@@ -1,0 +1,380 @@
+@import "tailwindcss";
+
+@theme {
+  --color-forest: #072a21;
+  --color-forest-dark: #05251d;
+  --color-forest-surface: #05251d;
+  --color-forest-elevated: #0b362b;
+  --color-forest-card: #0a3429;
+  --color-emerald-primary: #0f5a48;
+  --color-emerald-light: #167a63;
+  --color-champagne: #c8b276;
+  --color-champagne-light: #dfbf85;
+  --color-champagne-dark: #a88344;
+  
+  /* Light Theme Warm Ivory Palette — NO PURE WHITE */
+  --color-ivory: #f7f3e8;
+  --color-ivory-primary: #f3ede1;
+  --color-ivory-elevated: #faf6ee;
+  --color-ivory-secondary: #efe8da;
+  --color-ivory-sand: #e6dcc9;
+  --color-ivory-border: #d9cfbd;
+  --color-ink: #121417;
+  --color-ink-muted: #536057;
+
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* =============================================================================
+   MILJOR DESIGN SYSTEM — CSS VARIABLES & SEMANTIC TOKENS
+   Quiet Luxury Commerce × Swiss Minimalism
+   Exact Reference Lock:
+   DARK:  Forest (#072A21), Deep Forest (#05251D), Emerald (#0F5A48), Champagne (#C8B276), Ivory (#F7F3E8)
+   LIGHT: Warm Ivory (#F7F3E8), Surface (#F3EDE1), Elevated (#FAF6EE), Sand (#E6DCC9), Ink (#121417)
+          NO PURE WHITE SURFACES OR BACKGROUNDS
+   ============================================================================= */
+
+:root {
+  color-scheme: light;
+
+  /* Light Theme Surfaces & Backgrounds — EXACT REFERENCE LOCK (#EEE6D8, #E3D7C4) */
+  --bg-page: #eee6d8;
+  --bg-surface: #f1eadf;
+  --bg-sidebar: #e3d7c4;
+  --bg-sidebar-active: #f4eee3;
+  --bg-card: #f4eee3;
+  --bg-elevated: #ede4d5;
+  --bg-subtle: #e6dbcb;
+  --bg-sand: #ded2bf;
+  --bg-input: #f4eee3;
+  --bg-backdrop: rgba(12, 43, 36, 0.45);
+
+  /* Light Theme Dashboard Background Palette & Formula */
+  --bg-main: #f4eedf;
+  --bg-secondary: #efe6d6;
+  --bg-soft: #e8ddca;
+  --bg-highlight: #f8f3e8;
+  --forest-soft: rgba(7, 42, 33, 0.06);
+  --champagne-soft: rgba(200, 178, 118, 0.16);
+  --champagne-line: rgba(200, 178, 118, 0.42);
+
+  /* Light Theme Multi-layer Dashboard Gradient Stack — Rich, Prominent & Aesthetic Silk Waves */
+  --bg-dashboard:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(248, 243, 232, 0) 35%, rgba(200, 178, 118, 0.15) 100%),
+    radial-gradient(ellipse 90% 50% at 85% 75%, rgba(200, 178, 118, 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 85% 45% at 15% 90%, rgba(214, 195, 168, 0.28) 0%, transparent 60%),
+    radial-gradient(circle at 45% 42%, rgba(15, 90, 72, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 78% 28%, rgba(214, 185, 125, 0.20) 0%, transparent 60%),
+    linear-gradient(180deg, #f8f2e6 0%, #f1e8d8 50%, #e8ddca 100%);
+
+  /* Light Theme Auth Pages Multi-Layer Atmospheric Gradient Canvas */
+  --bg-auth:
+    radial-gradient(ellipse 75% 60% at 50% 40%, rgba(255, 255, 255, 0.70) 0%, rgba(247, 243, 232, 0.40) 45%, transparent 75%),
+    radial-gradient(circle at 85% 20%, rgba(200, 178, 118, 0.25) 0%, transparent 55%),
+    radial-gradient(circle at 15% 80%, rgba(15, 90, 72, 0.10) 0%, transparent 55%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(248, 243, 232, 0) 35%, rgba(200, 178, 118, 0.15) 100%),
+    radial-gradient(ellipse 90% 50% at 85% 75%, rgba(200, 178, 118, 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 85% 45% at 15% 90%, rgba(214, 195, 168, 0.28) 0%, transparent 60%),
+    radial-gradient(circle at 78% 28%, rgba(214, 185, 125, 0.20) 0%, transparent 60%),
+    linear-gradient(180deg, #f8f2e6 0%, #f1e8d8 50%, #e8ddca 100%);
+
+  /* Light Theme Hero Background Blend Spot Behind Image */
+  --glow-hero: radial-gradient(circle at 76% 34%, rgba(247, 243, 232, 0.40) 0%, rgba(200, 178, 118, 0.10) 45%, transparent 70%);
+
+  /* Light Theme Hero Ground Contact & Ambient Shadow System */
+  --hero-shadow-contact: radial-gradient(ellipse at 50% 50%, rgba(95, 75, 45, 0.32) 0%, rgba(135, 105, 65, 0.12) 45%, transparent 75%);
+  --hero-shadow-ambient: radial-gradient(ellipse at 50% 50%, rgba(160, 135, 95, 0.20) 0%, rgba(180, 155, 115, 0.06) 55%, transparent 80%);
+  --hero-shadow-slit: radial-gradient(ellipse at 50% 50%, rgba(20, 15, 10, 0.40) 0%, rgba(50, 35, 20, 0.15) 50%, transparent 75%);
+  --hero-img-filter: none;
+  --hero-contact-shadow: radial-gradient(ellipse at center, rgba(140, 115, 80, 0.18) 0%, rgba(140, 115, 80, 0.05) 50%, transparent 75%);
+  --hero-contact-blur: 10px;
+  --hero-contact-opacity: 0.75;
+  --arc-opacity: 0.40;
+
+  /* Typography / Text Roles — HIGH CONTRAST (WCAG AA >= 4.5:1) */
+  --text-primary: #0c2b24;
+  --text-forest: #0c2b24;
+  --text-secondary: #4c574f;
+  --text-muted: #57635a;
+  --text-on-emerald: #f7f3e8;
+  --text-on-champagne: #0c2b24;
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(12, 43, 36, 0.08);
+  --border-default: #d4c7b2;
+  --border-strong: #bfb098;
+
+  /* Brand Accents */
+  --brand-primary: #0c2b24;
+  --brand-primary-hover: #0f5a48;
+  --brand-emerald: #0f5a48;
+  --brand-accent: #c8b276;
+  --brand-accent-hover: #b89452;
+  --brand-accent-soft: rgba(200, 178, 118, 0.18);
+
+  /* Status Colors */
+  --status-success: #0f5a48;
+  --status-success-bg: rgba(15, 90, 72, 0.12);
+  --status-warning: #9e6417;
+  --status-warning-bg: rgba(158, 100, 23, 0.12);
+  --status-danger: #a32222;
+  --status-danger-bg: rgba(163, 34, 34, 0.10);
+
+  /* Focus & Shadows */
+  --ring-focus: rgba(12, 43, 36, 0.25);
+  --shadow-card: 0 1px 3px rgba(12, 43, 36, 0.04), 0 4px 14px rgba(12, 43, 36, 0.04);
+  --shadow-elevated: 0 6px 24px rgba(12, 43, 36, 0.08);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Dark Theme Surfaces — EXACT REFERENCE LOCK (#072A21, #05251D, #0F5A48) */
+  --bg-page: #072a21;
+  --bg-surface: #0a3429;
+  --bg-sidebar: #05251d;
+  --bg-sidebar-active: #0f5a48;
+  --bg-card: #0a3429;
+  --bg-elevated: #103d32;
+  --bg-subtle: #0c382c;
+  --bg-sand: #124034;
+  --bg-input: #041f18;
+  --bg-backdrop: rgba(3, 20, 16, 0.75);
+
+  /* Dark Theme Dashboard Background Palette & Formula */
+  --bg-main-dark: #06271f;
+  --bg-deep-dark: #041d17;
+  --bg-emerald-dark: #0a3a2d;
+  --bg-fade-dark: #0b3329;
+  --gold-soft-dark: rgba(200, 178, 118, 0.10);
+  --emerald-soft-dark: rgba(15, 90, 72, 0.18);
+  --black-depth: rgba(0, 0, 0, 0.20);
+
+  /* Dark Theme Multi-layer Dashboard Gradient Stack (Rich, Prominent & Aesthetic Chiaroscuro) */
+  --bg-dashboard:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.03) 0%, transparent 40%, rgba(0, 0, 0, 0.25) 100%),
+    radial-gradient(ellipse 90% 50% at 75% 60%, rgba(15, 90, 72, 0.32) 0%, transparent 65%),
+    radial-gradient(ellipse 80% 40% at 20% 88%, rgba(5, 30, 24, 0.38) 0%, transparent 60%),
+    radial-gradient(circle at 62% 22%, rgba(200, 178, 118, 0.16) 0%, transparent 52%),
+    radial-gradient(circle at 85% 30%, rgba(0, 0, 0, 0.30) 0%, transparent 55%),
+    radial-gradient(circle at 66% 36%, rgba(15, 90, 72, 0.35) 0%, transparent 65%),
+    linear-gradient(180deg, #09382b 0%, #072a21 50%, #031914 100%);
+
+  /* Dark Theme Auth Pages Multi-Layer Atmospheric Gradient Canvas */
+  --bg-auth:
+    radial-gradient(ellipse 75% 60% at 50% 42%, rgba(15, 90, 72, 0.40) 0%, rgba(7, 42, 33, 0.20) 50%, transparent 80%),
+    radial-gradient(circle at 85% 20%, rgba(200, 178, 118, 0.20) 0%, transparent 55%),
+    radial-gradient(circle at 15% 85%, rgba(0, 0, 0, 0.45) 0%, transparent 55%),
+    linear-gradient(140deg, rgba(255, 255, 255, 0.03) 0%, transparent 40%, rgba(0, 0, 0, 0.25) 100%),
+    radial-gradient(ellipse 90% 50% at 75% 60%, rgba(15, 90, 72, 0.32) 0%, transparent 65%),
+    radial-gradient(ellipse 80% 40% at 20% 88%, rgba(5, 30, 24, 0.38) 0%, transparent 60%),
+    radial-gradient(circle at 62% 22%, rgba(200, 178, 118, 0.16) 0%, transparent 52%),
+    linear-gradient(180deg, #09382b 0%, #072a21 50%, #031914 100%);
+
+  /* Dark Theme Hero Background Blend Spot Behind Image */
+  --glow-hero: radial-gradient(circle at 77% 35%, rgba(11, 54, 43, 0.34) 0%, rgba(0, 0, 0, 0.18) 45%, transparent 70%);
+
+  /* Dark Theme Hero Ground Contact & Ambient Shadow System */
+  --hero-shadow-contact: radial-gradient(ellipse at 50% 50%, rgba(0, 14, 10, 0.65) 0%, rgba(4, 30, 22, 0.25) 45%, transparent 75%);
+  --hero-shadow-ambient: radial-gradient(ellipse at 50% 50%, rgba(3, 25, 18, 0.45) 0%, rgba(7, 42, 33, 0.15) 55%, transparent 80%);
+  --hero-shadow-slit: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.78) 0%, rgba(0, 10, 6, 0.38) 50%, transparent 75%);
+  --hero-img-filter: none;
+  --hero-contact-shadow: radial-gradient(ellipse at center, rgba(2, 20, 15, 0.45) 0%, rgba(2, 20, 15, 0.12) 50%, transparent 75%);
+  --hero-contact-blur: 14px;
+  --hero-contact-opacity: 0.85;
+  --arc-opacity: 0.52;
+
+  /* Typography / Text Roles — HIGH CONTRAST (WCAG AA >= 4.5:1) */
+  --text-primary: #f7f3e8;
+  --text-forest: #f7f3e8;
+  --text-secondary: #c8d3cf;
+  --text-muted: #a3b5af;
+  --text-on-emerald: #ffffff;
+  --text-on-champagne: #072a21;
+
+  /* Borders & Dividers — VISIBLE BOUNDARIES */
+  --border-subtle: rgba(200, 178, 118, 0.18);
+  --border-default: rgba(200, 178, 118, 0.30);
+  --border-strong: rgba(200, 178, 118, 0.45);
+
+  /* Brand Accents */
+  --brand-primary: #072a21;
+  --brand-primary-hover: #0f5a48;
+  --brand-emerald: #0f5a48;
+  --brand-accent: #c8b276;
+  --brand-accent-hover: #dfbf85;
+  --brand-accent-soft: rgba(200, 178, 118, 0.18);
+
+  /* Status Colors */
+  --status-success: #3ab885;
+  --status-success-bg: rgba(58, 184, 133, 0.16);
+  --status-warning: #e09f45;
+  --status-warning-bg: rgba(224, 159, 69, 0.16);
+  --status-danger: #ea5b5b;
+  --status-danger-bg: rgba(234, 91, 91, 0.16);
+
+  /* Focus & Shadows */
+  --ring-focus: rgba(200, 178, 118, 0.35);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Base Body Styles */
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
+  letter-spacing: -0.011em;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  overflow-x: hidden;
+}
+
+/* Editorial Headlines use Playfair Display */
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/* Tabular figures for financial and quantity data */
+.tabular-nums, .font-numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus styles for keyboard accessibility */
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+/* Selective Luxurious Gold Gradient for "Together" — Preserves Descender Room for 'g' */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #f5dba4 0%, #d8ac63 50%, #b78743 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  padding-bottom: 0.18em;
+  margin-bottom: -0.18em;
+  padding-right: 0.05em;
+  overflow: visible;
+}
+
+:root:not(.dark) .text-gold-gradient {
+  background: linear-gradient(135deg, #c69244 0%, #a6732e 50%, #8c5c1d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  padding-bottom: 0.18em;
+  margin-bottom: -0.18em;
+  padding-right: 0.05em;
+  overflow: visible;
+}
+
+/* Ambient Champagne Arc Line */
+.ambient-arc {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Enhanced Frosted & Sculpted Luxury Card Box for Auth Pages (Rollback Safe) */
+.auth-box-enhanced {
+  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.10) 0%, transparent 70%), var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.85) inset, 0 16px 44px -8px rgba(12, 43, 36, 0.12), 0 4px 16px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .auth-box-enhanced {
+  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.12) 0%, transparent 70%), var(--bg-surface);
+  border: 1px solid rgba(200, 178, 118, 0.32);
+  box-shadow: 0 1px 0 0 rgba(200, 178, 118, 0.35) inset, 0 20px 50px -10px rgba(0, 0, 0, 0.55), 0 0 30px rgba(15, 90, 72, 0.18);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Subtle Luxury Button Shimmer Reflection */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  25%, 100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.32) 50%,
+    transparent 100%
+  );
+  animation: shimmer-sweep 6s infinite ease-in-out;
+  pointer-events: none;
+}
+
+/* Fast Luxury Collapsed Sidebar Floating Tooltip */
+.luxury-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--brand-primary);
+  color: var(--text-on-emerald);
+  border: 1px solid var(--border-default);
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 50;
+  animation: tooltip-fade 0.12s ease-out;
+}
+
+@keyframes tooltip-fade {
+  from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+.luxury-tooltip::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background-color: var(--brand-primary);
+  border-left: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}

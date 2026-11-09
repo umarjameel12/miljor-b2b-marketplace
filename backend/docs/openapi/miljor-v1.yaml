@@ -1,0 +1,1372 @@
+openapi: 3.0.3
+info:
+  title: MilJor B2B Collective Food Procurement API
+  version: 1.0.0
+  description: |
+    Production-grade, authoritative REST API for MilJor's collective food procurement platform.
+    Connects commercial food buyers with verified agricultural suppliers via pooled demand,
+    volume tier pricing, escrow payment protection, supplier-managed delivery, and dispute arbitration.
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local Development / Integration Server
+paths:
+  # ===========================================================================
+  # AUTHENTICATION & IDENTITY
+  # ===========================================================================
+  /auth/register:
+    post:
+      summary: Register a new buyer or supplier
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, password, full_name, role]
+              properties:
+                phone:
+                  type: string
+                  example: "03001234567"
+                password:
+                  type: string
+                  format: password
+                  example: "SecureP@ssw0rd!"
+                full_name:
+                  type: string
+                  example: "Muhammad Ali"
+                email:
+                  type: string
+                  format: email
+                  example: "ali@lahorehotels.pk"
+                role:
+                  type: string
+                  enum: [BUYER, SUPPLIER]
+                  example: BUYER
+                business_name:
+                  type: string
+                  example: "Lahore Gourmet Catering"
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '400':
+          $ref: '#/components/responses/400Error'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /auth/login:
+    post:
+      summary: Authenticate with phone/email and password
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                  example: "03001000005"
+                password:
+                  type: string
+                  format: password
+                  example: "Password123"
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+
+  /auth/google:
+    post:
+      summary: Authenticate or onboard a user via verified Google ID token
+      description: |
+        Validates Google OIDC ID token server-side against Google public certs.
+        Supports double-submit cookie CSRF validation when g_csrf_token is provided.
+        Safe onboarding defaults to BUYER. Suspended accounts are rejected with 403.
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token:
+                  type: string
+                  description: Google JWT ID token
+                credential:
+                  type: string
+                  description: Alias for id_token used by Google Identity Services library
+                g_csrf_token:
+                  type: string
+                  description: Double-submit CSRF cookie token when submitted via browser form/One Tap POST
+      responses:
+        '200':
+          description: Google authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '400':
+          $ref: '#/components/responses/400Error'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          description: Forbidden - Account suspended, unverified email, or CSRF mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /auth/google/link:
+    post:
+      summary: Explicitly link authenticated user's account to a Google account
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token:
+                  type: string
+      responses:
+        '200':
+          description: Google account linked successfully
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /auth/google/unlink:
+    post:
+      summary: Safely unlink Google account (requires existing password)
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Google account unlinked successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+
+  /auth/verify-email:
+    post:
+      summary: Verify email address using single-use 6-digit OTP
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp:
+                  type: string
+                  example: "847291"
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Email verified successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+
+  /auth/resend-otp:
+    post:
+      summary: Request fresh email verification OTP (throttled to 1/min)
+      tags: [Auth]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Verification code sent
+        '429':
+          description: Rate limited
+
+  /auth/request-password-reset:
+    post:
+      summary: Request password reset OTP without user enumeration
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Generic confirmation returned
+
+  /auth/reset-password:
+    post:
+      summary: Reset account password using verified OTP
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp, new_password]
+              properties:
+                email:
+                  type: string
+                otp:
+                  type: string
+                new_password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password reset successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+
+  /auth/me:
+    get:
+      summary: Get current authenticated user profile
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Hydrated user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/UserProfile'
+                      supplier_profile:
+                        type: object
+                        nullable: true
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+
+  # ===========================================================================
+  # POOL DISCOVERY & LIFECYCLE
+  # ===========================================================================
+  /pools:
+    get:
+      summary: Public discovery of active pooled demand listings
+      tags: [Pools]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: min_price
+          in: query
+          schema:
+            type: number
+        - name: max_price
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: List of active pools (DRAFT strictly excluded)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  data:
+                    type: object
+                    properties:
+                      pools:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PoolListItem'
+
+  /pools/{id}:
+    get:
+      summary: Retrieve detailed snapshot of a single pool
+      tags: [Pools]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Unified pool snapshot with pricing tiers and allowed actions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      pool:
+                        $ref: '#/components/schemas/PoolDetailSnapshot'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+  /pools/supplier/my:
+    get:
+      summary: List all pools created by the authenticated supplier
+      tags: [Pools]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Supplier pools
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      pools:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PoolListItem'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+
+  /auth/google:
+    post:
+      summary: Authenticate or onboard a user via verified Google ID token
+      description: |
+        Validates Google OIDC ID token server-side against Google public certs.
+        Supports double-submit cookie CSRF validation when g_csrf_token is provided.
+        Safe onboarding defaults to BUYER. Suspended accounts are rejected with 403.
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token:
+                  type: string
+                  description: Google JWT ID token
+                credential:
+                  type: string
+                  description: Alias for id_token used by Google Identity Services library
+                g_csrf_token:
+                  type: string
+                  description: Double-submit CSRF cookie token when submitted via browser form/One Tap POST
+      responses:
+        '200':
+          description: Google authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '400':
+          $ref: '#/components/responses/400Error'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          description: Forbidden - Account suspended, unverified email, or CSRF mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /auth/google/link:
+    post:
+      summary: Explicitly link authenticated user's account to a Google account
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token:
+                  type: string
+      responses:
+        '200':
+          description: Google account linked successfully
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /auth/google/unlink:
+    post:
+      summary: Safely unlink Google account (requires existing password)
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Google account unlinked successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+
+  /auth/verify-email:
+    post:
+      summary: Verify email address using single-use 6-digit OTP
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp:
+                  type: string
+                  example: "847291"
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Email verified successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+
+  /auth/resend-otp:
+    post:
+      summary: Request fresh email verification OTP (throttled to 1/min)
+      tags: [Auth]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Verification code sent
+        '429':
+          description: Rate limited
+
+  /auth/request-password-reset:
+    post:
+      summary: Request password reset OTP without user enumeration
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Generic confirmation returned
+
+  /auth/reset-password:
+    post:
+      summary: Reset account password using verified OTP
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp, new_password]
+              properties:
+                email:
+                  type: string
+                otp:
+                  type: string
+                new_password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password reset successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+
+  # ===========================================================================
+  # BUYER RESERVATIONS
+  # ===========================================================================
+  /reservations:
+    post:
+      summary: Join an active pool by creating a reservation
+      tags: [Reservations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pool_id, quantity]
+              properties:
+                pool_id:
+                  type: integer
+                  example: 1
+                quantity:
+                  type: number
+                  example: 25.0
+      responses:
+        '201':
+          description: Reservation created
+        '400':
+          $ref: '#/components/responses/400Error'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /reservations/my:
+    get:
+      summary: List reservations for authenticated buyer
+      tags: [Reservations]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Buyer reservations list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      reservations:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationListItem'
+
+  /reservations/{id}:
+    get:
+      summary: View reservation details, permissions, and allowed next actions
+      tags: [Reservations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Reservation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      reservation:
+                        $ref: '#/components/schemas/ReservationDetail'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+  /reservations/{id}/order:
+    post:
+      summary: Convert buyer commitment into an authoritative order
+      tags: [Reservations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Order created successfully
+        '400':
+          $ref: '#/components/responses/400Error'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  # ===========================================================================
+  # ORDERS & CHECKOUT
+  # ===========================================================================
+  /orders:
+    get:
+      summary: List orders for authenticated user with pagination and status filter
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated order list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+
+  /orders/my:
+    get:
+      summary: Alias route to list orders for authenticated user
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Paginated order list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+
+  /orders/{id}:
+    get:
+      summary: Get order details with commercial breakdown and allowed actions
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      order:
+                        $ref: '#/components/schemas/OrderDetail'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+  /orders/{id}/checkout:
+    post:
+      summary: Initiate Safepay sandbox checkout session for an AWAITING_PAYMENT order
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                redirect_url:
+                  type: string
+                cancel_url:
+                  type: string
+      responses:
+        '200':
+          description: Checkout session initiated
+        '400':
+          $ref: '#/components/responses/400Error'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '409':
+          $ref: '#/components/responses/409Conflict'
+
+  /orders/{id}/payment-status:
+    get:
+      summary: Query authoritative payment status for an order
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payment status read-model
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      order_id:
+                        type: integer
+                      order_status:
+                        type: string
+                      payment_status:
+                        type: string
+
+  # ===========================================================================
+  # FULFILLMENT & DELIVERY TRACKING
+  # ===========================================================================
+  /fulfillment/buyer/orders:
+    get:
+      summary: List paid fulfillment orders for authenticated buyer
+      tags: [Fulfillment]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Buyer fulfillment tracking list
+
+  /fulfillment/buyer/orders/{id}/confirm-receipt:
+    post:
+      summary: Buyer confirms receipt of delivered goods
+      tags: [Fulfillment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order confirmed and marked completed
+
+  /fulfillment/supplier/orders:
+    get:
+      summary: List assigned fulfillment orders for authenticated supplier
+      tags: [Fulfillment]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Supplier fulfillment queue
+
+  /fulfillment/supplier/orders/{id}/transition:
+    post:
+      summary: Supplier advances order fulfillment milestone
+      tags: [Fulfillment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_status]
+              properties:
+                target_status:
+                  type: string
+                  enum: [PREPARING, READY_FOR_DISPATCH, DISPATCHED, SUPPLIER_DELIVERED]
+      responses:
+        '200':
+          description: Fulfillment status advanced
+
+  # ===========================================================================
+  # DISPUTES & EXCEPTIONS
+  # ===========================================================================
+  /disputes:
+    post:
+      summary: File a dispute on a delivered order
+      tags: [Disputes]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id, reason, dispute_category, description, disputed_quantity]
+              properties:
+                order_id:
+                  type: integer
+                reason:
+                  type: string
+                  enum: [WRONG_PRODUCT, DAMAGED_GOODS, SHORTAGE_IN_QUANTITY, QUALITY_MISMATCH, NOT_DELIVERED, SAFETY_ISSUE]
+                dispute_category:
+                  type: string
+                description:
+                  type: string
+                disputed_quantity:
+                  type: number
+      responses:
+        '201':
+          description: Dispute filed successfully
+
+  /disputes/my:
+    get:
+      summary: List disputes filed by the authenticated buyer
+      tags: [Disputes]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Buyer disputes list
+
+  /disputes/{id}:
+    get:
+      summary: View dispute details and event history
+      tags: [Disputes]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dispute details
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '404':
+          $ref: '#/components/responses/404NotFound'
+
+  # ===========================================================================
+  # SETTLEMENTS & FINANCIAL SUMMARY
+  # ===========================================================================
+  /settlements/payables/supplier:
+    get:
+      summary: Supplier views own settlement payables and balance
+      tags: [Settlements]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Supplier payables
+
+  /settlements/admin/overview:
+    get:
+      summary: Platform administrator financial settlement overview
+      tags: [Settlements]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Settlement overview
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            user:
+              $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        full_name:
+          type: string
+          example: "Asif Khan"
+        email:
+          type: string
+          example: "asif@foodprocure.pk"
+        phone:
+          type: string
+          example: "03001000005"
+        role:
+          type: string
+          enum: [BUYER, SUPPLIER, ADMIN, SUPER_ADMIN]
+          example: BUYER
+        verification_status:
+          type: string
+          example: "VERIFIED"
+        is_verified:
+          type: integer
+          example: 1
+
+    PoolListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        pool_code:
+          type: string
+          example: "MJ-POOL-0001"
+        status:
+          type: string
+          example: "ACTIVE"
+        target_qty:
+          type: number
+          example: 500.0
+        current_qty:
+          type: number
+          example: 120.0
+        fill_percentage:
+          type: number
+          example: 24.0
+        current_price_per_unit:
+          type: number
+          example: 165.0
+        pool_unit:
+          type: string
+          example: "BAG"
+        product_title:
+          type: string
+          example: "Premium Super Basmati Rice"
+        supplier_name:
+          type: string
+          example: "Punjab Agro Supplies"
+
+    PoolDetailSnapshot:
+      type: object
+      properties:
+        id:
+          type: integer
+        pool_code:
+          type: string
+        status:
+          type: string
+        target_qty:
+          type: number
+        current_qty:
+          type: number
+        estimated_unit_price:
+          type: number
+        allowed_actions:
+          type: array
+          items:
+            type: string
+          example: ["RESERVE"]
+        pricing_mode:
+          type: string
+          example: "TIERED"
+        is_conditional_pricing:
+          type: boolean
+          example: true
+        specification:
+          type: object
+          properties:
+            product_title:
+              type: string
+            quality_grade:
+              type: string
+        supplier:
+          type: object
+          properties:
+            id:
+              type: integer
+            business_name:
+              type: string
+
+    ReservationListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        reservation_code:
+          type: string
+        pool_id:
+          type: integer
+        quantity:
+          type: number
+        unit_price:
+          type: number
+        total_price:
+          type: number
+        status:
+          type: string
+
+    ReservationDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        reservation_code:
+          type: string
+        quantity:
+          type: number
+        unit_price:
+          type: number
+        total_price:
+          type: number
+        status:
+          type: string
+        permissions:
+          type: object
+          properties:
+            can_modify:
+              type: boolean
+            can_cancel:
+              type: boolean
+            blocked_reason:
+              type: string
+              nullable: true
+        allowed_actions:
+          type: array
+          items:
+            type: string
+
+    OrderListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        count:
+          type: integer
+        data:
+          type: object
+          properties:
+            orders:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderDetail'
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 1
+                limit:
+                  type: integer
+                  example: 20
+                total_records:
+                  type: integer
+                  example: 45
+                total_pages:
+                  type: integer
+                  example: 3
+
+    OrderDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12
+        order_code:
+          type: string
+          example: "MJ-ORD-0012"
+        reservation_id:
+          type: integer
+        pool_id:
+          type: integer
+        product_title:
+          type: string
+          example: "Super Basmati Rice 50kg"
+        purchasing_unit:
+          type: string
+          example: "BAG"
+        buyer_id:
+          type: integer
+        supplier_id:
+          type: integer
+        total_qty:
+          type: number
+          example: 20.0
+        unit_price:
+          type: number
+          example: 150.0
+        subtotal_amount:
+          type: number
+          example: 3000.0
+        delivery_fee:
+          type: number
+          example: 50.0
+        buyer_platform_fee:
+          type: number
+          example: 30.0
+        total_amount:
+          type: number
+          example: 3080.0
+        currency:
+          type: string
+          example: "PKR"
+        payment_status:
+          type: string
+          enum: [AWAITING_PAYMENT, PAYMENT_INITIATED, PAID, PAYMENT_FAILED, REFUND_PENDING, REFUNDED]
+          example: "AWAITING_PAYMENT"
+        order_status:
+          type: string
+          enum: [AWAITING_PAYMENT, PAID, SUPPLIER_CONFIRMED, PROCESSING, OUT_FOR_DELIVERY, DELIVERED, COMPLETED, CANCELLED, DISPUTED]
+          example: "AWAITING_PAYMENT"
+        fulfillment_status:
+          type: string
+          enum: [UNPAID, AWAITING_SUPPLIER_ACKNOWLEDGEMENT, PREPARING, READY_FOR_DISPATCH, DISPATCHED, SUPPLIER_DELIVERED, BUYER_CONFIRMED, COMPLETED, EXCEPTION]
+          example: "UNPAID"
+        allowed_actions:
+          type: array
+          items:
+            type: string
+          example: ["CHECKOUT"]
+        financial_breakdown:
+          type: object
+          properties:
+            total_qty:
+              type: number
+            unit_price:
+              type: number
+            subtotal_amount:
+              type: number
+            delivery_fee:
+              type: number
+            buyer_platform_fee:
+              type: number
+            tax_amount:
+              type: number
+            total_payable_amount:
+              type: number
+            currency:
+              type: string
+
+  responses:
+    400Error:
+      description: Bad request or validation failure
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "INVALID_INPUT"
+                  message:
+                    type: string
+
+    401Unauthorized:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "UNAUTHORIZED"
+                  message:
+                    type: string
+
+    403Forbidden:
+      description: Forbidden - Insufficient role or tenant boundary violation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "FORBIDDEN"
+                  message:
+                    type: string
+
+    404NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "NOT_FOUND"
+                  message:
+                    type: string
+
+    409Conflict:
+      description: State machine or concurrency conflict
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "CONFLICT"
+                  message:
+                    type: string

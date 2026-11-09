@@ -1,0 +1,175 @@
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Logo } from '../components/ui/Logo';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { toast } from 'react-toastify';
+import { Mail, Lock, AlertCircle } from 'lucide-react';
+
+export const LoginPage = () => {
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+  const [unverifiedEmail, setUnverifiedEmail] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/pools';
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setUnverifiedEmail(null);
+
+    if (!identifier.trim() || !password) {
+      const msg = 'Please enter your registered email address and password.';
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login({ identifier: identifier.trim(), password });
+      toast.success('Signed in successfully.');
+      navigate(from, { replace: true });
+    } catch (err) {
+      const errData = err.response?.data?.error;
+      const code = errData?.code;
+      const msg = errData?.message || err.message || 'Authentication failed';
+
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        const targetEmail = errData?.email || (identifier.includes('@') ? identifier.trim() : '');
+        setUnverifiedEmail(targetEmail);
+        setError('Please verify your email address to continue.');
+        toast.error('Email verification required.');
+      } else {
+        setError(msg);
+        toast.error(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="min-h-[calc(100vh-5rem)] flex items-center justify-center p-4 sm:p-6 lg:p-8 transition-colors duration-300 relative overflow-hidden"
+      style={{ background: 'var(--bg-auth)' }}
+    >
+      <div
+        className="w-full max-w-md p-8 sm:p-10 rounded-3xl auth-box-enhanced flex flex-col gap-6 relative z-10"
+      >
+        {/* Top Branding with Refined Champagne-Gold Ribbon M Monogram */}
+        <div className="flex flex-col items-center text-center">
+          <Link to="/" aria-label="MilJor Home" className="mb-4">
+            <Logo variant="monogram" size="lg" />
+          </Link>
+
+          <h2
+            className="font-display font-black text-2xl tracking-tight"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            Sign In
+          </h2>
+          <p
+            className="text-xs font-sans mt-1"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Collective Food Procurement Platform
+          </p>
+        </div>
+
+        {/* Error / Verification Notice */}
+        {error && (
+          <div
+            className="p-3.5 rounded-xl border flex flex-col gap-2 text-xs"
+            style={{
+              backgroundColor: 'var(--status-danger-bg)',
+              borderColor: 'var(--status-danger)',
+              color: 'var(--status-danger)',
+            }}
+            role="alert"
+          >
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-semibold block">Sign-In Notice</span>
+                <span className="mt-0.5 block">{error}</span>
+              </div>
+            </div>
+
+            {unverifiedEmail && (
+              <div className="pt-2 border-t flex justify-end" style={{ borderColor: 'rgba(163, 34, 34, 0.2)' }}>
+                <Link
+                  to={`/verify-email?email=${encodeURIComponent(unverifiedEmail)}`}
+                  state={{ email: unverifiedEmail }}
+                  className="inline-flex items-center font-bold hover:underline"
+                >
+                  <span>Verify Email Now</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Input
+            label="Email Address"
+            type="email"
+            required
+            autoComplete="email"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="chef@restaurant.com"
+            icon={Mail}
+          />
+
+          <Input
+            label="Password"
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••••••"
+            icon={Lock}
+          />
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            loading={loading}
+            className="w-full mt-2 font-semibold shadow-xs justify-center"
+            style={{
+              backgroundColor: 'var(--brand-accent)',
+              color: 'var(--text-on-champagne)',
+            }}
+          >
+            <span>Sign In</span>
+          </Button>
+        </form>
+
+        {/* Registration Link */}
+        <div className="text-center pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+          <p className="text-xs font-sans" style={{ color: 'var(--text-muted)' }}>
+            New commercial kitchen or supplier?{' '}
+            <Link
+              to="/register"
+              className="font-bold hover:underline"
+              style={{ color: 'var(--brand-accent)' }}
+            >
+              Create Account
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default LoginPage;

@@ -1,0 +1,50 @@
+# =============================================================================
+# MilJor Project - Root .gitignore
+# Prevents secrets, environment configurations, and build artifacts from leaking
+# =============================================================================
+
+# Environment Secrets (NEVER COMMIT SENSITIVE KEYS / PASSWORDS)
+.env
+.env.*
+!.env.example
+*.env
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Production Builds & Output
+dist/
+dist-ssr/
+build/
+*/dist/
+
+# Logs & Debugging
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Database Dumps & Backups
+*.sql.bak
+*.dump
+database/backups/
+backend/database/backups/
+
+# Operating System & IDE Cache
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test Coverage & Reports
+coverage/
+*/coverage/

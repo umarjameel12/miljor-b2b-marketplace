@@ -1,0 +1,205 @@
+import React, { useState } from 'react';
+import { Package } from 'lucide-react';
+import FLAGS from '../config/featureFlags';
+
+// Curated high-fidelity food imagery matching Quiet Luxury aesthetic
+const DEFAULT_CARD_IMAGES = {
+  tomatoes: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=500&q=80',
+  rice: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=500&q=80',
+  dal: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=500&q=80',
+};
+
+export const PoolCard = ({ pool, onSelect }) => {
+  const [imgError, setImgError] = useState(false);
+
+  // Safe progress percentage clamped between 0 and 100
+  const progressPercent = Math.min(
+    100,
+    Math.max(0, parseFloat(pool.fill_percentage || pool.progress_percentage || 0))
+  );
+
+  const isClosed = pool.status === 'CLOSED';
+  const estimatedPrice = pool.estimated_unit_price || pool.current_unit_price || pool.base_unit_price;
+  const unit = pool.pack_unit || pool.pool_unit || 'kg';
+  const buyerMoq = pool.min_order_qty || pool.moq_buyer || 20;
+  const grade = pool.grade || 'A';
+  const committedQty = pool.committed_quantity || Math.round((progressPercent / 100) * (pool.target_quantity || 1000));
+  const targetQty = pool.target_quantity || 1000;
+
+  // Determine appropriate image
+  let imageUrl = pool.image_url;
+  if (!imageUrl) {
+    const nameLower = (pool.product_name || pool.title || '').toLowerCase();
+    if (nameLower.includes('rice') || nameLower.includes('basmati')) imageUrl = DEFAULT_CARD_IMAGES.rice;
+    else if (nameLower.includes('dal') || nameLower.includes('lentil') || nameLower.includes('masoor')) imageUrl = DEFAULT_CARD_IMAGES.dal;
+    else imageUrl = DEFAULT_CARD_IMAGES.tomatoes;
+  }
+
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--bg-card)',
+        borderColor: 'var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)',
+      }}
+      className="rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col overflow-hidden group select-none"
+    >
+      {/* Top Banner Photo (Compact height ~110px matching reference) */}
+      <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-stone-200 dark:bg-stone-900">
+        {!imgError ? (
+          <img
+            src={imageUrl}
+            alt={pool.product_name || 'Commodity'}
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--brand-primary)' }}
+          >
+            <Package className="w-8 h-8 text-stone-300" />
+          </div>
+        )}
+
+        {/* Live Status Badge Overlay (Right Aligned matching reference) */}
+        <div className="absolute top-2.5 right-2.5">
+          <span
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-md shadow-xs"
+            style={{
+              backgroundColor: isClosed
+                ? 'rgba(163, 34, 34, 0.9)'
+                : FLAGS.dynamicDemandBadges && progressPercent >= 75
+                ? 'rgba(7, 42, 33, 0.92)'
+                : FLAGS.dynamicDemandBadges && progressPercent >= 50
+                ? 'rgba(180, 83, 9, 0.90)'
+                : 'rgba(7, 42, 33, 0.85)',
+              color: '#f7f3e8',
+              border: `1px solid ${
+                FLAGS.dynamicDemandBadges && progressPercent >= 75
+                  ? 'rgba(200, 178, 118, 0.6)'
+                  : 'rgba(200, 178, 118, 0.3)'
+              }`,
+            }}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isClosed
+                  ? 'bg-red-400'
+                  : FLAGS.dynamicDemandBadges && progressPercent >= 50
+                  ? 'bg-amber-400 animate-pulse'
+                  : 'bg-emerald-400'
+              }`}
+            />
+            <span>
+              {isClosed
+                ? 'Closed'
+                : FLAGS.dynamicDemandBadges && progressPercent >= 75
+                ? 'Tier 2 Unlocked ⭐'
+                : FLAGS.dynamicDemandBadges && progressPercent >= 50
+                ? 'Fast Filling 🔥'
+                : 'Live'}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Card Content Body */}
+      <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
+        <div>
+          {/* Product Title */}
+          <h3
+            className="font-sans font-semibold text-sm sm:text-base tracking-tight truncate"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            {pool.product_name || pool.title || 'Wholesale Commodity'}
+          </h3>
+
+          {/* Specifications line: Grade & MOQ */}
+          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-sans text-stone-500 dark:text-stone-400">
+            <span>Grade {grade}</span>
+            <span>•</span>
+            <span>Min {buyerMoq} {unit}</span>
+          </div>
+
+          {/* Price & Fill Percentage Row */}
+          <div className="mt-3 flex items-baseline justify-between" title="Estimated Price">
+            <div className="flex items-baseline gap-1">
+              <span className="sr-only">Estimated Price: </span>
+              <span className="font-sans font-bold text-base sm:text-lg tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                {estimatedPrice ? `Rs. ${Number(estimatedPrice).toLocaleString()}` : 'Price on Tier'}
+              </span>
+              <span className="text-[11px] font-sans text-stone-500">
+                / {unit}
+              </span>
+            </div>
+
+            {/* Percentage pill on right side */}
+            <span className="text-[11px] font-sans font-semibold tabular-nums text-stone-600 dark:text-stone-300">
+              {progressPercent}%
+            </span>
+          </div>
+
+          {/* Volume Progress Bar */}
+          <div className="mt-2">
+            <div
+              className="relative w-full h-2 rounded-full overflow-hidden"
+              style={{ backgroundColor: 'var(--bg-sand)' }}
+              role="progressbar"
+              aria-valuenow={progressPercent}
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${progressPercent}%`,
+                  backgroundColor: 'var(--brand-emerald)',
+                }}
+              />
+              {FLAGS.tierNotchesOnProgress && (
+                <>
+                  <div
+                    className="absolute top-0 bottom-0 w-[1.5px] bg-white/50 dark:bg-black/40 z-10"
+                    style={{ left: '33%' }}
+                    title="Tier 1 Volume Target (33%)"
+                  />
+                  <div
+                    className="absolute top-0 bottom-0 w-[1.5px] bg-white/50 dark:bg-black/40 z-10"
+                    style={{ left: '66%' }}
+                    title="Tier 2 Bulk Wholesale Target (66%)"
+                  />
+                </>
+              )}
+            </div>
+
+            {/* Current vs Target volume text */}
+            <div className="mt-1 flex items-center justify-between text-[10px] font-sans text-stone-500 dark:text-stone-400 tabular-nums">
+              <span>{committedQty.toLocaleString()} {unit} / {targetQty.toLocaleString()} {unit}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Button: Reserve Quantity */}
+        <div className="mt-3.5">
+          <button
+            type="button"
+            onClick={() => onSelect && onSelect(pool)}
+            disabled={isClosed}
+            className="w-full py-2 px-3 rounded-xl font-sans font-medium text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+            style={{
+              backgroundColor: 'var(--brand-primary)',
+              color: 'var(--text-on-emerald)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <span>{isClosed ? 'Concluded' : 'Reserve Quantity'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PoolCard;
