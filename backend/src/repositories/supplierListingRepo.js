@@ -55,7 +55,7 @@ class SupplierListingRepository {
     return result.insertId;
   }
 
-  // Find listing by ID with complete spec and supplier information
+  // Find listing by ID with complete spec, canonical family/category, and supplier information
   async findById(id) {
     const [rows] = await db.query(
       `SELECT sl.*,
@@ -66,6 +66,7 @@ class SupplierListingRepository {
               sp.subscription_plan,
               ps.spec_code,
               ps.title as spec_title,
+              ps.variant_title,
               ps.brand,
               ps.variety,
               ps.quality_grade,
@@ -73,12 +74,22 @@ class SupplierListingRepository {
               ps.pack_size,
               ps.pack_unit,
               ps.purchasing_unit,
-              p.category as product_category
+              ps.approval_status as spec_approval_status,
+              p.category as product_category,
+              COALESCE(ps.category_id, p.category_id) as category_id,
+              COALESCE(ps.family_id, p.family_id) as family_id,
+              c.name as category_name,
+              c.slug as category_slug,
+              f.name as family_name,
+              f.slug as family_slug,
+              f.family_code
        FROM supplier_listings sl
        JOIN users u ON sl.supplier_id = u.id
        LEFT JOIN supplier_profiles sp ON u.id = sp.supplier_id
        JOIN product_specifications ps ON sl.product_spec_id = ps.id
        JOIN products p ON ps.product_id = p.id
+       LEFT JOIN catalog_categories c ON COALESCE(ps.category_id, p.category_id) = c.id
+       LEFT JOIN catalog_product_families f ON COALESCE(ps.family_id, p.family_id) = f.id
        WHERE sl.id = ?`,
       [id]
     );
@@ -111,6 +122,7 @@ class SupplierListingRepository {
               sp.verification_level,
               ps.spec_code,
               ps.title as spec_title,
+              ps.variant_title,
               ps.brand,
               ps.variety,
               ps.quality_grade,
@@ -118,12 +130,22 @@ class SupplierListingRepository {
               ps.pack_size,
               ps.pack_unit,
               ps.purchasing_unit,
-              p.category as product_category
+              ps.approval_status as spec_approval_status,
+              p.category as product_category,
+              COALESCE(ps.category_id, p.category_id) as category_id,
+              COALESCE(ps.family_id, p.family_id) as family_id,
+              c.name as category_name,
+              c.slug as category_slug,
+              f.name as family_name,
+              f.slug as family_slug,
+              f.family_code
        FROM supplier_listings sl
        JOIN users u ON sl.supplier_id = u.id
        LEFT JOIN supplier_profiles sp ON u.id = sp.supplier_id
        JOIN product_specifications ps ON sl.product_spec_id = ps.id
        JOIN products p ON ps.product_id = p.id
+       LEFT JOIN catalog_categories c ON COALESCE(ps.category_id, p.category_id) = c.id
+       LEFT JOIN catalog_product_families f ON COALESCE(ps.family_id, p.family_id) = f.id
        WHERE 1=1
     `;
     const params = [];
@@ -144,14 +166,22 @@ class SupplierListingRepository {
       sql += ' AND sl.product_spec_id = ?';
       params.push(filters.product_spec_id);
     }
+    if (filters.family_id) {
+      sql += ' AND COALESCE(ps.family_id, p.family_id) = ?';
+      params.push(Number(filters.family_id));
+    }
+    if (filters.category_id) {
+      sql += ' AND COALESCE(ps.category_id, p.category_id) = ?';
+      params.push(Number(filters.category_id));
+    }
     if (filters.category) {
-      sql += ' AND p.category = ?';
-      params.push(filters.category);
+      sql += ' AND (p.category = ? OR c.name = ? OR c.slug = ?)';
+      params.push(filters.category, filters.category, filters.category);
     }
     if (filters.search) {
-      sql += ' AND (ps.title LIKE ? OR ps.brand LIKE ? OR ps.variety LIKE ? OR u.full_name LIKE ?)';
+      sql += ' AND (ps.title LIKE ? OR ps.brand LIKE ? OR ps.variety LIKE ? OR u.full_name LIKE ? OR f.name LIKE ?)';
       const term = `%${filters.search}%`;
-      params.push(term, term, term, term);
+      params.push(term, term, term, term, term);
     }
 
     sql += ' ORDER BY sl.base_unit_price ASC';
@@ -162,6 +192,27 @@ class SupplierListingRepository {
       effective_status: Number(r.available_stock) <= 0 ? 'OUT_OF_STOCK' : r.status,
       is_available_for_purchase: r.status === 'ACTIVE' && Number(r.available_stock) >= Number(r.buyer_min_qty)
     }));
+  }
+
+  // Count distinct active product families and active offers for a supplier (E3 preparation)
+  async getSupplierCatalogUsageSummary(supplierId) {
+    const [rows] = await db.query(
+      `SELECT
+         COUNT(sl.id) AS total_offers,
+         SUM(CASE WHEN sl.status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_offers,
+         COUNT(DISTINCT CASE WHEN sl.status = 'ACTIVE' THEN COALESCE(ps.family_id, p.family_id) END) AS active_distinct_families
+       FROM supplier_listings sl
+       JOIN product_specifications ps ON sl.product_spec_id = ps.id
+       JOIN products p ON ps.product_id = p.id
+       WHERE sl.supplier_id = ?`,
+      [supplierId]
+    );
+    const r = rows[0] || {};
+    return {
+      total_offers: Number(r.total_offers || 0),
+      active_offers: Number(r.active_offers || 0),
+      active_distinct_families: Number(r.active_distinct_families || 0)
+    };
   }
 
   // Update listing with ownership verification

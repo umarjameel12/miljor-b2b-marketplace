@@ -105,7 +105,7 @@ export const SupplierProfilePage = () => {
             </div>
 
             {/* Quick Metrics */}
-            <div className="flex items-center gap-3 self-stretch sm:self-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-[var(--border-subtle)]">
+            <div className="flex flex-wrap items-center gap-3 self-stretch sm:self-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-[var(--border-subtle)]">
               <div className="px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center flex-1 sm:flex-initial">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">Plan</span>
                 <span className="text-xs font-bold text-[var(--brand-accent)]">{profile?.subscription_plan || 'STARTER'}</span>
@@ -114,6 +114,15 @@ export const SupplierProfilePage = () => {
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">Fee Rate</span>
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{profile?.transaction_fee_percent}%</span>
               </div>
+              <Button
+                size="sm"
+                onClick={() => navigate('/supplier/catalog')}
+                className="flex items-center gap-1.5 text-xs"
+              >
+                <Package className="w-3.5 h-3.5" />
+                Catalog & Offers
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
             </div>
           </div>
 

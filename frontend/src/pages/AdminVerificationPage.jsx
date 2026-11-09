@@ -225,6 +225,14 @@ export const AdminVerificationPage = () => {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => navigate('/admin/catalog')}
+              className="gap-2"
+            >
+              Catalog Governance & Requests
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={fetchPendingSuppliers}
               disabled={loading}
               className="gap-2"

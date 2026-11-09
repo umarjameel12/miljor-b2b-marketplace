@@ -13,35 +13,119 @@ class EncryptionService {
   }
 
   /**
-   * Retrieves the authoritative 32-byte (256-bit) encryption key
+   * Parses and validates a 256-bit (32-byte) key string.
+   * For non-test environments, requires high-entropy 256-bit key material:
+   *   - 64-character hex string (32 bytes)
+   *   - 44-character base64 string decoding to 32 bytes
+   *   - Exact 32-byte UTF-8 key material with sufficient character diversity
+   * Arbitrary-length passphrases are rejected for new encryption unless legacy derivation is explicitly requested for decryption.
+   */
+  _parseKeyMaterial(rawKey, { allowLegacyPassphraseDerivation = false } = {}) {
+    if (!rawKey || typeof rawKey !== 'string' || rawKey.trim().length === 0) {
+      return null;
+    }
+
+    const cleanKey = rawKey.trim();
+
+    // 1. Hex key (64 hex characters = 32 bytes)
+    if (/^[0-9a-fA-F]{64}$/.test(cleanKey)) {
+      const buf = Buffer.from(cleanKey, 'hex');
+      const uniqueBytes = new Set(buf).size;
+      if (uniqueBytes < 8) {
+        const err = new Error('Encryption key material has insufficient entropy (trivial repeating pattern)');
+        err.code = 'WEAK_ENCRYPTION_KEY';
+        throw err;
+      }
+      return buf;
+    }
+
+    // 2. Base64 key (44 characters ending with '=' encoding 32 bytes)
+    if (/^[A-Za-z0-9+/]{43}=$/.test(cleanKey)) {
+      const buf = Buffer.from(cleanKey, 'base64');
+      if (buf.length === 32) {
+        const uniqueBytes = new Set(buf).size;
+        if (uniqueBytes < 8) {
+          const err = new Error('Encryption key material has insufficient entropy (trivial repeating pattern)');
+          err.code = 'WEAK_ENCRYPTION_KEY';
+          throw err;
+        }
+        return buf;
+      }
+    }
+
+    // 3. Exact 32-byte raw UTF-8 string with high entropy
+    if (Buffer.byteLength(cleanKey, 'utf8') === 32) {
+      const buf = Buffer.from(cleanKey, 'utf8');
+      const uniqueBytes = new Set(buf).size;
+      if (uniqueBytes < 8) {
+        const err = new Error('Encryption key material has insufficient entropy (trivial repeating pattern)');
+        err.code = 'WEAK_ENCRYPTION_KEY';
+        throw err;
+      }
+      return buf;
+    }
+
+    // 4. Backward compatibility for decrypting previously encrypted records ONLY when explicitly enabled
+    if (allowLegacyPassphraseDerivation) {
+      return crypto.createHash('sha256').update(cleanKey, 'utf8').digest();
+    }
+
+    const err = new Error(
+      'Invalid BANK_DATA_ENCRYPTION_KEY format. Non-test environments require high-entropy 256-bit key material (64-char hex, 44-char base64, or 32-byte key); arbitrary passphrases are prohibited.'
+    );
+    err.code = 'WEAK_ENCRYPTION_KEY';
+    throw err;
+  }
+
+  /**
+   * Retrieves the authoritative 32-byte (256-bit) encryption key for active encryption
    */
   getEncryptionKey() {
     const rawKey = process.env.BANK_DATA_ENCRYPTION_KEY;
 
     if (rawKey && rawKey.trim().length > 0) {
-      const cleanKey = rawKey.trim();
-      // Hex key (64 hex characters)
-      if (/^[0-9a-fA-F]{64}$/.test(cleanKey)) {
-        return Buffer.from(cleanKey, 'hex');
-      }
-      // Base64 key (44 characters)
-      if (cleanKey.length === 44) {
-        return Buffer.from(cleanKey, 'base64');
-      }
-      // Plain 32-byte string
-      if (Buffer.byteLength(cleanKey, 'utf8') === 32) {
-        return Buffer.from(cleanKey, 'utf8');
-      }
-      // Derive 32-byte key via SHA-256 if supplied string is arbitrary length
-      return crypto.createHash('sha256').update(cleanKey, 'utf8').digest();
+      return this._parseKeyMaterial(rawKey, { allowLegacyPassphraseDerivation: false });
     }
 
-    // In isolated test environments, provide a deterministic test key (32 bytes)
+    // In isolated test environments ONLY when no custom key is supplied, provide deterministic 32-byte key
     if (process.env.NODE_ENV === 'test') {
       return crypto.createHash('sha256').update('miljor_test_bank_key_32_bytes').digest();
     }
 
     return null;
+  }
+
+  /**
+   * Retrieves candidate 32-byte keys for decryption (supports primary key + legacy rotation/derivation fallback)
+   */
+  getDecryptionCandidateKeys() {
+    const candidates = [];
+    const rawKey = process.env.BANK_DATA_ENCRYPTION_KEY;
+
+    if (rawKey && rawKey.trim().length > 0) {
+      try {
+        const strictKey = this._parseKeyMaterial(rawKey, { allowLegacyPassphraseDerivation: false });
+        if (strictKey) candidates.push(strictKey);
+      } catch (err) {
+        if (process.env.ALLOW_LEGACY_KEY_DERIVATION === 'true') {
+          const derived = this._parseKeyMaterial(rawKey, { allowLegacyPassphraseDerivation: true });
+          if (derived) candidates.push(derived);
+        } else {
+          throw err;
+        }
+      }
+    } else if (process.env.NODE_ENV === 'test') {
+      candidates.push(crypto.createHash('sha256').update('miljor_test_bank_key_32_bytes').digest());
+    }
+
+    // Optional legacy key for non-destructive key rotation reads
+    const legacyRawKey = process.env.BANK_DATA_LEGACY_ENCRYPTION_KEY;
+    if (legacyRawKey && legacyRawKey.trim().length > 0) {
+      const legacyBuf = this._parseKeyMaterial(legacyRawKey, { allowLegacyPassphraseDerivation: true });
+      if (legacyBuf) candidates.push(legacyBuf);
+    }
+
+    return candidates;
   }
 
   /**
@@ -59,10 +143,14 @@ class EncryptionService {
   }
 
   /**
-   * Checks whether encryption at rest is configured in the current environment
+   * Checks whether encryption at rest is configured with valid key material in the current environment
    */
   isConfigured() {
-    return this.getEncryptionKey() !== null;
+    try {
+      return this.getEncryptionKey() !== null;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -140,28 +228,33 @@ class EncryptionService {
       throw err;
     }
 
-    const key = this.getEncryptionKey();
-    if (!key) {
+    const candidateKeys = this.getDecryptionCandidateKeys();
+    if (!candidateKeys || candidateKeys.length === 0) {
       const err = new Error('Sensitive data encryption key (BANK_DATA_ENCRYPTION_KEY) is not configured in environment');
       err.code = 'ENCRYPTION_KEY_NOT_CONFIGURED';
       throw err;
     }
 
-    try {
-      const iv = Buffer.from(hexIv, 'hex');
-      const authTag = Buffer.from(hexTag, 'hex');
-      const decipher = crypto.createDecipheriv(this.algorithm, key, iv);
-      decipher.setAuthTag(authTag);
+    const iv = Buffer.from(hexIv, 'hex');
+    const authTag = Buffer.from(hexTag, 'hex');
 
-      let plaintext = decipher.update(hexCiphertext, 'hex', 'utf8');
-      plaintext += decipher.final('utf8');
+    for (const key of candidateKeys) {
+      try {
+        const decipher = crypto.createDecipheriv(this.algorithm, key, iv);
+        decipher.setAuthTag(authTag);
 
-      return plaintext;
-    } catch {
-      const err = new Error('Cryptographic decryption failed: ciphertext corrupted or authentication tag mismatch');
-      err.code = 'DECRYPTION_FAILED';
-      throw err;
+        let plaintext = decipher.update(hexCiphertext, 'hex', 'utf8');
+        plaintext += decipher.final('utf8');
+
+        return plaintext;
+      } catch {
+        // Try next candidate key if rotation fallback is configured
+      }
     }
+
+    const err = new Error('Cryptographic decryption failed: ciphertext corrupted or authentication tag mismatch');
+    err.code = 'DECRYPTION_FAILED';
+    throw err;
   }
 }
 

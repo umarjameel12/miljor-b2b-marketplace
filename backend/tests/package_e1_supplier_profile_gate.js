@@ -649,6 +649,23 @@ async function runE1Gate() {
       assert.strictEqual(capExceededRes.status, 400);
       assert.strictEqual(capExceededRes.data.error.code, 'PLAN_CAP_EXCEEDED');
 
+      // 3b. Malformed max_active_listings strings, floats, negatives, arrays, and objects are strictly rejected
+      const malformedCaps = ['4abc', '13.5', '25foo', -5, 0, 12.75, [4], { cap: 4 }, 'NaN', 'Infinity'];
+      for (const badCap of malformedCaps) {
+        const badCapRes = await api(`/api/v1/admin/suppliers/${supplier2Id}/verify`, {
+          method: 'PUT',
+          token: adminToken,
+          body: {
+            verification_status: 'VERIFIED',
+            verification_level: 'LEVEL_1_CONTACT',
+            subscription_plan: 'GROWTH',
+            max_active_listings: badCap
+          }
+        });
+        assert.strictEqual(badCapRes.status, 400, `Malformed cap ${JSON.stringify(badCap)} must be rejected with 400`);
+        assert.strictEqual(badCapRes.data.error.code, 'INVALID_LISTING_CAP');
+      }
+
       // 4. Approving with STARTER plan defaults listings cap safely to 4 (not 25)
       const starterApproveRes = await api(`/api/v1/admin/suppliers/${supplier2Id}/verify`, {
         method: 'PUT',
@@ -707,9 +724,9 @@ async function runE1Gate() {
     });
 
     // ---------------------------------------------------------------------------
-    // TEST 26: Missing BANK_DATA_ENCRYPTION_KEY fails safely in non-test mode
+    // TEST 26: Missing or weak BANK_DATA_ENCRYPTION_KEY fails safely in non-test mode
     // ---------------------------------------------------------------------------
-    await test('Missing BANK_DATA_ENCRYPTION_KEY fails safely without logging or persisting plaintext', async () => {
+    await test('Missing or weak BANK_DATA_ENCRYPTION_KEY fails safely without logging or persisting plaintext', async () => {
       const encryptionService = require('../src/services/encryptionService');
       const originalEnv = process.env.NODE_ENV;
       const originalKey = process.env.BANK_DATA_ENCRYPTION_KEY;
@@ -728,10 +745,28 @@ async function runE1Gate() {
         }, (err) => {
           return err.code === 'ENCRYPTION_KEY_NOT_CONFIGURED';
         });
+
+        // Weak passphrase or low-entropy repeating key must fail closed with WEAK_ENCRYPTION_KEY
+        process.env.BANK_DATA_ENCRYPTION_KEY = 'short_weak_passphrase';
+        assert.strictEqual(encryptionService.isConfigured(), false);
+        assert.throws(() => {
+          encryptionService.encrypt('PK36SCBL0000001123456702');
+        }, (err) => {
+          return err.code === 'WEAK_ENCRYPTION_KEY';
+        });
+
+        process.env.BANK_DATA_ENCRYPTION_KEY = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        assert.throws(() => {
+          encryptionService.encrypt('PK36SCBL0000001123456702');
+        }, (err) => {
+          return err.code === 'WEAK_ENCRYPTION_KEY';
+        });
       } finally {
         process.env.NODE_ENV = originalEnv;
         if (originalKey) {
           process.env.BANK_DATA_ENCRYPTION_KEY = originalKey;
+        } else {
+          delete process.env.BANK_DATA_ENCRYPTION_KEY;
         }
       }
     });
@@ -766,32 +801,99 @@ async function runE1Gate() {
         'Admin queue must show migration-required indicator rather than parsing legacy plaintext'
       );
 
-      // 4. Unauthorized migration attempt (arbitrary boolean or non-superadmin) fails closed
-      await assert.rejects(
-        async () => {
-          await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, { authorized: true });
-        },
-        /Requires trusted server-side maintenance context with SUPER_ADMIN privileges/
-      );
+      // 4. Forged plain objects (even with exact matching keys) MUST be rejected!
       await assert.rejects(
         async () => {
           await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, {
             source: 'INTERNAL_ADMIN_MAINTENANCE',
-            actorRole: 'BUYER',
-            adminId: 99
+            actorRole: 'SUPER_ADMIN',
+            adminId: adminId,
+            targetSupplierId: supplier2Id,
+            intent: 'MIGRATE_LEGACY_BANK_IBAN'
           });
         },
-        /Requires trusted server-side maintenance context with SUPER_ADMIN privileges/
+        (err) => err.code === 'UNAUTHORIZED_MIGRATION'
       );
 
-      // 5. Trusted administrative maintenance context migrates record safely
-      const trustedContext = {
-        source: 'INTERNAL_ADMIN_MAINTENANCE',
-        actorRole: 'SUPER_ADMIN',
-        adminId: 1
-      };
-      const migResult = await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, trustedContext);
-      assert.strictEqual(migResult.migrated, true);
+      // Non-SUPER_ADMIN token (both BUYER and VERIFICATION_ADMIN) cannot mint migration capability
+      await assert.rejects(
+        async () => {
+          await supplierProfileRepo.authorizeLegacyBankMigration({
+            adminToken: buyerToken,
+            targetSupplierId: supplier2Id,
+            intent: 'MIGRATE_LEGACY_BANK_IBAN'
+          });
+        },
+        (err) => err.code === 'UNAUTHORIZED_MIGRATION'
+      );
+      await assert.rejects(
+        async () => {
+          await supplierProfileRepo.authorizeLegacyBankMigration({
+            adminToken: adminToken, // VERIFICATION_ADMIN (not SUPER_ADMIN)
+            targetSupplierId: supplier2Id,
+            intent: 'MIGRATE_LEGACY_BANK_IBAN'
+          });
+        },
+        (err) => err.code === 'UNAUTHORIZED_MIGRATION'
+      );
+
+      // Seed an active verified SUPER_ADMIN in miljor_test_db for maintenance test
+      const [saRes] = await db.query(
+        `INSERT INTO users (full_name, email, phone, password_hash, role, verification_status, is_verified)
+         VALUES ('Super Admin Maintenance', ?, ?, ?, 'SUPER_ADMIN', 'VERIFIED', 1)`,
+        [`superadmin_e1_${timestamp}@miljor.com`, `+923009${timestamp.toString().slice(-6)}`, passwordHash]
+      );
+      const superAdminId = saRes.insertId;
+      const superAdminToken = generateTestToken({
+        id: superAdminId,
+        email: `superadmin_e1_${timestamp}@miljor.com`,
+        role: 'SUPER_ADMIN'
+      });
+
+      try {
+        // Development DB mutation denial even if ALLOW_DEV_DB_MIGRATION is set
+        const devBlockedCap = await supplierProfileRepo.authorizeLegacyBankMigration({
+          adminToken: superAdminToken,
+          targetSupplierId: supplier2Id,
+          intent: 'MIGRATE_LEGACY_BANK_IBAN'
+        });
+        const fakeDevConnection = {
+          query: async (sql) => {
+            if (sql.includes('SELECT DATABASE()')) return [[{ current_db: 'miljor_db' }]];
+            throw new Error('Should not execute any further queries on miljor_db');
+          }
+        };
+        process.env.ALLOW_DEV_DB_MIGRATION = 'true';
+        try {
+          await assert.rejects(
+            async () => {
+              await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, devBlockedCap, fakeDevConnection);
+            },
+            (err) => err.code === 'DEV_DB_MIGRATION_BLOCKED'
+          );
+        } finally {
+          delete process.env.ALLOW_DEV_DB_MIGRATION;
+        }
+
+        // 5. Verified SUPER_ADMIN capability minting + migration succeeds on miljor_test_db
+        const verifiedCapability = await supplierProfileRepo.authorizeLegacyBankMigration({
+          adminToken: superAdminToken,
+          targetSupplierId: supplier2Id,
+          intent: 'MIGRATE_LEGACY_BANK_IBAN'
+        });
+        const migResult = await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, verifiedCapability);
+        assert.strictEqual(migResult.migrated, true);
+
+        // Replaying the consumed one-time capability fails closed
+        await assert.rejects(
+          async () => {
+            await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, verifiedCapability);
+          },
+          (err) => err.code === 'UNAUTHORIZED_MIGRATION'
+        );
+      } finally {
+        await db.query('DELETE FROM users WHERE id = ?', [superAdminId]);
+      }
 
       // Verify record is now safely encrypted in MySQL
       const [migratedRow] = await db.query('SELECT bank_iban FROM supplier_profiles WHERE supplier_id = ?', [supplier2Id]);

@@ -1,21 +1,38 @@
 // =============================================================================
 // src/controllers/productSpecificationController.js
 // MilJor Product Specification Controller
-// Specification catalog management and multi-supplier comparison
+// Specification catalog management and multi-supplier comparison (Package E2)
 // =============================================================================
 const specRepo = require('../repositories/productSpecificationRepo');
 const productRepo = require('../repositories/productRepo');
+const catalogRepo = require('../repositories/catalogRepository');
 const listingRepo = require('../repositories/supplierListingRepo');
 const specService = require('../services/specificationService');
 const unitService = require('../services/unitConversionService');
+
+const ADMIN_CATALOG_ROLES = ['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'ADMIN'];
 
 class ProductSpecificationController {
   // 1. Get All Specifications with Filtering and Search
   async getAllSpecifications(req, res) {
     try {
-      const { category, brand, variety, quality_grade, pack_size, pack_unit, search, product_id } = req.query;
+      const {
+        category,
+        category_id,
+        family_id,
+        brand,
+        variety,
+        quality_grade,
+        pack_size,
+        pack_unit,
+        search,
+        product_id
+      } = req.query;
+
       const specifications = await specRepo.findAll({
         category,
+        category_id,
+        family_id,
         brand,
         variety,
         quality_grade,
@@ -65,11 +82,25 @@ class ProductSpecificationController {
     }
   }
 
-  // 3. Create New Exact Specification (Admin & Verified Suppliers)
+  // 3. Create New Exact Specification (Package E2: Restricted to Catalog Admins;
+  // Suppliers must submit moderated requests via POST /api/v1/catalog/requests)
   async createSpecification(req, res) {
     try {
+      const userRole = req.user?.role;
+      if (!ADMIN_CATALOG_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'DIRECT_CATALOG_CREATION_PROHIBITED',
+            message: 'Suppliers cannot create public product specifications directly. Please submit a moderated variant request via POST /api/v1/catalog/requests.'
+          }
+        });
+      }
+
       const {
         product_id,
+        family_id,
+        category_id,
         brand,
         variety,
         crop_year,
@@ -93,12 +124,19 @@ class ProductSpecificationController {
         });
       }
 
-      // 2. Category-specific validation
-      const validation = specService.validateSpecificationInput(req.body, baseProduct.category);
+      const resolvedFamilyId = family_id || baseProduct.family_id || null;
+      const resolvedCategoryId = category_id || baseProduct.category_id || null;
+      let familyContext = null;
+      if (resolvedFamilyId) {
+        familyContext = await catalogRepo.findFamilyById(resolvedFamilyId);
+      }
+
+      // 2. Category & Family-specific validation
+      const validation = specService.validateSpecificationInput(req.body, baseProduct.category, familyContext);
       if (!validation.valid) {
         return res.status(400).json({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: validation.message }
+          error: { code: validation.code || 'VALIDATION_ERROR', message: validation.message }
         });
       }
 
@@ -135,9 +173,11 @@ class ProductSpecificationController {
       const specCode = specService.generateSpecCode(baseProduct.category, variety);
       const title = `${brand} ${variety} ${crop_year ? crop_year + ' ' : ''}${processing_method}, ${quality_grade}, ${pack_size}${pack_unit}`;
 
-      // 6. Save specification
+      // 6. Save specification with canonical category_id, family_id, and APPROVED status
       const specId = await specRepo.create({
         product_id,
+        category_id: resolvedCategoryId,
+        family_id: resolvedFamilyId,
         spec_code: specCode,
         title,
         brand: brand.trim(),
@@ -152,7 +192,11 @@ class ProductSpecificationController {
         storage_requirements: storage_requirements ? storage_requirements.trim() : null,
         shelf_life_days: shelf_life_days ? Number(shelf_life_days) : null,
         spec_attributes: spec_attributes || null,
-        spec_hash: specHash
+        spec_hash: specHash,
+        approval_status: 'APPROVED',
+        created_by: req.user?.id || null,
+        approved_by: req.user?.id || null,
+        approved_at: new Date()
       });
 
       const newSpec = await specRepo.findById(specId);

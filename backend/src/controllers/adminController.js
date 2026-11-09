@@ -184,17 +184,37 @@ class AdminController {
       const effectivePlan = subscription_plan || 'GROWTH';
       const authorizedPlanCap = AUTHORIZED_PLAN_LISTING_CAPS[effectivePlan] || 4;
 
+      let effectiveListingCap = authorizedPlanCap;
       if (max_active_listings !== undefined && max_active_listings !== null) {
-        const requestedCap = parseInt(max_active_listings, 10);
-        if (isNaN(requestedCap) || requestedCap < 1) {
+        let isValidInteger = false;
+        let requestedCap = NaN;
+
+        if (typeof max_active_listings === 'number') {
+          if (Number.isInteger(max_active_listings) && Number.isSafeInteger(max_active_listings) && max_active_listings >= 1) {
+            isValidInteger = true;
+            requestedCap = max_active_listings;
+          }
+        } else if (typeof max_active_listings === 'string') {
+          const trimmed = max_active_listings.trim();
+          if (/^[1-9]\d*$/.test(trimmed)) {
+            const num = Number(trimmed);
+            if (Number.isSafeInteger(num) && num >= 1) {
+              isValidInteger = true;
+              requestedCap = num;
+            }
+          }
+        }
+
+        if (!isValidInteger) {
           return res.status(400).json({
             success: false,
             error: {
               code: 'INVALID_LISTING_CAP',
-              message: 'max_active_listings must be a positive integer'
+              message: 'max_active_listings must be an exact positive safe integer (decimals, trailing characters, arrays, and objects are prohibited)'
             }
           });
         }
+
         if (requestedCap > authorizedPlanCap) {
           return res.status(400).json({
             success: false,
@@ -204,11 +224,9 @@ class AdminController {
             }
           });
         }
-      }
 
-      const effectiveListingCap = (max_active_listings !== undefined && max_active_listings !== null)
-        ? parseInt(max_active_listings, 10)
-        : authorizedPlanCap;
+        effectiveListingCap = requestedCap;
+      }
 
       // Check supplier profile exists
       const [profiles] = await db.query('SELECT * FROM supplier_profiles WHERE supplier_id = ?', [id]);

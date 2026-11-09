@@ -16,7 +16,9 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SupplierProfilePage } from './pages/SupplierProfilePage';
 import { SupplierOnboardingPage } from './pages/SupplierOnboardingPage';
+import { SupplierCatalogPage } from './pages/SupplierCatalogPage';
 import { AdminVerificationPage } from './pages/AdminVerificationPage';
+import { AdminCatalogPage } from './pages/AdminCatalogPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -54,7 +56,10 @@ function AppContent() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/supplier/profile" element={<SupplierProfilePage />} />
           <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />
+          <Route path="/supplier/catalog" element={<SupplierCatalogPage />} />
           <Route path="/admin/verifications" element={<AdminVerificationPage />} />
+          <Route path="/admin/suppliers/verification" element={<AdminVerificationPage />} />
+          <Route path="/admin/catalog" element={<AdminCatalogPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

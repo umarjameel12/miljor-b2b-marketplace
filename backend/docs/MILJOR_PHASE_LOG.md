@@ -1138,6 +1138,39 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - **HARDENED MAINTENANCE WORKFLOW: VERIFIED (Row-level lock, SUPER_ADMIN context, audit trail)**
   - **CAN START E2: NO (Strict Stop Enforced)**
 
+---
+
+## Package E2 Execution Detail — Canonical Catalog Architecture, Supplier Catalog Requests, Product/Variant Management & E1 Security Closure
+- **Execution Date:** 2026-11-10
+- **Objective:** Implement the complete canonical four-level catalog hierarchy (`CATEGORY → PRODUCT FAMILY → APPROVED PHYSICAL VARIANT → SUPPLIER OFFER`), supplier catalog addition requests (`NEW_FAMILY` and `NEW_VARIANT`), admin moderation workflow (`DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED / REJECTED`), and close all remaining E1 security review findings.
+- **Database Migration Applied (Test DB Only):**
+  - Migration 033: `backend/database/migrations/033_canonical_catalog_and_moderation.sql`
+  - Rollback script: `backend/database/migrations/rollback/033_rollback_canonical_catalog_and_moderation.sql`
+  - Applied strictly to `miljor_test_db` (`miljor_db` remains untouched at Migration 031).
+- **Files Modified/Created:**
+  - `backend/src/services/encryptionService.js`: Enforced high-entropy 256-bit key validation in non-test environments (`WEAK_ENCRYPTION_KEY`) and optional legacy key rotation support.
+  - `backend/src/repositories/supplierProfileRepository.js`: Added `authorizeLegacyBankMigration` with JWT + DB `SUPER_ADMIN` verification and one-time `WeakSet` capability token; unconditionally blocked `miljor_db` and `miljor_sandbox_db` in `migrateLegacyBankingRecord`.
+  - `backend/src/controllers/adminController.js`: Replaced `parseInt()` with strict positive safe integer validation (`INVALID_LISTING_CAP`).
+  - `backend/src/services/specificationService.js`: Added cross-commodity semantic validation (`validateFamilyAndCommodityCoherence`), strict decimal `validatePackSize`, and `computeCatalogRequestHash`.
+  - `backend/src/repositories/catalogRepository.js` & `backend/src/services/catalogService.js`: Full canonical catalog repository and transactional moderation service.
+  - `backend/src/controllers/catalogController.js`, `backend/src/routes/v1/catalogRoutes.js`, `backend/src/routes/v1/adminRoutes.js`: Public catalog discovery, supplier request endpoints, and admin moderation endpoints.
+  - `backend/src/controllers/productController.js` & `backend/src/controllers/productSpecificationController.js`: Closed direct supplier catalog creation bypass (`403 DIRECT_CATALOG_CREATION_PROHIBITED`).
+  - `backend/src/controllers/supplierListingController.js` & `backend/src/repositories/supplierListingRepo.js`: Enforced `APPROVED` variant/family/category checks and added `getSupplierCatalogUsageSummary` (`active_distinct_families`) for Package E3 readiness.
+  - `frontend/src/api/catalog.js`, `frontend/src/pages/SupplierCatalogPage.jsx`, `frontend/src/pages/AdminCatalogPage.jsx`, `frontend/src/App.jsx`, `frontend/src/components/layout/AppShell.jsx`: Complete supplier and admin catalog interfaces.
+  - `backend/tests/package_e2_catalog_foundation_gate.js`, `backend/tests/package_e2_catalog_moderation_gate.js`, `backend/tests/package_e2_catalog_security_gate.js`, `frontend/tests/package_e2_frontend_catalog.test.cjs`: Automated verification suites.
+- **Automated Gate Results:**
+  - `package_e1_supplier_profile_gate.js`: **28/28 PASS**
+  - `package_e2_catalog_foundation_gate.js`: **9/9 PASS**
+  - `package_e2_catalog_moderation_gate.js`: **8/8 PASS**
+  - `package_e2_catalog_security_gate.js`: **8/8 PASS**
+  - `part3_specification_gate.js`: **15/15 PASS**
+  - `package_e2_frontend_catalog.test.cjs`: **4/4 PASS**
+  - `cd frontend && npm run build`: **0 errors (built in 767ms)**
+- **Package Status:**
+  - **PACKAGE E2: PASS**
+  - **CAN START E3: NO (Strict Stop Enforced)**
+
+
 
 
 

@@ -41,6 +41,37 @@ class SupplierListingController {
         });
       }
 
+      // Package E2: Enforce that variant, parent family, and parent category are APPROVED and active
+      if (spec.approval_status && spec.approval_status !== 'APPROVED') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'VARIANT_NOT_APPROVED',
+            message: 'Commercial offers can only be published against APPROVED physical variants.'
+          }
+        });
+      }
+
+      if (spec.family_is_active === 0 || spec.family_approval_status === 'ARCHIVED') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FAMILY_INACTIVE',
+            message: 'Cannot publish offer because the parent product family is archived or inactive.'
+          }
+        });
+      }
+
+      if (spec.category_is_active === 0 || spec.category_approval_status === 'INACTIVE') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'CATEGORY_INACTIVE',
+            message: 'Cannot publish offer because the parent catalog category is inactive.'
+          }
+        });
+      }
+
       // 2. Validate price and quantities
       const validation = unitService.validateQuantityAndPrice(
         buyer_min_qty || 1,
@@ -138,9 +169,11 @@ class SupplierListingController {
   // 2. Get All Public Active Listings (Catalog / Buyer View)
   async getAllListings(req, res) {
     try {
-      const { category, product_spec_id, supplier_id, search } = req.query;
+      const { category, category_id, family_id, product_spec_id, supplier_id, search } = req.query;
       const listings = await listingRepo.findAll({
         category,
+        category_id,
+        family_id,
         product_spec_id,
         supplier_id,
         search,
@@ -161,19 +194,25 @@ class SupplierListingController {
     }
   }
 
-  // 3. Get Authenticated Supplier's Own Listings
+  // 3. Get Authenticated Supplier's Own Listings (with E3 preparation family usage summary)
   async getMyListings(req, res) {
     try {
       const supplierId = req.user.id;
-      const listings = await listingRepo.findAll({
-        supplier_id: supplierId,
-        activeOnly: false
-      });
+      const [listings, usageSummary] = await Promise.all([
+        listingRepo.findAll({
+          supplier_id: supplierId,
+          activeOnly: false
+        }),
+        listingRepo.getSupplierCatalogUsageSummary(supplierId)
+      ]);
 
       res.status(200).json({
         success: true,
         count: listings.length,
-        data: { listings }
+        data: {
+          listings,
+          catalog_usage: usageSummary
+        }
       });
     } catch (error) {
       console.error('Get My Listings Error:', error);

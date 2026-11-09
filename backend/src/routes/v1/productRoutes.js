@@ -1,17 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../../controllers/productController');
-const { protect, authorize } = require('../../middlewares/authGuard');
+const { protect } = require('../../middlewares/authGuard');
 
 // Public Routes (Buyers & Visitors can view catalog)
 router.get('/', productController.getAllProducts);
 router.get('/:id', productController.getProductById);
 
-// Protected Routes (Only SUPPLIER and ADMIN can add products)
+// Protected Routes (Package E2: Direct public catalog creation is restricted to Catalog Admins;
+// Suppliers must submit moderated catalog requests via POST /api/v1/catalog/requests)
 router.post(
   '/',
   protect,
-  authorize('SUPPLIER', 'ADMIN'),
   productController.createProduct
 );
 
