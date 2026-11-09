@@ -737,14 +737,14 @@ async function runE1Gate() {
     });
 
     // ---------------------------------------------------------------------------
-    // TEST 27: Normal repository path rejects implicit legacy plaintext, authorized migration succeeds
+    // TEST 27: Normal repository & admin paths refuse implicit legacy plaintext; hardened maintenance migration works
     // ---------------------------------------------------------------------------
-    await test('Normal repository path refuses implicit legacy plaintext and explicit migration works safely', async () => {
+    await test('Normal repository & admin paths refuse implicit legacy plaintext; hardened maintenance migration works', async () => {
       const supplierProfileRepo = require('../src/repositories/supplierProfileRepository');
 
-      // 1. Seed unencrypted legacy IBAN into supplier2 record in MySQL
-      const legacyIban = 'PK68HABB0000009988776601';
-      await db.query('UPDATE supplier_profiles SET bank_iban = ? WHERE supplier_id = ?', [legacyIban, supplier2Id]);
+      // 1. Seed unencrypted legacy IBAN into supplier2 record in MySQL (valid Modulo-97 Pakistani IBAN)
+      const legacyIban = 'PK36SCBL0000001123456702';
+      await db.query('UPDATE supplier_profiles SET bank_iban = ?, verification_status = "PENDING_REVIEW" WHERE supplier_id = ?', [legacyIban, supplier2Id]);
 
       // 2. Normal application path: findBySupplierId must NOT return plaintext
       const normalProfile = await supplierProfileRepo.findBySupplierId(supplier2Id);
@@ -756,23 +756,56 @@ async function runE1Gate() {
       const [rawCheck] = await db.query('SELECT bank_iban FROM supplier_profiles WHERE supplier_id = ?', [supplier2Id]);
       assert.strictEqual(rawCheck[0].bank_iban, legacyIban, 'Raw MySQL record must remain preserved');
 
-      // 3. Unauthorized migration attempt fails
-      await assert.rejects(
-        async () => {
-          await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, { authorized: false });
-        },
-        /Unauthorized legacy migration attempt/
+      // 3. Admin pending queue must also refuse to parse or mask legacy plaintext in normal operations
+      const pendingCheck = await api('/api/v1/admin/suppliers/pending', { token: adminToken });
+      const legacySupplierInQueue = pendingCheck.data.data.suppliers.find((s) => s.supplier_id === supplier2Id);
+      assert.ok(legacySupplierInQueue, 'Supplier 2 must be in pending list');
+      assert.strictEqual(
+        legacySupplierInQueue.bank_iban_masked,
+        'PK** **** **** [LEGACY_MIGRATION_REQUIRED]',
+        'Admin queue must show migration-required indicator rather than parsing legacy plaintext'
       );
 
-      // 4. Authorized migration procedure encrypts record safely
-      const migResult = await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, { authorized: true });
+      // 4. Unauthorized migration attempt (arbitrary boolean or non-superadmin) fails closed
+      await assert.rejects(
+        async () => {
+          await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, { authorized: true });
+        },
+        /Requires trusted server-side maintenance context with SUPER_ADMIN privileges/
+      );
+      await assert.rejects(
+        async () => {
+          await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, {
+            source: 'INTERNAL_ADMIN_MAINTENANCE',
+            actorRole: 'BUYER',
+            adminId: 99
+          });
+        },
+        /Requires trusted server-side maintenance context with SUPER_ADMIN privileges/
+      );
+
+      // 5. Trusted administrative maintenance context migrates record safely
+      const trustedContext = {
+        source: 'INTERNAL_ADMIN_MAINTENANCE',
+        actorRole: 'SUPER_ADMIN',
+        adminId: 1
+      };
+      const migResult = await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, trustedContext);
       assert.strictEqual(migResult.migrated, true);
 
       // Verify record is now safely encrypted in MySQL
       const [migratedRow] = await db.query('SELECT bank_iban FROM supplier_profiles WHERE supplier_id = ?', [supplier2Id]);
       assert.ok(migratedRow[0].bank_iban.startsWith('v1:'), 'Migrated record must start with v1: envelope');
 
-      // 5. Subsequent normal application read now decrypts normally
+      // Verify audit log entry was created without plaintext
+      const [auditLogs] = await db.query(
+        'SELECT * FROM system_audit_logs WHERE action = "LEGACY_BANK_DATA_MIGRATED" AND entity_id = ?',
+        [supplier2Id]
+      );
+      assert.ok(auditLogs.length > 0, 'Audit log entry must be persisted');
+      assert.strictEqual(JSON.stringify(auditLogs[0]).includes(legacyIban), false, 'Audit log MUST NOT contain plaintext IBAN');
+
+      // 6. Subsequent normal application read now decrypts normally
       const postMigProfile = await supplierProfileRepo.findBySupplierId(supplier2Id);
       assert.strictEqual(postMigProfile.bank_iban, legacyIban, 'Post-migration normal path must decrypt successfully');
       assert.strictEqual(postMigProfile.bank_iban_is_encrypted, true);

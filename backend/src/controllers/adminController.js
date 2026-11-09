@@ -59,16 +59,16 @@ class AdminController {
       const suppliers = rows.map((r) => {
         let bankIbanMasked = null;
         if (r.bank_iban) {
-          try {
-            if (encryptionService.isEncrypted(r.bank_iban)) {
+          if (encryptionService.isEncrypted(r.bank_iban)) {
+            try {
               const decrypted = encryptionService.decrypt(r.bank_iban);
               bankIbanMasked = validationService.maskIban(decrypted);
-            } else {
-              // Legacy unencrypted in db masked safely
-              bankIbanMasked = validationService.maskIban(r.bank_iban);
+            } catch {
+              bankIbanMasked = 'PK** **** **** [CIPHERTEXT_ERROR]';
             }
-          } catch {
-            bankIbanMasked = 'PK** **** **** [ENCRYPTED]';
+          } else {
+            // Strict security invariant: do not parse or mask raw legacy plaintext in normal API paths
+            bankIbanMasked = 'PK** **** **** [LEGACY_MIGRATION_REQUIRED]';
           }
         }
 

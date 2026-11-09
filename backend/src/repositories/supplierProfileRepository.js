@@ -5,6 +5,7 @@
 // =============================================================================
 const defaultDb = require('../config/db');
 const encryptionService = require('../services/encryptionService');
+const validationService = require('../services/supplierValidationService');
 
 class SupplierProfileRepository {
   /**
@@ -80,43 +81,115 @@ class SupplierProfileRepository {
   }
 
   /**
-   * Explicit authorized legacy migration procedure
-   * Strictly isolated from normal application runtime paths.
-   * Reads unencrypted legacy record with authorization, validates, encrypts with active key,
-   * and updates MySQL record without data loss.
+   * Explicit server-side administrative legacy migration procedure.
+   * Strictly isolated from normal application runtime paths and public APIs.
+   * Requires trusted server-side context (maintenance workflow with valid adminId & SUPER_ADMIN role).
+   * Never mutates development database miljor_db without explicit migration environment bypass.
    */
   async migrateLegacyBankingRecord(supplierId, authorizationContext, connection) {
-    if (!authorizationContext || authorizationContext.authorized !== true) {
-      const err = new Error('Unauthorized legacy migration attempt. Explicit authorization context required.');
+    // 1. Validate trusted server-side context (not a simple boolean)
+    if (
+      !authorizationContext ||
+      typeof authorizationContext !== 'object' ||
+      authorizationContext.source !== 'INTERNAL_ADMIN_MAINTENANCE' ||
+      !['SUPER_ADMIN'].includes(authorizationContext.actorRole) ||
+      !authorizationContext.adminId ||
+      typeof authorizationContext.adminId !== 'number'
+    ) {
+      const err = new Error('Unauthorized legacy migration attempt. Requires trusted server-side maintenance context with SUPER_ADMIN privileges.');
       err.code = 'UNAUTHORIZED_MIGRATION';
       throw err;
     }
 
-    const db = connection || defaultDb;
-    const [rows] = await db.query(
-      'SELECT supplier_id, bank_iban FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
-      [supplierId]
-    );
-
-    if (!rows[0] || !rows[0].bank_iban) {
-      return { migrated: false, reason: 'NO_RECORD' };
+    // 2. Encryption key verification before starting transaction
+    if (!encryptionService.isConfigured()) {
+      const err = new Error('Cannot execute legacy banking migration: BANK_DATA_ENCRYPTION_KEY is unconfigured.');
+      err.code = 'ENCRYPTION_KEY_NOT_CONFIGURED';
+      throw err;
     }
 
-    const rawVal = rows[0].bank_iban;
-    if (encryptionService.isEncrypted(rawVal)) {
-      return { migrated: false, reason: 'ALREADY_ENCRYPTED' };
+    // 3. Database safety guard: strictly block migration on miljor_db unless separately authorized
+    const dbToQuery = connection || defaultDb;
+    const [dbRow] = await dbToQuery.query('SELECT DATABASE() as current_db');
+    const activeDb = dbRow[0]?.current_db;
+    if (activeDb === 'miljor_db' && process.env.ALLOW_DEV_DB_MIGRATION !== 'true') {
+      const err = new Error('CRITICAL SAFETY INVARIANT: Legacy banking migration is strictly blocked against miljor_db without explicit ALLOW_DEV_DB_MIGRATION authorization.');
+      err.code = 'DEV_DB_MIGRATION_BLOCKED';
+      throw err;
     }
 
-    // Explicitly authorized legacy read
-    const plaintext = encryptionService.decrypt(rawVal, { allowLegacy: true });
-    const encrypted = encryptionService.encrypt(plaintext);
+    // 4. Controlled Transaction Boundaries with Row-Level Lock
+    const isExternalTx = Boolean(connection);
+    const conn = connection || (await defaultDb.getConnection());
+    try {
+      if (!isExternalTx) {
+        await conn.beginTransaction();
+      }
 
-    await db.query(
-      'UPDATE supplier_profiles SET bank_iban = ? WHERE supplier_id = ?',
-      [encrypted, supplierId]
-    );
+      // Exclusive row-level lock to prevent races with concurrent profile updates
+      const [rows] = await conn.query(
+        'SELECT supplier_id, bank_iban FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+        [supplierId]
+      );
 
-    return { migrated: true, supplierId };
+      if (!rows[0] || !rows[0].bank_iban) {
+        if (!isExternalTx) await conn.commit();
+        return { migrated: false, reason: 'NO_RECORD' };
+      }
+
+      const rawVal = rows[0].bank_iban;
+
+      // 5. Idempotent check: if already encrypted envelope, no-op safely
+      if (encryptionService.isEncrypted(rawVal)) {
+        if (!isExternalTx) await conn.commit();
+        return { migrated: false, reason: 'ALREADY_ENCRYPTED' };
+      }
+
+      // 6. Explicit authorized legacy read and validation before encryption
+      const plaintext = encryptionService.decrypt(rawVal, { allowLegacy: true });
+      const ibanValidation = validationService.validateIban(plaintext);
+      if (!ibanValidation.valid) {
+        const err = new Error('Legacy migration failed: unencrypted record does not contain a valid Pakistani IBAN.');
+        err.code = 'INVALID_LEGACY_IBAN';
+        throw err;
+      }
+
+      // 7. Re-encrypt with active key
+      const encrypted = encryptionService.encrypt(plaintext);
+
+      await conn.query(
+        'UPDATE supplier_profiles SET bank_iban = ? WHERE supplier_id = ?',
+        [encrypted, supplierId]
+      );
+
+      // 8. Persist audit log without leaking plaintext
+      await conn.query(
+        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
+         VALUES (?, ?, 'LEGACY_BANK_DATA_MIGRATED', 'supplier_profiles', ?, ?, ?)`,
+        [
+          authorizationContext.adminId,
+          authorizationContext.actorRole,
+          supplierId,
+          JSON.stringify({ status: 'LEGACY_PLAINTEXT_REDACTED' }),
+          JSON.stringify({ status: 'ENCRYPTED_AT_REST_V1' })
+        ]
+      );
+
+      if (!isExternalTx) {
+        await conn.commit();
+      }
+
+      return { migrated: true, supplierId };
+    } catch (err) {
+      if (!isExternalTx) {
+        await conn.rollback();
+      }
+      throw err;
+    } finally {
+      if (!isExternalTx) {
+        conn.release();
+      }
+    }
   }
 
   /**
