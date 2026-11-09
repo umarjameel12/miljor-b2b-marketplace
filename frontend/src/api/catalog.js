@@ -40,7 +40,70 @@ export const catalogApi = {
   },
 
   // ---------------------------------------------------------------------------
-  // B. Supplier Catalog Requests (NEW_FAMILY / NEW_VARIANT)
+  // B. Supplier-Owned Products & Physical SKUs (6-Level Hierarchy)
+  // ---------------------------------------------------------------------------
+  createSupplierProduct: async (payload) => {
+    const res = await apiClient.post('/catalog/supplier-products', payload);
+    return res.data;
+  },
+
+  getMySupplierProducts: async (params = {}) => {
+    const res = await apiClient.get('/catalog/supplier-products/me', { params });
+    return res.data;
+  },
+
+  getSupplierProductById: async (productId) => {
+    const res = await apiClient.get(`/catalog/supplier-products/${productId}`);
+    return res.data;
+  },
+
+  updateSupplierProduct: async (productId, payload) => {
+    const res = await apiClient.put(`/catalog/supplier-products/${productId}`, payload);
+    return res.data;
+  },
+
+  publishSupplierProduct: async (productId) => {
+    const res = await apiClient.post(`/catalog/supplier-products/${productId}/publish`);
+    return res.data;
+  },
+
+  archiveSupplierProduct: async (productId) => {
+    const res = await apiClient.post(`/catalog/supplier-products/${productId}/archive`);
+    return res.data;
+  },
+
+  createSupplierSku: async (payload) => {
+    const res = await apiClient.post('/catalog/supplier-skus', payload);
+    return res.data;
+  },
+
+  getMySupplierSkus: async (params = {}) => {
+    const res = await apiClient.get('/catalog/supplier-skus/me', { params });
+    return res.data;
+  },
+
+  getSupplierSkuById: async (skuId) => {
+    const res = await apiClient.get(`/catalog/supplier-skus/${skuId}`);
+    return res.data;
+  },
+
+  updateSupplierSku: async (skuId, payload) => {
+    const res = await apiClient.put(`/catalog/supplier-skus/${skuId}`, payload);
+    return res.data;
+  },
+
+  publishSupplierSku: async (skuId) => {
+    const res = await apiClient.post(`/catalog/supplier-skus/${skuId}/publish`);
+    return res.data;
+  },
+
+  archiveSupplierSku: async (skuId) => {
+    const res = await apiClient.post(`/catalog/supplier-skus/${skuId}/archive`);
+    return res.data;
+  },
+
+  // ---------------------------------------------------------------------------
+  // C. Supplier Catalog Requests (NEW_FAMILY / NEW_VARIANT)
   // ---------------------------------------------------------------------------
   createCatalogRequest: async (payload) => {
     const res = await apiClient.post('/catalog/requests', payload);

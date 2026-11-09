@@ -10,12 +10,14 @@ class PoolRepository {
   async createPool(poolData, connection = null) {
     const executor = connection || db;
     const {
-      pool_code, supplier_id, product_id, product_spec_id, supplier_listing_id,
+      pool_code, supplier_id, product_id, product_spec_id,
+      supplier_product_id, supplier_sku_id, supplier_listing_id,
       target_qty, supplier_min_qty, buyer_min_qty, max_capacity, pool_unit,
       purchase_increment, early_close_allowed, delivery_type, delivery_zones,
       delivery_fee_policy, fulfilment_lead_time_days, cancellation_cutoff_hours,
       current_price_per_unit, next_tier_price, quality_spec_grade, status,
-      expires_at, supplier_confirmation_deadline, buyer_commitment_deadline,
+      participation_opens_at, expires_at, scheduled_close_at, promised_delivery_at,
+      supplier_confirmation_deadline, buyer_commitment_deadline,
       coverage_policy
     } = poolData;
 
@@ -24,19 +26,22 @@ class PoolRepository {
 
     const [result] = await executor.query(
       `INSERT INTO pools
-        (pool_code, supplier_id, product_id, product_spec_id, supplier_listing_id,
-         current_qty, target_qty, supplier_min_qty, buyer_min_qty, max_capacity,
+        (pool_code, supplier_id, product_id, product_spec_id, supplier_product_id, supplier_sku_id,
+         supplier_listing_id, current_qty, target_qty, supplier_min_qty, buyer_min_qty, max_capacity,
          pool_unit, purchase_increment, early_close_allowed, delivery_type,
          delivery_zones, delivery_fee_policy, fulfilment_lead_time_days,
          cancellation_cutoff_hours, current_price_per_unit, next_tier_price,
-         quality_spec_grade, status, expires_at, supplier_confirmation_deadline,
-         buyer_commitment_deadline, coverage_policy)
-       VALUES (?, ?, ?, ?, ?, 0.0000, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         quality_spec_grade, status, participation_opens_at, expires_at, scheduled_close_at,
+         promised_delivery_at, supplier_confirmation_deadline,
+         buyer_commitment_deadline, coverage_policy, is_terms_locked)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0.0000, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [
         pool_code,
         supplier_id,
         product_id,
         product_spec_id || null,
+        supplier_product_id || null,
+        supplier_sku_id || null,
         supplier_listing_id || null,
         target_qty,
         supplier_min_qty,
@@ -54,7 +59,10 @@ class PoolRepository {
         next_tier_price || null,
         quality_spec_grade || null,
         status || 'DRAFT',
+        participation_opens_at || null,
         expires_at,
+        scheduled_close_at || expires_at,
+        promised_delivery_at || null,
         supplier_confirmation_deadline || null,
         buyer_commitment_deadline || null,
         effectiveCoveragePolicy
@@ -63,6 +71,7 @@ class PoolRepository {
     return result.insertId;
   }
 
+  // Strictly enforces DRAFT-only commercial mutations at the repository level (Rule P3 & P4)
   async updatePool(poolId, updateData, connection = null) {
     const executor = connection || db;
     const allowedFields = [
@@ -70,8 +79,8 @@ class PoolRepository {
       'pool_unit', 'purchase_increment', 'early_close_allowed', 'delivery_type',
       'delivery_zones', 'delivery_fee_policy', 'fulfilment_lead_time_days',
       'cancellation_cutoff_hours', 'current_price_per_unit', 'next_tier_price',
-      'quality_spec_grade', 'status', 'expires_at',
-      'supplier_confirmation_deadline', 'buyer_commitment_deadline',
+      'quality_spec_grade', 'participation_opens_at', 'expires_at', 'scheduled_close_at',
+      'promised_delivery_at', 'supplier_confirmation_deadline', 'buyer_commitment_deadline',
       'coverage_policy'
     ];
 
@@ -94,10 +103,21 @@ class PoolRepository {
     sets.push('updated_at = NOW()');
     values.push(poolId);
 
-    await executor.query(
-      `UPDATE pools SET ${sets.join(', ')} WHERE id = ?`,
+    const [res] = await executor.query(
+      `UPDATE pools SET ${sets.join(', ')} WHERE id = ? AND status = 'DRAFT' AND is_terms_locked = 0`,
       values
     );
+
+    if (res.affectedRows === 0) {
+      const [rows] = await executor.query('SELECT id, status, is_terms_locked FROM pools WHERE id = ?', [poolId]);
+      if (rows[0] && (rows[0].status !== 'DRAFT' || rows[0].is_terms_locked)) {
+        const err = new Error(`Cannot modify commercial terms of pool in status '${rows[0].status}'. Published pool terms are permanently immutable.`);
+        err.statusCode = 422;
+        err.code = 'INVALID_POOL_STATE';
+        err.subcode = 'POOL_TERMS_IMMUTABLE';
+        throw err;
+      }
+    }
   }
 
   async createPriceTier(tierData, connection = null) {
@@ -111,6 +131,14 @@ class PoolRepository {
 
   async replacePriceTiers(poolId, tiers, connection = null) {
     const executor = connection || db;
+    const [poolRows] = await executor.query('SELECT status, is_terms_locked FROM pools WHERE id = ?', [poolId]);
+    if (poolRows[0] && (poolRows[0].status !== 'DRAFT' || poolRows[0].is_terms_locked)) {
+      const err = new Error('Published pool price tiers are permanently locked and cannot be replaced.');
+      err.statusCode = 422;
+      err.code = 'INVALID_POOL_STATE';
+      err.subcode = 'POOL_TERMS_IMMUTABLE';
+      throw err;
+    }
     await executor.query('DELETE FROM pool_price_tiers WHERE pool_id = ?', [poolId]);
     for (const tier of tiers) {
       await executor.query(
@@ -120,9 +148,17 @@ class PoolRepository {
     }
   }
 
-  // Set or replace pool authorized delivery clusters (Phase 6D.3)
-  async setPoolDeliveryClusters(poolId, clusterIds, connection = null) {
+  // Set or replace pool authorized delivery clusters (strictly locked once published: Rule P3 & P4)
+  async setPoolDeliveryClusters(poolId, clusterIds, connection = null, options = {}) {
     const executor = connection || db;
+    const [poolRows] = await executor.query('SELECT status, is_terms_locked FROM pools WHERE id = ?', [poolId]);
+    if (poolRows[0] && (poolRows[0].is_terms_locked || (options.requireDraft && poolRows[0].status !== 'DRAFT'))) {
+      const err = new Error('Published pool delivery clusters are permanently locked and cannot be modified.');
+      err.statusCode = 422;
+      err.code = 'POOL_COVERAGE_LOCKED';
+      err.subcode = 'POOL_TERMS_IMMUTABLE';
+      throw err;
+    }
     await executor.query('DELETE FROM pool_delivery_clusters WHERE pool_id = ?', [poolId]);
     if (Array.isArray(clusterIds)) {
       for (const cId of clusterIds) {
@@ -277,8 +313,19 @@ class PoolRepository {
     );
 
     const deliveryClusters = await this.getPoolDeliveryClusters(id, executor);
+    const poolRow = pools[0];
+    let parsedSnapshot = poolRow.published_terms_snapshot;
+    if (typeof parsedSnapshot === 'string') {
+      try { parsedSnapshot = JSON.parse(parsedSnapshot); } catch { parsedSnapshot = null; }
+    }
 
-    return { ...pools[0], price_tiers: tiers, delivery_clusters: deliveryClusters };
+    return {
+      ...poolRow,
+      is_terms_locked: Boolean(poolRow.is_terms_locked || poolRow.status !== 'DRAFT'),
+      published_terms_snapshot: parsedSnapshot || null,
+      price_tiers: tiers,
+      delivery_clusters: deliveryClusters
+    };
   }
 
   // Supplier's own pools (includes DRAFT, ACTIVE, etc.)

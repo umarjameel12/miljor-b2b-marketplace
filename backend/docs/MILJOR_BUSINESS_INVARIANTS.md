@@ -154,3 +154,19 @@
 2. **Append-Only History:**
    - Never overwrite or delete mutation logs, business events, or audit trails.
    - Never delete legitimate historical records to force test passes.
+
+
+---
+
+## 9. Supplier-Owned Product & Physical SKU Invariants (Migration 034)
+1. **6-Level Hierarchy:** `Canonical Category -> Canonical Product Family -> Supplier-Owned Product -> Physical SKU -> Commercial Listing -> Regular Pool`.
+2. **Optional Brand (`is_unbranded`):** Suppliers may create branded (`is_unbranded = 0`, non-empty `brand`) or unbranded wholesale products (`is_unbranded = 1`, `brand = NULL`).
+3. **Optional Quality Grade & Processing Method:** `quality_grade` and `processing_method` are optional (`NULL` preserved). Never inject synthetic default strings (`'Standard'`, `'Grade A'`).
+4. **Separate Physical SKUs per Pack Size:** `25 kg` and `50 kg` bags are distinct `supplier_skus` rows with separate inventory and listings.
+5. **Strict Mass vs Volume Separation:** `MASS` families (`Rice`, `Sugar`, `Gur`) allow only `kg`/`g`; `VOLUME` families (`Cooking Oil`) allow only `L`/`mL` (`400 INCOMPATIBLE_FAMILY_UNIT`).
+6. **SKU Lock After Publish:** `DRAFT` SKUs are editable; once `PUBLISHED` or `ARCHIVED`, packaging, size, and unit are permanently immutable (`422 SKU_IMMUTABLE_AFTER_PUBLISH`).
+
+## 10. Regular Pool Ownership, Immutability & 24–72h Delivery SLA Invariants (Rules P1–P13)
+1. **Supplier-Only Creation & Publishing (Rule P1):** Only the verified owning `SUPPLIER` may create, edit in draft, configure clusters, or publish a Regular Pool. `ADMIN` is strictly blocked (`403 FORBIDDEN`, `subcode: 'SUPPLIER_CONSENT_REQUIRED'`).
+2. **Permanent Commercial Immutability Upon Publish (Rules P3 & P4):** Publishing a pool sets `status = 'ACTIVE'`, `is_terms_locked = 1`, `terms_locked_at = NOW()`, and records `published_terms_snapshot`. Once published, all commercial terms and delivery clusters are permanently immutable (`422 POOL_TERMS_IMMUTABLE`), **even when the pool has zero buyer reservations**.
+3. **Mandatory 24-to-72 Hour Promised Delivery SLA (Rules P6 & P7):** Publishing requires `promised_delivery_at` within `[scheduled_close_at + 24 hours, scheduled_close_at + 72 hours]` inclusive (`422 PROMISED_DELIVERY_REQUIRED` / `422 DELIVERY_SLA_OUT_OF_RANGE`).

@@ -679,6 +679,453 @@ class CatalogRepository {
       metadata: this._parseJson(r.metadata, null)
     }));
   }
+
+  // ---------------------------------------------------------------------------
+  // 5. SUPPLIER-OWNED PRODUCTS (Level 3: supplier_products)
+  // ---------------------------------------------------------------------------
+  _hydrateSupplierProduct(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      is_unbranded: Boolean(row.is_unbranded),
+      commodity_attributes: this._parseJson(row.commodity_attributes, null),
+      sku_count: row.sku_count !== undefined ? Number(row.sku_count) : undefined,
+      published_sku_count: row.published_sku_count !== undefined ? Number(row.published_sku_count) : undefined
+    };
+  }
+
+  _hydrateSupplierSku(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      pack_size: Number(row.pack_size),
+      is_unbranded: row.is_unbranded !== undefined ? Boolean(row.is_unbranded) : false,
+      commodity_attributes: this._parseJson(row.commodity_attributes, null),
+      sku_attributes: this._parseJson(row.sku_attributes, null)
+    };
+  }
+
+  async findSupplierProductByIdentityHash(supplierId, identityHash, excludeId = null, connection = null) {
+    const executor = connection || db;
+    let sql = `SELECT * FROM supplier_products WHERE supplier_id = ? AND product_identity_hash = ?`;
+    const params = [Number(supplierId), identityHash];
+    if (excludeId) {
+      sql += ` AND id != ?`;
+      params.push(Number(excludeId));
+    }
+    sql += ` LIMIT 1`;
+    const [rows] = await executor.query(sql, params);
+    return this._hydrateSupplierProduct(rows[0]);
+  }
+
+  async createSupplierProduct(data, connection = null) {
+    const executor = connection || db;
+    const {
+      product_code,
+      supplier_id,
+      category_id,
+      family_id,
+      legacy_product_id = null,
+      title,
+      brand = null,
+      is_unbranded = 0,
+      variety,
+      processing_method = null,
+      quality_grade = null,
+      origin = null,
+      crop_year = null,
+      commodity_attributes = null,
+      description = null,
+      product_identity_hash,
+      status = 'DRAFT'
+    } = data;
+
+    const [res] = await executor.query(
+      `INSERT INTO supplier_products (
+        product_code, supplier_id, category_id, family_id, legacy_product_id,
+        title, brand, is_unbranded, variety, processing_method, quality_grade,
+        origin, crop_year, commodity_attributes, description,
+        product_identity_hash, status, published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        product_code,
+        Number(supplier_id),
+        Number(category_id),
+        Number(family_id),
+        legacy_product_id ? Number(legacy_product_id) : null,
+        title,
+        brand,
+        is_unbranded ? 1 : 0,
+        variety,
+        processing_method,
+        quality_grade,
+        origin,
+        crop_year,
+        commodity_attributes ? JSON.stringify(commodity_attributes) : null,
+        description,
+        product_identity_hash,
+        status,
+        status === 'PUBLISHED' ? new Date() : null
+      ]
+    );
+    return this.findSupplierProductById(res.insertId, executor);
+  }
+
+  async findSupplierProductById(id, connection = null, forUpdate = false) {
+    const executor = connection || db;
+    const lockSql = forUpdate ? ' FOR UPDATE' : '';
+    const [rows] = await executor.query(
+      `SELECT sp.*,
+              c.name AS category_name,
+              c.slug AS category_slug,
+              c.is_active AS category_is_active,
+              c.approval_status AS category_approval_status,
+              f.name AS family_name,
+              f.slug AS family_slug,
+              f.family_code,
+              f.is_active AS family_is_active,
+              f.approval_status AS family_approval_status,
+              f.allowed_pack_units,
+              f.allowed_purchasing_units
+       FROM supplier_products sp
+       JOIN catalog_categories c ON sp.category_id = c.id
+       JOIN catalog_product_families f ON sp.family_id = f.id
+       WHERE sp.id = ?${lockSql}`,
+      [Number(id)]
+    );
+    return this._hydrateSupplierProduct(rows[0]);
+  }
+
+  async findSupplierProductsBySupplier(supplierId, { status = null, familyId = null, categoryId = null } = {}) {
+    let sql = `
+      SELECT sp.*,
+             c.name AS category_name,
+             c.slug AS category_slug,
+             f.name AS family_name,
+             f.slug AS family_slug,
+             f.family_code,
+             (SELECT COUNT(*) FROM supplier_skus sk WHERE sk.supplier_product_id = sp.id) AS sku_count,
+             (SELECT COUNT(*) FROM supplier_skus sk WHERE sk.supplier_product_id = sp.id AND sk.status = 'PUBLISHED') AS published_sku_count
+      FROM supplier_products sp
+      JOIN catalog_categories c ON sp.category_id = c.id
+      JOIN catalog_product_families f ON sp.family_id = f.id
+      WHERE sp.supplier_id = ?
+    `;
+    const params = [Number(supplierId)];
+    if (status) {
+      sql += ` AND sp.status = ?`;
+      params.push(status);
+    }
+    if (familyId) {
+      sql += ` AND sp.family_id = ?`;
+      params.push(Number(familyId));
+    }
+    if (categoryId) {
+      sql += ` AND sp.category_id = ?`;
+      params.push(Number(categoryId));
+    }
+    sql += ` ORDER BY sp.id DESC`;
+    const [rows] = await db.query(sql, params);
+    return rows.map(r => this._hydrateSupplierProduct(r));
+  }
+
+  // Strictly enforces DRAFT-only physical identity updates at the SQL statement level
+  async updateDraftSupplierProduct(id, updates, connection = null) {
+    const executor = connection || db;
+    const fields = [];
+    const params = [];
+
+    const allowed = [
+      'category_id',
+      'family_id',
+      'legacy_product_id',
+      'title',
+      'brand',
+      'is_unbranded',
+      'variety',
+      'processing_method',
+      'quality_grade',
+      'origin',
+      'crop_year',
+      'description',
+      'product_identity_hash'
+    ];
+
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        fields.push(`${key} = ?`);
+        params.push(key === 'is_unbranded' ? (updates[key] ? 1 : 0) : updates[key]);
+      }
+    }
+
+    if (updates.commodity_attributes !== undefined) {
+      fields.push('commodity_attributes = ?');
+      params.push(updates.commodity_attributes ? JSON.stringify(updates.commodity_attributes) : null);
+    }
+
+    if (fields.length === 0) return this.findSupplierProductById(id, executor);
+
+    params.push(Number(id));
+    const [res] = await executor.query(
+      `UPDATE supplier_products SET ${fields.join(', ')} WHERE id = ? AND status = 'DRAFT'`,
+      params
+    );
+    if (res.affectedRows === 0) {
+      const err = new Error('Supplier product physical identity is locked and cannot be modified outside DRAFT state.');
+      err.status = 409;
+      err.code = 'PRODUCT_IDENTITY_LOCKED';
+      throw err;
+    }
+    return this.findSupplierProductById(id, executor);
+  }
+
+  async transitionSupplierProductStatus(id, toStatus, connection = null) {
+    const executor = connection || db;
+    if (toStatus === 'PUBLISHED') {
+      await executor.query(
+        `UPDATE supplier_products
+         SET status = 'PUBLISHED', published_at = COALESCE(published_at, NOW())
+         WHERE id = ? AND status IN ('DRAFT', 'PUBLISHED')`,
+        [Number(id)]
+      );
+    } else if (toStatus === 'ARCHIVED') {
+      await executor.query(
+        `UPDATE supplier_products
+         SET status = 'ARCHIVED', archived_at = COALESCE(archived_at, NOW())
+         WHERE id = ?`,
+        [Number(id)]
+      );
+    } else {
+      const err = new Error(`Invalid status transition to '${toStatus}'. Published or archived products cannot revert to DRAFT.`);
+      err.status = 409;
+      err.code = 'INVALID_LIFECYCLE_TRANSITION';
+      throw err;
+    }
+    return this.findSupplierProductById(id, executor);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. SUPPLIER-OWNED PHYSICAL SKUs (Level 4: supplier_skus)
+  // ---------------------------------------------------------------------------
+  async findSupplierSkuByHash(supplierId, skuHash, excludeId = null, connection = null) {
+    const executor = connection || db;
+    let sql = `SELECT * FROM supplier_skus WHERE supplier_id = ? AND sku_hash = ?`;
+    const params = [Number(supplierId), skuHash];
+    if (excludeId) {
+      sql += ` AND id != ?`;
+      params.push(Number(excludeId));
+    }
+    sql += ` LIMIT 1`;
+    const [rows] = await executor.query(sql, params);
+    return this._hydrateSupplierSku(rows[0]);
+  }
+
+  async createSupplierSku(data, connection = null) {
+    const executor = connection || db;
+    const {
+      sku_code,
+      supplier_id,
+      supplier_product_id,
+      category_id,
+      family_id,
+      linked_spec_id = null,
+      packaging_type,
+      pack_size,
+      pack_unit,
+      purchasing_unit = 'bag',
+      pack_specification = null,
+      storage_requirements = null,
+      shelf_life_days = null,
+      sku_attributes = null,
+      sku_hash,
+      status = 'DRAFT'
+    } = data;
+
+    const [res] = await executor.query(
+      `INSERT INTO supplier_skus (
+        sku_code, supplier_id, supplier_product_id, category_id, family_id,
+        linked_spec_id, packaging_type, pack_size, pack_unit, purchasing_unit,
+        pack_specification, storage_requirements, shelf_life_days,
+        sku_attributes, sku_hash, status, published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        sku_code,
+        Number(supplier_id),
+        Number(supplier_product_id),
+        Number(category_id),
+        Number(family_id),
+        linked_spec_id ? Number(linked_spec_id) : null,
+        packaging_type,
+        Number(pack_size),
+        pack_unit,
+        purchasing_unit,
+        pack_specification,
+        storage_requirements,
+        shelf_life_days,
+        sku_attributes ? JSON.stringify(sku_attributes) : null,
+        sku_hash,
+        status,
+        status === 'PUBLISHED' ? new Date() : null
+      ]
+    );
+    return this.findSupplierSkuById(res.insertId, executor);
+  }
+
+  async findSupplierSkuById(id, connection = null, forUpdate = false) {
+    const executor = connection || db;
+    const lockSql = forUpdate ? ' FOR UPDATE' : '';
+    const [rows] = await executor.query(
+      `SELECT sk.*,
+              sp.product_code,
+              sp.title AS product_title,
+              sp.brand,
+              sp.is_unbranded,
+              sp.variety,
+              sp.processing_method,
+              sp.quality_grade,
+              sp.origin,
+              sp.crop_year,
+              sp.commodity_attributes,
+              sp.description AS product_description,
+              sp.status AS product_status,
+              sp.legacy_product_id,
+              c.name AS category_name,
+              c.slug AS category_slug,
+              c.is_active AS category_is_active,
+              c.approval_status AS category_approval_status,
+              f.name AS family_name,
+              f.slug AS family_slug,
+              f.family_code,
+              f.is_active AS family_is_active,
+              f.approval_status AS family_approval_status
+       FROM supplier_skus sk
+       JOIN supplier_products sp ON sk.supplier_product_id = sp.id
+       JOIN catalog_categories c ON sk.category_id = c.id
+       JOIN catalog_product_families f ON sk.family_id = f.id
+       WHERE sk.id = ?${lockSql}`,
+      [Number(id)]
+    );
+    return this._hydrateSupplierSku(rows[0]);
+  }
+
+  async findSupplierSkusBySupplier(supplierId, { status = null, supplierProductId = null, familyId = null } = {}) {
+    let sql = `
+      SELECT sk.*,
+             sp.product_code,
+             sp.title AS product_title,
+             sp.brand,
+             sp.is_unbranded,
+             sp.variety,
+             sp.processing_method,
+             sp.quality_grade,
+             sp.origin,
+             sp.crop_year,
+             sp.commodity_attributes,
+             sp.status AS product_status,
+             c.name AS category_name,
+             c.slug AS category_slug,
+             f.name AS family_name,
+             f.slug AS family_slug,
+             f.family_code,
+             (SELECT sl.id FROM supplier_listings sl WHERE sl.supplier_id = sk.supplier_id AND (sl.supplier_sku_id = sk.id OR (sk.linked_spec_id IS NOT NULL AND sl.product_spec_id = sk.linked_spec_id)) LIMIT 1) AS listing_id
+      FROM supplier_skus sk
+      JOIN supplier_products sp ON sk.supplier_product_id = sp.id
+      JOIN catalog_categories c ON sk.category_id = c.id
+      JOIN catalog_product_families f ON sk.family_id = f.id
+      WHERE sk.supplier_id = ?
+    `;
+    const params = [Number(supplierId)];
+    if (status) {
+      sql += ` AND sk.status = ?`;
+      params.push(status);
+    }
+    if (supplierProductId) {
+      sql += ` AND sk.supplier_product_id = ?`;
+      params.push(Number(supplierProductId));
+    }
+    if (familyId) {
+      sql += ` AND sk.family_id = ?`;
+      params.push(Number(familyId));
+    }
+    sql += ` ORDER BY sk.id DESC`;
+    const [rows] = await db.query(sql, params);
+    return rows.map(r => this._hydrateSupplierSku(r));
+  }
+
+  // Strictly enforces DRAFT-only physical SKU identity updates at the SQL statement level
+  async updateDraftSupplierSku(id, updates, connection = null) {
+    const executor = connection || db;
+    const fields = [];
+    const params = [];
+
+    const allowed = [
+      'packaging_type',
+      'pack_size',
+      'pack_unit',
+      'purchasing_unit',
+      'pack_specification',
+      'storage_requirements',
+      'shelf_life_days',
+      'sku_hash'
+    ];
+
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        fields.push(`${key} = ?`);
+        params.push(updates[key]);
+      }
+    }
+
+    if (updates.sku_attributes !== undefined) {
+      fields.push('sku_attributes = ?');
+      params.push(updates.sku_attributes ? JSON.stringify(updates.sku_attributes) : null);
+    }
+
+    if (fields.length === 0) return this.findSupplierSkuById(id, executor);
+
+    params.push(Number(id));
+    const [res] = await executor.query(
+      `UPDATE supplier_skus SET ${fields.join(', ')} WHERE id = ? AND status = 'DRAFT'`,
+      params
+    );
+    if (res.affectedRows === 0) {
+      const err = new Error('Supplier physical SKU identity is locked and cannot be modified outside DRAFT state.');
+      err.status = 409;
+      err.code = 'SKU_IDENTITY_LOCKED';
+      throw err;
+    }
+    return this.findSupplierSkuById(id, executor);
+  }
+
+  async publishSupplierSku(id, linkedSpecId, connection = null) {
+    const executor = connection || db;
+    const [res] = await executor.query(
+      `UPDATE supplier_skus
+       SET status = 'PUBLISHED',
+           linked_spec_id = COALESCE(?, linked_spec_id),
+           published_at = COALESCE(published_at, NOW())
+       WHERE id = ? AND status IN ('DRAFT', 'PUBLISHED')`,
+      [linkedSpecId ? Number(linkedSpecId) : null, Number(id)]
+    );
+    if (res.affectedRows === 0) {
+      const err = new Error('Cannot publish an archived SKU.');
+      err.status = 409;
+      err.code = 'INVALID_LIFECYCLE_TRANSITION';
+      throw err;
+    }
+    return this.findSupplierSkuById(id, executor);
+  }
+
+  async archiveSupplierSku(id, connection = null) {
+    const executor = connection || db;
+    await executor.query(
+      `UPDATE supplier_skus
+       SET status = 'ARCHIVED', archived_at = COALESCE(archived_at, NOW())
+       WHERE id = ?`,
+      [Number(id)]
+    );
+    return this.findSupplierSkuById(id, executor);
+  }
 }
 
 module.exports = new CatalogRepository();

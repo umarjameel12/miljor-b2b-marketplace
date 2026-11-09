@@ -146,7 +146,8 @@ class FulfillmentService {
                 o.acknowledged_at, o.preparing_at, o.ready_for_dispatch_at,
                 o.dispatched_at, o.supplier_delivered_at, o.buyer_confirmed_at,
                 o.exception_reason, o.exception_recorded_at, o.created_at, o.updated_at,
-                p.pool_code, p.pool_unit, pr.title AS product_name
+                p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
+                pr.title AS product_name
          FROM orders o
          LEFT JOIN pools p ON o.pool_id = p.id
          LEFT JOIN products pr ON p.product_id = pr.id
@@ -186,7 +187,7 @@ class FulfillmentService {
       await this._assertVerifiedSupplier(actor, connection);
 
       const [orderRows] = await connection.query(
-        `SELECT o.*, p.pool_code, p.pool_unit, pr.title AS product_name
+        `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at, pr.title AS product_name
          FROM orders o
          LEFT JOIN pools p ON o.pool_id = p.id
          LEFT JOIN products pr ON p.product_id = pr.id
@@ -398,6 +399,21 @@ class FulfillmentService {
       updateParams.push(orderId);
 
       await connection.query(updateSql, updateParams);
+
+      // Rule P10: Track actual_dispatched_at and actual_delivered_at on parent pool without mutating promised_delivery_at
+      if (order.pool_id && (toStatus === 'DISPATCHED' || toStatus === 'SUPPLIER_DELIVERED')) {
+        if (toStatus === 'DISPATCHED') {
+          await connection.query(
+            'UPDATE pools SET actual_dispatched_at = COALESCE(actual_dispatched_at, NOW()), updated_at = NOW() WHERE id = ?',
+            [order.pool_id]
+          );
+        } else if (toStatus === 'SUPPLIER_DELIVERED') {
+          await connection.query(
+            'UPDATE pools SET actual_delivered_at = COALESCE(actual_delivered_at, NOW()), updated_at = NOW() WHERE id = ?',
+            [order.pool_id]
+          );
+        }
+      }
 
       // Record immutable milestone event in order_fulfillment_events
       const eventCode = this._generateEventCode(orderId, toStatus, trimmedKey);
@@ -709,7 +725,8 @@ class FulfillmentService {
                 o.acknowledged_at, o.preparing_at, o.ready_for_dispatch_at,
                 o.dispatched_at, o.supplier_delivered_at, o.buyer_confirmed_at,
                 o.exception_reason, o.exception_recorded_at, o.created_at, o.updated_at,
-                p.pool_code, p.pool_unit, pr.title AS product_name,
+                p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
+                pr.title AS product_name,
                 su.business_name AS supplier_name
          FROM orders o
          LEFT JOIN pools p ON o.pool_id = p.id
@@ -756,7 +773,8 @@ class FulfillmentService {
     const connection = await db.getConnection();
     try {
       const [orderRows] = await connection.query(
-        `SELECT o.*, p.pool_code, p.pool_unit, pr.title AS product_name,
+        `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
+                pr.title AS product_name,
                 su.business_name AS supplier_name
          FROM orders o
          LEFT JOIN pools p ON o.pool_id = p.id
@@ -1240,7 +1258,8 @@ class FulfillmentService {
     const connection = await db.getConnection();
     try {
       const [orderRows] = await connection.query(
-        `SELECT o.*, p.pool_code, p.pool_unit, pr.title AS product_name,
+        `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
+                pr.title AS product_name,
                 su.business_name AS supplier_name,
                 bu.email AS buyer_email, su.email AS supplier_email
          FROM orders o
@@ -1284,6 +1303,12 @@ class FulfillmentService {
   // ===========================================================================
 
   _formatOrderSummary(row) {
+    const promisedDate = row.promised_delivery_at ? new Date(row.promised_delivery_at) : null;
+    const deliveredDate = row.supplier_delivered_at ? new Date(row.supplier_delivered_at) : null;
+    const isLateDelivery = promisedDate
+      ? (deliveredDate ? deliveredDate.getTime() > promisedDate.getTime() : Date.now() > promisedDate.getTime())
+      : false;
+
     return {
       order_id: row.id,
       order_code: row.order_code,
@@ -1307,6 +1332,9 @@ class FulfillmentService {
       fulfillment_status: row.fulfillment_status,
       delivery_method: row.delivery_method,
       supplier_delivery_reference: row.supplier_delivery_reference,
+      promised_delivery_at: row.promised_delivery_at || null,
+      scheduled_close_at: row.scheduled_close_at || null,
+      is_late_delivery: isLateDelivery,
       acknowledged_at: row.acknowledged_at,
       dispatched_at: row.dispatched_at,
       supplier_delivered_at: row.supplier_delivered_at,

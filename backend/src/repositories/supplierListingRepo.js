@@ -12,6 +12,8 @@ class SupplierListingRepository {
       listing_code,
       supplier_id,
       product_spec_id,
+      supplier_product_id,
+      supplier_sku_id,
       available_stock,
       base_unit_price,
       pricing_unit,
@@ -28,15 +30,17 @@ class SupplierListingRepository {
 
     const [result] = await db.query(
       `INSERT INTO supplier_listings (
-        listing_code, supplier_id, product_spec_id, available_stock,
-        base_unit_price, pricing_unit, price_per_base_unit, currency,
+        listing_code, supplier_id, product_spec_id, supplier_product_id, supplier_sku_id,
+        available_stock, base_unit_price, pricing_unit, price_per_base_unit, currency,
         supplier_min_qty, buyer_min_qty, delivery_zones, delivery_fee_policy,
         fulfilment_lead_time_days, status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         listing_code,
         supplier_id,
         product_spec_id,
+        supplier_product_id || null,
+        supplier_sku_id || null,
         available_stock || 0.00,
         base_unit_price,
         pricing_unit || 'pack',
@@ -194,24 +198,32 @@ class SupplierListingRepository {
     }));
   }
 
-  // Count distinct active product families and active offers for a supplier (E3 preparation)
+  // Count distinct active product families, products, SKUs, and active offers for a supplier (E2 + E3 preparation)
   async getSupplierCatalogUsageSummary(supplierId) {
     const [rows] = await db.query(
       `SELECT
          COUNT(sl.id) AS total_offers,
          SUM(CASE WHEN sl.status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_offers,
-         COUNT(DISTINCT CASE WHEN sl.status = 'ACTIVE' THEN COALESCE(ps.family_id, p.family_id) END) AS active_distinct_families
+         COUNT(DISTINCT CASE WHEN sl.status = 'ACTIVE' THEN COALESCE(ps.family_id, p.family_id) END) AS active_distinct_families,
+         (SELECT COUNT(*) FROM supplier_products sp WHERE sp.supplier_id = ?) AS total_supplier_products,
+         (SELECT COUNT(*) FROM supplier_products sp WHERE sp.supplier_id = ? AND sp.status = 'PUBLISHED') AS published_supplier_products,
+         (SELECT COUNT(*) FROM supplier_skus sk WHERE sk.supplier_id = ?) AS total_supplier_skus,
+         (SELECT COUNT(*) FROM supplier_skus sk WHERE sk.supplier_id = ? AND sk.status = 'PUBLISHED') AS published_supplier_skus
        FROM supplier_listings sl
        JOIN product_specifications ps ON sl.product_spec_id = ps.id
        JOIN products p ON ps.product_id = p.id
        WHERE sl.supplier_id = ?`,
-      [supplierId]
+      [supplierId, supplierId, supplierId, supplierId, supplierId]
     );
     const r = rows[0] || {};
     return {
       total_offers: Number(r.total_offers || 0),
       active_offers: Number(r.active_offers || 0),
-      active_distinct_families: Number(r.active_distinct_families || 0)
+      active_distinct_families: Number(r.active_distinct_families || 0),
+      total_supplier_products: Number(r.total_supplier_products || 0),
+      published_supplier_products: Number(r.published_supplier_products || 0),
+      total_supplier_skus: Number(r.total_supplier_skus || 0),
+      published_supplier_skus: Number(r.published_supplier_skus || 0)
     };
   }
 

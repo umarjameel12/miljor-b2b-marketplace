@@ -243,11 +243,11 @@ class CatalogService {
       throw err;
     }
 
-    const cleanBrand = specificationService.normalizeText(brand);
+    const cleanBrand = payload?.is_unbranded ? null : (specificationService.normalizeText(brand) || null);
     const cleanVariety = specificationService.normalizeText(variety);
     const cleanCropYear = specificationService.normalizeText(crop_year || 'N/A') || 'N/A';
-    const cleanProcessing = specificationService.normalizeText(processing_method || 'Standard') || 'Standard';
-    const cleanGrade = specificationService.normalizeText(quality_grade || 'Standard') || 'Standard';
+    const cleanProcessing = specificationService.normalizeText(processing_method) || null;
+    const cleanGrade = specificationService.normalizeText(quality_grade) || null;
     const cleanPackaging = specificationService.normalizeText(packaging_type);
     const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit || 'bag').toLowerCase() || 'bag';
 
@@ -255,6 +255,7 @@ class CatalogService {
       {
         product_id: family.default_product_id || family.id,
         brand: cleanBrand,
+        is_unbranded: !cleanBrand || Boolean(payload?.is_unbranded),
         variety: cleanVariety,
         crop_year: cleanCropYear,
         processing_method: cleanProcessing,
@@ -266,7 +267,8 @@ class CatalogService {
         spec_attributes
       },
       category.name,
-      family
+      family,
+      { allowOptionalBrandAndGrade: true }
     );
 
     if (!validation.valid) {
@@ -332,7 +334,9 @@ class CatalogService {
       }
     }
 
-    const variantTitle = `${cleanBrand} ${family.name} — ${cleanVariety} (${cleanGrade}) — ${normalizedPackSize}${normalizedPackUnit} ${cleanPackaging}`;
+    const brandLabel = cleanBrand || 'Unbranded';
+    const gradeLabel = cleanGrade ? ` (${cleanGrade})` : '';
+    const variantTitle = `${brandLabel} ${family.name} — ${cleanVariety}${gradeLabel} — ${normalizedPackSize}${normalizedPackUnit} ${cleanPackaging}`;
 
     const normalizedPayload = {
       request_type: 'NEW_VARIANT',
@@ -509,11 +513,11 @@ class CatalogService {
       throw err;
     }
 
-    const cleanBrand = specificationService.normalizeText(payload.brand !== undefined ? payload.brand : existing.brand);
+    const cleanBrand = payload.is_unbranded ? null : (specificationService.normalizeText(payload.brand !== undefined ? payload.brand : existing.brand) || null);
     const cleanVariety = specificationService.normalizeText(payload.variety !== undefined ? payload.variety : existing.variety);
     const cleanCropYear = specificationService.normalizeText(payload.crop_year !== undefined ? payload.crop_year : existing.crop_year) || 'N/A';
-    const cleanProcessing = specificationService.normalizeText(payload.processing_method !== undefined ? payload.processing_method : existing.processing_method) || 'Standard';
-    const cleanGrade = specificationService.normalizeText(payload.quality_grade !== undefined ? payload.quality_grade : existing.quality_grade) || 'Standard';
+    const cleanProcessing = specificationService.normalizeText(payload.processing_method !== undefined ? payload.processing_method : existing.processing_method) || null;
+    const cleanGrade = specificationService.normalizeText(payload.quality_grade !== undefined ? payload.quality_grade : existing.quality_grade) || null;
     const cleanPackaging = specificationService.normalizeText(payload.packaging_type !== undefined ? payload.packaging_type : existing.packaging_type);
     const rawPackSize = payload.pack_size !== undefined ? payload.pack_size : existing.pack_size;
     const rawPackUnit = payload.pack_unit !== undefined ? payload.pack_unit : existing.pack_unit;
@@ -524,6 +528,7 @@ class CatalogService {
       {
         product_id: family.default_product_id || family.id,
         brand: cleanBrand,
+        is_unbranded: !cleanBrand || Boolean(payload.is_unbranded),
         variety: cleanVariety,
         crop_year: cleanCropYear,
         processing_method: cleanProcessing,
@@ -535,7 +540,8 @@ class CatalogService {
         spec_attributes: rawAttrs
       },
       category.name,
-      family
+      family,
+      { allowOptionalBrandAndGrade: true }
     );
 
     if (!validation.valid) {
@@ -1222,6 +1228,764 @@ class CatalogService {
     });
 
     return createdVariant;
+  }
+
+  // ===========================================================================
+  // 8. SUPPLIER-OWNED PRODUCT LIFECYCLE (Level 3: DRAFT -> PUBLISHED -> ARCHIVED)
+  // ===========================================================================
+  _generateSupplierProductCode(familySlug) {
+    const clean = (familySlug || 'PROD')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '')
+      .slice(0, 6);
+    const ts = Date.now().toString(36).toUpperCase().slice(-4);
+    const rand = Math.floor(100 + Math.random() * 900);
+    return `SP-${clean}-${ts}-${rand}`;
+  }
+
+  _generateSupplierSkuCode(familySlug, packSize, packUnit) {
+    const clean = (familySlug || 'SKU')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '')
+      .slice(0, 5);
+    const sizeLabel = `${Number(packSize)}${String(packUnit || '').toUpperCase()}`;
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `SKU-${clean}-${sizeLabel}-${rand}`;
+  }
+
+  async createSupplierProduct(supplierId, payload, actorRole = 'SUPPLIER') {
+    const { category_id, family_id, title } = payload || {};
+
+    if (!family_id || !Number.isInteger(Number(family_id)) || Number(family_id) <= 0) {
+      const err = new Error('Valid family_id is required to create a supplier product.');
+      err.status = 400;
+      err.code = 'INVALID_FAMILY';
+      throw err;
+    }
+
+    const family = await catalogRepo.findFamilyById(Number(family_id));
+    if (!family || !family.is_active || family.approval_status !== 'APPROVED') {
+      const err = new Error('Selected canonical product family does not exist or is inactive.');
+      err.status = 400;
+      err.code = 'INACTIVE_OR_MISSING_FAMILY';
+      throw err;
+    }
+
+    const resolvedCategoryId = category_id ? Number(category_id) : Number(family.category_id);
+    if (resolvedCategoryId !== Number(family.category_id)) {
+      const err = new Error(`Product family '${family.name}' does not belong to category_id ${resolvedCategoryId}.`);
+      err.status = 400;
+      err.code = 'CATEGORY_FAMILY_MISMATCH';
+      throw err;
+    }
+
+    const category = await catalogRepo.findCategoryById(resolvedCategoryId);
+    if (!category || !category.is_active || category.approval_status !== 'APPROVED') {
+      const err = new Error('Parent catalog category is inactive.');
+      err.status = 400;
+      err.code = 'INACTIVE_OR_MISSING_CATEGORY';
+      throw err;
+    }
+
+    const validation = specificationService.validateSupplierProductInput(payload, category.name, family);
+    if (!validation.valid) {
+      const err = new Error(validation.message);
+      err.status = 400;
+      err.code = validation.code || 'PRODUCT_VALIDATION_ERROR';
+      throw err;
+    }
+
+    const norm = validation.normalized;
+    const identityHash = specificationService.computeSupplierProductIdentityHash({
+      supplierId,
+      categoryId: category.id,
+      familyId: family.id,
+      brand: norm.brand,
+      isUnbranded: norm.is_unbranded,
+      variety: norm.variety,
+      processingMethod: norm.processing_method,
+      qualityGrade: norm.quality_grade,
+      origin: norm.origin,
+      cropYear: norm.crop_year,
+      commodityAttributes: norm.commodity_attributes
+    });
+
+    const dup = await catalogRepo.findSupplierProductByIdentityHash(supplierId, identityHash);
+    if (dup) {
+      const err = new Error('You already have an identical product registered under this family.');
+      err.status = 409;
+      err.code = 'DUPLICATE_SUPPLIER_PRODUCT';
+      err.existingProduct = dup;
+      throw err;
+    }
+
+    const baseProduct = await this.ensureDefaultProductForFamily(family);
+    const brandDisplay = norm.brand && !norm.is_unbranded ? norm.brand : 'Unbranded';
+    const gradeDisplay = norm.quality_grade ? ` (${norm.quality_grade})` : '';
+    const computedTitle = specificationService.normalizeText(title) ||
+      `${brandDisplay} ${family.name} — ${norm.variety}${gradeDisplay}`;
+
+    const created = await catalogRepo.createSupplierProduct({
+      product_code: this._generateSupplierProductCode(family.slug),
+      supplier_id: supplierId,
+      category_id: category.id,
+      family_id: family.id,
+      legacy_product_id: baseProduct.id,
+      title: computedTitle,
+      brand: norm.brand,
+      is_unbranded: norm.is_unbranded,
+      variety: norm.variety,
+      processing_method: norm.processing_method,
+      quality_grade: norm.quality_grade,
+      origin: norm.origin,
+      crop_year: norm.crop_year,
+      commodity_attributes: norm.commodity_attributes,
+      description: norm.description,
+      product_identity_hash: identityHash,
+      status: 'DRAFT'
+    });
+
+    return created;
+  }
+
+  async updateSupplierProduct(supplierId, productId, payload, actorRole = 'SUPPLIER') {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const existing = await catalogRepo.findSupplierProductById(Number(productId), connection, true);
+      if (!existing) {
+        const err = new Error('Supplier product not found.');
+        err.status = 404;
+        err.code = 'PRODUCT_NOT_FOUND';
+        throw err;
+      }
+
+      if (Number(existing.supplier_id) !== Number(supplierId)) {
+        const err = new Error('You do not own this supplier product and cannot modify it.');
+        err.status = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+
+      if (payload && payload.status === 'DRAFT' && existing.status !== 'DRAFT') {
+        const err = new Error('Published or archived products cannot revert to DRAFT.');
+        err.status = 409;
+        err.code = 'INVALID_LIFECYCLE_TRANSITION';
+        throw err;
+      }
+
+      if (existing.status !== 'DRAFT') {
+        const err = new Error(`Product physical identity is locked in '${existing.status}' status and cannot be modified. Create a new product/SKU instead.`);
+        err.status = 409;
+        err.code = 'PRODUCT_IDENTITY_LOCKED';
+        throw err;
+      }
+
+      const targetFamilyId = payload.family_id !== undefined ? Number(payload.family_id) : Number(existing.family_id);
+      const family = await catalogRepo.findFamilyById(targetFamilyId, connection);
+      if (!family || !family.is_active || family.approval_status !== 'APPROVED') {
+        const err = new Error('Selected product family does not exist or is inactive.');
+        err.status = 400;
+        err.code = 'INACTIVE_OR_MISSING_FAMILY';
+        throw err;
+      }
+
+      const targetCategoryId = payload.category_id !== undefined ? Number(payload.category_id) : Number(family.category_id);
+      if (targetCategoryId !== Number(family.category_id)) {
+        const err = new Error(`Product family '${family.name}' does not belong to category_id ${targetCategoryId}.`);
+        err.status = 400;
+        err.code = 'CATEGORY_FAMILY_MISMATCH';
+        throw err;
+      }
+
+      const category = await catalogRepo.findCategoryById(targetCategoryId, connection);
+
+      const mergedInput = {
+        brand: payload.brand !== undefined ? payload.brand : existing.brand,
+        is_unbranded: payload.is_unbranded !== undefined ? payload.is_unbranded : existing.is_unbranded,
+        variety: payload.variety !== undefined ? payload.variety : existing.variety,
+        processing_method: payload.processing_method !== undefined ? payload.processing_method : existing.processing_method,
+        quality_grade: payload.quality_grade !== undefined ? payload.quality_grade : existing.quality_grade,
+        origin: payload.origin !== undefined ? payload.origin : existing.origin,
+        crop_year: payload.crop_year !== undefined ? payload.crop_year : existing.crop_year,
+        commodity_attributes: payload.commodity_attributes !== undefined ? payload.commodity_attributes : existing.commodity_attributes,
+        description: payload.description !== undefined ? payload.description : existing.description
+      };
+
+      const validation = specificationService.validateSupplierProductInput(mergedInput, category.name, family);
+      if (!validation.valid) {
+        const err = new Error(validation.message);
+        err.status = 400;
+        err.code = validation.code || 'PRODUCT_VALIDATION_ERROR';
+        throw err;
+      }
+
+      const norm = validation.normalized;
+      const identityHash = specificationService.computeSupplierProductIdentityHash({
+        supplierId,
+        categoryId: category.id,
+        familyId: family.id,
+        brand: norm.brand,
+        isUnbranded: norm.is_unbranded,
+        variety: norm.variety,
+        processingMethod: norm.processing_method,
+        qualityGrade: norm.quality_grade,
+        origin: norm.origin,
+        cropYear: norm.crop_year,
+        commodityAttributes: norm.commodity_attributes
+      });
+
+      const dup = await catalogRepo.findSupplierProductByIdentityHash(supplierId, identityHash, existing.id, connection);
+      if (dup) {
+        const err = new Error('Another product with this exact physical identity already exists in your catalog.');
+        err.status = 409;
+        err.code = 'DUPLICATE_SUPPLIER_PRODUCT';
+        throw err;
+      }
+
+      const brandDisplay = norm.brand && !norm.is_unbranded ? norm.brand : 'Unbranded';
+      const gradeDisplay = norm.quality_grade ? ` (${norm.quality_grade})` : '';
+      const computedTitle = payload.title !== undefined && specificationService.normalizeText(payload.title)
+        ? specificationService.normalizeText(payload.title)
+        : `${brandDisplay} ${family.name} — ${norm.variety}${gradeDisplay}`;
+
+      const updated = await catalogRepo.updateDraftSupplierProduct(
+        existing.id,
+        {
+          category_id: category.id,
+          family_id: family.id,
+          title: computedTitle,
+          brand: norm.brand,
+          is_unbranded: norm.is_unbranded,
+          variety: norm.variety,
+          processing_method: norm.processing_method,
+          quality_grade: norm.quality_grade,
+          origin: norm.origin,
+          crop_year: norm.crop_year,
+          commodity_attributes: norm.commodity_attributes,
+          description: norm.description,
+          product_identity_hash: identityHash
+        },
+        connection
+      );
+
+      await connection.commit();
+      return updated;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async publishSupplierProduct(supplierId, productId) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const existing = await catalogRepo.findSupplierProductById(Number(productId), connection, true);
+      if (!existing) {
+        const err = new Error('Supplier product not found.');
+        err.status = 404;
+        err.code = 'PRODUCT_NOT_FOUND';
+        throw err;
+      }
+      if (Number(existing.supplier_id) !== Number(supplierId)) {
+        const err = new Error('You do not own this supplier product.');
+        err.status = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+      if (existing.status === 'ARCHIVED') {
+        const err = new Error('Archived supplier product cannot be published.');
+        err.status = 409;
+        err.code = 'INVALID_LIFECYCLE_TRANSITION';
+        throw err;
+      }
+      const updated = await catalogRepo.transitionSupplierProductStatus(existing.id, 'PUBLISHED', connection);
+      await connection.commit();
+      return updated;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async archiveSupplierProduct(supplierId, productId) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const existing = await catalogRepo.findSupplierProductById(Number(productId), connection, true);
+      if (!existing) {
+        const err = new Error('Supplier product not found.');
+        err.status = 404;
+        err.code = 'PRODUCT_NOT_FOUND';
+        throw err;
+      }
+      if (Number(existing.supplier_id) !== Number(supplierId)) {
+        const err = new Error('You do not own this supplier product.');
+        err.status = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+      const updated = await catalogRepo.transitionSupplierProductStatus(existing.id, 'ARCHIVED', connection);
+      // Also archive child SKUs and pause active commercial listings
+      await connection.query(
+        `UPDATE supplier_skus SET status = 'ARCHIVED', archived_at = COALESCE(archived_at, NOW()) WHERE supplier_product_id = ?`,
+        [existing.id]
+      );
+      await connection.query(
+        `UPDATE supplier_listings SET status = 'ARCHIVED' WHERE supplier_product_id = ? AND status = 'ACTIVE'`,
+        [existing.id]
+      );
+      await connection.commit();
+      return updated;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  // ===========================================================================
+  // 9. SUPPLIER-OWNED PHYSICAL SKU LIFECYCLE (Level 4: DRAFT -> PUBLISHED -> ARCHIVED)
+  // ===========================================================================
+  async createSupplierSku(supplierId, payload) {
+    const {
+      supplier_product_id,
+      packaging_type,
+      pack_size,
+      pack_unit,
+      purchasing_unit,
+      pack_specification,
+      storage_requirements,
+      shelf_life_days,
+      sku_attributes
+    } = payload || {};
+
+    if (!supplier_product_id || !Number.isInteger(Number(supplier_product_id)) || Number(supplier_product_id) <= 0) {
+      const err = new Error('Valid supplier_product_id is required to create a physical SKU.');
+      err.status = 400;
+      err.code = 'INVALID_SUPPLIER_PRODUCT';
+      throw err;
+    }
+
+    const product = await catalogRepo.findSupplierProductById(Number(supplier_product_id));
+    if (!product) {
+      const err = new Error('Parent supplier product not found.');
+      err.status = 404;
+      err.code = 'PRODUCT_NOT_FOUND';
+      throw err;
+    }
+
+    if (Number(product.supplier_id) !== Number(supplierId)) {
+      const err = new Error('You can only create physical SKUs under your own supplier products.');
+      err.status = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    if (product.status === 'ARCHIVED') {
+      const err = new Error('Cannot create a physical SKU under an archived product.');
+      err.status = 409;
+      err.code = 'PRODUCT_ARCHIVED';
+      throw err;
+    }
+
+    const family = await catalogRepo.findFamilyById(product.family_id);
+    if (!family || !family.is_active || family.approval_status !== 'APPROVED') {
+      const err = new Error('Parent product family is inactive.');
+      err.status = 400;
+      err.code = 'INACTIVE_OR_MISSING_FAMILY';
+      throw err;
+    }
+
+    const cleanPackaging = specificationService.normalizeText(packaging_type);
+    const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit || 'bag').toLowerCase() || 'bag';
+
+    const validation = specificationService.validateSpecificationInput(
+      {
+        product_id: product.legacy_product_id || family.default_product_id || family.id,
+        brand: product.brand,
+        is_unbranded: product.is_unbranded,
+        variety: product.variety,
+        crop_year: product.crop_year,
+        processing_method: product.processing_method,
+        quality_grade: product.quality_grade,
+        packaging_type: cleanPackaging,
+        pack_size,
+        pack_unit,
+        purchasing_unit: cleanPurchasingUnit,
+        spec_attributes: sku_attributes || product.commodity_attributes
+      },
+      product.category_name,
+      family,
+      { allowOptionalBrandAndGrade: true }
+    );
+
+    if (!validation.valid) {
+      const err = new Error(validation.message);
+      err.status = 400;
+      err.code = validation.code || 'SKU_VALIDATION_ERROR';
+      throw err;
+    }
+
+    const normalizedPackSize = validation.normalizedPackSize;
+    const normalizedPackUnit = validation.normalizedPackUnit;
+    const normalizedSkuAttrs = specificationService.normalizeAttributes(sku_attributes);
+
+    const skuHash = specificationService.computeSupplierSkuHash({
+      supplierId,
+      supplierProductId: product.id,
+      packagingType: cleanPackaging,
+      packSize: normalizedPackSize,
+      packUnit: normalizedPackUnit,
+      purchasingUnit: cleanPurchasingUnit,
+      skuAttributes: normalizedSkuAttrs
+    });
+
+    const dup = await catalogRepo.findSupplierSkuByHash(supplierId, skuHash);
+    if (dup) {
+      const err = new Error('You already have an identical physical SKU (same packaging and pack size) under this product.');
+      err.status = 409;
+      err.code = 'DUPLICATE_SUPPLIER_SKU';
+      err.existingSku = dup;
+      throw err;
+    }
+
+    const created = await catalogRepo.createSupplierSku({
+      sku_code: this._generateSupplierSkuCode(family.slug, normalizedPackSize, normalizedPackUnit),
+      supplier_id: supplierId,
+      supplier_product_id: product.id,
+      category_id: product.category_id,
+      family_id: product.family_id,
+      packaging_type: cleanPackaging,
+      pack_size: normalizedPackSize,
+      pack_unit: normalizedPackUnit,
+      purchasing_unit: cleanPurchasingUnit,
+      pack_specification: specificationService.normalizeText(pack_specification) || `${normalizedPackSize}${normalizedPackUnit} ${cleanPackaging}`,
+      storage_requirements: specificationService.normalizeText(storage_requirements) || null,
+      shelf_life_days: shelf_life_days ? Number(shelf_life_days) : null,
+      sku_attributes: normalizedSkuAttrs,
+      sku_hash: skuHash,
+      status: 'DRAFT'
+    });
+
+    return created;
+  }
+
+  async updateSupplierSku(supplierId, skuId, payload) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const existing = await catalogRepo.findSupplierSkuById(Number(skuId), connection, true);
+      if (!existing) {
+        const err = new Error('Supplier SKU not found.');
+        err.status = 404;
+        err.code = 'SKU_NOT_FOUND';
+        throw err;
+      }
+
+      if (Number(existing.supplier_id) !== Number(supplierId)) {
+        const err = new Error('You do not own this physical SKU and cannot modify it.');
+        err.status = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+
+      if (payload && payload.status === 'DRAFT' && existing.status !== 'DRAFT') {
+        const err = new Error('Published or archived SKUs cannot revert to DRAFT.');
+        err.status = 409;
+        err.code = 'INVALID_LIFECYCLE_TRANSITION';
+        throw err;
+      }
+
+      if (existing.status !== 'DRAFT') {
+        const err = new Error(`Physical SKU identity is locked in '${existing.status}' status and cannot be modified. Create a new SKU for different packaging or pack size.`);
+        err.status = 409;
+        err.code = 'SKU_IDENTITY_LOCKED';
+        throw err;
+      }
+
+      const family = await catalogRepo.findFamilyById(existing.family_id, connection);
+      const cleanPackaging = specificationService.normalizeText(
+        payload.packaging_type !== undefined ? payload.packaging_type : existing.packaging_type
+      );
+      const rawPackSize = payload.pack_size !== undefined ? payload.pack_size : existing.pack_size;
+      const rawPackUnit = payload.pack_unit !== undefined ? payload.pack_unit : existing.pack_unit;
+      const cleanPurchasingUnit = specificationService.normalizeText(
+        payload.purchasing_unit !== undefined ? payload.purchasing_unit : existing.purchasing_unit
+      ).toLowerCase() || 'bag';
+      const rawSkuAttrs = payload.sku_attributes !== undefined ? payload.sku_attributes : existing.sku_attributes;
+
+      const validation = specificationService.validateSpecificationInput(
+        {
+          product_id: existing.legacy_product_id || family.default_product_id || family.id,
+          brand: existing.brand,
+          is_unbranded: existing.is_unbranded,
+          variety: existing.variety,
+          crop_year: existing.crop_year,
+          processing_method: existing.processing_method,
+          quality_grade: existing.quality_grade,
+          packaging_type: cleanPackaging,
+          pack_size: rawPackSize,
+          pack_unit: rawPackUnit,
+          purchasing_unit: cleanPurchasingUnit,
+          spec_attributes: rawSkuAttrs || existing.commodity_attributes
+        },
+        existing.category_name,
+        family,
+        { allowOptionalBrandAndGrade: true }
+      );
+
+      if (!validation.valid) {
+        const err = new Error(validation.message);
+        err.status = 400;
+        err.code = validation.code || 'SKU_VALIDATION_ERROR';
+        throw err;
+      }
+
+      const normalizedPackSize = validation.normalizedPackSize;
+      const normalizedPackUnit = validation.normalizedPackUnit;
+      const normalizedSkuAttrs = specificationService.normalizeAttributes(rawSkuAttrs);
+
+      const skuHash = specificationService.computeSupplierSkuHash({
+        supplierId,
+        supplierProductId: existing.supplier_product_id,
+        packagingType: cleanPackaging,
+        packSize: normalizedPackSize,
+        packUnit: normalizedPackUnit,
+        purchasingUnit: cleanPurchasingUnit,
+        skuAttributes: normalizedSkuAttrs
+      });
+
+      const dup = await catalogRepo.findSupplierSkuByHash(supplierId, skuHash, existing.id, connection);
+      if (dup) {
+        const err = new Error('Another SKU with this exact packaging and pack size already exists under this product.');
+        err.status = 409;
+        err.code = 'DUPLICATE_SUPPLIER_SKU';
+        throw err;
+      }
+
+      const updated = await catalogRepo.updateDraftSupplierSku(
+        existing.id,
+        {
+          packaging_type: cleanPackaging,
+          pack_size: normalizedPackSize,
+          pack_unit: normalizedPackUnit,
+          purchasing_unit: cleanPurchasingUnit,
+          pack_specification: payload.pack_specification !== undefined
+            ? specificationService.normalizeText(payload.pack_specification)
+            : `${normalizedPackSize}${normalizedPackUnit} ${cleanPackaging}`,
+          storage_requirements: payload.storage_requirements !== undefined
+            ? specificationService.normalizeText(payload.storage_requirements)
+            : existing.storage_requirements,
+          shelf_life_days: payload.shelf_life_days !== undefined
+            ? (payload.shelf_life_days ? Number(payload.shelf_life_days) : null)
+            : existing.shelf_life_days,
+          sku_attributes: normalizedSkuAttrs,
+          sku_hash: skuHash
+        },
+        connection
+      );
+
+      await connection.commit();
+      return updated;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async publishSupplierSku(supplierId, skuId) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const sku = await catalogRepo.findSupplierSkuById(Number(skuId), connection, true);
+      if (!sku) {
+        const err = new Error('Supplier SKU not found.');
+        err.status = 404;
+        err.code = 'SKU_NOT_FOUND';
+        throw err;
+      }
+
+      if (Number(sku.supplier_id) !== Number(supplierId)) {
+        const err = new Error('You do not own this physical SKU and cannot publish it.');
+        err.status = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+
+      if (sku.status === 'ARCHIVED') {
+        const err = new Error('Archived SKU cannot be published.');
+        err.status = 409;
+        err.code = 'INVALID_LIFECYCLE_TRANSITION';
+        throw err;
+      }
+
+      const product = await catalogRepo.findSupplierProductById(sku.supplier_product_id, connection, true);
+      if (!product || product.status === 'ARCHIVED') {
+        const err = new Error('Parent supplier product is archived or missing.');
+        err.status = 409;
+        err.code = 'PRODUCT_ARCHIVED';
+        throw err;
+      }
+
+      if (!sku.category_is_active || sku.category_approval_status !== 'APPROVED') {
+        const err = new Error('Cannot publish SKU because parent category is inactive.');
+        err.status = 403;
+        err.code = 'CATEGORY_INACTIVE';
+        throw err;
+      }
+
+      if (!sku.family_is_active || sku.family_approval_status !== 'APPROVED') {
+        const err = new Error('Cannot publish SKU because parent canonical product family is inactive.');
+        err.status = 403;
+        err.code = 'FAMILY_INACTIVE';
+        throw err;
+      }
+
+      // 1. Lock parent product to PUBLISHED as well
+      await catalogRepo.transitionSupplierProductStatus(product.id, 'PUBLISHED', connection);
+
+      // 2. Ensure base product row exists for backward-compatible FK on product_specifications
+      const family = await catalogRepo.findFamilyById(sku.family_id, connection);
+      const baseProduct = await this.ensureDefaultProductForFamily(family, connection);
+
+      // 3. Create or link product_specifications bridge row so supplier_listings and pools work seamlessly
+      let linkedSpecId = sku.linked_spec_id;
+      if (!linkedSpecId) {
+        const mergedAttrs = {
+          ...(product.commodity_attributes || {}),
+          ...(sku.sku_attributes || {}),
+          supplier_sku_id: sku.id,
+          supplier_id: supplierId
+        };
+        const specHash = specificationService.computeSpecHash({
+          productId: baseProduct.id,
+          brand: product.brand || `Unbranded-S${supplierId}`,
+          variety: product.variety,
+          cropYear: product.crop_year || 'N/A',
+          processingMethod: product.processing_method || '',
+          qualityGrade: product.quality_grade || '',
+          packagingType: sku.packaging_type,
+          packSize: sku.pack_size,
+          packUnit: sku.pack_unit,
+          purchasingUnit: sku.purchasing_unit,
+          specAttributes: mergedAttrs
+        });
+
+        const [existingSpec] = await connection.query(
+          `SELECT id FROM product_specifications WHERE spec_hash = ? LIMIT 1`,
+          [specHash]
+        );
+
+        if (existingSpec[0]) {
+          linkedSpecId = existingSpec[0].id;
+        } else {
+          const brandDisplay = product.brand && !product.is_unbranded ? product.brand : 'Unbranded';
+          const gradeDisplay = product.quality_grade ? ` (${product.quality_grade})` : '';
+          const title = `${brandDisplay} ${family.name} — ${product.variety}${gradeDisplay} — ${sku.pack_size}${sku.pack_unit} ${sku.packaging_type}`;
+          const variantTitle = `${brandDisplay} — ${product.variety}${gradeDisplay} — ${sku.pack_size}${sku.pack_unit} ${sku.packaging_type}`;
+          const specCode = specificationService.generateSpecCode(family.category_name, product.variety);
+
+          linkedSpecId = await productSpecRepo.create(
+            {
+              product_id: baseProduct.id,
+              category_id: sku.category_id,
+              family_id: sku.family_id,
+              supplier_id: supplierId,
+              supplier_product_id: product.id,
+              supplier_sku_id: sku.id,
+              variant_title: variantTitle,
+              spec_code: specCode,
+              title,
+              brand: product.brand || null,
+              is_unbranded: product.is_unbranded,
+              variety: product.variety,
+              crop_year: product.crop_year || null,
+              processing_method: product.processing_method || null,
+              quality_grade: product.quality_grade || null,
+              origin: product.origin || null,
+              packaging_type: sku.packaging_type,
+              pack_size: sku.pack_size,
+              pack_unit: sku.pack_unit,
+              purchasing_unit: sku.purchasing_unit,
+              storage_requirements: sku.storage_requirements || null,
+              shelf_life_days: sku.shelf_life_days || null,
+              spec_attributes: mergedAttrs,
+              spec_hash: specHash,
+              approval_status: 'APPROVED',
+              lifecycle_status: 'PUBLISHED',
+              created_by: supplierId,
+              approved_by: supplierId,
+              approved_at: new Date()
+            },
+            connection
+          );
+        }
+      }
+
+      const publishedSku = await catalogRepo.publishSupplierSku(sku.id, linkedSpecId, connection);
+
+      await connection.commit();
+      return publishedSku;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async archiveSupplierSku(supplierId, skuId) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const sku = await catalogRepo.findSupplierSkuById(Number(skuId), connection, true);
+      if (!sku) {
+        const err = new Error('Supplier SKU not found.');
+        err.status = 404;
+        err.code = 'SKU_NOT_FOUND';
+        throw err;
+      }
+
+      if (Number(sku.supplier_id) !== Number(supplierId)) {
+        const err = new Error('You do not own this physical SKU.');
+        err.status = 403;
+        err.code = 'FORBIDDEN';
+        throw err;
+      }
+
+      const archivedSku = await catalogRepo.archiveSupplierSku(sku.id, connection);
+      if (sku.linked_spec_id) {
+        await connection.query(
+          `UPDATE product_specifications SET lifecycle_status = 'ARCHIVED' WHERE id = ? AND supplier_id = ?`,
+          [sku.linked_spec_id, supplierId]
+        );
+      }
+      await connection.query(
+        `UPDATE supplier_listings SET status = 'ARCHIVED' WHERE (supplier_sku_id = ? OR (product_spec_id = ? AND supplier_id = ?)) AND status = 'ACTIVE'`,
+        [sku.id, sku.linked_spec_id || -1, supplierId]
+      );
+
+      await connection.commit();
+      return archivedSku;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
   }
 }
 

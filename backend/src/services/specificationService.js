@@ -346,10 +346,11 @@ class SpecificationService {
   }
 
   // Validate category-specific attributes (Backward-compatible entry point)
-  validateSpecificationInput(data, categoryName = '', familyContext = null) {
+  validateSpecificationInput(data, categoryName = '', familyContext = null, options = {}) {
     const {
       product_id,
       brand,
+      is_unbranded,
       variety,
       crop_year,
       processing_method,
@@ -361,19 +362,21 @@ class SpecificationService {
       spec_attributes
     } = data;
 
+    const allowOptional = Boolean(options.allowOptionalBrandAndGrade);
+
     if (!product_id && !familyContext) {
       return { valid: false, message: 'Base product ID (product_id) or family is required' };
     }
-    if (!brand || typeof brand !== 'string' || !brand.trim()) {
+    if (!allowOptional && (!brand || typeof brand !== 'string' || !brand.trim()) && !is_unbranded) {
       return { valid: false, message: 'Brand is required' };
     }
     if (!variety || typeof variety !== 'string' || !variety.trim()) {
       return { valid: false, message: 'Variety is required' };
     }
-    if (!processing_method || typeof processing_method !== 'string' || !processing_method.trim()) {
+    if (!allowOptional && (!processing_method || typeof processing_method !== 'string' || !processing_method.trim())) {
       return { valid: false, message: 'Processing method is required' };
     }
-    if (!quality_grade || typeof quality_grade !== 'string' || !quality_grade.trim()) {
+    if (!allowOptional && (!quality_grade || typeof quality_grade !== 'string' || !quality_grade.trim())) {
       return { valid: false, message: 'Quality grade is required' };
     }
     if (!packaging_type || typeof packaging_type !== 'string' || !packaging_type.trim()) {
@@ -392,10 +395,10 @@ class SpecificationService {
       categoryName: categoryName || familyContext?.category_name || '',
       familySlug: familyContext?.slug || '',
       familyName: familyContext?.name || '',
-      brand,
+      brand: brand || '',
       variety,
-      processingMethod: processing_method,
-      qualityGrade: quality_grade,
+      processingMethod: processing_method || '',
+      qualityGrade: quality_grade || '',
       packagingType: packaging_type,
       packSize: pack_size,
       packUnit: pack_unit,
@@ -414,6 +417,139 @@ class SpecificationService {
       normalizedPackUnit: coherence.normalizedPackUnit,
       normalizedAttributes: coherence.normalizedAttributes
     };
+  }
+
+  // Validate Supplier-Owned Product (Level 3: Brand & Grade are OPTIONAL)
+  validateSupplierProductInput(data, categoryName = '', familyContext = null) {
+    const {
+      brand,
+      is_unbranded,
+      variety,
+      processing_method,
+      quality_grade,
+      origin,
+      crop_year,
+      commodity_attributes,
+      description
+    } = data || {};
+
+    const cleanVariety = this.normalizeText(variety);
+    if (!cleanVariety || cleanVariety.length < 2) {
+      return {
+        valid: false,
+        code: 'VARIETY_REQUIRED',
+        message: 'Product variety or commercial type is required (minimum 2 characters).'
+      };
+    }
+
+    const cleanBrand = is_unbranded ? null : (this.normalizeText(brand) || null);
+    const normalizedUnbranded = (!cleanBrand || Boolean(is_unbranded)) ? 1 : 0;
+    const cleanProcessing = this.normalizeText(processing_method) || null;
+    const cleanGrade = this.normalizeText(quality_grade) || null;
+    const cleanOrigin = this.normalizeText(origin) || null;
+    const cleanCropYear = this.normalizeText(crop_year) || null;
+    const cleanDesc = this.normalizeText(description) || null;
+    const normAttrs = this.normalizeAttributes(commodity_attributes);
+
+    // Check cross-commodity coherence using a dummy valid pack size/unit for family
+    const defaultUnit = Array.isArray(familyContext?.allowed_pack_units) && familyContext.allowed_pack_units.length > 0
+      ? familyContext.allowed_pack_units[0]
+      : 'kg';
+
+    const coherence = this.validateFamilyAndCommodityCoherence({
+      categorySlug: familyContext?.category_slug || '',
+      categoryName: categoryName || familyContext?.category_name || '',
+      familySlug: familyContext?.slug || '',
+      familyName: familyContext?.name || '',
+      brand: cleanBrand || '',
+      variety: cleanVariety,
+      processingMethod: cleanProcessing || '',
+      qualityGrade: cleanGrade || '',
+      packagingType: 'Bag',
+      packSize: 25,
+      packUnit: defaultUnit,
+      purchasingUnit: 'bag',
+      specAttributes: normAttrs,
+      allowedPackUnits: familyContext?.allowed_pack_units || null
+    });
+
+    if (!coherence.valid) {
+      return coherence;
+    }
+
+    return {
+      valid: true,
+      normalized: {
+        brand: cleanBrand,
+        is_unbranded: normalizedUnbranded,
+        variety: cleanVariety,
+        processing_method: cleanProcessing,
+        quality_grade: cleanGrade,
+        origin: cleanOrigin,
+        crop_year: cleanCropYear,
+        commodity_attributes: normAttrs,
+        description: cleanDesc
+      }
+    };
+  }
+
+  // Compute deterministic Supplier Product Identity Hash
+  computeSupplierProductIdentityHash({
+    supplierId,
+    categoryId,
+    familyId,
+    brand,
+    isUnbranded,
+    variety,
+    processingMethod,
+    qualityGrade,
+    origin,
+    cropYear,
+    commodityAttributes
+  }) {
+    const normAttrs = this.normalizeAttributes(commodityAttributes);
+    const attrString = normAttrs ? JSON.stringify(normAttrs) : '';
+    const brandVal = isUnbranded || !brand ? '__unbranded__' : this.normalizeText(brand).toLowerCase();
+
+    const raw = [
+      Number(supplierId),
+      Number(categoryId),
+      Number(familyId),
+      brandVal,
+      this.normalizeText(variety).toLowerCase(),
+      this.normalizeText(processingMethod || '').toLowerCase(),
+      this.normalizeText(qualityGrade || '').toLowerCase(),
+      this.normalizeText(origin || '').toLowerCase(),
+      this.normalizeText(cropYear || '').toLowerCase(),
+      attrString
+    ].join('|');
+
+    return crypto.createHash('sha256').update(raw).digest('hex');
+  }
+
+  // Compute deterministic Supplier Physical SKU Hash (distinguishes 25kg vs 50kg, etc.)
+  computeSupplierSkuHash({
+    supplierId,
+    supplierProductId,
+    packagingType,
+    packSize,
+    packUnit,
+    purchasingUnit,
+    skuAttributes
+  }) {
+    const normAttrs = this.normalizeAttributes(skuAttributes);
+    const attrString = normAttrs ? JSON.stringify(normAttrs) : '';
+    const raw = [
+      Number(supplierId),
+      Number(supplierProductId),
+      this.normalizeText(packagingType).toLowerCase(),
+      Number(packSize).toFixed(2),
+      this.normalizeUnit(packUnit).toLowerCase(),
+      this.normalizeText(purchasingUnit || 'bag').toLowerCase(),
+      attrString
+    ].join('|');
+
+    return crypto.createHash('sha256').update(raw).digest('hex');
   }
 }
 

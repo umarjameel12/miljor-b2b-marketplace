@@ -5,8 +5,25 @@
 // clean progress mechanics, and responsive card rhythm
 // =============================================================================
 import React, { useState } from 'react';
-import { Package, Truck, Store, Zap, ShieldCheck, MapPin } from 'lucide-react';
+import { Package, Truck, Store, Zap, ShieldCheck, MapPin, Clock, Lock } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
+
+const formatLahoreTimestamp = (ts) => {
+  if (!ts) return null;
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleString('en-PK', {
+      timeZone: 'Asia/Karachi',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return null;
+  }
+};
 
 // Curated high-fidelity food imagery matching Quiet Luxury aesthetic
 const DEFAULT_CARD_IMAGES = {
@@ -28,12 +45,15 @@ export const PoolCard = ({ pool, onSelect }) => {
   );
 
   const isClosed = pool.status === 'CLOSED';
-  const estimatedPrice = pool.estimated_unit_price || pool.current_unit_price || pool.base_unit_price;
+  const estimatedPrice = pool.estimated_unit_price || pool.current_unit_price || pool.current_price_per_unit || pool.base_unit_price;
   const unit = pool.pack_unit || pool.pool_unit || 'kg';
-  const buyerMoq = pool.min_order_qty || pool.moq_buyer || 20;
-  const grade = pool.grade || 'A';
-  const committedQty = pool.committed_quantity || Math.round((progressPercent / 100) * (pool.target_quantity || 1000));
-  const targetQty = pool.target_quantity || 1000;
+  const buyerMoq = pool.min_order_qty || pool.buyer_min_qty || pool.moq_buyer || 1;
+  const grade = pool.quality_spec_grade || pool.quality_grade || pool.grade || null;
+  const brandLabel = pool.brand ? pool.brand : (pool.is_unbranded ? 'Unbranded' : null);
+  const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : Math.round((progressPercent / 100) * (pool.target_quantity || pool.target_qty || 1000)));
+  const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
+  const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
+  const promisedDeliveryFormatted = formatLahoreTimestamp(pool.promised_delivery_at);
 
   // Fulfillment Availability Indicators (Phase 6D.3 / Package D Invariant)
   const hasStandard = Boolean(
@@ -169,11 +189,52 @@ export const PoolCard = ({ pool, onSelect }) => {
               {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Verified Lahore Mill'}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
-              <span>Grade {grade}</span>
-              <span>•</span>
+              {brandLabel && (
+                <>
+                  <span>{brandLabel}</span>
+                  <span>•</span>
+                </>
+              )}
+              {grade && (
+                <>
+                  <span>{grade}</span>
+                  <span>•</span>
+                </>
+              )}
               <span>Min {buyerMoq} {unit}</span>
             </div>
           </div>
+
+          {/* Participation Cutoff & Promised 1-3 Day Delivery SLA */}
+          {(cutoffFormatted || promisedDeliveryFormatted) && (
+            <div className="mt-2 p-2 rounded-xl border text-[10px] space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+              {cutoffFormatted && (
+                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-600" />
+                    <span>Closes (PKT):</span>
+                  </span>
+                  <strong className="font-mono text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                </div>
+              )}
+              {promisedDeliveryFormatted && (
+                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <Truck className="w-3 h-3" />
+                    <span>Promised Delivery:</span>
+                  </span>
+                  <strong className="font-mono">{promisedDeliveryFormatted}</strong>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-[9px] text-stone-400 pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="inline-flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5 text-emerald-600" />
+                  <span>Immutable Published Terms</span>
+                </span>
+                <span>1–3 Day SLA</span>
+              </div>
+            </div>
+          )}
 
           {/* Clean Fulfillment Mode Availability Indicators */}
           <div className="flex flex-wrap items-center gap-1 mt-2.5">

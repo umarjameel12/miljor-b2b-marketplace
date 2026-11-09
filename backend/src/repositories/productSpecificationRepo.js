@@ -77,21 +77,26 @@ class ProductSpecificationRepository {
     return rows[0] || null;
   }
 
-  // Create new exact specification (supports canonical category_id, family_id, approval_status)
+  // Create new exact specification (supports canonical category_id, family_id, approval_status & supplier SKU link)
   async create(specData, connection = null) {
     const executor = connection || db;
     const {
       product_id,
       category_id,
       family_id,
+      supplier_id,
+      supplier_product_id,
+      supplier_sku_id,
       variant_title,
       spec_code,
       title,
       brand,
+      is_unbranded,
       variety,
       crop_year,
       processing_method,
       quality_grade,
+      origin,
       packaging_type,
       pack_size,
       pack_unit,
@@ -101,35 +106,42 @@ class ProductSpecificationRepository {
       spec_attributes,
       spec_hash,
       approval_status,
+      lifecycle_status,
       created_by,
       approved_by,
       approved_at
     } = specData;
 
+    const brandLabel = brand && !is_unbranded ? brand : 'Unbranded';
     const computedVariantTitle =
       variant_title ||
-      `${brand} — ${variety}${quality_grade && quality_grade !== 'N/A' ? ` (${quality_grade})` : ''} — ${Number(pack_size)}${pack_unit} ${packaging_type}`;
+      `${brandLabel} — ${variety}${quality_grade && quality_grade !== 'N/A' ? ` (${quality_grade})` : ''} — ${Number(pack_size)}${pack_unit} ${packaging_type}`;
 
     const [result] = await executor.query(
       `INSERT INTO product_specifications (
-        product_id, category_id, family_id, variant_title,
-        spec_code, title, brand, variety, crop_year,
-        processing_method, quality_grade, packaging_type, pack_size,
+        product_id, category_id, family_id, supplier_id, supplier_product_id, supplier_sku_id,
+        variant_title, spec_code, title, brand, is_unbranded, variety, crop_year,
+        processing_method, quality_grade, origin, packaging_type, pack_size,
         pack_unit, purchasing_unit, storage_requirements, shelf_life_days,
-        spec_attributes, spec_hash, approval_status, created_by, approved_by, approved_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        spec_attributes, spec_hash, approval_status, lifecycle_status, created_by, approved_by, approved_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         product_id,
         category_id || null,
         family_id || null,
+        supplier_id || null,
+        supplier_product_id || null,
+        supplier_sku_id || null,
         computedVariantTitle,
         spec_code,
         title,
-        brand,
+        brand || null,
+        is_unbranded ? 1 : 0,
         variety,
         crop_year || null,
-        processing_method,
-        quality_grade,
+        processing_method || null,
+        quality_grade || null,
+        origin || null,
         packaging_type,
         pack_size,
         pack_unit,
@@ -139,6 +151,7 @@ class ProductSpecificationRepository {
         spec_attributes ? (typeof spec_attributes === 'string' ? spec_attributes : JSON.stringify(spec_attributes)) : null,
         spec_hash,
         approval_status || 'APPROVED',
+        lifecycle_status || (supplier_id ? 'PUBLISHED' : 'LEGACY_GLOBAL'),
         created_by || null,
         approved_by || null,
         approved_at || new Date()

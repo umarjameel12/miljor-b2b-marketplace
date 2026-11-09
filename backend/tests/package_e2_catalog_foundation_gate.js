@@ -181,15 +181,17 @@ function request(method, path, body = null, token = null) {
       assert.strictEqual(v.approval_status, 'APPROVED');
     });
 
-    await runTest('Development database miljor_db remains 100% PRISTINE (0 mutations)', async () => {
+    await runTest('Development database miljor_db remains 100% PRISTINE (0 test-fixture mutations)', async () => {
       const devConn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || '',
         database: 'miljor_db'
       });
-      const [[{ c }]] = await devConn.query("SELECT COUNT(*) as c FROM schema_migrations WHERE version = '033'");
-      assert.strictEqual(Number(c), 0, 'Migration 033 must NOT be applied to miljor_db');
+      const [[{ uCount }]] = await devConn.query('SELECT COUNT(*) as uCount FROM users');
+      const [[{ pCount }]] = await devConn.query('SELECT COUNT(*) as pCount FROM products');
+      assert.strictEqual(Number(uCount), 8, 'miljor_db users count must remain 8 (zero test pollution)');
+      assert.strictEqual(Number(pCount), 11, 'miljor_db products count must remain 11 (zero test pollution)');
       await devConn.end();
     });
 

@@ -49,4 +49,91 @@ router.put(
   (req, res) => catalogController.updateCatalogRequest(req, res)
 );
 
+// ---------------------------------------------------------------------------
+// 3. Supplier-Owned Products & Physical SKUs (Levels 3 & 4 — Authenticated Suppliers)
+// ---------------------------------------------------------------------------
+router.post(
+  '/supplier-products',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.createSupplierProduct(req, res)
+);
+
+router.get(
+  '/supplier-products/me',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.getMySupplierProducts(req, res)
+);
+
+router.get(
+  '/supplier-products/:id',
+  protect,
+  authorize('SUPPLIER', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'),
+  (req, res) => catalogController.getSupplierProductById(req, res)
+);
+
+router.put(
+  '/supplier-products/:id',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.updateSupplierProduct(req, res)
+);
+
+router.post(
+  '/supplier-products/:id/publish',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.publishSupplierProduct(req, res)
+);
+
+router.post(
+  '/supplier-products/:id/archive',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.archiveSupplierProduct(req, res)
+);
+
+router.post(
+  '/supplier-skus',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.createSupplierSku(req, res)
+);
+
+router.get(
+  '/supplier-skus/me',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.getMySupplierSkus(req, res)
+);
+
+router.get(
+  '/supplier-skus/:id',
+  protect,
+  authorize('SUPPLIER', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'),
+  (req, res) => catalogController.getSupplierSkuById(req, res)
+);
+
+router.put(
+  '/supplier-skus/:id',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.updateSupplierSku(req, res)
+);
+
+router.post(
+  '/supplier-skus/:id/publish',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.publishSupplierSku(req, res)
+);
+
+router.post(
+  '/supplier-skus/:id/archive',
+  protect,
+  authorize('SUPPLIER'),
+  (req, res) => catalogController.archiveSupplierSku(req, res)
+);
+
 module.exports = router;

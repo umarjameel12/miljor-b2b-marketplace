@@ -5,14 +5,16 @@
 // =============================================================================
 const listingRepo = require('../repositories/supplierListingRepo');
 const specRepo = require('../repositories/productSpecificationRepo');
+const catalogRepo = require('../repositories/catalogRepository');
 const unitService = require('../services/unitConversionService');
 
 class SupplierListingController {
-  // 1. Create Supplier Listing (Verified Suppliers Only)
+  // 1. Create Supplier Listing (Verified Suppliers Only — supports supplier_sku_id or product_spec_id)
   async createListing(req, res) {
     try {
       const supplierId = req.user.id;
       const {
+        supplier_sku_id,
         product_spec_id,
         available_stock,
         base_unit_price,
@@ -25,20 +27,79 @@ class SupplierListingController {
         notes
       } = req.body;
 
-      // 1. Validate spec existence
-      if (!product_spec_id) {
+      let resolvedSpecId = product_spec_id ? Number(product_spec_id) : null;
+      let resolvedSupplierProductId = null;
+      let resolvedSupplierSkuId = supplier_sku_id ? Number(supplier_sku_id) : null;
+
+      // 1A. If supplier_sku_id is provided, verify ownership and PUBLISHED state
+      if (resolvedSupplierSkuId) {
+        const sku = await catalogRepo.findSupplierSkuById(resolvedSupplierSkuId);
+        if (!sku) {
+          return res.status(404).json({
+            success: false,
+            error: { code: 'SKU_NOT_FOUND', message: 'Supplier physical SKU not found.' }
+          });
+        }
+        if (Number(sku.supplier_id) !== Number(supplierId)) {
+          return res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'You can only create commercial offers against your own physical SKUs.' }
+          });
+        }
+        if (sku.status !== 'PUBLISHED') {
+          return res.status(403).json({
+            success: false,
+            error: {
+              code: 'SKU_NOT_PUBLISHED',
+              message: `Physical SKU is in '${sku.status}' status. Publish the SKU before creating a commercial offer.`
+            }
+          });
+        }
+        resolvedSpecId = sku.linked_spec_id;
+        resolvedSupplierProductId = sku.supplier_product_id;
+      }
+
+      // 1B. Validate spec existence
+      if (!resolvedSpecId) {
         return res.status(400).json({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Product specification ID (product_spec_id) is required' }
+          error: { code: 'VALIDATION_ERROR', message: 'Either supplier_sku_id or product_spec_id is required' }
         });
       }
 
-      const spec = await specRepo.findById(product_spec_id);
+      const spec = await specRepo.findById(resolvedSpecId);
       if (!spec || !spec.is_active) {
         return res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: 'Active product specification not found' }
         });
+      }
+
+      // If the specification belongs to a specific supplier's SKU, enforce ownership and PUBLISHED lifecycle
+      if (spec.supplier_id && Number(spec.supplier_id) !== Number(supplierId)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You cannot create a commercial offer on another supplier\'s owned SKU.'
+          }
+        });
+      }
+      if (spec.lifecycle_status && !['PUBLISHED', 'LEGACY_GLOBAL'].includes(spec.lifecycle_status)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'SKU_NOT_PUBLISHED',
+            message: `Physical SKU is in '${spec.lifecycle_status}' status and cannot accept commercial offers.`
+          }
+        });
+      }
+
+      if (!resolvedSupplierProductId && spec.supplier_product_id) {
+        resolvedSupplierProductId = spec.supplier_product_id;
+      }
+      if (!resolvedSupplierSkuId && spec.supplier_sku_id) {
+        resolvedSupplierSkuId = spec.supplier_sku_id;
       }
 
       // Package E2: Enforce that variant, parent family, and parent category are APPROVED and active
@@ -113,7 +174,7 @@ class SupplierListingController {
       }
 
       // 3. Check for duplicate active listing for this supplier & spec
-      const existing = await listingRepo.findBySupplierAndSpec(supplierId, product_spec_id);
+      const existing = await listingRepo.findBySupplierAndSpec(supplierId, resolvedSpecId);
       if (existing) {
         return res.status(409).json({
           success: false,
@@ -135,7 +196,9 @@ class SupplierListingController {
       const listingId = await listingRepo.create({
         listing_code: listingCode,
         supplier_id: supplierId,
-        product_spec_id,
+        product_spec_id: resolvedSpecId,
+        supplier_product_id: resolvedSupplierProductId,
+        supplier_sku_id: resolvedSupplierSkuId,
         available_stock: stock,
         base_unit_price: Number(base_unit_price).toFixed(2),
         pricing_unit: pricingUnit,

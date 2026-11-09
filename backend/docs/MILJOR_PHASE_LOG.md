@@ -1176,3 +1176,30 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 
 
+
+
+---
+
+## Package E2 Final Closure — Supplier-Owned Products, Physical SKUs, Immutable Published Pools, 24–72h Delivery SLA, `miljor_db` Activation & Master Documentation Suite
+- **Execution Date:** 2026-11-10
+- **Database Migration Applied:**
+  - Migration `034`: `database/migrations/034_supplier_owned_products_skus_and_immutable_pools.sql` (and rollback script `database/migrations/rollback/034_rollback_supplier_owned_products_skus_and_immutable_pools.sql`).
+  - Applied, rolled back, and re-applied cleanly on `miljor_test_db`.
+  - Full external backup of `miljor_db` verified in `miljor_recovery_verify_db` (50/50 tables parity), followed by ordered activation of Migrations `032`, `033`, and `034` on `miljor_db`.
+- **Key Deliverables Completed:**
+  1. **6-Level Product Ownership Hierarchy:** Implemented `supplier_products` (with optional `brand` via `is_unbranded`, optional `quality_grade`, optional `processing_method`) and `supplier_skus` (separate physical SKUs for `25kg` vs `50kg`, strict mass vs volume enforcement, `DRAFT -> PUBLISHED -> ARCHIVED` lifecycle with bridge linkage to `product_specifications`).
+  2. **Regular Pool Invariants (Rules P1–P13):** Enforced supplier-only pool creation/editing/publishing (`ADMIN` blocked with `403 SUPPLIER_CONSENT_REQUIRED`), unconditional commercial & cluster immutability after publish (`is_terms_locked = 1`, `published_terms_snapshot`, `422 POOL_TERMS_IMMUTABLE` even at 0 reservations), `SELECT ... FOR UPDATE` serialization between draft updates and publish, and mandatory `promised_delivery_at` within `[scheduled_close_at + 24h, scheduled_close_at + 72h]`.
+  3. **Frontend Studio & Marketplace Updates:** Refactored `SupplierCatalogPage.jsx` for Supplier Products & Physical SKUs, updated `PoolCard.jsx` to display promised delivery SLA and unbranded/optional-grade metadata, and verified `npm run build` (`0` errors).
+  4. **Master Documentation Suite:** Authored 12 comprehensive architectural and domain specifications in `backend/docs/`.
+- **Automated Gate Results:**
+  - `node tests/package_e2_product_ownership_and_immutable_pools_gate.js`: **20/20 PASS**
+  - `node tests/package_e1_supplier_profile_gate.js`: **28/28 PASS**
+  - `node tests/package_e2_catalog_foundation_gate.js`: **9/9 PASS**
+  - `node tests/package_e2_catalog_moderation_gate.js`: **8/8 PASS**
+  - `node tests/package_e2_catalog_security_gate.js`: **8/8 PASS**
+  - `node tests/part3_specification_gate.js`: **15/15 PASS**
+  - `node tests/part4b2_pool_creation_gate.js`: **22/22 PASS**
+  - `node tests/part4b3_pool_publishing_gate.js`: **25/25 PASS**
+  - `node tests/part_6d3_buyer_onboarding_pool_clusters_gate.js`: **11/11 PASS**
+  - `node tests/part_6d3_2_backend_hardening_gate.js`: **11/11 PASS**
+- **Status:** **PASS (COMPLETE — READY FOR GITHUB SYNC)**.

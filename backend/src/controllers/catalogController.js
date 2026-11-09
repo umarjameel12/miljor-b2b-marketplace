@@ -27,6 +27,8 @@ class CatalogController {
     if (err.existingFamily) payload.error.existing_family = err.existingFamily;
     if (err.existingSpecification) payload.error.existing_specification = err.existingSpecification;
     if (err.existingRequest) payload.error.existing_request = err.existingRequest;
+    if (err.existingProduct) payload.error.existing_product = err.existingProduct;
+    if (err.existingSku) payload.error.existing_sku = err.existingSku;
     return res.status(status).json(payload);
   }
 
@@ -527,6 +529,235 @@ class CatalogController {
       });
     } catch (err) {
       return this._handleError(res, err, 'adminRejectCatalogRequest');
+    }
+  }
+
+  // ===========================================================================
+  // D. SUPPLIER-OWNED PRODUCT & PHYSICAL SKU ENDPOINTS (Levels 3 & 4)
+  // ===========================================================================
+
+  // POST /api/v1/catalog/supplier-products
+  async createSupplierProduct(req, res) {
+    try {
+      const product = await catalogService.createSupplierProduct(req.user.id, req.body || {}, req.user.role);
+      return res.status(201).json({
+        success: true,
+        message: 'Supplier product created in DRAFT status.',
+        data: { product }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'createSupplierProduct');
+    }
+  }
+
+  // GET /api/v1/catalog/supplier-products/me
+  async getMySupplierProducts(req, res) {
+    try {
+      const { status, family_id, category_id } = req.query;
+      const products = await catalogRepo.findSupplierProductsBySupplier(req.user.id, {
+        status: status || null,
+        familyId: family_id ? Number(family_id) : null,
+        categoryId: category_id ? Number(category_id) : null
+      });
+      return res.status(200).json({
+        success: true,
+        count: products.length,
+        data: { products }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'getMySupplierProducts');
+    }
+  }
+
+  // GET /api/v1/catalog/supplier-products/:id
+  async getSupplierProductById(req, res) {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_ID', message: 'Valid numeric product ID is required.' }
+        });
+      }
+      const product = await catalogRepo.findSupplierProductById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'PRODUCT_NOT_FOUND', message: 'Supplier product not found.' }
+        });
+      }
+      const isAdmin = ['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'].includes(req.user.role);
+      if (!isAdmin && Number(product.supplier_id) !== Number(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You are not authorized to access another supplier\'s product.' }
+        });
+      }
+      const skus = await catalogRepo.findSupplierSkusBySupplier(product.supplier_id, {
+        supplierProductId: product.id
+      });
+      return res.status(200).json({
+        success: true,
+        data: { product, skus }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'getSupplierProductById');
+    }
+  }
+
+  // PUT /api/v1/catalog/supplier-products/:id
+  async updateSupplierProduct(req, res) {
+    try {
+      const id = Number(req.params.id);
+      const product = await catalogService.updateSupplierProduct(req.user.id, id, req.body || {}, req.user.role);
+      return res.status(200).json({
+        success: true,
+        message: 'Supplier product draft updated.',
+        data: { product }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'updateSupplierProduct');
+    }
+  }
+
+  // POST /api/v1/catalog/supplier-products/:id/publish
+  async publishSupplierProduct(req, res) {
+    try {
+      const id = Number(req.params.id);
+      const product = await catalogService.publishSupplierProduct(req.user.id, id);
+      return res.status(200).json({
+        success: true,
+        message: 'Supplier product published. Physical identity is now permanently locked.',
+        data: { product }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'publishSupplierProduct');
+    }
+  }
+
+  // POST /api/v1/catalog/supplier-products/:id/archive
+  async archiveSupplierProduct(req, res) {
+    try {
+      const id = Number(req.params.id);
+      const product = await catalogService.archiveSupplierProduct(req.user.id, id);
+      return res.status(200).json({
+        success: true,
+        message: 'Supplier product archived.',
+        data: { product }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'archiveSupplierProduct');
+    }
+  }
+
+  // POST /api/v1/catalog/supplier-skus
+  async createSupplierSku(req, res) {
+    try {
+      const sku = await catalogService.createSupplierSku(req.user.id, req.body || {});
+      return res.status(201).json({
+        success: true,
+        message: 'Supplier physical SKU created in DRAFT status.',
+        data: { sku }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'createSupplierSku');
+    }
+  }
+
+  // GET /api/v1/catalog/supplier-skus/me
+  async getMySupplierSkus(req, res) {
+    try {
+      const { status, supplier_product_id, family_id } = req.query;
+      const skus = await catalogRepo.findSupplierSkusBySupplier(req.user.id, {
+        status: status || null,
+        supplierProductId: supplier_product_id ? Number(supplier_product_id) : null,
+        familyId: family_id ? Number(family_id) : null
+      });
+      return res.status(200).json({
+        success: true,
+        count: skus.length,
+        data: { skus }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'getMySupplierSkus');
+    }
+  }
+
+  // GET /api/v1/catalog/supplier-skus/:id
+  async getSupplierSkuById(req, res) {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_ID', message: 'Valid numeric SKU ID is required.' }
+        });
+      }
+      const sku = await catalogRepo.findSupplierSkuById(id);
+      if (!sku) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'SKU_NOT_FOUND', message: 'Supplier SKU not found.' }
+        });
+      }
+      const isAdmin = ['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'].includes(req.user.role);
+      if (!isAdmin && Number(sku.supplier_id) !== Number(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You are not authorized to access another supplier\'s SKU.' }
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: { sku }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'getSupplierSkuById');
+    }
+  }
+
+  // PUT /api/v1/catalog/supplier-skus/:id
+  async updateSupplierSku(req, res) {
+    try {
+      const id = Number(req.params.id);
+      const sku = await catalogService.updateSupplierSku(req.user.id, id, req.body || {});
+      return res.status(200).json({
+        success: true,
+        message: 'Supplier physical SKU draft updated.',
+        data: { sku }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'updateSupplierSku');
+    }
+  }
+
+  // POST /api/v1/catalog/supplier-skus/:id/publish
+  async publishSupplierSku(req, res) {
+    try {
+      const id = Number(req.params.id);
+      const sku = await catalogService.publishSupplierSku(req.user.id, id);
+      return res.status(200).json({
+        success: true,
+        message: 'Supplier physical SKU published. Physical identity is now permanently locked and ready for commercial offers.',
+        data: { sku }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'publishSupplierSku');
+    }
+  }
+
+  // POST /api/v1/catalog/supplier-skus/:id/archive
+  async archiveSupplierSku(req, res) {
+    try {
+      const id = Number(req.params.id);
+      const sku = await catalogService.archiveSupplierSku(req.user.id, id);
+      return res.status(200).json({
+        success: true,
+        message: 'Supplier physical SKU archived.',
+        data: { sku }
+      });
+    } catch (err) {
+      return this._handleError(res, err, 'archiveSupplierSku');
     }
   }
 }
