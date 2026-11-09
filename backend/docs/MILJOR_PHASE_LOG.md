@@ -1106,7 +1106,37 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - **GATE B (ADMIN VERIFICATION INTERFACE): COMPLETE & VERIFIED**
   - **GATE C (MIGRATION 032 INTEGRITY & PRISTINE DEV DB): VERIFIED**
   - **GATE D (AUTOMATED TEST GATES & BUILD): 108/108 PASS & 0 BUILD ERRORS**
+
+---
+
+## Package E1.2 Execution Detail — GitHub Code Review Fixes
+- **Execution Date:** 2026-11-10
+- **Objective:** Resolve three confirmed code review issues on `feature/package-e`: (1) Explicit response field allowlist in `getPendingSuppliers()` to eliminate raw/ciphertext leakage; (2) Server-side enforcement of authorized plan caps (`STARTER`=4, `GROWTH`=13, `BUSINESS`=25) rejecting client bypass with `400 PLAN_CAP_EXCEEDED`; (3) Removal of implicit legacy plaintext acceptance from normal runtime in `supplierProfileRepository.findBySupplierId()` with explicit, authorized migration procedure.
+- **Files Modified/Created:**
+  - `backend/src/controllers/adminController.js`: Replaced `SELECT sp.*` with explicit response field allowlist; derived `bank_iban_masked` without raw/ciphertext leakage; enforced server-side plan caps rejecting requests > authorized cap with `400 PLAN_CAP_EXCEEDED`.
+  - `backend/src/repositories/supplierProfileRepository.js`: Removed `{ allowLegacy: true }` from normal path; legacy records flag `LEGACY_MIGRATION_REQUIRED` without data loss; implemented `migrateLegacyBankingRecord()` requiring `{ authorized: true }`.
+  - `frontend/src/pages/AdminVerificationPage.jsx`: Updated IBAN display to strictly use `bank_iban_masked`; bounded listing cap input to authorized plan cap.
+  - `backend/tests/package_e1_supplier_profile_gate.js`: Extended to 28 assertions covering response field allowlist, plan cap overreach rejection (400), and legacy migration lifecycle.
+  - `backend/docs/MILJOR_PACKAGE_E1_FINAL_INTEGRATION_SECURITY_REPORT.md`: Updated with E1.2 code review fixes and evidence.
+- **Automated Gate Results:**
+  - `backend/tests/package_e1_supplier_profile_gate.js`: **28/28 assertions passed (100% PASS)**.
+  - `frontend/tests/package_e1_frontend_integration.test.cjs`: **6/6 assertions passed (100% PASS)**.
+  - `backend/tests/part2_security_gate.js`: **16/16 assertions passed (100% PASS)**.
+  - `backend/tests/part_g2_delivery_integration_gate.js`: **44/44 assertions passed (100% PASS)**.
+  - `backend/tests/part3_specification_gate.js`: **15/15 assertions passed (100% PASS)**.
+  - Total Active Gate Assertions: **109/109 passed (100% GREEN)**.
+  - `cd frontend && npm run build`: **0 errors (built in 771ms)**.
+- **Database & Business Data Preservation:**
+  - `miljor_test_db`: Contains verified Migration 032 with expanded `bank_iban VARCHAR(150)`.
+  - `miljor_db`: Verified 100% PRISTINE (8 users, 31 migrations, 0 writes).
+  - Development database migration status: **DEPLOYMENT BLOCKED** pending separate explicit authorization.
+- **Package Status:**
+  - **PACKAGE E1.2: PASS**
+  - **RESPONSE FIELD ALLOWLIST: VERIFIED (Zero raw/ciphertext leakage)**
+  - **SERVER-SIDE PLAN CAPS: VERIFIED (STARTER 4, GROWTH 13, BUSINESS 25)**
+  - **FAIL-CLOSED LEGACY PATH: VERIFIED (Normal path refuses implicit plaintext)**
   - **CAN START E2: NO (Strict Stop Enforced)**
+
 
 
 

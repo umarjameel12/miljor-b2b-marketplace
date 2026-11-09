@@ -57,17 +57,66 @@ class SupplierProfileRepository {
 
     const profile = rows[0] || null;
     if (profile && profile.bank_iban) {
-      try {
-        profile.bank_iban_is_encrypted = encryptionService.isEncrypted(profile.bank_iban);
-        profile.bank_iban = encryptionService.decrypt(profile.bank_iban, { allowLegacy: true });
-      } catch (e) {
-        console.error('Warning: could not decrypt bank_iban for supplier:', supplierId, e.message);
-        profile.bank_iban = null;
-        profile.bank_iban_decrypt_error = e.code || 'DECRYPTION_ERROR';
+      profile.bank_iban_is_encrypted = encryptionService.isEncrypted(profile.bank_iban);
+      if (profile.bank_iban_is_encrypted) {
+        try {
+          // Normal application path: strictly decrypts authenticated v1 envelopes
+          profile.bank_iban = encryptionService.decrypt(profile.bank_iban);
+        } catch (e) {
+          console.error('Warning: could not decrypt bank_iban for supplier:', supplierId, e.message);
+          profile.bank_iban = null;
+          profile.bank_iban_decrypt_error = e.code || 'DECRYPTION_ERROR';
+        }
+      } else {
+        // Legacy unencrypted banking record detected in normal application path
+        // Normal runtime strictly refuses implicit legacy acceptance without destroying or overwriting data
+        profile.bank_iban_legacy_unencrypted = true;
+        profile.bank_iban = null; // Do not expose plaintext in normal runtime
+        profile.bank_iban_status = 'LEGACY_MIGRATION_REQUIRED';
       }
     }
 
     return profile;
+  }
+
+  /**
+   * Explicit authorized legacy migration procedure
+   * Strictly isolated from normal application runtime paths.
+   * Reads unencrypted legacy record with authorization, validates, encrypts with active key,
+   * and updates MySQL record without data loss.
+   */
+  async migrateLegacyBankingRecord(supplierId, authorizationContext, connection) {
+    if (!authorizationContext || authorizationContext.authorized !== true) {
+      const err = new Error('Unauthorized legacy migration attempt. Explicit authorization context required.');
+      err.code = 'UNAUTHORIZED_MIGRATION';
+      throw err;
+    }
+
+    const db = connection || defaultDb;
+    const [rows] = await db.query(
+      'SELECT supplier_id, bank_iban FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+      [supplierId]
+    );
+
+    if (!rows[0] || !rows[0].bank_iban) {
+      return { migrated: false, reason: 'NO_RECORD' };
+    }
+
+    const rawVal = rows[0].bank_iban;
+    if (encryptionService.isEncrypted(rawVal)) {
+      return { migrated: false, reason: 'ALREADY_ENCRYPTED' };
+    }
+
+    // Explicitly authorized legacy read
+    const plaintext = encryptionService.decrypt(rawVal, { allowLegacy: true });
+    const encrypted = encryptionService.encrypt(plaintext);
+
+    await db.query(
+      'UPDATE supplier_profiles SET bank_iban = ? WHERE supplier_id = ?',
+      [encrypted, supplierId]
+    );
+
+    return { migrated: true, supplierId };
   }
 
   /**

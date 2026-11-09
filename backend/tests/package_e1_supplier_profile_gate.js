@@ -635,7 +635,21 @@ async function runE1Gate() {
       assert.strictEqual(badPlanRes.status, 400);
       assert.strictEqual(badPlanRes.data.error.code, 'INVALID_SUBSCRIPTION_PLAN');
 
-      // 3. Approving with STARTER plan defaults listings cap safely to 4 (not 25)
+      // 3. Admin cannot exceed authorized plan cap (STARTER max 4 slots; requesting 25 must fail with 400)
+      const capExceededRes = await api(`/api/v1/admin/suppliers/${supplier2Id}/verify`, {
+        method: 'PUT',
+        token: adminToken,
+        body: {
+          verification_status: 'VERIFIED',
+          verification_level: 'LEVEL_1_CONTACT',
+          subscription_plan: 'STARTER',
+          max_active_listings: 25 // Exceeds authorized cap of 4
+        }
+      });
+      assert.strictEqual(capExceededRes.status, 400);
+      assert.strictEqual(capExceededRes.data.error.code, 'PLAN_CAP_EXCEEDED');
+
+      // 4. Approving with STARTER plan defaults listings cap safely to 4 (not 25)
       const starterApproveRes = await api(`/api/v1/admin/suppliers/${supplier2Id}/verify`, {
         method: 'PUT',
         token: adminToken,
@@ -673,6 +687,15 @@ async function runE1Gate() {
       // Check that supplier1 is in the list
       const found = adminRes.data.data.suppliers.find((s) => s.supplier_id === supplier1Id);
       assert.ok(found, 'Pending list must contain supplier1');
+
+      // Issue 1 verification: bank_iban and ciphertext must NEVER be exposed in response
+      assert.strictEqual(found.bank_iban, undefined, 'Raw bank_iban field MUST NOT be in response');
+      assert.ok(found.bank_iban_masked.includes('****'), 'Masked bank_iban must be returned');
+      assert.strictEqual(
+        JSON.stringify(adminRes.data).includes('v1:'),
+        false,
+        'Raw ciphertext envelope MUST NOT be leaked in admin pending response!'
+      );
 
       // Verify unauthenticated is rejected
       const unauthRes = await api('/api/v1/admin/suppliers/pending');
@@ -714,7 +737,49 @@ async function runE1Gate() {
     });
 
     // ---------------------------------------------------------------------------
-    // TEST 27: No mutation of miljor_db
+    // TEST 27: Normal repository path rejects implicit legacy plaintext, authorized migration succeeds
+    // ---------------------------------------------------------------------------
+    await test('Normal repository path refuses implicit legacy plaintext and explicit migration works safely', async () => {
+      const supplierProfileRepo = require('../src/repositories/supplierProfileRepository');
+
+      // 1. Seed unencrypted legacy IBAN into supplier2 record in MySQL
+      const legacyIban = 'PK68HABB0000009988776601';
+      await db.query('UPDATE supplier_profiles SET bank_iban = ? WHERE supplier_id = ?', [legacyIban, supplier2Id]);
+
+      // 2. Normal application path: findBySupplierId must NOT return plaintext
+      const normalProfile = await supplierProfileRepo.findBySupplierId(supplier2Id);
+      assert.strictEqual(normalProfile.bank_iban, null, 'Normal path must not expose unencrypted legacy IBAN');
+      assert.strictEqual(normalProfile.bank_iban_legacy_unencrypted, true, 'Legacy flag must be set');
+      assert.strictEqual(normalProfile.bank_iban_status, 'LEGACY_MIGRATION_REQUIRED');
+
+      // Verify raw database record was NOT overwritten or deleted
+      const [rawCheck] = await db.query('SELECT bank_iban FROM supplier_profiles WHERE supplier_id = ?', [supplier2Id]);
+      assert.strictEqual(rawCheck[0].bank_iban, legacyIban, 'Raw MySQL record must remain preserved');
+
+      // 3. Unauthorized migration attempt fails
+      await assert.rejects(
+        async () => {
+          await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, { authorized: false });
+        },
+        /Unauthorized legacy migration attempt/
+      );
+
+      // 4. Authorized migration procedure encrypts record safely
+      const migResult = await supplierProfileRepo.migrateLegacyBankingRecord(supplier2Id, { authorized: true });
+      assert.strictEqual(migResult.migrated, true);
+
+      // Verify record is now safely encrypted in MySQL
+      const [migratedRow] = await db.query('SELECT bank_iban FROM supplier_profiles WHERE supplier_id = ?', [supplier2Id]);
+      assert.ok(migratedRow[0].bank_iban.startsWith('v1:'), 'Migrated record must start with v1: envelope');
+
+      // 5. Subsequent normal application read now decrypts normally
+      const postMigProfile = await supplierProfileRepo.findBySupplierId(supplier2Id);
+      assert.strictEqual(postMigProfile.bank_iban, legacyIban, 'Post-migration normal path must decrypt successfully');
+      assert.strictEqual(postMigProfile.bank_iban_is_encrypted, true);
+    });
+
+    // ---------------------------------------------------------------------------
+    // TEST 28: No mutation of miljor_db
     // ---------------------------------------------------------------------------
     await test('Development database miljor_db remains 100% PRISTINE (0 writes, 0 mutations)', async () => {
       const [devUsersAfter] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.users');

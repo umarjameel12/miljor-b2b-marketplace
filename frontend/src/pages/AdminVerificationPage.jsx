@@ -341,7 +341,7 @@ export const AdminVerificationPage = () => {
                             {s.bank_name || 'No Bank'} • {s.bank_account_title || 'N/A'}
                           </p>
                           <p className="text-[11px] text-[var(--text-secondary)] font-mono">
-                            IBAN: {s.bank_iban ? `${s.bank_iban.substring(0, 4)} **** ${s.bank_iban.slice(-4)}` : 'Not on file'}
+                            IBAN: {s.bank_iban_masked || 'Not on file'}
                           </p>
                           <p className="text-[11px] text-[var(--text-secondary)]">
                             NTN: <span className="font-mono">{s.tax_ntn || 'Exempt / Not Provided'}</span>
@@ -466,8 +466,11 @@ export const AdminVerificationPage = () => {
                     }
                     className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
                     min="1"
-                    max="100"
+                    max={PLAN_LISTING_CAPS[approvalForm.subscription_plan] || 4}
                   />
+                  <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
+                    Authorized cap: {PLAN_LISTING_CAPS[approvalForm.subscription_plan] || 4}
+                  </span>
                 </div>
                 <div>
                   <label className="font-semibold block mb-1">Transaction Fee %</label>
