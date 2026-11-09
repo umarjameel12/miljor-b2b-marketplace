@@ -14,6 +14,9 @@ import { RegisterPage } from './pages/RegisterPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SupplierProfilePage } from './pages/SupplierProfilePage';
+import { SupplierOnboardingPage } from './pages/SupplierOnboardingPage';
+import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -29,9 +32,9 @@ function AppContent() {
     return <OpeningTreatment />;
   }
 
-  // Showcase (/), marketplace (/pools), orders (/orders), and profile (/profile) use the responsive AppShell layout with sidebar.
-  // Auth routes (/login, /register, /verify-email) use the clean standalone Navbar.
-  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/profile');
+  // Showcase (/), marketplace (/pools), orders (/orders), profile (/profile), supplier (/supplier), and admin (/admin) use the responsive AppShell layout with sidebar.
+  // Auth routes (/login, /register, /verify-email, /forgot-password) use the clean standalone Navbar.
+  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin');
 
   return (
     <div
@@ -49,6 +52,9 @@ function AppContent() {
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/supplier/profile" element={<SupplierProfilePage />} />
+          <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />
+          <Route path="/admin/verifications" element={<AdminVerificationPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

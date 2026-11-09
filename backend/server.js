@@ -52,7 +52,7 @@ const fulfillmentRoutes = require('./src/routes/v1/fulfillmentRoutes');
 const financialSettlementRoutes = require('./src/routes/v1/financialSettlementRoutes');
 const geographicRoutes = require('./src/routes/v1/geographicRoutes');
 const buyerAddressRoutes = require('./src/routes/v1/buyerAddressRoutes');
-const supplierDeliveryRoutes = require('./src/routes/v1/supplierDeliveryRoutes');
+const supplierRoutes = require('./src/routes/v1/supplierRoutes');
 const deliveryQuotationRoutes = require('./src/routes/v1/deliveryQuotationRoutes');
 const paymentController = require('./src/controllers/paymentController');
 
@@ -180,7 +180,7 @@ app.use('/api/v1/fulfillment', fulfillmentRoutes);
 app.use('/api/v1/settlements', financialSettlementRoutes);
 app.use('/api/v1/geo', geographicRoutes);
 app.use('/api/v1/buyer/addresses', buyerAddressRoutes);
-app.use('/api/v1/supplier', supplierDeliveryRoutes);
+app.use('/api/v1/supplier', supplierRoutes);
 app.use('/api/v1', deliveryQuotationRoutes);
 app.post('/api/v1/webhooks/safepay', (req, res) => paymentController.handleSafepayWebhook(req, res));
 

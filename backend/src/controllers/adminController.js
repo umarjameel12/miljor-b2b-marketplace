@@ -43,7 +43,14 @@ class AdminController {
   async verifySupplier(req, res) {
     try {
       const { id } = req.params; // supplier_id (user id)
-      const { verification_status, verification_level = 'LEVEL_2_BUSINESS', subscription_plan = 'GROWTH', max_active_listings = 25, transaction_fee_percent = 1.50 } = req.body;
+      const {
+        verification_status,
+        verification_level = 'LEVEL_2_BUSINESS',
+        subscription_plan = 'GROWTH',
+        max_active_listings,
+        transaction_fee_percent = 1.50,
+        rejection_reason = null
+      } = req.body;
       const adminId = req.user.id;
 
       // 1. Self-Verification Restriction
@@ -62,6 +69,41 @@ class AdminController {
         });
       }
 
+      // Server-side allowlists for verification level and subscription plan
+      const ALLOWED_VERIFICATION_LEVELS = ['LEVEL_1_CONTACT', 'LEVEL_2_BUSINESS', 'LEVEL_3_QUALITY'];
+      const ALLOWED_SUBSCRIPTION_PLANS = ['STARTER', 'GROWTH', 'BUSINESS'];
+      const DEFAULT_PLAN_LISTING_CAPS = {
+        STARTER: 4,
+        GROWTH: 13,
+        BUSINESS: 25
+      };
+
+      if (verification_level && !ALLOWED_VERIFICATION_LEVELS.includes(verification_level)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_VERIFICATION_LEVEL',
+            message: `Verification level must be one of: [${ALLOWED_VERIFICATION_LEVELS.join(', ')}]`
+          }
+        });
+      }
+
+      if (subscription_plan && !ALLOWED_SUBSCRIPTION_PLANS.includes(subscription_plan)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_SUBSCRIPTION_PLAN',
+            message: `Subscription plan must be one of: [${ALLOWED_SUBSCRIPTION_PLANS.join(', ')}]`
+          }
+        });
+      }
+
+      // Determine safe listing cap: do not implicitly assign 25 slots to STARTER (Free) suppliers
+      const effectivePlan = subscription_plan || 'GROWTH';
+      const effectiveListingCap = (max_active_listings !== undefined && max_active_listings !== null)
+        ? Math.min(Math.max(parseInt(max_active_listings, 10) || 1, 1), 100)
+        : (DEFAULT_PLAN_LISTING_CAPS[effectivePlan] || 4);
+
       // Check supplier profile exists
       const [profiles] = await db.query('SELECT * FROM supplier_profiles WHERE supplier_id = ?', [id]);
       if (!profiles[0]) {
@@ -73,6 +115,7 @@ class AdminController {
         await connection.beginTransaction();
 
         const isApproved = verification_status === 'VERIFIED';
+        const effectiveRejectionReason = isApproved ? null : (rejection_reason || null);
 
         // Update supplier profile
         await connection.query(
@@ -81,9 +124,11 @@ class AdminController {
                verification_level = ?,
                subscription_plan = ?,
                max_active_listings = ?,
-               transaction_fee_percent = ?
+               transaction_fee_percent = ?,
+               rejection_reason = ?,
+               verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END
            WHERE supplier_id = ?`,
-          [verification_status, verification_level, subscription_plan, max_active_listings, transaction_fee_percent, id]
+          [verification_status, verification_level, effectivePlan, effectiveListingCap, transaction_fee_percent, effectiveRejectionReason, isApproved ? 1 : 0, id]
         );
 
         // Update users table
@@ -119,7 +164,8 @@ class AdminController {
             supplier_id: parseInt(id),
             verification_status,
             verification_level,
-            subscription_plan
+            subscription_plan,
+            rejection_reason: effectiveRejectionReason
           }
         });
 

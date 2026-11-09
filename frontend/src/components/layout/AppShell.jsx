@@ -21,6 +21,8 @@ import {
   LogOut,
   ChevronDown,
   X,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react';
 
 /**
@@ -909,6 +911,26 @@ export const AppShell = ({ children }) => {
                       </div>
 
                       <div className="space-y-1">
+                        {['SUPER_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'].includes(user?.role) && (
+                          <Link
+                            to="/admin/verifications"
+                            onClick={() => setAccountMenuOpen(false)}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20"
+                          >
+                            <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span>Admin Verifications</span>
+                          </Link>
+                        )}
+                        {user?.role === 'SUPPLIER' && (
+                          <Link
+                            to="/supplier/profile"
+                            onClick={() => setAccountMenuOpen(false)}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/20"
+                          >
+                            <Building2 className="w-4 h-4 text-[var(--brand-accent)]" />
+                            <span>Supplier Portal</span>
+                          </Link>
+                        )}
                         <Link
                           to="/profile"
                           onClick={() => setAccountMenuOpen(false)}
