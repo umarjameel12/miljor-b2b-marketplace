@@ -56,3 +56,16 @@ This establishes actual domain helper execution, not full Node runner parity or 
 **Plan package division:** P1 (A–D), P2 (E–H), P3 (I–N), P4 (O–Q); individual gates retained and cross-package finance dependencies mandatory.
 
 **B6 gate remains PARTIAL / BLOCKED:** No schema audit against live `miljor_test_db`, migration applied, live API integration, real checkout, B4/B5 shared listing concurrency or Vite build. B6-B and all buyer-facing acceptance remain unverified. The early quote-comparison helper is a bounded independent non-mutating source module, not completion of B6-F. No changes to `miljor_db`, B4 or B5.
+
+
+---
+
+## B5 final acceptance handoff received and remote-verified (2026-11-10)
+
+- User supplied the B5 final acceptance report. Read the authoritative `backend/docs/MILJOR_B5_FLASH_POOL_ACCEPTANCE_REPORT.md` from GitHub B5 branch.
+- Current remote B5 branch head independently fetched as `ecd7d2ee67d280dab9550e8ffc9497207106cbf6`; report records the same final SHA, Migration 036, `miljor_test_db`, 302/302 sequential assertions and successful frontend build. The report states protected `miljor_db` had zero test writes. GitHub combined CI status list for B5 SHA was empty, so this is a remote documentation/branch confirmation, not a fresh execution by this session.
+- B5/B4 Git graph still reports `diverged` (B5 ahead 40 / behind 38 at inspection); report claims selected B4 parity synchronization, not full B4 ancestry. Direct B5-vs-B6 content comparison confirmed identical accepted `poolController.js` and `tierPricingService.js`; Flash-specific `flashPoolService.js`, Migration 036, Flash UI and Safepay hooks remain on B5 and are not yet in B6. Do not silently claim B6 already contains B5.
+- B6 remains based on accepted B4 ancestry. No branch merge, force-push, B5 rewrite or database mutation performed. Before B6 award/stock/payment acceptance, its integration plan must explicitly reconcile B5 Flash allocations and Safepay hooks with the same supplier listing inventory ledger.
+- **B6 countdown compatibility patch:** added `frontend/src/utils/parseDeadline.js`; updated `CountdownTimer.jsx` to use strict shared parser for timezone-less UTC MySQL DATETIME, fractional seconds, ISO Z/offset, Date and numeric inputs while retaining B6 server-clock baseline. Added `frontend/tests/parse_deadline.test.js` and included it in frontend `npm test`.
+- Exact GitHub source of parser and test executed in isolated JavaScript runtime: **14/14 PASS**. This is a pure utility test, not Vite/browser E2E.
+- **B6 current status:** B5 dependency acceptance RECEIVED/REMOTE DOCUMENTATION VERIFIED; B6-A/P1 source foundation remains PARTIAL/BLOCKED for actual MySQL/API schema migration and local Node test execution. No B6-B database/API feature is declared complete.
