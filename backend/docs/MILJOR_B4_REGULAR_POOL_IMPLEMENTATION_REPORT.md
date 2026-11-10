@@ -1,69 +1,81 @@
-# MilJor — B4 Regular Pool Lifecycle & Integration Hardening
+# MILJOR — PHASE B4: REGULAR POOL INTEGRATION & LIFECYCLE HARDENING
 
 **Date:** 2026-11-10  
-**Branch:** `feature/b4-regular-pools` (separate from B3 acceptance).  
-**Base:** `fd3d116098abfe00e0ce9f22eb9b0d46514a38c6` — B3 source **before** final Antigravity acceptance.  
-**B2 accepted head (to reconcile):** `fcbd82dafcb236f9cee980904ebddba5c1ab1999`.  
-**Status:** **PARTIAL IMPLEMENTATION — B4-A/B STARTED, ALL RUNTIME INTEGRATION TESTS PENDING**. No assumption that unverified B3 fixes are accepted; no B4 PASS or B4 release claim.
+**GitHub branch:** `feature/b4-regular-pools`  
+**Accepted upstream B2 SHA:** `fcbd82dafcb236f9cee980904ebddba5c1ab1999` — Antigravity 67/67 PASS  
+**Accepted upstream B3 SHA:** `44f591d7fdd9c16f7a43c10d01de2b50bb637e7e` — Antigravity 81/81 PASS  
+**B4 two-parent reconciliation merge:** `9f2e057fc3fd2d3bf7ebc0e614079e7ad8b89ea1` — B3 is a verified Git ancestor of B4 and the original pool-specific source tree is preserved.  
+**CURRENT VERDICT:** **B4 SOURCE HARDENING IN PLACE, B4 FINAL MYSQL/API/FRONTEND ACCEPTANCE NOT YET RUN.**  
+**NEXT PHASE:** B5 not authorized. Production release/merge-to-main not authorized.
 
-## 1. Authoritative six-level business path
+## 1. Original source locations and Git/local parity
 
-Canonical family (MilJor) -> supplier physical product -> supplier-owned physical SKU -> supplier listing -> Regular Pool -> buyer reservations. Published physical identity and published pool commercial terms must remain immutable.
+The repository has no `secretary` directory. `.agents/skills/subagent-driven-development/scripts/task-brief` is an installed agent skill, not application source. Existing MilJor code remains in original tracked `backend/src/controllers`, `backend/src/services`, `backend/src/repositories`, `backend/src/routes/v1`, `frontend/src/pages`, `frontend/src/api`, `backend/tests` and `backend/docs`. See `MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md`.
 
-All work must use original paths; see `MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md`. Repo tree inspection found no `secretary` directory, and the `.agents/skills/.../task-brief` path is legitimate agent tooling, not a product source folder.
+Accepted B2/B3 original `catalogService.js`, `supplierListingMutationService.js` and historical reports were explicitly reconciled into the B4 original paths, then a proper **two-parent merge commit** recorded B3 ancestry. No duplicate backend, artificial source folder, destructive database migration or alternate MilJor project was created. GitHub commits do NOT by themselves prove Antigravity's local B4 worktree is up to date; it must safely fetch/sync and check local/remote SHA parity. Do not overwrite B3 worktree.
 
-## 2. Planned B4 subphases and implementation states
+## 2. B4 subphase source implementation/audit matrix
 
-| Subphase | Scope | State |
-| --- | --- | --- |
-| B4-A | Pool-to-SKU/listing/product identity & supplier ownership | **SOURCE CHANGES COMMITTED; TEST PENDING** |
-| B4-B | Draft quantity/target/MOQ/delivery unit/time validation | **PARTIAL SOURCE CHANGES COMMITTED; TEST PENDING** |
-| B4-C | Allocation ledger, concurrency, no overselling | **AUDIT/IMPLEMENTATION PENDING** |
-| B4-D | Atomic publishing and immutable terms | **AUDIT/IMPLEMENTATION PENDING** |
-| B4-E | Tier price boundaries, progression, quantity units | **AUDIT/IMPLEMENTATION PENDING** |
-| B4-F | Time/target close, qualification, supplier decisions | **AUDIT/IMPLEMENTATION PENDING** |
-| B4-G | Buyer reservation, capacity, eligibility | **AUDIT/IMPLEMENTATION PENDING** |
-| B4-H | Supplier/buyer frontend and statuses | **AUDIT/IMPLEMENTATION PENDING** |
-| B4-I | Consolidated Antigravity acceptance | **NOT EXECUTED** |
+| Subphase | Source status | Implementation/evidence |
+|---|---|---|
+| **B4-A Pool identity/ownership** | **Fixed in original source; test assertions committed** | SKU-only pool creation resolves legacy `products.id` from the immutable published `product_specifications.product_id`, never from canonical `family_id`. Supplied supplier-product and SKU IDs are cross-validated against the owning listing and specification; incorrect mappings return `POOL_PHYSICAL_IDENTITY_MISMATCH`. Existing supplier-only pool creation and matching spec/listing authorization preserved. |
+| **B4-B Draft quantities/schedules** | **Fixed in original source; test assertions committed** | Create and update both reject malformed/nonfinite/excess-precision DECIMAL(12,4) quantities via `INVALID_POOL_DECIMAL`. Existing target/MOQ/capacity, whole-pack, time window and mandatory 24–72h SLA rules preserved. |
+| **B4-C Inventory allocations/concurrency** | **Fixed in original source; test assertion committed** | Publish already serializes pool/listing rows and commits `supplier_inventory_allocations` within the same transaction. New safeguards compare on-hand + outstanding promises via exact decimal math; allocate canonical 4dp quantity; reject rows with incompatible allocation units (`ALLOCATION_UNIT_MISMATCH`). Existing duplicate-publish/idempotency handling preserved. |
+| **B4-D Publish & immutable terms** | **Fixed in original source; existing regression reused** | At final publication verify listing supplier and exact physical spec, and that supplier-owned product and SKU are still PUBLISHED; reject `POOL_SKU_NOT_ELIGIBLE` or `POOL_LISTING_IDENTITY_MISMATCH`. Existing atomic allocation, locked commercial snapshot, tier and delivery term immutability retained. |
+| **B4-E Price tier/progress** | **Fixed validation; existing progress read model reused** | `tierPricingService` rejects excess precision, NaN, Infinity, invalid range and overlapping discrete boundaries before Number conversion; continuity uses actual purchase increment. A new fast pure tier contract gate covers positive/negative cases. Existing `poolProgressService` authoritative eligible-demand read model reused rather than rewritten. |
+| **B4-F Closing/qualification/supplier decisions** | **Existing implementation audited/reused** | Existing `commercialLifecycleService`, pool qualification, authoritative supplier-decision and buyer-commitment APIs remain in service. Retired `confirm` route stays fail-closed and now points callers to the existing qualification/decision APIs (not an obsolete future placeholder). Historical reservation/qualification/status tests retained. |
+| **B4-G Buyer reservations/units** | **Fixed custom physical-unit gap; core reservation flow reused** | Supplier-defined purchasing pack units (e.g. `bundle`) now treated as indivisible by shared unit semantics; conversion checks actual SKU purchasing unit and preserves the historical global standard-pack bridge. Existing reservation capacity, increment, identity, payment isolation, authorization and expiry behavior reused. New pure custom-unit gate added. |
+| **B4-H Supplier/buyer UI** | **Supplier draft UI corrected; existing buyer read model reused** | Supplier portal sends exact decimal string quantities and tier prices, exposes purchase increment, calculates tier boundary from defined increment, restricts new draft CTA to ACTIVE listing, shows actual product title and retains immutable publish confirmation. Client decimal regex escape error corrected. Existing buyer pool card/progress APIs reused. |
+| **B4-I End-to-end acceptance** | **Test source prepared; executable MySQL/API/React gate PENDING** | Updated existing E2 immutable-pool test with FK/identity, draft precision and committed allocation assertions; new fast pure tier/custom-unit tests. Antigravity must run affected pool, reservation, lifecycle, E2/E3 compatibility suites and frontend build on `miljor_test_db`, with protected DB before/after evidence. |
 
-Do not create a second pool engine, new parallel tables, or duplicate services. Preserve existing `poolController.js`, `poolRepo.js`, `poolProgressService.js`, `tierPricingService.js`, inventory allocations, existing historical Regular Pools and B0 financial safeguards.
+**Important:** The implementation/audit status above does not equal verified runtime PASS. B4-A through H contain source changes and deliberate reuse of previously tested modules; integration defects may still be exposed by the required B4 gate.
 
-## 3. Confirmed B4-A defects addressed
+## 3. Files modified in original locations
 
-**Incorrect legacy FK conversion:** Existing `poolController.createPool` set `product_id = sku.family_id` when supplier used `supplier_sku_id` without explicitly providing product ID. These are different ID domains. This could give `PRODUCT_NOT_FOUND` or wrong physical product linkage. Now fetch the SKU's **immutable published specification**, validate owning supplier and SKU link/lifecycle, and set legacy `product_id = publishedSpec.product_id` instead. New test checks `pools.product_id` and `product_spec_id` against the actual linked spec.
+- `backend/src/controllers/poolController.js` — B4-A/B/C/D/F.
+- `backend/src/services/tierPricingService.js` — B4-E.
+- `backend/src/services/unitConversionService.js` — B4-G.
+- `frontend/src/pages/SupplierCatalogPage.jsx` — B4-H.
+- `backend/tests/package_e2_product_ownership_and_immutable_pools_gate.js` — B4-A/B/C/D compatibility assertions.
+- `backend/tests/b4_tier_decimal_contract_gate.js` — B4-E pure unit regression.
+- `backend/tests/b4_custom_pack_unit_gate.js` — B4-G pure unit regression.
+- `backend/docs/MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md` — canonical paths/source parity.
+- `backend/docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md` — this source implementation/evidence handoff.
+- `backend/docs/MILJOR_PHASE_LOG.md` — phase status.
 
-**Physical-ID mismatch:** Previously client-provided `supplier_product_id` and `supplier_sku_id` could override the linked listing/spec identity. Now check supplied IDs against the authoritative spec and listing and reject `400 POOL_PHYSICAL_IDENTITY_MISMATCH`; save only authoritative physical IDs. Added negative test using a wrong existing supplier product ID.
+No new database migration, payment state mutation, altered historic commercial snapshots or direct protected database change is part of this GitHub-only implementation.
 
-## 4. Confirmed B4-B partial correction
+## 4. Source-only verification
 
-Pool draft positive quantity fields and optional purchase increment/maximum capacity now pass `exactDecimal.toCanonical(..., 4)` validation and reject negative, nonfinite, exponential/malformed, out-of-range or more-than-four nonzero fractional digits before SQL. Returns `400 INVALID_POOL_DECIMAL` rather than relying on JavaScript `Number()` and silent MySQL rounding. Added negative regression for target `40.00001`.
+- JavaScript syntax may be statically parsed without MySQL.
+- Pure tier/unit modules were executed in an isolated source evaluator: six selected checks PASS (custom packaging recognized, 37kg bundle conversion, unrelated-unit conversion rejected, valid tiers, overlapping tiers, excessive precision). **This is not execution of the committed Node suite and does not establish DB/API acceptance.**
+- New committed `b4_tier_decimal_contract_gate.js` and `b4_custom_pack_unit_gate.js` still need Antigravity's actual Node execution.
+- JSX must be verified with a real frontend build. No authenticated HTTP test or DB mutation was run by ChatGPT.
 
-**Still pending B4-B:** Audit all draft update/publish/price tiers/units and expected whole-pack increment behavior. New decimal guard is only at create boundary; do not imply end-to-end exactness until all affected mutations are tested.
+## 5. Fast, broad-enough final Antigravity integration gate (one consolidated window)
 
-## 5. Parallel B3 acceptance and corrections
+1. In a **separate B4 Git worktree**, fetch `feature/b4-regular-pools`. Inspect dirty files and preserve all local user changes; never force reset. Confirm B3 `44f591d7` is reachable in B4 ancestry and B2 `fcbd82da` through accepted B3.
+2. Confirm `SELECT DATABASE() = 'miljor_test_db'` before any mutable test; record `miljor_db` protected counts before/after. Never run B3 and B4 mutable tests concurrently against the same `miljor_test_db`.
+3. Quick pure checks: `node tests/b4_tier_decimal_contract_gate.js`; `node tests/b4_custom_pack_unit_gate.js`.
+4. Most directly affected integrated flow: `node tests/package_e2_product_ownership_and_immutable_pools_gate.js`; `node tests/package_e3_entitlements_and_supplier_portal_gate.js`.
+5. Pool publishing + pricing + reservation: `node tests/part4b3_pool_publishing_gate.js`; `node tests/part4b4_buyer_reservation_gate.js` and/or `node tests/part4c1_reservation_mutations_gate.js`, selecting the smallest set that checks current changed dependencies.
+6. Closure/decision: `node tests/part4d2_pool_qualification_gate.js`; `node tests/part4d3_supplier_decision_gate.js`; `node tests/part4d4_buyer_commitment_gate.js` if not covered by a faster accepted consolidated gate. No unnecessary full B0 master suites.
+7. If needed, targeted concurrent publish/draft edit, double allocation, buyer capacity, invalid units and historical B3 listing reactivation checks.
+8. Run `npm --prefix frontend run build` once.
+9. Diagnose failures, correct minimal original source, add focused tests and rerun only affected suites. Never weaken safety checks to obtain green.
+10. Record exact commands, exit codes, per-suite assertions, DB identity/protection, source SHA and final PASS/FAIL/BLOCKED. Update this report and phase log, commit/push factual evidence and verify B4 local/remote HEAD parity.
 
-B3 tests are currently being executed by Antigravity in a separate branch/worktree. Do not touch or reset that worktree. B4 source branch is based on pre-acceptance B3; after verified B3 completion:
-1. Compare accepted B3 final SHA and B2 accepted SHA with B4 ancestry.
-2. Reconcile new B2 `catalogService.js` corrections and accepted B3 fixes into B4 with reviewed Git operations.
-3. Preserve B4 changes to `poolController.js` and B4 test cases.
-4. Fix conflicts in original paths, run focused regression, update this report with actual integrated SHAs.
-5. Never run B3 and B4 mutable tests concurrently against `miljor_test_db`.
+## 6. Mandatory post-test outcomes
 
-## 6. B4 final acceptance gate (not yet authorized as PASS)
+- No duplicate inventory allocation or leaked fixtures.
+- No historical published-pool snapshot changed.
+- No wrong canonical family/legacy product FK.
+- No supplier identity spoofing or invalid multi-supplier cross-edit.
+- No direct legacy supplier confirmation or unqualified buyer commitment bypass.
+- No invalid precision, tier overlap or custom-pack fractional reservation bypass.
+- No out-of-area/blocked supplier/new-buyer eligibility bypass.
+- No protected `miljor_db` changes.
 
-Use the smallest sufficient existing Regular Pool tests for B4-A–I and directly impacted E2/E3/B3 tests, plus one frontend build. Include:
-- Supplier SKU-only pool creation resolves published spec and true legacy product FK.
-- Spoofed supplier/product/SKU IDs rejected.
-- Strict pool quantity precision, MOQ/capacity, indivisible pack increments, quantity unit conversion.
-- Supplier verification/ownership and cross-supplier pool attempts.
-- Draft editing vs publish race and published snapshot immutability even with zero reservations.
-- Atomic inventory allocation and no double allocation across concurrent pools.
-- Tier boundaries/gaps and progress/qualified quantity correctness.
-- Time/target close, qualification and supplier decision transitions.
-- Buyer eligibility, reservations and remaining capacity.
-- Protected `miljor_db` never changed; test DB identity verified.
-
-One consolidated gate with targeted reruns on defects. Report exact commands, exit codes, assertion counts, tested SHA, failures/fixes and protected DB evidence. Update `MILJOR_PHASE_LOG.md`; commit/push truthful source and evidence.
-
-**B4 VERDICT: SOURCE IMPLEMENTATION IN PROGRESS — NO INTEGRATION PASS.**  
-**CAN RELEASE OR START B5: NO.**
+**B4 FINAL STATUS:** SOURCE IMPLEMENTATION/AUDIT READY FOR LOCAL ACCEPTANCE — NOT VERIFIED.  
+**CAN START B5:** NO.  
+**B2-MEDIA:** Remains a separate unimplemented workstream, not falsely included as B4 functionality.
