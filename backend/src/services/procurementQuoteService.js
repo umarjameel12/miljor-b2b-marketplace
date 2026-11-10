@@ -232,6 +232,67 @@ class ProcurementQuoteService{
       throw e;
     }finally{conn.release();}
   }
+  async withdraw(supplierId,quoteId,idempotencyKey){
+    const supplier=positiveId(supplierId),qid=positiveId(quoteId),idem=key(idempotencyKey);
+    const conn=await this.database.getConnection();
+    try{
+      await conn.beginTransaction();
+      const [lookup]=await conn.query(
+        'SELECT request_id FROM procurement_quotes WHERE id=? AND supplier_id=?',
+        [qid,supplier]
+      );
+      if(!lookup.length)throw failure('QUOTE_NOT_FOUND','Supplier quotation not found.',404);
+      // Same parent-before-child row-lock order as submit to avoid deadlocks.
+      const [requests]=await conn.query(
+        'SELECT id,status FROM procurement_requests WHERE id=? FOR UPDATE',
+        [lookup[0].request_id]
+      );
+      if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request no longer exists.',404);
+      const [rows]=await conn.query(
+        'SELECT id,status,withdrawal_key,current_version FROM procurement_quotes WHERE id=? AND supplier_id=? FOR UPDATE',
+        [qid,supplier]
+      );
+      const quote=rows[0];
+      if(!quote)throw failure('QUOTE_NOT_FOUND','Supplier quotation not found.',404);
+      if(quote.status==='WITHDRAWN'){
+        if(quote.withdrawal_key!==idem)
+          throw failure('QUOTE_ALREADY_WITHDRAWN','Quotation was withdrawn with a different request key.',409);
+        await conn.commit();
+        return {quote_id:qid,status:'WITHDRAWN',is_replay:true};
+      }
+      if(quote.status!=='ACTIVE')throw failure('QUOTE_NOT_ACTIVE','Quotation is not active.',409);
+      await conn.query(
+        `UPDATE procurement_quotes
+           SET status='WITHDRAWN',withdrawal_key=?,withdrawn_at=UTC_TIMESTAMP()
+           WHERE id=? AND supplier_id=? AND status='ACTIVE'`,
+        [idem,qid,supplier]
+      );
+      await conn.commit();
+      return {quote_id:qid,status:'WITHDRAWN',is_replay:false};
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
+  async getVersionsForBuyer(buyerId,requestId,quoteId){
+    const buyer=positiveId(buyerId),rid=positiveId(requestId),qid=positiveId(quoteId);
+    const [owned]=await this.database.query(
+      'SELECT id FROM procurement_requests WHERE id=? AND buyer_id=?',[rid,buyer]
+    );
+    if(!owned.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
+    const [quote]=await this.database.query(
+      'SELECT id,status FROM procurement_quotes WHERE id=? AND request_id=?',[qid,rid]
+    );
+    if(!quote.length)throw failure('QUOTE_NOT_FOUND','Quote not found.',404);
+    const [versions]=await this.database.query(
+      `SELECT version_number,coverage,valid_until,delivery_fee,delivery_lead_days,
+              items_total,quoted_total,immutable_snapshot,created_at
+       FROM procurement_quote_versions WHERE quote_id=? ORDER BY version_number DESC`,[qid]
+    );
+    return {quote_id:qid,status:quote[0].status,
+      versions:versions.map(v=>({...v,quote_snapshot:
+        typeof v.immutable_snapshot==='string'?JSON.parse(v.immutable_snapshot):v.immutable_snapshot,
+        immutable_snapshot:undefined}))};
+  }
+
   async getForBuyer(buyerId,requestId){
     const buyer=positiveId(buyerId),rid=positiveId(requestId);
     const [requests]=await this.database.query(
