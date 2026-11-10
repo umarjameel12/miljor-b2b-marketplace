@@ -1386,3 +1386,5 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - Updated B6 master plan with B5 integration requirements: single inventory allocation ceiling, Safepay claim/release/reconciliation, strict route auth, and sequential combined regression.
 - B6 still B4-ancestry; B5 Flash service, Migration 036 and Flash UI are not yet ported into B6. They must remain separate and be reconciled before B6 stock/payment acceptance.
 - **Verdict:** B5 handoff REMOTE-VERIFIED FROM REPORT; B6-A/P1 PARTIAL/BLOCKED pending local Node/MySQL/API verification and schema audit. No production DB writes. B6-B NOT STARTED. **CAN START NEXT PHASE: NO**.
+
+- **B5 report arithmetic check:** the 13 displayed suite counts sum to **319**, not the reported aggregate 302 (difference 17). This is a report-total reconciliation item only; no evidence of a failing suite. Do not quote 302 as independently verified until Antigravity reconciles it with raw output. B5 branch was not modified.
