@@ -227,6 +227,15 @@ class ProcurementQuoteService{
         'UPDATE procurement_quotes SET current_version=? WHERE id=?',
         [version,quote.id]
       );
+      // B6-F: revision is the supplier's durable response to any outstanding
+      // improvement request on an earlier version. Same transaction as quote.
+      await conn.query(
+        `UPDATE procurement_quote_negotiations
+         SET status='RESPONDED',responded_version=?,responded_at=UTC_TIMESTAMP()
+         WHERE quote_id=? AND supplier_id=? AND status='OPEN'
+           AND requested_version < ?`,
+        [version,quote.id,supplier,version]
+      );
       await conn.commit();
       return {...response,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
