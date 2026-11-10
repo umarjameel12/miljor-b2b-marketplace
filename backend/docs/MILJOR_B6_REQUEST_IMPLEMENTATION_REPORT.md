@@ -44,3 +44,13 @@
 B6-C source buyer form partially implemented, browser/API test pending.
 Stop before B6-D or live award/checkout until the B6-B end-to-end gate is genuinely green and B5 shared inventory financial contracts are reconciled.
 **CAN START NEXT PHASE: NO**.
+
+
+## Code-level execution update (same checkpoint)
+- Loaded the **current exact GitHub copies** of `exactDecimal.js`, `procurementRequestPolicy.js` and `procurementRequestService.js` into isolated JavaScript with a deterministic mocked database adapter.
+- Executed **8/8 passing** simulated lifecycle assertions: create two item lines, create replay, edit/version increment, original create snapshot unchanged after edits, edit replay, publish, publish replay, and published immutability.
+- This is a bounded **MOCKED DATABASE** exercise. It does not prove MySQL SQL syntax, row-lock behavior, constraints, transactions, HTTP route authorization or Vite build. The explicit live `b6_procurement_request_lifecycle_gate.js` remains unexecuted.
+- Reconciled catalog migration 033: product family IDs are INT, parent category approval must also be ACTIVE/APPROVED, and the two JSON arrays list allowed physical/packaging units. New B6 service validates both category/family and requested unit; existing buyer UI filters purchasing unit choices.
+- Fixed immutable original-create replay by adding `create_response_snapshot` JSON column to Migration 037 and persisting first response inside creation transaction.
+- Legacy RFQ UI/route preserved for compatibility; new buyer UI foregrounds **Get Best Quotes** and does not represent supplier bidding/payment as live.
+- No additional database or financial mutations occurred from this GitHub-only implementation.
