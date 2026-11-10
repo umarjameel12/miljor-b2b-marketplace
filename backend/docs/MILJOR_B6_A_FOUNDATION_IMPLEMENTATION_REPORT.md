@@ -69,3 +69,9 @@ This establishes actual domain helper execution, not full Node runner parity or 
 - **B6 countdown compatibility patch:** added `frontend/src/utils/parseDeadline.js`; updated `CountdownTimer.jsx` to use strict shared parser for timezone-less UTC MySQL DATETIME, fractional seconds, ISO Z/offset, Date and numeric inputs while retaining B6 server-clock baseline. Added `frontend/tests/parse_deadline.test.js` and included it in frontend `npm test`.
 - Exact GitHub source of parser and test executed in isolated JavaScript runtime: **14/14 PASS**. This is a pure utility test, not Vite/browser E2E.
 - **B6 current status:** B5 dependency acceptance RECEIVED/REMOTE DOCUMENTATION VERIFIED; B6-A/P1 source foundation remains PARTIAL/BLOCKED for actual MySQL/API schema migration and local Node test execution. No B6-B database/API feature is declared complete.
+
+
+### B5 acceptance-report arithmetic clarification
+The B5 acceptance report lists 13 suite assertion counts:
+`13, 27, 22, 28, 18, 22, 25, 28, 56, 30, 22, 21, 7`.
+Their arithmetic sum is **319**, while the report's stated aggregate is **302/302**. This is a documentation/evidence reconciliation item (difference 17), not evidence that any test failed. Keep B5 implementation marked as reported PASS, but the aggregate must be reconciled against raw test-run output before reusing "302/302" as a verified total. No B5 branch edit made.
