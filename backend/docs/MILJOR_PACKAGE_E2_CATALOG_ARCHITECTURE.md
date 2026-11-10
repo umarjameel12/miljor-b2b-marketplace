@@ -1,5 +1,8 @@
 # MILJOR — PACKAGE E2: CANONICAL CATALOG ARCHITECTURE & MODERATION SPECIFICATION
 
+> **B1 ARCHITECTURE UPDATE — historical E2 reference only.** This document records the original migration-033 four-level platform-approved-variant workflow for compatibility. **It is no longer authoritative for newly created supplier physical products.** The active six-level supplier-owned architecture is documented in `MILJOR_PRODUCT_CATALOG_AND_SKU_ARCHITECTURE.md` and the B1 implementation report. Existing `product_specifications` records remain as a compatibility bridge. Admin controls categories/families; suppliers define their own products, brands, grades, packaging and any valid pack quantity. Historic `NEW_VARIANT` endpoints are retained for backward compatibility and must not be presented as a required supplier onboarding step.
+
+
 **Document Version:** 1.0 (Package E2 Authoritative Reference)  
 **Date:** 2026-11-10  
 **Branch:** `feature/package-e`  
