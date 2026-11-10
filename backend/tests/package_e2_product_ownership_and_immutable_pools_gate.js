@@ -701,6 +701,16 @@ async function runGate() {
       createdPoolIds.push(draftPoolId);
       assert.strictEqual(draftRes.body.data.pool.status, 'DRAFT');
       assert.strictEqual(draftRes.body.data.pool.promised_delivery_at, null);
+      // B4-A: Pool create provides only supplier_sku_id and listing id, not
+      // legacy product_id. Product FK must resolve from immutable SKU spec,
+      // never by confusing canonical family_id with products.id.
+      const [[skuSpecIdentity]] = await db.query(
+        'SELECT product_id, family_id FROM product_specifications WHERE id = ?',
+        [publishedSpec25Id]
+      );
+      assert.strictEqual(Number(draftRes.body.data.pool.product_id), Number(skuSpecIdentity.product_id));
+      assert.strictEqual(Number(draftRes.body.data.pool.product_spec_id), Number(publishedSpec25Id));
+      pass('B4-A: SKU-only pool creation resolves legacy products FK from matching published specification');
 
       // Attempt to publish without promised_delivery_at -> Must fail with 422 PROMISED_DELIVERY_REQUIRED
       const pubNoSla = await api(`/api/v1/pools/${draftPoolId}/publish`, {
