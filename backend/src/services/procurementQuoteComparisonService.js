@@ -247,7 +247,8 @@ async function compareForBuyer(buyerId,requestId,database=db) {
   const result=compareQuoteOptions({items,quotes});
   const fastest=[...result.options].sort((a,b)=>
     a.estimated_delivery_days-b.estimated_delivery_days ||
-    BigInt(cents(a.total_delivered_cost))<BigInt(cents(b.total_delivered_cost))?-1:1);
+    (cents(a.total_delivered_cost)<cents(b.total_delivered_cost)?-1:
+      cents(a.total_delivered_cost)>cents(b.total_delivered_cost)?1:0));
   const bestValue=[...result.options].sort((a,b)=>
     a.supplier_count-b.supplier_count ||
     (cents(a.total_delivered_cost)<cents(b.total_delivered_cost)?-1:
