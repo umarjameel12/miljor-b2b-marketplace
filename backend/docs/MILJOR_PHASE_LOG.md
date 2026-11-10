@@ -1368,3 +1368,12 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **Test status:** NOT RUN; GitHub interface cannot execute local MySQL, Node or Vite. Need local test execution and schema contract gate, with B5 shared-inventory reconciliation.
 - **Evidence:** `backend/docs/MILJOR_B6_A_FOUNDATION_IMPLEMENTATION_REPORT.md`. No production/development DB mutations.
 - **Verdict:** PARTIAL — B6-A source foundation committed, full B6-A acceptance BLOCKED. B6-B NOT STARTED. **CAN START NEXT PHASE: NO**.
+
+
+### B6-A/P1 checkpoint update — 2026-11-10
+- B6 expanded plan grouped into four packages: P1 A–D, P2 E–H, P3 I–N, P4 O–Q, while maintaining individual gates.
+- New pure `backend/src/services/procurementQuoteComparisonService.js` and `backend/tests/b6_quote_comparison_gate.js` provide exact-decimal multi-product full/split supplier quote preview; NO orders/payments/stock mutation.
+- Direct GitHub-source sandbox JS execution: request policy **15/15 PASS**, quote comparison **12/12 PASS**, combined **27/27 PASS**. These were NOT run in Node/MySQL; no connected DB or Vite evidence.
+- B4/B5 remain divergent: B5 ahead 39 and behind 38 from accepted B4 at audit time; no shared-stock integration assumed.
+- Updated evidence: `backend/docs/MILJOR_B6_A_FOUNDATION_IMPLEMENTATION_REPORT.md`.
+- **Current P1/B6-A gate: PARTIAL / BLOCKED.** Need local `miljor_test_db` migration/schema/API gate and independently accepted B5 integration before declaring end-to-end PASS. **CAN START NEXT PHASE: NO.**
