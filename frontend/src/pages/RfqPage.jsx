@@ -201,9 +201,11 @@ export const RfqPage = () => {
       const data = await res.json();
       if (res.ok) {
         setRfqs(data.data?.rfqs || []);
+      } else if (res.status !== 404) {
+        throw new Error(data.error?.message || 'Could not load legacy RFQs');
       }
     } catch (err) {
-      toast.error('Failed to load RFQs');
+      toast.error(err.message || 'Failed to load legacy RFQs');
     } finally {
       setLoading(false);
     }
@@ -228,7 +230,7 @@ export const RfqPage = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'RFQ creation failed');
-      toast.success('RFQ published! Suppliers have been notified.');
+      toast.success('Single-item RFQ saved.');
       setShowCreateModal(false);
       setRfqForm({
         product_name: '',
@@ -298,10 +300,10 @@ export const RfqPage = () => {
               Custom Procurement Desk
             </span>
             <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
-              Requests for Quotation (RFQs)
+              Get Best Quotes
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">
-              Direct B2B negotiation for customized specifications, non-standard quantities, and contract terms.
+              One shopping list, flexible suppliers, clearer wholesale comparisons. Start by creating a multi-product request below.
             </p>
           </div>
 
@@ -312,7 +314,7 @@ export const RfqPage = () => {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--brand-accent)] text-stone-900 text-sm font-semibold hover:opacity-95 shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              Create RFQ
+              Legacy Single-Item RFQ
             </button>
           </div>
         </div>
