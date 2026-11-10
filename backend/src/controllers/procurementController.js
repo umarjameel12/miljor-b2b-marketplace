@@ -7,23 +7,38 @@ const procurementService = require('../services/procurementService');
 
 class ProcurementController {
 
-  // Flash Pools
-  async createFlashPool(req, res) {
+  // B5: Dedicated Flash Pool lifecycle. Fail closed on unsafe direct ACTIVE creation.
+  async createFlashPool(req,res) {
     try {
-      const pool = await procurementService.createFlashPool(req.user.id, req.body);
-      res.status(201).json({ success: true, data: { flash_pool: pool } });
-    } catch (err) {
-      res.status(err.statusCode || 500).json({ success: false, error: { code: err.code || 'SERVER_ERROR', message: err.message } });
-    }
+      const flash = await require('../services/flashPoolService').createDraft(req.user.id,req.body||{});
+      res.status(201).json({success:true,data:{flash_pool:flash}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_CREATE_FAILED',message:e.statusCode?e.message:'Unable to create Flash Pool'}});}
   }
-
-  async getFlashPools(req, res) {
+  async publishFlashPool(req,res) {
     try {
-      const pools = await procurementService.getActiveFlashPools(req.query);
-      res.status(200).json({ success: true, count: pools.length, data: { flash_pools: pools } });
-    } catch (err) {
-      res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
-    }
+      const flash=await require('../services/flashPoolService').publish(req.user.id,Number(req.params.id));
+      res.status(200).json({success:true,data:{flash_pool:flash}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_PUBLISH_FAILED',message:e.statusCode?e.message:'Unable to publish Flash Pool'}});}
+  }
+  async getFlashPools(req,res) {
+    try {
+      const pools=await require('../services/flashPoolService').getActive(req.query);
+      res.status(200).json({success:true,count:pools.length,data:{flash_pools:pools,server_time:new Date().toISOString()}});
+    }catch(e){res.status(500).json({success:false,error:{code:'FLASH_DISCOVERY_FAILED',message:'Unable to retrieve Flash Pools'}});}
+  }
+  async getMyFlashPools(req,res) {
+    try {
+      const [rows]=await require('../config/db').query(
+        'SELECT * FROM flash_pools WHERE supplier_id=? ORDER BY created_at DESC LIMIT 200',[req.user.id]);
+      res.status(200).json({success:true,data:{flash_pools:rows,server_time:new Date().toISOString()}});
+    }catch(e){res.status(500).json({success:false,error:{code:'FLASH_LIST_FAILED',message:'Unable to list supplier Flash Pools'}});}
+  }
+  async reserveFlashPool(req,res) {
+    try {
+      const result=await require('../services/flashPoolService').requestHold(
+        req.user.id,Number(req.params.id),req.body||{},req.headers['x-idempotency-key']);
+      res.status(201).json({success:true,data:{hold:result}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_HOLD_FAILED',message:e.statusCode?e.message:'Unable to reserve Flash Pool'}});}
   }
 
   // Demand Requests ("Request a Pool")
