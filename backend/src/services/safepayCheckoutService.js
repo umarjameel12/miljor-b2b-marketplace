@@ -550,6 +550,15 @@ class SafepayCheckoutService {
 
       await connection.commit();
 
+      // B5: Payment is already financially final. Flash stock reconciliation
+      // runs only after authentic Safepay confirmation and is independently
+      // recoverable via the authorized buyer hold-status endpoint.
+      try {
+        await require('./flashPoolService').reconcilePaidOrder(order.id);
+      } catch (flashErr) {
+        console.error('[B5] Verified order requires Flash stock reconciliation:', flashErr.code || flashErr.message);
+      }
+
       return {
         success: true,
         order_id: order.id,
@@ -938,6 +947,12 @@ class SafepayCheckoutService {
       );
 
       await connection.commit();
+
+      try {
+        await require('./flashPoolService').reconcilePaidOrder(order.id);
+      } catch (flashErr) {
+        console.error('[B5] Reconciled Safepay order requires Flash stock update:', flashErr.code || flashErr.message);
+      }
 
       const [newPayments] = await db.query(
         `SELECT * FROM payments WHERE id = ?`,
