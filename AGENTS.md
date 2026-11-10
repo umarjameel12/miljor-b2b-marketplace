@@ -28,9 +28,9 @@
    - Complete all mandatory steps needed for the feature to function. Do not implement unrelated future features.
 
 4. **Smart Risk-Based Testing:**
-   - **Level 1 (Focused):** Run only the modified component's test suite immediately after editing (expected baseline ~5s; not a hard timeout).
-   - **Level 2 (Impacted):** Run directly affected subsystem suites when needed (expected baseline ~15s; not a hard timeout).
-   - **Level 3 (Master Regression):** Run once at the explicitly authorized final phase gate via `node tests/master_regression_runner.js`.
+   - **During Phase Implementation:** Complete all in-scope edits without repeatedly running integration/regression suites after each change. Run a narrow diagnostic check only if needed to isolate a failure or prevent immediate data/transaction damage.
+   - **End-of-Phase Verification:** Run one consolidated relevant test/integration/regression gate after implementation stabilizes, strictly against `miljor_test_db` for mutable tests. Include essential financial/security negative and concurrency coverage. Run the master runner at most once when the phase gate explicitly requires it.
+   - **Failure Handling:** If the final gate fails, repair the root cause and rerun affected failures, then verify the consolidated gate once after stabilization; do not claim PASS prematurely.
    - For security-critical or financial changes, include negative and concurrency tests within the focused scope.
    - Do not skip essential tests. Do not run full regression repeatedly. Do not start browser E2E, frontend builds, or load tests unless required by the task.
 
@@ -49,7 +49,7 @@
    - Never fabricate evidence or test counts.
 
 8. **Concise Professional Task Report (10–20 Lines):**
-   Provide a structured summary: `TASK`, `IMPLEMENTED`, `FILES`, `TESTS`, `EVIDENCE`, `DATABASE`, `UNRESOLVED`, `RESULT` (`PASS / PARTIAL / FAIL / BLOCKED`).
+   Provide a structured summary: `TASK`, `IMPLEMENTED`, `FILES`, `TESTS`, `EVIDENCE`, `DATABASE`, `UNRESOLVED`, `RESULT` (`PASS / PARTIAL / FAIL / BLOCKED`). At the end of each phase, save factual final integration/test commands, results, protected-DB checks, changed-file list, git SHA and phase status in a dedicated `backend/docs/` phase report, and update `backend/docs/MILJOR_PHASE_LOG.md`; commit/push this evidence with the verified phase changes.
 
 9. **Data & Project Safety:**
    - All tests, fixtures, and failure simulations run strictly in `miljor_test_db`.
@@ -94,7 +94,7 @@ MilJor maintains an authoritative project skill inventory located at `.agents/sk
    - **User Authorization Required:** Never install (`npx skills add`) or update skills automatically; always present the recommendation and request explicit user authorization.
 6. **Testing & Debugging Policy (`systematic-debugging`, `test-driven-development`, `verification-before-completion`):**
    - Enforce the 4-phase root-cause protocol (reproduce -> isolate -> hypothesize -> verify) before proposing fixes.
-   - Follow MilJor's risk-based testing (Level 1 focused tests during development; Level 3 master regression only once at the final phase gate).
+   - Follow MilJor's consolidated end-of-phase testing policy: no repeated development-cycle integration suites; one relevant final gate, with targeted reruns only to resolve failures.
    - Never run entire test suites solely because a skill suggests generic verification.
 7. **Security Review Policy (`security-review`):**
    - Employ for systematic vulnerability analysis across auth, authorization, database queries, and input validation.
