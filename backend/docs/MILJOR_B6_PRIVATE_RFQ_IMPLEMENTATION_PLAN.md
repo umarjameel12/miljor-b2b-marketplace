@@ -193,3 +193,21 @@ A subphase is **COMPLETE AND VERIFIED** only after actual database, backend, API
 **Non-goals:** direct customer households, mandatory 12-hour limits, fake market discounts, supplier-admin impersonation, automated unapproved recurring charges, forced buyer contact sharing, entirely new payment gateway, independent delivery-day marketplace, mixed-unit artificial aggregate quantities, duplicate inventory or financial ledgers, automatic B7 start.
 
 **CURRENT B6 STATUS:** MASTER PLAN UPDATED — source work for expanded scope and runtime acceptance pending. **CAN START NEXT PHASE: NO** without an explicit implementation go-ahead.
+
+## 10. Four implementation packages and explicit handoff gates (consolidated 2026-11-10)
+
+Keep all B6-A through B6-Q subphases above as executable checklist items; organize delivery and review into four packages without skipping individual domain gates.
+
+| Package | Subphases | Commercial outcome | Phase handoff |
+|---|---|---|---|
+| **B6-P1 — Foundation & Buyer Journey** | A–D | Authoritative request/item schema, validated buyer multi-item drafts, progressive buyer UI, verified supplier matching and invitations | Real test DB migration/API auth/CRUD + buyer UI checks PASS |
+| **B6-P2 — Quotes & One-Time Purchasing** | E–H | Immutable supplier quotes, full/split-basket comparison, accepted offers, order/stock lock and Safepay | Exact totals, supplier-specific delivery, idempotency, races, verified payment and refund gate PASS |
+| **B6-P3 — Collective & Recurring** | I–N | Independent buyers join and pay own quantities, threshold qualification, weekly/monthly cycles, pause/resume and demand-first quotes | Separate buyer privacy/liability, group failure handling, retry-safe schedules and regression gate PASS |
+| **B6-P4 — Delivery & Production Readiness** | O–Q | Area + delivery-day grouping, conditional pre-order mode (only if commercial policy approved), deadlines, responsive interface, notifications and end-to-end regression | B0–B4 regression, accepted B5 inventory/payment compatibility, protected DB unchanged, final B6 report PASS |
+
+### Actual implementation tracking (do not confuse preview with live API)
+- **B6-P1/B6-A:** `backend/src/services/procurementRequestPolicy.js` supplies pure normalized mode, item, unit and deadline inputs. 15 focused cases have been executed in a sandboxed JS runtime using the exact GitHub source and passed. **Not yet verified against MySQL/Express; B6-A full gate remains BLOCKED.**
+- **B6-P2/B6-F groundwork (early safe independent pure helper):** `backend/src/services/procurementQuoteComparisonService.js` previews supplier basket/split quote options with exact decimal subtotal/delivery/platform fees, refuses incompatible/mismatched units and handles expired quotes. 12 focused pure JS checks passed in the same isolated runtime. It does **not** create real orders, modify inventory, or claim the quote is still valid at award time. Must be revalidated under B6-E/G integration.
+- **Regular Pool countdown:** shared UI component and existing `PoolCard` integration committed on B6 branch. Production browser/build/API-time verification pending.
+- **B5:** read-only branch inspection shows divergence from accepted B4. Until the B5 independent acceptance report supplies green regression and reconciled listing lock contracts, B6 shared-stock full gate is BLOCKED.
+- **Only once P1 passes** move to P2; helper preview code created early must not bypass quote eligibility or payment gates. All future P2–P4 work follows project stop-and-report rules.
