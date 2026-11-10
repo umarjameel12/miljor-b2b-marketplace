@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS procurement_collective_buyer_approvals (
   CONSTRAINT fk_collective_approval_participant FOREIGN KEY (participant_id) REFERENCES procurement_collective_participants(id),
   CONSTRAINT fk_collective_approval_buyer FOREIGN KEY (buyer_id) REFERENCES users(id),
   CONSTRAINT fk_collective_approval_bid_version FOREIGN KEY (bid_version_id) REFERENCES procurement_collective_bid_versions(id),
-  UNIQUE KEY uq_collective_approval_participant (group_id,participant_id),
+  UNIQUE KEY uq_collective_approval_participant_version (group_id,participant_id,bid_version_id),
   UNIQUE KEY uq_collective_approval_idempotency (buyer_id,idempotency_key),
   KEY idx_collective_approval_bid (bid_version_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
