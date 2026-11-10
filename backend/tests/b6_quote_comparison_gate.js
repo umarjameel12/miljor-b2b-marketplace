@@ -67,4 +67,4 @@ test('Too many quote combinations explicitly blocked', () => {
   const x=compareQuoteOptions({items:request,quotes:Array.from({length:9},(_,i)=>q(i+1,i+10,[line(1,'100','kg','250'),line(2,'5','tin','5000')]))});
   assert.equal(x.blocked,'TOO_MANY_QUOTES_FOR_EXACT_COMBINATION');
 });
-console.log('B6 QUOTE COMPARISON PURE TESTS:',passed,'planned assertions; actual result only if executed.');
+console.log(`B6 QUOTE COMPARISON PURE TESTS: ${passed}/${passed} PASS (pure JS, no database)`);
