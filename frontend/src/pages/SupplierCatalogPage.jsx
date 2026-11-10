@@ -1500,8 +1500,8 @@ export const SupplierCatalogPage = () => {
                   Pools are editable only in <strong>DRAFT</strong> status. Once published, all commercial terms and the 24–72 hour promised delivery timestamp are permanently locked.
                 </p>
               </div>
-              {myListings.length > 0 && (
-                <Button size="sm" onClick={() => openCreatePoolModal(myListings[0])}>
+              {myListings.some(l => l.status === 'ACTIVE') && (
+                <Button size="sm" onClick={() => openCreatePoolModal(myListings.find(l => l.status === 'ACTIVE'))}>
                   + Create Draft Pool
                 </Button>
               )}
@@ -1539,7 +1539,7 @@ export const SupplierCatalogPage = () => {
                           </span>
                         </div>
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                          {pool.product_name || 'Wholesale Pool'} — Target: {pool.target_qty} {pool.pool_unit}
+                          {pool.product_title || pool.product_name || pool.spec_title || 'Wholesale Pool'} — Target: {pool.target_qty} {pool.pool_unit}
                         </h3>
                         <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--text-secondary)]">
                           <span><strong>Closes:</strong> {new Date(pool.scheduled_close_at || pool.expires_at).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' })}</span>
