@@ -1013,6 +1013,12 @@ async function runGate() {
       const afterJoin = await api(`/api/v1/pools/${draftPoolId}`);
       assert.strictEqual(afterJoin.status, 200);
       const pSnap = afterJoin.body.data.pool;
+      // B4-H: buyer read model must show the actual supplier physical SKU
+      // title, not the generic legacy products row serving as FK bridge.
+      const [[publishedPhysicalSpec]] = await db.query(
+        'SELECT title FROM product_specifications WHERE id = ?', [publishedSpec25Id]
+      );
+      assert.strictEqual(pSnap.product_title, publishedPhysicalSpec.title);
       assert.strictEqual(Number(pSnap.current_qty), 10);
       assert.strictEqual(Number(pSnap.target_qty), 50);
       assert.strictEqual(new Date(pSnap.promised_delivery_at).toISOString(), new Date(lockedPromisedDelivery).toISOString());
