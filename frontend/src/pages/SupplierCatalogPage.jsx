@@ -137,8 +137,8 @@ export const SupplierCatalogPage = () => {
     variety: '',
     quality_grade: '',
     processing_method: '',
-    crop_year: '2026',
-    origin: 'Pakistan',
+    crop_year: '',
+    origin: '',
     description: ''
   });
 
@@ -148,8 +148,8 @@ export const SupplierCatalogPage = () => {
   const [skuSubmitting, setSkuSubmitting] = useState(false);
   const [skuForm, setSkuForm] = useState({
     supplier_product_id: '',
-    packaging_type: 'PP Woven Bag',
-    pack_size: '25',
+    packaging_type: '',
+    pack_size: '',
     pack_unit: 'kg',
     purchasing_unit: 'bag',
     notes: ''
@@ -343,8 +343,8 @@ export const SupplierCatalogPage = () => {
       variety: '',
       quality_grade: '',
       processing_method: '',
-      crop_year: '2026',
-      origin: 'Pakistan',
+      crop_year: '',
+      origin: '',
       description: ''
     });
     setProductModalOpen(true);
@@ -420,8 +420,8 @@ export const SupplierCatalogPage = () => {
     setEditingSupplierSku(null);
     setSkuForm({
       supplier_product_id: String(sp.id),
-      packaging_type: defaultPackUnit === 'L' ? 'G.I Tin' : 'PP Woven Bag',
-      pack_size: defaultPackUnit === 'L' ? '16' : '25',
+      packaging_type: '',
+      pack_size: '',
       pack_unit: defaultPackUnit,
       purchasing_unit: defaultPurchUnit,
       notes: ''
@@ -433,8 +433,8 @@ export const SupplierCatalogPage = () => {
     setEditingSupplierSku(sku);
     setSkuForm({
       supplier_product_id: String(sku.supplier_product_id),
-      packaging_type: sku.packaging_type || 'PP Woven Bag',
-      pack_size: String(sku.pack_size || '25'),
+      packaging_type: sku.packaging_type || '',
+      pack_size: sku.pack_size !== null && sku.pack_size !== undefined ? String(sku.pack_size) : '',
       pack_unit: sku.pack_unit || 'kg',
       purchasing_unit: sku.purchasing_unit || 'bag',
       notes: sku.notes || ''
@@ -549,7 +549,7 @@ export const SupplierCatalogPage = () => {
     }));
   };
 
-  const openNewRequestModal = (type = 'NEW_VARIANT') => {
+  const openNewRequestModal = (type = 'NEW_FAMILY') => {
     const catId = selectedCategoryId || (categories[0] ? String(categories[0].id) : '');
     const fams = families.filter(f => String(f.category_id) === String(catId));
     const fam = currentFamily || fams[0] || null;
@@ -1500,16 +1500,14 @@ export const SupplierCatalogPage = () => {
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-primary)]">My Catalog Addition Requests</h2>
                 <p className="text-xs text-[var(--text-secondary)]">
-                  Track moderation status for missing product families and physical variants.
+                  Request missing commodity families here. Create physical product variants directly in My Products & SKUs; no admin approval is required for ordinary SKUs.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => openNewRequestModal('NEW_FAMILY')}>
                   + Request New Family
                 </Button>
-                <Button size="sm" onClick={() => openNewRequestModal('NEW_VARIANT')}>
-                  + Request New Variant
-                </Button>
+
               </div>
             </div>
 
@@ -2106,7 +2104,7 @@ export const SupplierCatalogPage = () => {
                     Moderated Catalog Governance
                   </span>
                   <h3 className="text-base font-bold text-[var(--text-primary)]">
-                    {editingRequestId ? 'Edit & Resubmit Catalog Request' : 'Request Missing Product Family or Physical Variant'}
+                    {editingRequestId ? 'Edit & Resubmit Catalog Request' : 'Request Missing Product Family'}
                   </h3>
                 </div>
                 <button type="button" onClick={() => setRequestModalOpen(false)} className="p-1 text-[var(--text-muted)]">
