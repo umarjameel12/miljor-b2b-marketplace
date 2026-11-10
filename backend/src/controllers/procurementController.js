@@ -12,6 +12,7 @@ const procurementNegotiationService = require('../services/procurementNegotiatio
 const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 const procurementCollectiveService = require('../services/procurementCollectiveService');
 const procurementRecurringService = require('../services/procurementRecurringService');
+const procurementAwardService = require('../services/procurementAwardService');
 
 class ProcurementController {
 
@@ -267,6 +268,30 @@ class ProcurementController {
         req.user.id,req.params.contractId,req.params.cycleId
       );
       res.json({success:true,data:{cycle:result}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-G/H award transaction. Financial writes stay behind server-only gate.
+  async previewSmartPayable(req,res){
+    try{
+      const payable=await procurementAwardService.previewPayable(
+        req.user.id,req.params.id,req.body?.selections
+      );
+      res.json({success:true,data:{preview:payable}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async acceptSmartAward(req,res){
+    try{
+      const result=await procurementAwardService.accept(
+        req.user.id,req.params.id,req.body,req.headers['x-idempotency-key']
+      );
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async getSmartAward(req,res){
+    try{
+      const award=await procurementAwardService.getMine(req.user.id,req.params.awardId);
+      res.json({success:true,data:{award}});
     }catch(err){this._smartError(res,err);}
   }
 
