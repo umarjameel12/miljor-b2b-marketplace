@@ -889,7 +889,7 @@ export const SupplierCatalogPage = () => {
         poolForm.max_capacity, poolForm.purchase_increment, poolForm.tier1_price,
         ...(poolForm.tier2_price ? [poolForm.tier2_price] : [])];
       if (!selectedListing || selectedListing.status !== 'ACTIVE' ||
-          decimalValues.some(v => !/^\\d+(?:\\.\\d{1,4})?$/.test(String(v).trim())) ||
+          decimalValues.some(v => !/^\d+(?:\.\d{1,4})?$/.test(String(v).trim())) ||
           !Number.isFinite(targetQty) || !Number.isFinite(suppMin) ||
           !Number.isFinite(maxCap) || !Number.isFinite(increment) ||
           targetQty < suppMin || maxCap < targetQty || increment <= 0) {
