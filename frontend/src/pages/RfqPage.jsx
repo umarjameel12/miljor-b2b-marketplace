@@ -26,6 +26,147 @@ export const RfqPage = () => {
   const [selectedRfq, setSelectedRfq] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // B6: Buyer-first multi-item shopping list, stored in the existing RFQ page.
+  const emptyItem = () => ({ family_id: '', quantity: '', unit: 'kg', requirements: '' });
+  const [shoppingList, setShoppingList] = useState([emptyItem()]);
+  const [deliveryArea, setDeliveryArea] = useState('');
+  const [quoteDeadline, setQuoteDeadline] = useState('');
+  const [familyChoices, setFamilyChoices] = useState([]);
+  const [savedRequests, setSavedRequests] = useState([]);
+  const [activeRequest, setActiveRequest] = useState(null);
+  const [shoppingBusy, setShoppingBusy] = useState(false);
+  const [shoppingError, setShoppingError] = useState('');
+
+  const newRequestKey = () => `buyer-${Date.now()}-${Math.random().toString(36).slice(2, 13)}`;
+  const toLocalInput = value => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  useEffect(() => {
+    if (!token || user?.role !== 'BUYER') return;
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const [catalogResponse, requestResponse] = await Promise.all([
+          fetch('/api/v1/catalog/families'),
+          fetch('/api/v1/procurement/requests', { headers: {Authorization: `Bearer ${token}`} })
+        ]);
+        const catalog = await catalogResponse.json();
+        const requests = await requestResponse.json();
+        if (!catalogResponse.ok || !requestResponse.ok) throw Error('Shopping list could not be loaded');
+        if (alive) {
+          setFamilyChoices((catalog.data?.families || []).filter(x => x.is_active && x.approval_status === 'APPROVED'));
+          setSavedRequests(requests.data?.requests || []);
+        }
+      } catch (error) {
+        if (alive) setShoppingError(error.message);
+      }
+    };
+    refresh();
+    return () => { alive = false; };
+  }, [token, user?.role]);
+
+  const refreshRequests = async () => {
+    const response = await fetch('/api/v1/procurement/requests', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const body = await response.json();
+    if (!response.ok) throw Error(body.error?.message || 'Could not refresh requests');
+    setSavedRequests(body.data?.requests || []);
+  };
+
+  const loadShoppingDraft = async requestId => {
+    setShoppingBusy(true);
+    setShoppingError('');
+    try {
+      const response = await fetch(`/api/v1/procurement/requests/${requestId}`, {
+        headers: {Authorization: `Bearer ${token}`}
+      });
+      const body = await response.json();
+      if (!response.ok) throw Error(body.error?.message || 'Could not open request');
+      const request = body.data.request;
+      if (request.status !== 'DRAFT') throw Error('Published requests cannot be edited');
+      setActiveRequest(request);
+      setShoppingList(request.items.map(item => ({
+        family_id: String(item.family_id), quantity: String(item.quantity),
+        unit: item.unit, requirements: item.requirements || ''
+      })));
+      setDeliveryArea(request.delivery_area || '');
+      setQuoteDeadline(toLocalInput(request.quote_deadline));
+    } catch (error) {
+      setShoppingError(error.message);
+    } finally { setShoppingBusy(false); }
+  };
+
+  const submitShoppingList = async publish => {
+    if (!token) return;
+    setShoppingError('');
+    setShoppingBusy(true);
+    try {
+      if (publish && !quoteDeadline) throw Error('Please choose a quotation closing time.');
+      const payload = {
+        ownership: 'SINGLE_BUYER', frequency: 'ONE_TIME',
+        award_policy: 'SPLIT_ALLOWED', priority: 'BEST_VALUE',
+        delivery_area: deliveryArea,
+        quote_deadline: quoteDeadline ? new Date(quoteDeadline).toISOString() : null,
+        items: shoppingList.map(item => ({
+          family_id: Number(item.family_id),
+          quantity: item.quantity,
+          unit: item.unit,
+          requirements: item.requirements,
+          allow_substitutions: false
+        }))
+      };
+      const editing = Boolean(activeRequest);
+      const url = editing
+        ? `/api/v1/procurement/requests/${activeRequest.id}`
+        : '/api/v1/procurement/requests';
+      const response = await fetch(url, {
+        method: editing ? 'PATCH' : 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': newRequestKey()
+        },
+        body: JSON.stringify(editing ? {...payload, version_number: activeRequest.version_number} : payload)
+      });
+      const body = await response.json();
+      if (!response.ok) throw Error(body.error?.message || 'Could not save shopping list');
+      let saved = body.data.request;
+      if (publish) {
+        const published = await fetch(`/api/v1/procurement/requests/${saved.id}/publish`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': newRequestKey()
+          },
+          body: JSON.stringify({version_number: saved.version_number})
+        });
+        const result = await published.json();
+        if (!published.ok) {
+          setActiveRequest(saved);
+          throw Error(result.error?.message || 'Saved as draft; publication failed');
+        }
+        saved = result.data.request;
+      }
+      setActiveRequest(publish ? null : saved);
+      if (publish) {
+        setShoppingList([emptyItem()]);
+        setDeliveryArea('');
+        setQuoteDeadline('');
+      }
+      await refreshRequests();
+      toast.success(publish ? 'Shopping list published for supplier quotations' : 'Shopping list draft saved');
+    } catch (error) {
+      setShoppingError(error.message);
+    } finally { setShoppingBusy(false); }
+  };
+
   // Buyer RFQ Form
   const [rfqForm, setRfqForm] = useState({
     product_name: '',
@@ -168,6 +309,98 @@ export const RfqPage = () => {
             </button>
           </div>
         </div>
+
+        {user?.role === 'BUYER' && (
+          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Get Best Quotes">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent)]">Smart Procurement Hub</p>
+              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Get Best Quotes — Your Shopping List</h2>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Add everything your business needs in one request. Start with one-time purchasing; collective and recurring modes will be available after their approval gates.</p>
+            </div>
+            {shoppingError && <p role="alert" className="text-sm text-red-600">{shoppingError}</p>}
+            <div className="space-y-3">
+              {shoppingList.map((item, index) => (
+                <div key={index} className="rounded-xl border border-[var(--border-subtle)] p-3 grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <label className="sm:col-span-4 text-xs font-semibold">Product family
+                    <select required value={item.family_id} onChange={e => setShoppingList(old => old.map((row,i)=>i===index?{...row,family_id:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm">
+                      <option value="">Choose product</option>
+                      {familyChoices.map(family => <option key={family.id} value={family.id}>{family.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="sm:col-span-2 text-xs font-semibold">Quantity
+                    <input type="number" min="0.0001" step="any" value={item.quantity}
+                      onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,quantity:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+                  </label>
+                  <label className="sm:col-span-2 text-xs font-semibold">Unit
+                    <select value={item.unit} onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,unit:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm">
+                      {['kg','g','l','ml','bag','tin','carton','sack','pack'].map(unit=><option key={unit} value={unit}>{unit}</option>)}
+                    </select>
+                  </label>
+                  <label className="sm:col-span-3 text-xs font-semibold">Quality / packaging (optional)
+                    <input value={item.requirements} maxLength={2000} placeholder="e.g. Premium Sella 25kg"
+                      onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,requirements:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+                  </label>
+                  <div className="sm:col-span-1 flex items-end">
+                    <button type="button" disabled={shoppingList.length===1||shoppingBusy}
+                      onClick={()=>setShoppingList(old=>old.filter((_,i)=>i!==index))}
+                      className="rounded-lg border p-2 text-xs disabled:opacity-40" aria-label={`Remove item ${index+1}`}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button type="button" disabled={shoppingBusy||shoppingList.length>=50}
+              onClick={()=>setShoppingList(old=>[...old,emptyItem()])}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--brand-accent)] disabled:opacity-40">
+              <Plus size={15}/> Add another product
+            </button>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Your delivery area
+                <input value={deliveryArea} maxLength={255} placeholder="e.g. Johar Town, Lahore"
+                  onChange={e=>setDeliveryArea(e.target.value)}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+              </label>
+              <label className="text-xs font-semibold">Quotation closing time (Pakistan local time)
+                <input type="datetime-local" value={quoteDeadline} onChange={e=>setQuoteDeadline(e.target.value)}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={shoppingBusy}
+                onClick={()=>submitShoppingList(false)}
+                className="rounded-xl px-4 py-2 border border-[var(--border-subtle)] text-sm font-semibold disabled:opacity-50">
+                {shoppingBusy?'Saving...':'Save Draft'}
+              </button>
+              <button type="button" disabled={shoppingBusy||!quoteDeadline}
+                onClick={()=>submitShoppingList(true)}
+                className="rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-sm font-semibold disabled:opacity-50">
+                Publish Shopping List
+              </button>
+              {activeRequest && <button type="button" disabled={shoppingBusy}
+                onClick={()=>{setActiveRequest(null);setShoppingList([emptyItem()]);setDeliveryArea('');setQuoteDeadline('');setShoppingError('');}}
+                className="text-sm px-3 py-2 underline">Start New</button>}
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">No payment or stock reservation happens when you publish. Supplier bidding and quote comparison will activate in the next verified implementation stage.</p>
+            {savedRequests.length>0 && (
+              <div className="border-t border-[var(--border-subtle)] pt-3">
+                <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
+                <div className="space-y-2">
+                  {savedRequests.map(request=>(
+                    <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span>{request.request_code} · {request.status} · {request.delivery_area}</span>
+                      {request.status==='DRAFT' &&
+                        <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
+                          className="text-[var(--brand-accent)] underline text-xs">Edit Draft</button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Tab Controls */}
         <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] mb-8">
