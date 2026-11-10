@@ -7,6 +7,8 @@ const procurementService = require('../services/procurementService');
 const procurementRequestService = require('../services/procurementRequestService');
 const procurementMatchingService = require('../services/procurementMatchingService');
 const procurementQuoteService = require('../services/procurementQuoteService');
+const procurementQuoteComparisonService = require('../services/procurementQuoteComparisonService');
+const procurementNegotiationService = require('../services/procurementNegotiationService');
 
 class ProcurementController {
 
@@ -146,6 +148,35 @@ class ProcurementController {
         req.user.id,req.params.id,req.params.quoteId
       );
       res.json({success:true,data:history});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-F: supplier-quoted comparison only. No order or checkout.
+  async compareSmartQuotes(req,res){
+    try{
+      const result=await procurementQuoteComparisonService.compareForBuyer(req.user.id,req.params.id);
+      res.json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async requestSmartBetterOffer(req,res){
+    try{
+      const result=await procurementNegotiationService.requestBetterOffer(
+        req.user.id,req.params.id,req.params.quoteId,req.body,
+        req.headers['x-idempotency-key']
+      );
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listBuyerSmartNegotiations(req,res){
+    try{
+      const negotiations=await procurementNegotiationService.forBuyer(req.user.id,req.params.id);
+      res.json({success:true,data:{negotiations}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listSupplierSmartNegotiations(req,res){
+    try{
+      const negotiations=await procurementNegotiationService.forSupplier(req.user.id);
+      res.json({success:true,data:{negotiations}});
     }catch(err){this._smartError(res,err);}
   }
 
