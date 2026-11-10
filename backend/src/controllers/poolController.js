@@ -260,7 +260,30 @@ class PoolController {
         }
         if (!product_spec_id) product_spec_id = sku.linked_spec_id;
         if (!supplier_product_id) supplier_product_id = sku.supplier_product_id;
-        if (!product_id) product_id = sku.family_id;
+        // B4-A: canonical family_id is NOT the legacy products.id FK.
+        // The SKU's immutable published specification owns the correct
+        // legacy product reference used by pools and existing orders.
+        if (!product_id) {
+          const publishedSpec = await productSpecificationRepo.findById(sku.linked_spec_id);
+          if (!publishedSpec || !publishedSpec.is_active ||
+              Number(publishedSpec.supplier_sku_id) !== Number(sku.id) ||
+              Number(publishedSpec.supplier_id) !== Number(supplier_id) ||
+              publishedSpec.lifecycle_status !== 'PUBLISHED') {
+            return res.status(422).json({
+              success: false,
+              error: { code: 'SKU_SPECIFICATION_MISMATCH', message: 'Published SKU has no eligible matching physical specification.' }
+            });
+          }
+          product_id = publishedSpec.product_id;
+        }
+      }
+
+      // B4-A: Older legitimate commercial offers may supply a legacy
+      // product_spec_id without product_id. Resolve the FK from the spec
+      // itself; never guess products.id from canonical family.id.
+      if (!product_id && product_spec_id) {
+        const existingSpec = await productSpecificationRepo.findById(Number(product_spec_id));
+        if (existingSpec) product_id = existingSpec.product_id;
       }
 
       // 1. Mandatory Identity Validations
@@ -350,8 +373,22 @@ class PoolController {
         });
       }
 
-      const resolvedSupplierProductId = supplier_product_id || listing.supplier_product_id || spec.supplier_product_id || null;
-      const resolvedSupplierSkuId = supplier_sku_id || listing.supplier_sku_id || spec.supplier_sku_id || null;
+      // B4-A: Every supplied identifier must match the immutable physical SKU
+      // mapped by the specification and the supplier's commercial listing.
+      // Never let client-provided IDs override authoritative linked records.
+      if ((supplier_product_id && Number(supplier_product_id) !== Number(spec.supplier_product_id)) ||
+          (supplier_sku_id && Number(supplier_sku_id) !== Number(spec.supplier_sku_id)) ||
+          (listing.supplier_product_id && spec.supplier_product_id &&
+            Number(listing.supplier_product_id) !== Number(spec.supplier_product_id)) ||
+          (listing.supplier_sku_id && spec.supplier_sku_id &&
+            Number(listing.supplier_sku_id) !== Number(spec.supplier_sku_id))) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_PHYSICAL_IDENTITY_MISMATCH', message: 'Pool product/SKU identity must match the listing and its published physical specification.' }
+        });
+      }
+      const resolvedSupplierProductId = spec.supplier_product_id || listing.supplier_product_id || null;
+      const resolvedSupplierSkuId = spec.supplier_sku_id || listing.supplier_sku_id || null;
 
       // 4. Commercial Quantity Validations
       const parsedTarget = Number(target_qty);
@@ -373,6 +410,27 @@ class PoolController {
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_INCREMENT', message: 'purchase_increment must be a positive number' }
+        });
+      }
+
+      // B4-B: Reject Infinity, exponential/invalid decimals, precision
+      // overflow and fractional scale that MySQL would silently round.
+      const exactDecimal = require('../services/exactDecimal');
+      const poolQuantities = [target_qty, supplier_min_qty, buyer_min_qty];
+      if (max_capacity !== undefined && max_capacity !== null) poolQuantities.push(max_capacity);
+      if (purchase_increment !== undefined && purchase_increment !== null) poolQuantities.push(purchase_increment);
+      try {
+        for (const input of poolQuantities) {
+          const normalized = exactDecimal.toCanonical(input, 4);
+          const integerPart = normalized.split('.')[0].replace('-', '');
+          if (integerPart.length > 8 || !exactDecimal.exactDecimalGte(normalized, '0.0001', 4)) {
+            throw new Error('Out of range');
+          }
+        }
+      } catch (_) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Pool quantities must be valid positive decimals with up to 4 fractional digits and within database precision.' }
         });
       }
 
@@ -904,6 +962,29 @@ class PoolController {
         });
       }
 
+      // B4-B: Draft updates obey the same exact MySQL DECIMAL(12,4)
+      // contract as draft creation; never silently round incoming values.
+      try {
+        const exactDecimal = require('../services/exactDecimal');
+        const inputs = [target_qty, supplier_min_qty, buyer_min_qty, max_capacity, purchase_increment]
+          .filter(value => value !== undefined && value !== null);
+        for (const input of inputs) {
+          const value = exactDecimal.toCanonical(input, 4);
+          if (value.split('.')[0].replace('-', '').length > 8 ||
+              !exactDecimal.exactDecimalGte(value, '0.0001', 4)) {
+            throw new Error('quantity out of range');
+          }
+        }
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Updated pool quantities must be positive valid decimals with at most four fractional digits.' }
+        });
+      }
+
       // Expiry (scheduled_close_at) & Promised Delivery SLA validation
       let expiresAtDate = existingPool.scheduled_close_at
         ? new Date(existingPool.scheduled_close_at)
@@ -1413,6 +1494,44 @@ class PoolController {
         });
       }
 
+      // B4-D: Revalidate identity and physical publication *at the final
+      // publication boundary*. Draft-time validation is not authoritative.
+      if (Number(listing.supplier_id) !== Number(supplier_id) ||
+          Number(listing.product_spec_id) !== Number(pool.product_spec_id)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'POOL_LISTING_IDENTITY_MISMATCH', message: 'Published pool must use an owned listing for its exact physical specification.' }
+        });
+      }
+      if (pool.supplier_sku_id) {
+        const [physical] = await connection.query(
+          `SELECT ps.supplier_id, ps.supplier_sku_id, ps.supplier_product_id, ps.lifecycle_status,
+                  sk.status AS sku_status, pr.status AS product_status
+           FROM product_specifications ps
+           LEFT JOIN supplier_skus sk ON sk.id = ps.supplier_sku_id
+           LEFT JOIN supplier_products pr ON pr.id = ps.supplier_product_id
+           WHERE ps.id = ?`,
+          [pool.product_spec_id]
+        );
+        const physicalItem = physical[0];
+        if (!physicalItem ||
+            Number(physicalItem.supplier_id) !== Number(supplier_id) ||
+            Number(physicalItem.supplier_sku_id) !== Number(pool.supplier_sku_id) ||
+            Number(physicalItem.supplier_product_id) !== Number(pool.supplier_product_id) ||
+            physicalItem.lifecycle_status !== 'PUBLISHED' ||
+            physicalItem.sku_status !== 'PUBLISHED' ||
+            physicalItem.product_status !== 'PUBLISHED') {
+          await connection.rollback();
+          connection.release();
+          return res.status(409).json({
+            success: false,
+            error: { code: 'POOL_SKU_NOT_ELIGIBLE', message: 'Supplier-owned product and physical SKU must remain published before pool activation.' }
+          });
+        }
+      }
+
       // Fetch specification for unit conversion
       const spec = await productSpecificationRepo.findById(pool.product_spec_id);
 
@@ -1443,15 +1562,42 @@ class PoolController {
 
       // Check current active allocations
       const [allocRows] = await connection.query(
-        `SELECT COALESCE(SUM(allocated_qty), 0) AS total_allocated
+        `SELECT unit, SUM(allocated_qty) AS total_allocated
          FROM supplier_inventory_allocations
-         WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')`,
+         WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')
+         GROUP BY unit`,
         [pool.supplier_listing_id]
       );
-      const activeAllocated = Number(allocRows[0].total_allocated);
-      const availableToPromise = Number(listing.available_stock) - activeAllocated;
+      // B4-C: allocation balances are only additive within one compatible
+      // physical quantity unit. Never add kg + bags or L + tins.
+      if (allocRows.some(row => unitConversionService.normalizeUnit(row.unit) !== listingUnit)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'ALLOCATION_UNIT_MISMATCH', message: 'Existing inventory allocations use incompatible units; reconcile inventory before publishing.' }
+        });
+      }
+      // Compare DECIMAL quantities exactly; binary floats can permit
+      // a final fractional over-allocation at the capacity boundary.
+      const exactDecimal = require('../services/exactDecimal');
+      let requiredStockExact, allocationSumExact, listingStockExact;
+      try {
+        requiredStockExact = exactDecimal.toCanonical(requiredStockInListingUnits, 4);
+        allocationSumExact = exactDecimal.exactDecimalSum(allocRows.map(row => row.total_allocated), 4);
+        listingStockExact = exactDecimal.toCanonical(listing.available_stock, 4);
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'INVALID_INVENTORY_PRECISION', message: 'Inventory units cannot be represented exactly in the allocation ledger.' }
+        });
+      }
+      const totalPromisedExact = exactDecimal.exactDecimalSum([allocationSumExact, requiredStockExact], 4);
+      const availableToPromise = exactDecimal.exactDecimalSum([listingStockExact, '-' + allocationSumExact], 4);
 
-      if (requiredStockInListingUnits > availableToPromise) {
+      if (!exactDecimal.exactDecimalGte(listingStockExact, totalPromisedExact, 4)) {
         await connection.rollback();
         connection.release();
         return res.status(409).json({
@@ -1468,7 +1614,7 @@ class PoolController {
         `INSERT INTO supplier_inventory_allocations
           (supplier_listing_id, allocation_type, reference_id, allocated_qty, unit, status)
          VALUES (?, 'REGULAR_POOL', ?, ?, ?, 'COMMITTED')`,
-        [pool.supplier_listing_id, id, requiredStockInListingUnits, listingUnit]
+        [pool.supplier_listing_id, id, requiredStockExact, listingUnit]
       );
 
       // Fetch delivery clusters for immutable snapshot
@@ -1554,7 +1700,7 @@ class PoolController {
             is_terms_locked: 1,
             scheduled_close_at: scheduledCloseDate.toISOString(),
             promised_delivery_at: promisedDeliveryDate.toISOString(),
-            allocated_qty: requiredStockInListingUnits,
+            allocated_qty: requiredStockExact,
             allocation_unit: listingUnit,
             idempotency_key: req.idempotency ? req.idempotency.key : null
           })
@@ -1695,7 +1841,7 @@ class PoolController {
       success: false,
       error: {
         code: 'LEGACY_OPERATION_RETIRED',
-        message: 'Direct pool confirmation via legacy endpoint has been retired. The authoritative supplier confirmation workflow with qualification snapshot binding will be available in Part 4D.3.'
+        message: 'Direct legacy pool confirmation is retired. Use POST /api/v1/pools/:id/qualify and the authorized POST /api/v1/pools/:id/supplier-decision workflow with qualification snapshot binding.'
       }
     });
   }

@@ -1,13 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Clock } from 'lucide-react';
 
+// Robust parsing for UTC, Pakistan timezone, and timezone-less MySQL DATETIME strings
+export function parseDeadline(raw) {
+  if (!raw) return NaN;
+  if (typeof raw === 'number') return raw;
+  const str = String(raw).trim();
+  // If it's a MySQL datetime string like 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DDTHH:MM:SS' without timezone, treat as UTC
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(str)) {
+    return Date.parse(str.replace(' ', 'T') + 'Z');
+  }
+  const parsed = Date.parse(str);
+  if (!Number.isNaN(parsed)) return parsed;
+  return Date.parse(str.replace(' ', 'T'));
+}
+
 // Shared regular/flash countdown. Deadline is authoritative and never reset
 // by re-render, refresh or browser visibility changes. Local clock is adjusted
 // with the API's server_time where available.
 export function CountdownTimer({ deadline, serverTime = null, onExpire, compact = false, label = 'Time left' }) {
-  const parsedDeadline = useMemo(() => Date.parse(deadline || ''), [deadline]);
+  const parsedDeadline = useMemo(() => parseDeadline(deadline), [deadline]);
   const offsetMs = useMemo(() => {
-    const remote = Date.parse(serverTime || '');
+    const remote = parseDeadline(serverTime);
     return Number.isFinite(remote) ? remote - Date.now() : 0;
   }, [serverTime]);
   const [now, setNow] = useState(Date.now());

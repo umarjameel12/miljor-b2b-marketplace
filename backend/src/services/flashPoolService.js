@@ -83,6 +83,7 @@ class FlashPoolService {
     const expiry=goodDate(payload.expiry_time);
     const min=mode==='WHOLE_LOT'?stock:dec(payload.min_quantity == null||payload.min_quantity===''?'1':payload.min_quantity);
     const max=mode==='WHOLE_LOT'?stock:dec(payload.max_quantity_per_buyer == null||payload.max_quantity_per_buyer===''?stock:payload.max_quantity_per_buyer);
+    const increment=mode==='WHOLE_LOT'?stock:dec(payload.purchase_increment == null||payload.purchase_increment===''?'1':payload.purchase_increment);
     if (!money.exactDecimalGte(stock,min,2) || !money.exactDecimalGte(max,min,2) ||
         !money.exactDecimalGte(stock,max,2)) throw fail('INVALID_FLASH_QUANTITY','Minimum and per-buyer maximum must fit the offered stock.');
     if(!Number.isSafeInteger(Number(payload.supplier_listing_id)) || Number(payload.supplier_listing_id)<1)
@@ -126,15 +127,16 @@ class FlashPoolService {
           (flash_code,supplier_id,product_id,supplier_sku_id,supplier_listing_id,product_spec_id,
            total_stock,remaining_stock,discounted_unit_price,original_unit_price,min_quantity,
            max_quantity_per_buyer,selling_mode,clearance_reason,condition_notes,expiry_time,
-           configured_duration_minutes,delivery_fee,best_before_date,status,snapshot_json)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?)`,
+           configured_duration_minutes,delivery_fee,best_before_date,purchase_increment,status,snapshot_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?)`,
         ['FL-'+crypto.randomBytes(10).toString('hex'),supplierId,spec.product_id,
          spec.supplier_sku_id,listing.id,spec.id,stock,stock,price,original,min,max,mode,
-         reason,condition,padSqlDate(expiry),Math.ceil((expiry.getTime()-Date.now())/60000),deliveryFee,bestBefore,
+         reason,condition,padSqlDate(expiry),Math.ceil((expiry.getTime()-Date.now())/60000),deliveryFee,bestBefore,increment,
          JSON.stringify({sku_id:spec.supplier_sku_id,sku_title:spec.title,
            product_id:spec.product_id,pack_size:spec.pack_size,pack_unit:spec.pack_unit,
            purchasing_unit:spec.purchasing_unit,listing_id:listing.id,price_per_pack:price,
-           original_price:original,selling_mode:mode,offer_stock:stock,condition_notes:condition,delivery_fee:deliveryFee,best_before_date:bestBefore})]
+           original_price:original,selling_mode:mode,offer_stock:stock,purchase_increment:increment,
+           condition_notes:condition,delivery_fee:deliveryFee,best_before_date:bestBefore})]
       );
       await conn.commit();
       return this.getSupplierOffer(supplierId,result.insertId);
@@ -159,6 +161,7 @@ class FlashPoolService {
         throw fail('INVALID_DISCOUNT','Comparison price cannot be less than Flash price.');
       const min=mode==='WHOLE_LOT'?stock:dec(payload.min_quantity||offer.min_quantity||'1');
       const max=mode==='WHOLE_LOT'?stock:dec(payload.max_quantity_per_buyer||offer.max_quantity_per_buyer||stock);
+      const increment=mode==='WHOLE_LOT'?stock:dec(payload.purchase_increment||offer.purchase_increment||'1');
       if(!money.exactDecimalGte(stock,min,2)||!money.exactDecimalGte(max,min,2)||
         !money.exactDecimalGte(stock,max,2))throw fail('INVALID_FLASH_QUANTITY','Minimum/maximum must fit the available Flash stock.');
       const duration=payload.duration_minutes===undefined?
@@ -197,10 +200,10 @@ class FlashPoolService {
         `UPDATE flash_pools SET total_stock=?,remaining_stock=?,discounted_unit_price=?,
          original_unit_price=?,min_quantity=?,max_quantity_per_buyer=?,selling_mode=?,
          clearance_reason=?,condition_notes=?,delivery_fee=?,best_before_date=?,
-         configured_duration_minutes=?,snapshot_json=?,version_number=version_number+1
+         configured_duration_minutes=?,purchase_increment=?,snapshot_json=?,version_number=version_number+1
          WHERE id=? AND status='DRAFT'`,
          [stock,stock,price,original,min,max,mode,reason,condition,deliveryFee,
-         bestBefore,duration,JSON.stringify(snapshot),id]);
+         bestBefore,duration,increment,JSON.stringify(snapshot),id]);
       await conn.commit();
       return this.getSupplierOffer(supplierId,id);
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -391,9 +394,18 @@ class FlashPoolService {
           throw fail('WHOLE_LOT_REQUIRED','This offer must be purchased as a single complete lot.',409);
         if(money.toCanonical(offer.remaining_stock,2)!==money.toCanonical(offer.total_stock,2))
           throw fail('WHOLE_LOT_HELD','The entire lot is already on hold or sold.',409);
-      } else if(!money.exactDecimalGte(quantity,offer.min_quantity,2) ||
-         !money.exactDecimalGte(offer.max_quantity_per_buyer,quantity,2)) {
-        throw fail('FLASH_QUANTITY_OUT_OF_RANGE','Quantity must satisfy supplier minimum and maximum.',409);
+      } else {
+        if(!money.exactDecimalGte(quantity,offer.min_quantity,2) ||
+           !money.exactDecimalGte(offer.max_quantity_per_buyer,quantity,2)) {
+          throw fail('FLASH_QUANTITY_OUT_OF_RANGE','Quantity must satisfy supplier minimum and maximum.',409);
+        }
+        const purchaseIncrement = Number(offer.purchase_increment) || 1.0;
+        const buyerMinQty = Number(offer.min_quantity) || 1.0;
+        const requestedQty = Number(quantity);
+        const remainder = (requestedQty - buyerMinQty) % purchaseIncrement;
+        if (Math.abs(remainder) > 0.0001 && Math.abs(remainder - purchaseIncrement) > 0.0001) {
+          throw fail('INVALID_PURCHASE_INCREMENT', `Requested quantity must advance in increments of ${purchaseIncrement} above minimum (${buyerMinQty}).`, 409);
+        }
       }
       if(!money.exactDecimalGte(offer.remaining_stock,quantity,2))
         throw fail('FLASH_OUT_OF_STOCK','Not enough stock remains.',409);
@@ -477,6 +489,28 @@ class FlashPoolService {
   // Called before each new buyer allocation (and may be called by an external
   // maintenance scheduler). Only untouched/uninitiated HELD orders can expire.
   // An initiated Safepay checkout remains locked until provider reconciliation.
+  async releaseCheckoutClaim(orderId,buyerId) {
+    const conn=await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [holds]=await conn.query(
+        "SELECT id,status FROM flash_purchase_holds WHERE order_id=? AND buyer_id=? FOR UPDATE",[orderId,buyerId]);
+      if(holds.length && holds[0].status==='PAYMENT_PENDING') {
+        await conn.query(
+          "UPDATE flash_purchase_holds SET status='HELD' WHERE id=?",[holds[0].id]);
+      }
+      await conn.commit();
+    } catch(e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  }
+
+  // Called before each new buyer allocation (and may be called by an external
+  // maintenance scheduler). Reclaims uninitiated expired HELD leases, and abandoned
+  // PAYMENT_PENDING sessions without confirmed or live in-flight payments.
   async reclaimExpiredUninitiatedHolds(flashId,clientConnection=null) {
     const conn=clientConnection || await db.getConnection();
     const owns=!clientConnection;
@@ -486,19 +520,23 @@ class FlashPoolService {
       // flash_pools -> holds -> orders.
       await conn.query('SELECT id FROM flash_pools WHERE id=? FOR UPDATE',[flashId]);
       const [expired]=await conn.query(
-        `SELECT h.id,h.quantity,h.order_id
+        `SELECT h.id,h.quantity,h.order_id,h.status
          FROM flash_purchase_holds h
-         WHERE h.flash_pool_id=? AND h.status='HELD' AND h.expires_at<=UTC_TIMESTAMP()
+         WHERE h.flash_pool_id=? AND h.status IN ('HELD','PAYMENT_PENDING') AND h.expires_at<=UTC_TIMESTAMP()
          ORDER BY h.id ASC FOR UPDATE`,[flashId]);
       let released=0;
       for(const hold of expired){
         const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=? FOR UPDATE',[hold.order_id]);
         if(!orders.length || orders[0].payment_status!=='AWAITING_PAYMENT' ||
           orders[0].order_status!=='AWAITING_PAYMENT')continue;
-        const [attempts]=await conn.query('SELECT id FROM payment_attempts WHERE order_id=? LIMIT 1',[hold.order_id]);
-        if(attempts.length)continue;
+        const [paidPayments]=await conn.query("SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[hold.order_id]);
+        if(paidPayments.length)continue;
+        const [activeAttempts]=await conn.query(
+          "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) LIMIT 1",
+          [hold.order_id]);
+        if(activeAttempts.length)continue;
         await conn.query(
-          "UPDATE flash_purchase_holds SET status='EXPIRED' WHERE id=? AND status='HELD'",[hold.id]);
+          "UPDATE flash_purchase_holds SET status='EXPIRED' WHERE id=? AND status IN ('HELD','PAYMENT_PENDING')",[hold.id]);
         await conn.query(
           "UPDATE orders SET order_status='CANCELLED',payment_status='PAYMENT_FAILED' WHERE id=?",[hold.order_id]);
         const [updated]=await conn.query(

@@ -169,12 +169,20 @@ class SafepayCheckoutService {
     }
 
     // Step 2: Call Safepay API OUTSIDE transaction lock
-    const { trackerToken, rawResponse } = await safepayAdapter.createTracker({
-      amount: totalPayable,
-      currency: order.currency || 'PKR',
-      orderCode: order.order_code,
-      mockClient
-    });
+    let trackerToken, rawResponse;
+    try {
+      const trackerRes = await safepayAdapter.createTracker({
+        amount: totalPayable,
+        currency: order.currency || 'PKR',
+        orderCode: order.order_code,
+        mockClient
+      });
+      trackerToken = trackerRes.trackerToken;
+      rawResponse = trackerRes.rawResponse;
+    } catch (checkoutErr) {
+      await require('./flashPoolService').releaseCheckoutClaim(orderId, actor.id).catch(() => {});
+      throw checkoutErr;
+    }
 
     let tbtToken = null;
     try {
