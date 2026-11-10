@@ -15,6 +15,9 @@ class ProcurementCollectiveApprovalService {
  constructor(database=db){this.database=database}
  async _preview(conn,buyerId,groupId,bidId,lock=false){
   const buyer=id(buyerId),gid=id(groupId),bid=id(bidId);
+  const [verified]=await conn.query(
+   "SELECT id FROM users WHERE id=? AND role='BUYER' AND is_verified=1 AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'",[buyer]);
+  if(!verified.length)throw fail('BUYER_NOT_ELIGIBLE','Verified active B2B buyer required.',403);
   const [groups]=await conn.query("SELECT g.id,g.status,g.quote_deadline,g.qualification_policy FROM procurement_collective_groups g WHERE g.id=?"+(lock?' FOR UPDATE':''),[gid]);
   if(!groups.length)throw fail('GROUP_NOT_FOUND','Collective not found.',404);
   if(groups[0].status!=='QUOTING')throw fail('GROUP_NOT_QUOTING','Collective is not accepting bid consent.',409);
