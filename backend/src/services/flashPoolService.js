@@ -134,6 +134,94 @@ class FlashPoolService {
       return this.getSupplierOffer(supplierId,result.insertId);
     } catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
+  async updateDraft(supplierId,id,payload={}) {
+    const conn=await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await this._lockVerifiedSupplier(conn,supplierId);
+      const [rows]=await conn.query(
+        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+      const offer=rows[0];
+      if(!offer)throw fail('FLASH_NOT_FOUND','Supplier Flash offer not found.',404);
+      if(offer.status!=='DRAFT')throw fail('FLASH_TERMS_LOCKED','Published or cancelled Flash offers cannot be edited.',409);
+      const mode=validMode(payload.selling_mode||offer.selling_mode);
+      const stock=dec(payload.total_stock??offer.total_stock);
+      const price=dec(payload.discounted_unit_price??offer.discounted_unit_price);
+      const original=payload.original_unit_price===null||payload.original_unit_price===''?null:
+        dec(payload.original_unit_price??offer.original_unit_price??price);
+      if(original&&!money.exactDecimalGte(original,price,2))
+        throw fail('INVALID_DISCOUNT','Comparison price cannot be less than Flash price.');
+      const min=mode==='WHOLE_LOT'?stock:dec(payload.min_quantity||offer.min_quantity||'1');
+      const max=mode==='WHOLE_LOT'?stock:dec(payload.max_quantity_per_buyer||offer.max_quantity_per_buyer||stock);
+      if(!money.exactDecimalGte(stock,min,2)||!money.exactDecimalGte(max,min,2)||
+        !money.exactDecimalGte(stock,max,2))throw fail('INVALID_FLASH_QUANTITY','Minimum/maximum must fit the available Flash stock.');
+      const duration=payload.duration_minutes===undefined?
+        Number(offer.configured_duration_minutes):Number(payload.duration_minutes);
+      if(!Number.isSafeInteger(duration)||duration<1)
+        throw fail('INVALID_FLASH_DURATION','Enter a valid positive supplier-selected duration in whole minutes.');
+      const reason=String(payload.clearance_reason??offer.clearance_reason).trim();
+      const condition=String(payload.condition_notes??offer.condition_notes??'').trim();
+      const deliveryFee=dec(payload.delivery_fee??offer.delivery_fee,{positive:false});
+      const bestBefore=payload.best_before_date===undefined?offer.best_before_date:
+        (payload.best_before_date||null);
+      if(reason.length<3||reason.length>255||condition.length>2000)
+        throw fail('INVALID_FLASH_DETAILS','Check clearance and condition details.');
+      if(bestBefore) {
+        const [[safe]]=await conn.query(
+          'SELECT (DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE) < DATE_ADD(?,INTERVAL 1 DAY)) AS within_date',
+          [duration,bestBefore]);
+        if(!safe.within_date)throw fail('INVALID_BEST_BEFORE','Sale cannot extend beyond its stated best-before date.');
+      }
+      const {listing,spec}=await this._lockListing(conn,offer.supplier_listing_id,supplierId);
+      const loose=new Set(['kg','g','mg','l','litre','liter','ml']);
+      if(!loose.has(String(spec.purchasing_unit||'').toLowerCase()) &&
+        [stock,min,max].some(x=>!Number.isInteger(Number(x))))
+        throw fail('FRACTIONAL_PHYSICAL_PACK','Physical purchasing packs must be whole quantities.');
+      const snapshot={sku_id:spec.supplier_sku_id,sku_title:spec.title,
+        product_id:spec.product_id,pack_size:spec.pack_size,pack_unit:spec.pack_unit,
+        purchasing_unit:spec.purchasing_unit,listing_id:listing.id,
+        price_per_pack:price,original_price:original,selling_mode:mode,
+        offer_stock:stock,condition_notes:condition,delivery_fee:deliveryFee,
+        best_before_date:bestBefore};
+      await conn.query(
+        `UPDATE flash_pools SET total_stock=?,remaining_stock=?,discounted_unit_price=?,
+         original_unit_price=?,min_quantity=?,max_quantity_per_buyer=?,selling_mode=?,
+         clearance_reason=?,condition_notes=?,delivery_fee=?,best_before_date=?,
+         configured_duration_minutes=?,snapshot_json=?,version_number=version_number+1
+         WHERE id=? AND status='DRAFT'`,
+         [stock,stock,price,original,min,max,mode,reason,condition,deliveryFee,
+         bestBefore,duration,JSON.stringify(snapshot),id]);
+      await conn.commit();
+      return this.getSupplierOffer(supplierId,id);
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
+  async cancelOffer(supplierId,id) {
+    const conn=await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await this._lockVerifiedSupplier(conn,supplierId);
+      const [rows]=await conn.query(
+        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+      const offer=rows[0];
+      if(!offer)throw fail('FLASH_NOT_FOUND','Supplier Flash offer not found.',404);
+      if(offer.status==='CANCELLED'){await conn.commit();return {id,status:'CANCELLED'};}
+      if(!['DRAFT','ACTIVE'].includes(offer.status))
+        throw fail('FLASH_CANCELLATION_BLOCKED','Paid, expired or sold-out Flash offers require formal resolution.',409);
+      if(offer.status==='ACTIVE' && (
+        !money.exactDecimalEquals(offer.held_stock,'0',2) ||
+        !money.exactDecimalEquals(offer.committed_stock,'0',2)))
+        throw fail('FLASH_BUYER_OBLIGATIONS','Flash offer has outstanding buyer checkout/payment commitments.',409);
+      if(offer.status==='ACTIVE')await conn.query(
+        `UPDATE supplier_inventory_allocations SET status='RELEASED',allocated_qty=0
+         WHERE allocation_type='FLASH_POOL' AND reference_id=? AND status='COMMITTED'`,[id]);
+      await conn.query(
+        "UPDATE flash_pools SET status='CANCELLED',version_number=version_number+1 WHERE id=?",[id]);
+      await conn.commit();
+      return {id,status:'CANCELLED'};
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
   async getSupplierOffer(supplierId,id) {
     const [rows]=await db.query("SELECT *, DATE_FORMAT(expiry_time,'%Y-%m-%dT%H:%i:%sZ') AS expiry_at_utc FROM flash_pools WHERE id = ? AND supplier_id = ?",[id,supplierId]);
     if(!rows.length)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
