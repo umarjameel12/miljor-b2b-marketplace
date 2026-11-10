@@ -216,6 +216,106 @@ class ProcurementRecurringService {
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
 
+  // B6-M: due cycle generates a ONE_TIME buyer draft; no order or payment.
+  async prepareDueCycle(buyerId,contractId,cycleId){
+    const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract'),cyid=id(cycleId,'Cycle');
+    const conn=await this.database.getConnection();
+    try{
+      await conn.beginTransaction();
+      await this._verified(conn,buyer);
+      const [contracts]=await conn.query(
+        'SELECT * FROM procurement_recurring_contracts WHERE id=? AND buyer_id=? FOR UPDATE',
+        [cid,buyer]
+      );
+      const contract=contracts[0];
+      if(!contract)throw fail('CONTRACT_NOT_FOUND','Recurring contract not found.',404);
+      const [cycles]=await conn.query(
+        'SELECT * FROM procurement_recurring_cycles WHERE id=? AND contract_id=? AND buyer_id=? FOR UPDATE',
+        [cyid,cid,buyer]
+      );
+      const cycle=cycles[0];
+      if(!cycle)throw fail('CYCLE_NOT_FOUND','Recurring cycle not found.',404);
+      if(cycle.status==='AWAITING_BUYER_APPROVAL' && cycle.generated_request_id){
+        await conn.commit();
+        return {cycle_id:cyid,request_id:cycle.generated_request_id,
+          status:'AWAITING_BUYER_APPROVAL',is_replay:true,creates_order:false};
+      }
+      if(contract.status!=='ACTIVE'||cycle.status!=='SCHEDULED')
+        throw fail('CYCLE_NOT_PREPARABLE','Paused, skipped, processed or cancelled cycle.',409);
+      if(Number(cycle.contract_version)!==Number(contract.version_number))
+        throw fail('CYCLE_CONTRACT_CHANGED','Schedule version changed; buyer reapproval is required.',409);
+      const [[clock]]=await conn.query('SELECT (? <= UTC_TIMESTAMP()) AS due',[cycle.due_at_utc]);
+      if(Number(clock?.due)!==1)throw fail('CYCLE_NOT_DUE','Cycle is not yet due.',409);
+      const [templates]=await conn.query(
+        'SELECT id FROM procurement_requests WHERE id=? AND buyer_id=?',
+        [contract.template_request_id,buyer]
+      );
+      if(!templates.length)throw fail('RECURRING_TEMPLATE_MISSING','Procurement template missing.',409);
+      const requestKey='recurring-cycle-'+cid+'-'+cycle.cycle_key;
+      const requestCode='MJ-RC-'+crypto.randomUUID();
+      const requestHash=crypto.createHash('sha256').update(JSON.stringify({
+        contract_id:cid,cycle_key:cycle.cycle_key,
+        template_request_id:contract.template_request_id,
+        schedule_version:contract.version_number
+      })).digest('hex');
+      const [request]=await conn.query(
+        `INSERT INTO procurement_requests
+         (buyer_id,request_code,ownership,frequency,award_policy,priority,
+          status,delivery_area,notes,quote_deadline,join_deadline,
+          idempotency_key,request_hash)
+         SELECT buyer_id,?,'SINGLE_BUYER','ONE_TIME',award_policy,priority,
+          'DRAFT',delivery_area,notes,NULL,NULL,?,?
+         FROM procurement_requests WHERE id=? AND buyer_id=?`,
+        [requestCode,requestKey,requestHash,contract.template_request_id,buyer]
+      );
+      if(!request.insertId)throw fail('CYCLE_DRAFT_NOT_CREATED','Cycle draft not created.',500);
+      const [inserted]=await conn.query(
+        `INSERT INTO procurement_request_items
+          (request_id,line_number,family_id,quantity,unit,requirements,allow_substitutions)
+         SELECT ?,line_number,family_id,quantity,unit,requirements,allow_substitutions
+         FROM procurement_request_items WHERE request_id=?`,
+        [request.insertId,contract.template_request_id]
+      );
+      if(!inserted.affectedRows)throw fail('CYCLE_WITHOUT_ITEMS','Template is empty.',409);
+      await conn.query(
+        `UPDATE procurement_recurring_cycles
+         SET status='AWAITING_BUYER_APPROVAL',generated_request_id=?,
+          last_attempt_at=UTC_TIMESTAMP(),attempt_count=attempt_count+1
+         WHERE id=? AND status='SCHEDULED'`,
+        [request.insertId,cyid]
+      );
+      await conn.query(
+        `INSERT INTO procurement_recurring_cycle_events
+          (cycle_id,event_key,event_type,event_snapshot)
+         VALUES (?,'REQUEST_DRAFT_CREATED','REQUEST_DRAFT_CREATED',?)
+         ON DUPLICATE KEY UPDATE id=id`,
+        [cyid,JSON.stringify({request_id:request.insertId,creates_payment:false,
+          creates_order:false,requires_explicit_buyer_approval:true})]
+      );
+      await conn.commit();
+      return {cycle_id:cyid,request_id:request.insertId,
+        status:'AWAITING_BUYER_APPROVAL',is_replay:false,
+        creates_order:false,creates_payment:false};
+    }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
+      throw fail('CYCLE_PREPARATION_CONFLICT','Concurrent cycle request; reload first.',409);
+      throw e;}finally{conn.release();}
+  }
+  async listCycles(buyerId,contractId){
+    const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract');
+    const [contracts]=await this.database.query(
+      'SELECT id FROM procurement_recurring_contracts WHERE id=? AND buyer_id=?',
+      [cid,buyer]
+    );
+    if(!contracts.length)throw fail('CONTRACT_NOT_FOUND','Recurring contract not found.',404);
+    const [cycles]=await this.database.query(
+      `SELECT id,cycle_key,due_at_utc,status,generated_request_id,
+       attempt_count,failure_code,contract_version
+       FROM procurement_recurring_cycles WHERE contract_id=? AND buyer_id=?
+       ORDER BY due_at_utc DESC LIMIT 100`,[cid,buyer]
+    );
+    return cycles;
+  }
+
   async prepareUpcoming(contractId,{limit=6}={}){
     const cid=id(contractId,'Contract');
     if(!Number.isInteger(limit)||limit<1||limit>24)
