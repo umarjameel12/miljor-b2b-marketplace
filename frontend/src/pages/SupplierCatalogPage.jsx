@@ -109,6 +109,7 @@ export const SupplierCatalogPage = () => {
   const [myListings, setMyListings] = useState([]);
   const [myPools, setMyPools] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
+  const [familyEntitlements, setFamilyEntitlements] = useState(null);
   const [catalogUsage, setCatalogUsage] = useState({
     total_offers: 0,
     active_offers: 0,
@@ -218,7 +219,7 @@ export const SupplierCatalogPage = () => {
   const loadPortalData = async () => {
     try {
       setLoading(true);
-      const [profRes, catRes, famRes, spRes, skuRes, listRes, poolRes, reqRes] = await Promise.all([
+      const [profRes, catRes, famRes, spRes, skuRes, listRes, poolRes, reqRes, entRes] = await Promise.all([
         supplierApi.getProfile().catch(() => ({ data: { profile: null } })),
         catalogApi.getCategories(),
         catalogApi.getFamilies(),
@@ -226,7 +227,8 @@ export const SupplierCatalogPage = () => {
         catalogApi.getMySupplierSkus().catch(() => ({ data: { skus: [] } })),
         catalogApi.getMyListings().catch(() => ({ data: { listings: [], catalog_usage: {} } })),
         poolsApi.getMyPools().catch(() => ({ data: { pools: [] } })),
-        catalogApi.getMyCatalogRequests().catch(() => ({ data: { requests: [], catalog_usage: {} } }))
+        catalogApi.getMyCatalogRequests().catch(() => ({ data: { requests: [], catalog_usage: {} } })),
+        supplierApi.getSubscription().catch(() => ({ data: { entitlements: null } }))
       ]);
 
       const loadedCategories = catRes.data?.categories || [];
@@ -240,6 +242,7 @@ export const SupplierCatalogPage = () => {
       setMyListings(listRes.data?.listings || []);
       setMyPools(poolRes.data?.pools || []);
       setMyRequests(reqRes.data?.requests || []);
+      setFamilyEntitlements(entRes.data?.entitlements || null);
       setCatalogUsage(listRes.data?.catalog_usage || reqRes.data?.catalog_usage || {
         total_offers: 0,
         active_offers: 0,
@@ -931,7 +934,7 @@ export const SupplierCatalogPage = () => {
               <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">Active Families</span>
                 <span className="text-sm font-bold text-[var(--text-primary)]">
-                  {catalogUsage.active_distinct_families} / {profile?.max_active_listings || 4}
+                  {familyEntitlements?.active_families_count ?? catalogUsage.active_distinct_families} / {familyEntitlements?.max_allowed_families ?? (profile?.subscription_plan === 'BUSINESS' ? 25 : profile?.subscription_plan === 'GROWTH' ? 13 : 4)}
                 </span>
               </div>
               <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
