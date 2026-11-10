@@ -358,153 +358,48 @@ class SupplierListingController {
     }
   }
 
-  // 5. Update Supplier Listing (Ownership Checked)
+  // B3: both update endpoints share one transactional domain mutation service.
   async updateListing(req, res) {
     try {
-      const { id } = req.params;
-      const listing = await listingRepo.findById(id);
-
-      if (!listing) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'Supplier listing not found' }
-        });
-      }
-
-      // Strict ownership check
-      if (listing.supplier_id !== req.user.id && req.user.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'You do not own this listing and cannot modify it' }
-        });
-      }
-
-      const {
-        available_stock,
-        base_unit_price,
-        supplier_min_qty,
-        buyer_min_qty,
-        delivery_zones,
-        delivery_fee_policy,
-        fulfilment_lead_time_days,
-        notes,
-        status,
-        price_change_reason
-      } = req.body;
-
-      // Price update check
-      if (base_unit_price !== undefined) {
-        const newPrice = Number(base_unit_price);
-        if (isNaN(newPrice) || newPrice <= 0) {
-          return res.status(400).json({
-            success: false,
-            error: { code: 'INVALID_PRICE', message: 'Price must be a strictly positive number greater than zero' }
-          });
-        }
-
-        const packSize = Number(listing.pack_size);
-        if (packSize > 0) {
-          req.body.price_per_base_unit = Number((newPrice / packSize).toFixed(4));
-        }
-
-        const oldPrice = Number(listing.base_unit_price);
-        if (newPrice !== oldPrice) {
-          await listingRepo.recordPriceChange(
-            id,
-            oldPrice,
-            newPrice,
-            req.user.id,
-            price_change_reason || 'Supplier price adjustment'
-          );
-        }
-      }
-
-      if (available_stock !== undefined && Number(available_stock) < 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_STOCK', message: 'Stock cannot be negative' }
-        });
-      }
-
-      await listingRepo.update(id, req.body);
-      const updatedListing = await listingRepo.findById(id);
-
-      res.status(200).json({
-        success: true,
-        message: 'Listing updated successfully',
-        data: { listing: updatedListing }
-      });
-    } catch (error) {
-      console.error('Update Listing Error:', error);
-      res.status(500).json({
+      const updated = await require('../services/supplierListingMutationService')
+        .mutate(Number(req.params.id), req.user, req.body || {});
+      return res.status(200).json({ success: true, message: 'Listing updated successfully', data: { listing: updated } });
+    } catch (err) {
+      return res.status(err.statusCode || 500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
+        error: { code: err.code || 'LISTING_UPDATE_FAILED', message: err.statusCode ? err.message : 'Failed to update listing' }
       });
     }
   }
 
-  // 6. Toggle Status (Active / Paused)
   async updateListingStatus(req, res) {
     try {
-      const { id } = req.params;
-      const { status } = req.body;
-
-      const validStatuses = ['ACTIVE', 'PAUSED', 'OUT_OF_STOCK', 'ARCHIVED'];
-      if (!status || !validStatuses.includes(status)) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_STATUS', message: `Status must be one of: ${validStatuses.join(', ')}` }
-        });
-      }
-
-      const listing = await listingRepo.findById(id);
-      if (!listing) {
-        return res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'Supplier listing not found' }
-        });
-      }
-
-      // Ownership check
-      if (listing.supplier_id !== req.user.id && req.user.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'You do not own this listing' }
-        });
-      }
-
-      await listingRepo.updateStatus(id, status);
-
-      res.status(200).json({
-        success: true,
-        message: `Listing status updated to ${status}`,
-        data: { id, status }
+      const updated = await require('../services/supplierListingMutationService')
+        .mutate(Number(req.params.id), req.user, req.body || {}, { statusOnly: true });
+      return res.status(200).json({
+        success: true, message: `Listing status updated to ${updated.status}`,
+        data: { id: updated.id, status: updated.status }
       });
-    } catch (error) {
-      console.error('Update Listing Status Error:', error);
-      res.status(500).json({
+    } catch (err) {
+      return res.status(err.statusCode || 500).json({
         success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
+        error: { code: err.code || 'LISTING_STATUS_UPDATE_FAILED', message: err.statusCode ? err.message : 'Failed to update listing status' }
       });
     }
   }
 
-  // 7. Get Price Change History
+  // Price history is supplier-private by default. No cross-supplier leakage.
   async getListingPriceHistory(req, res) {
     try {
-      const { id } = req.params;
-      const history = await listingRepo.getPriceHistory(id);
-
-      res.status(200).json({
-        success: true,
-        data: { listing_id: id, history }
-      });
-    } catch (error) {
-      console.error('Get Price History Error:', error);
-      res.status(500).json({
-        success: false,
-        error: { code: 'SERVER_ERROR', message: error.message }
-      });
+      const listing = await listingRepo.findById(Number(req.params.id));
+      if (!listing) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier listing not found' } });
+      if (Number(listing.supplier_id) !== Number(req.user.id) && req.user.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Price history belongs to the supplier' } });
+      }
+      const history = await listingRepo.getPriceHistory(listing.id);
+      return res.status(200).json({ success: true, data: { listing_id: listing.id, history } });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: { code: 'PRICE_HISTORY_FAILED', message: 'Could not retrieve listing price history' } });
     }
   }
 }
