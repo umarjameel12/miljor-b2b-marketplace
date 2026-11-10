@@ -10,6 +10,7 @@ const procurementQuoteService = require('../services/procurementQuoteService');
 const procurementQuoteComparisonService = require('../services/procurementQuoteComparisonService');
 const procurementNegotiationService = require('../services/procurementNegotiationService');
 const procurementAwardPolicy = require('../services/procurementAwardPolicy');
+const procurementCollectiveService = require('../services/procurementCollectiveService');
 
 class ProcurementController {
 
@@ -189,6 +190,39 @@ class ProcurementController {
         req.user.id,req.params.id,req.body?.selections
       );
       res.json({success:true,data:{preview}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-I: private collective participation; joining does not charge anyone.
+  async createCollectiveGroup(req,res){
+    try{
+      const result=await procurementCollectiveService.createGroup(
+        req.user.id,req.params.id,req.body||{}
+      );
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async inviteCollectiveBuyer(req,res){
+    try{
+      const invitation=await procurementCollectiveService.invite(
+        req.user.id,req.params.groupId,req.body?.buyer_id
+      );
+      res.json({success:true,data:{invitation}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async joinCollectiveGroup(req,res){
+    try{
+      const result=await procurementCollectiveService.join(
+        req.user.id,req.params.groupId,req.body?.lines,
+        req.headers['x-idempotency-key']
+      );
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async myCollectiveInvites(req,res){
+    try{
+      const invitations=await procurementCollectiveService.listMyInvites(req.user.id);
+      res.json({success:true,data:{invitations}});
     }catch(err){this._smartError(res,err);}
   }
 
