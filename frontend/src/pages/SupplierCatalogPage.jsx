@@ -177,6 +177,8 @@ export const SupplierCatalogPage = () => {
   const [offerModalVariant, setOfferModalVariant] = useState(null);
   const [editingListing, setEditingListing] = useState(null);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
+  const [priceHistory, setPriceHistory] = useState(null);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
   const [offerForm, setOfferForm] = useState({
     base_unit_price: '',
     available_stock: '100',
@@ -774,6 +776,18 @@ export const SupplierCatalogPage = () => {
       toast.error(msg);
     } finally {
       setOfferSubmitting(false);
+    }
+  };
+
+  const handleViewPriceHistory = async (listing) => {
+    setPriceHistoryLoading(true);
+    try {
+      const response = await catalogApi.getSupplierListingPriceHistory(listing.id);
+      setPriceHistory({ listing, entries: response.data?.history || [] });
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || 'Unable to load supplier price history.');
+    } finally {
+      setPriceHistoryLoading(false);
     }
   };
 
@@ -1438,6 +1452,9 @@ export const SupplierCatalogPage = () => {
                     >
                       Edit Price / Stock
                     </Button>}
+                    <Button size="sm" variant="outline" disabled={priceHistoryLoading} onClick={() => handleViewPriceHistory(listing)}>
+                      Price History
+                    </Button>
                     {listing.status !== 'ARCHIVED' && (
                       <Button size="sm" variant="outline" onClick={() => handleToggleListingStatus(listing)}>
                         {listing.status === 'ACTIVE' ? 'Pause' : 'Activate'}
@@ -1881,6 +1898,27 @@ export const SupplierCatalogPage = () => {
                   Confirm & Lock SKU
                 </Button>
               </div>
+            </Card>
+          </div>
+        )}
+
+        {priceHistory && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <Card className="w-full max-w-lg p-5 bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-3 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center gap-3">
+                <h3 className="text-base font-bold text-[var(--text-primary)]">Offer Price History</h3>
+                <Button size="sm" variant="outline" onClick={() => setPriceHistory(null)}>Close</Button>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)]">{priceHistory.listing.listing_code}</p>
+              {priceHistory.entries.length === 0 ? (
+                <p className="text-sm text-[var(--text-secondary)]">No recorded price changes.</p>
+              ) : priceHistory.entries.map(entry => (
+                <div key={entry.id} className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-1">
+                  <p className="text-xs font-semibold text-[var(--text-primary)]">PKR {entry.previous_price} → PKR {entry.new_price}</p>
+                  <p className="text-[11px] text-[var(--text-secondary)]">{entry.change_reason || 'Supplier price adjustment'}</p>
+                  <p className="text-[11px] text-[var(--text-secondary)]">{entry.effective_from ? new Date(entry.effective_from).toLocaleString() : ''}</p>
+                </div>
+              ))}
             </Card>
           </div>
         )}
