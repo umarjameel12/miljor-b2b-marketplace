@@ -45,6 +45,8 @@ export const RfqPage = () => {
   const [buyerQuotes,setBuyerQuotes] = useState([]);
   const [supplierQuoteDrafts,setSupplierQuoteDrafts] = useState({});
   const [quoteBusy,setQuoteBusy] = useState(false);
+  const [mySmartQuotes,setMySmartQuotes] = useState([]);
+  const [quoteHistory,setQuoteHistory] = useState(null);
 
 
 
@@ -254,6 +256,34 @@ export const RfqPage = () => {
     finally{setMatchingBusy(false);}
   };
 
+  const refreshMySmartQuotes = async () => {
+    if (!token || user?.role!=='SUPPLIER') return;
+    const response=await procurementApi('/api/v1/procurement/supplier/quotes');
+    setMySmartQuotes(response.quotes||[]);
+  };
+
+  const withdrawSmartQuote = async quoteId => {
+    setQuoteBusy(true);
+    try{
+      await procurementApi(`/api/v1/procurement/supplier/quotes/${quoteId}/withdraw`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({})
+      });
+      await refreshMySmartQuotes();
+      toast.success('Quotation withdrawn; historical versions retained');
+    }catch(error){toast.error(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const viewQuoteHistory = async (requestId,quoteId) => {
+    setQuoteBusy(true);
+    try{
+      const data=await procurementApi(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/versions`);
+      setQuoteHistory(data);
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
   const viewBuyerQuotes = async requestId => {
     setQuoteBusy(true);
     setShoppingError('');
@@ -297,10 +327,17 @@ export const RfqPage = () => {
         })
       });
       toast.success(`Quotation version ${result.quote.version_number} submitted`);
+      await refreshMySmartQuotes();
       setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
   };
+
+  useEffect(()=>{
+    if(token && user?.role==='SUPPLIER'){
+      refreshMySmartQuotes().catch(error=>toast.error(error.message));
+    }
+  },[token,user?.role]);
 
   // Buyer RFQ Form
   const [rfqForm, setRfqForm] = useState({
@@ -566,9 +603,24 @@ export const RfqPage = () => {
                       Items Rs. {quote.items_total} + Delivery Rs. {quote.delivery_fee}
                       = Rs. {quote.quoted_total}
                     </p>
-                    <p className="text-xs text-[var(--text-muted)]">Valid until {String(quote.valid_until)}. Buyer acceptance and payments will be enabled in B6-G.</p>
+                    <p className="text-xs text-[var(--text-muted)]">Valid until {String(quote.valid_until)}. Supplier quotation excludes MilJor processing fees; final payable amount is calculated only at order acceptance.</p>
+                    <button type="button" className="text-xs underline mt-1" disabled={quoteBusy}
+                      onClick={()=>viewQuoteHistory(selectedQuotesRequest,quote.id)}>View version history</button>
                   </article>
                 ))}
+                {quoteHistory && (
+                  <div className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs font-semibold">Quotation #{quoteHistory.quote_id} history</p>
+                      <button type="button" onClick={()=>setQuoteHistory(null)} className="text-xs underline">Close history</button>
+                    </div>
+                    {(quoteHistory.versions||[]).map(version=>(
+                      <p key={version.version_number} className="text-xs">
+                        Version {version.version_number} · {version.coverage} · Rs. {version.quoted_total} · Valid until {String(version.valid_until)}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {selectedMatchRequest && (
@@ -606,6 +658,20 @@ export const RfqPage = () => {
               <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
+            {mySmartQuotes.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                <p className="text-sm font-semibold">My submitted quotations</p>
+                {mySmartQuotes.map(quote=>(
+                  <div key={quote.id} className="flex flex-wrap justify-between gap-2 text-xs">
+                    <span>Quote #{quote.id} · RFQ #{quote.request_id} · v{quote.current_version} · {quote.status} · Rs. {quote.quoted_total}</span>
+                    {quote.status==='ACTIVE' && <button type="button" disabled={quoteBusy}
+                      onClick={()=>withdrawSmartQuote(quote.id)} className="underline text-red-600">
+                      Withdraw
+                    </button>}
+                  </div>
+                ))}
+              </div>
+            )}
             {supplierInbox.length===0 && <p className="text-sm text-[var(--text-muted)]">No open invitations yet.</p>}
             {supplierInbox.map(invitation=>(
               <article key={invitation.invitation_id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
