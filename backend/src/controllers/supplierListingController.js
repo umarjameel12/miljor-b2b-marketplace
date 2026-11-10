@@ -134,6 +134,20 @@ class SupplierListingController {
         });
       }
 
+      // B1: Every ACTIVE listing must resolve a canonical family. Without
+      // this identity, a legacy specification could bypass family quotas.
+      const canonicalFamilyId = Number(spec.family_id || spec.canonical_family_id);
+      if (!Number.isSafeInteger(canonicalFamilyId) || canonicalFamilyId <= 0 ||
+          !spec.family_name || !spec.category_name) {
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'CANONICAL_FAMILY_REQUIRED',
+            message: 'This physical SKU is not mapped to an approved canonical family and category.'
+          }
+        });
+      }
+
       // 2. Validate price and quantities
       const validation = unitService.validateQuantityAndPrice(
         buyer_min_qty || 1,
@@ -201,11 +215,9 @@ class SupplierListingController {
       let listingId;
       try {
         await conn.beginTransaction();
-        if (spec.family_id) {
-          await subscriptionEntitlementService.assertCanPublishInFamily(
-            supplierId, spec.family_id, conn
-          );
-        }
+        await subscriptionEntitlementService.assertCanPublishInFamily(
+          supplierId, canonicalFamilyId, conn
+        );
         // Recheck duplicate after obtaining the supplier-profile lock.
         // The earlier lookup is only a fast-path optimization.
         const duplicateUnderLock = await listingRepo.findBySupplierAndSpec(
