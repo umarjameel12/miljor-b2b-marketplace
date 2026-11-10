@@ -63,6 +63,11 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
+### Accepted B3 Reconciliation Recorded for B4
+- B3 source accepted: `44f591d7fdd9c16f7a43c10d01de2b50bb637e7e`, 81/81 assertions, frontend build PASS, protected `miljor_db` unchanged (per supplied Antigravity gate).
+- B4 copies the exact accepted `catalogService.js`, `supplierListingMutationService.js`, B2 and B3 reports into original paths. Its pool source and additional B4 tests stay isolated.
+- This is a file-content reconciliation, not a claim of a Git merge commit or local worktree parity. B4 final acceptance must verify both source history and local/remote sync.
+
 ## Approved Engineering Roadmap & Phase Status Summary
 
 | Phase / Part | Description | Status | Gate Evidence | Completion Date |
@@ -98,7 +103,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B0.2** | Backend Safety Closure & Final Acceptance Gate: Admin Subscription Bypass Hardening, Invoice Internal Authority Hardening, Exact Payment Provider Provenance, Safepay Amount Contract, and Legacy Refund False Completion Prevention | **COMPLETE AND VERIFIED** | `tests/phase_b0_2_safety_closure_gate.js` (22/22 PASS); `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Total 161/161 Assertions PASS; Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **COMPLETE AND VERIFIED** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; 73/73 Assertions PASS across E2/E3/E4-E6 gates; Frontend Vite Build PASS (2,216 modules, 0 errors); miljor_db 100% Pristine; Verified SHA: `986b2737` | 2026-11-10 |
 | **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **IMPLEMENTED — FINAL ANTIGRAVITY GATE PENDING** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; focused E2 negative assertions committed but not yet run; protected DB safety and frontend build pending | — |
-| **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **SOURCE IMPLEMENTED — REGRESSION PENDING** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; modified E2/E3 B3 test assertions NOT YET EXECUTED; B2 acceptance prerequisite for final B3 integration | — |
+| **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **COMPLETE AND VERIFIED (B3 upstream SHA 44f591d7, 81/81 acceptance); B4 branch source now manually reconciled** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; modified E2/E3 B3 test assertions 81/81 B3 accepted on 44f591d7; B4 source integration tracked separately | — |
 | **Phase B4** | Regular Pools: supplier physical ID/FK correctness, draft decimal validation, inventory/publish/tiers/progress/reservations/lifecycle (remaining scope pending) | **B4-A/B PARTIAL SOURCE IMPLEMENTATION — TEST PENDING** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; source parity policy; B3/B2 accepted dependency integration not yet done | — |
 | **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
