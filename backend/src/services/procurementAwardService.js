@@ -31,9 +31,20 @@ const currency=value=>{
 const cents=value=>BigInt(currency(value).replace('.',''));
 const fromCents=v=>(v/100n).toString()+'.'+(v%100n).toString().padStart(2,'0');
 const fromDbDate=value=>{
-  if(value instanceof Date)return value.toISOString();
+  if(value instanceof Date){
+    if(!Number.isFinite(value.getTime()))
+      throw fail('INVALID_DB_DATE','Invalid database datetime.',500);
+    return value.toISOString();
+  }
   if(typeof value!=='string')throw fail('INVALID_DB_DATE','Invalid database datetime.',500);
-  return value.replace(' ','T')+'Z';
+  const trimmed=value.trim();
+  // MySQL DATETIME is UTC without timezone; ISO strings may already carry Z/offset.
+  const withZone=/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:\.\d+)?$/.test(trimmed)
+    ?trimmed.replace(' ','T')+'Z':trimmed;
+  if(!/(?:Z|[+-]\d\d:\d\d)$/i.test(withZone)||
+     !Number.isFinite(Date.parse(withZone)))
+    throw fail('INVALID_DB_DATE','Timestamp must have an unambiguous UTC offset.',500);
+  return new Date(withZone).toISOString();
 };
 const feeDistribution=(groups,totalFee)=>{
   const feeCents=cents(totalFee);
