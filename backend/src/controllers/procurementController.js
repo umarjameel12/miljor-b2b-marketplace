@@ -5,6 +5,7 @@
 
 const procurementService = require('../services/procurementService');
 const procurementRequestService = require('../services/procurementRequestService');
+const procurementMatchingService = require('../services/procurementMatchingService');
 
 class ProcurementController {
 
@@ -72,6 +73,40 @@ class ProcurementController {
         message: err.statusCode ? err.message : 'Procurement request could not be processed.'
       }
     });
+  }
+
+  // B6-D: supplier matching and invitations. No quote/checkout authority.
+  async getSmartRequestMatches(req,res){
+    try{
+      const matches=await procurementMatchingService.findForBuyer(req.user.id,req.params.id);
+      res.json({success:true,data:{matches}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async inviteSmartSupplier(req,res){
+    try{
+      const invitation=await procurementMatchingService.invite(
+        req.user.id,req.params.id,req.body?.supplier_id
+      );
+      res.status(201).json({success:true,data:{invitation}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listSmartInvitations(req,res){
+    try{
+      const invitations=await procurementMatchingService.listInvitationsForBuyer(req.user.id,req.params.id);
+      res.json({success:true,data:{invitations}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async smartSupplierInbox(req,res){
+    try{
+      const invitations=await procurementMatchingService.inbox(req.user.id);
+      res.json({success:true,data:{invitations}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async respondSmartInvitation(req,res){
+    try{
+      const invitation=await procurementMatchingService.respond(req.user.id,req.params.invitationId,req.body?.decision);
+      res.json({success:true,data:{invitation}});
+    }catch(err){this._smartError(res,err);}
   }
 
   // Flash Pools
