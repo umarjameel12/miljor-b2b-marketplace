@@ -42,6 +42,34 @@ function startScheduler() {
   });
   activeTasks.push(cleanupTask);
 
+  // B6-M recurring procurement draft worker, opt-in only.
+  // Does NOT create orders, trigger Safepay or authorize standing charges.
+  // Locking and retry backoff are maintained in procurementRecurringService.
+  if (process.env.B6_RECURRING_WORKER_ENABLED === 'true' &&
+      process.env.B6_RECURRING_RUNTIME_APPROVED === 'true') {
+    let recurringRunning = false;
+    const recurringTask = cron.schedule('*/5 * * * *', async () => {
+      if (recurringRunning) return;
+      recurringRunning = true;
+      try {
+        const result = await require('./procurementRecurringService')
+          .runDueBatch({limit:20});
+        if (result.checked || result.failed) {
+          console.log('[Scheduler] Recurring drafts:', {
+            checked:result.checked,prepared:result.prepared,
+            retried:result.retried,failed:result.failed
+          });
+        }
+      } catch (err) {
+        console.error('[Scheduler] Recurring draft generation failed:', err.code||err.message);
+      } finally {
+        recurringRunning = false;
+      }
+    });
+    activeTasks.push(recurringTask);
+    console.log('[Scheduler] B6 recurring draft worker enabled (no automatic payments)');
+  }
+
   console.log('✅ Scheduler active: Pool expiry every 10 min | Cleanup every hour');
 }
 
