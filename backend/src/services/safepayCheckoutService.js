@@ -121,6 +121,10 @@ class SafepayCheckoutService {
       throw err;
     }
 
+    // B5 Flash: claim the hold before contacting Safepay. For non-Flash
+    // orders this is a no-op; B6's separate award hooks remain untouched.
+    await require('./flashPoolService').claimCheckout(orderId,actor.id);
+
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
     if (!totalPayable || totalPayable <= 0 || isNaN(totalPayable)) {
@@ -165,12 +169,23 @@ class SafepayCheckoutService {
     }
 
     // Step 2: Call Safepay API OUTSIDE transaction lock
-    const { trackerToken, rawResponse } = await safepayAdapter.createTracker({
-      amount: totalPayable,
-      currency: order.currency || 'PKR',
-      orderCode: order.order_code,
-      mockClient
-    });
+    let trackerToken, rawResponse;
+    try {
+      const tracker = await safepayAdapter.createTracker({
+        amount: totalPayable,
+        currency: order.currency || 'PKR',
+        orderCode: order.order_code,
+        mockClient
+      });
+      trackerToken = tracker.trackerToken;
+      rawResponse = tracker.rawResponse;
+    } catch (trackerError) {
+      await require('./flashPoolService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(releaseError => {
+          console.error('[B5/B6] Flash checkout claim release failed:', releaseError);
+        });
+      throw trackerError;
+    }
 
     let tbtToken = null;
     try {
@@ -554,6 +569,16 @@ class SafepayCheckoutService {
       }
 
       await connection.commit();
+
+      // B5 Flash pool stock transitions only AFTER an authentic confirmed
+      // payment. Reconciliation uses its own transaction and is idempotent;
+      // a transient failure must stay recoverable from the buyer hold endpoint.
+      try {
+        await require('./flashPoolService').reconcilePaidOrder(order.id);
+      } catch (flashError) {
+        console.error('[B5/B6] Verified Flash payment needs reconciliation:',
+          flashError.code || flashError.message);
+      }
 
       return {
         success: true,
@@ -949,6 +974,13 @@ class SafepayCheckoutService {
       }
 
       await connection.commit();
+
+      try {
+        await require('./flashPoolService').reconcilePaidOrder(order.id);
+      } catch (flashError) {
+        console.error('[B5/B6] Reconciled Flash payment needs stock update:',
+          flashError.code || flashError.message);
+      }
 
       const [newPayments] = await db.query(
         `SELECT * FROM payments WHERE id = ?`,
