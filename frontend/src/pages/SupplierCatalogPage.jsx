@@ -153,9 +153,13 @@ export const SupplierCatalogPage = () => {
     pack_size: '',
     pack_unit: 'kg',
     purchasing_unit: '',
-    notes: ''
+    pack_specification: '',
+    storage_requirements: '',
+    shelf_life_days: ''
   });
   const [confirmPublishSku, setConfirmPublishSku] = useState(null);
+  const [confirmArchive, setConfirmArchive] = useState(null);
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 
   // Modal 1: Publish / Edit Commercial Offer against an Approved Variant or Published Supplier SKU
   const [offerModalVariant, setOfferModalVariant] = useState(null);
@@ -408,8 +412,10 @@ export const SupplierCatalogPage = () => {
       await catalogApi.archiveSupplierProduct(productId);
       toast.success('Supplier product archived.');
       await loadPortalData();
+      return true;
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to archive supplier product.');
+      return false;
     }
   };
 
@@ -426,7 +432,9 @@ export const SupplierCatalogPage = () => {
       pack_size: '',
       pack_unit: defaultPackUnit,
       purchasing_unit: '',
-      notes: ''
+      pack_specification: '',
+      storage_requirements: '',
+      shelf_life_days: ''
     });
     setSkuModalOpen(true);
   };
@@ -439,7 +447,9 @@ export const SupplierCatalogPage = () => {
       pack_size: sku.pack_size !== null && sku.pack_size !== undefined ? String(sku.pack_size) : '',
       pack_unit: sku.pack_unit || 'kg',
       purchasing_unit: sku.purchasing_unit || 'bag',
-      notes: sku.notes || ''
+      pack_specification: sku.pack_specification || '',
+      storage_requirements: sku.storage_requirements || '',
+      shelf_life_days: sku.shelf_life_days == null ? '' : String(sku.shelf_life_days)
     });
     setSkuModalOpen(true);
   };
@@ -454,7 +464,9 @@ export const SupplierCatalogPage = () => {
         pack_size: Number(skuForm.pack_size),
         pack_unit: skuForm.pack_unit,
         purchasing_unit: skuForm.purchasing_unit,
-        notes: skuForm.notes
+        pack_specification: skuForm.pack_specification.trim() || null,
+        storage_requirements: skuForm.storage_requirements.trim() || null,
+        shelf_life_days: skuForm.shelf_life_days === '' ? null : Number(skuForm.shelf_life_days)
       };
       if (editingSupplierSku) {
         await catalogApi.updateSupplierSku(editingSupplierSku.id, payload);
@@ -489,8 +501,23 @@ export const SupplierCatalogPage = () => {
       await catalogApi.archiveSupplierSku(skuId);
       toast.success('Physical SKU archived.');
       await loadPortalData();
+      return true;
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to archive SKU.');
+      return false;
+    }
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!confirmArchive || archiveSubmitting) return;
+    setArchiveSubmitting(true);
+    try {
+      const ok = confirmArchive.kind === 'product'
+        ? await handleArchiveSupplierProduct(confirmArchive.id)
+        : await handleArchiveSku(confirmArchive.id);
+      if (ok) setConfirmArchive(null);
+    } finally {
+      setArchiveSubmitting(false);
     }
   };
 
@@ -1259,7 +1286,7 @@ export const SupplierCatalogPage = () => {
                             </Button>
                           )}
                           {sp.status !== 'ARCHIVED' && (
-                            <Button size="sm" variant="outline" onClick={() => handleArchiveSupplierProduct(sp.id)}>
+                            <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'product', id: sp.id, title: sp.display_title || sp.title })}>
                               <Archive className="w-3.5 h-3.5" />
                             </Button>
                           )}
@@ -1270,7 +1297,7 @@ export const SupplierCatalogPage = () => {
                       <div className="pl-3 border-l-2 border-emerald-500/30 space-y-2">
                         {productSkus.length === 0 ? (
                           <p className="text-xs text-[var(--text-muted)] italic">
-                            No physical pack SKUs added yet. Click &quot;+ Add Pack SKU&quot; to add a 25kg bag, 50kg bag, 16L tin, etc.
+                            No physical SKUs yet. Click &quot;+ Add Pack SKU&quot; and enter your own packaging, positive pack size and compatible unit.
                           </p>
                         ) : (
                           productSkus.map((sku) => (
@@ -1315,7 +1342,7 @@ export const SupplierCatalogPage = () => {
                                   </Button>
                                 )}
                                 {sku.status !== 'ARCHIVED' && (
-                                  <Button size="sm" variant="outline" onClick={() => handleArchiveSku(sku.id)}>
+                                  <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'sku', id: sku.id, title: sku.sku_title || sku.sku_code })}>
                                     Archive
                                   </Button>
                                 )}
@@ -1656,6 +1683,30 @@ export const SupplierCatalogPage = () => {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block text-xs text-[var(--text-secondary)]">
+                    Crop Year (Optional)
+                    <input type="text" maxLength={30} value={productForm.crop_year}
+                      onChange={(e) => setProductForm({ ...productForm, crop_year: e.target.value })}
+                      placeholder="Supplier-defined, if relevant"
+                      className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]" />
+                  </label>
+                  <label className="block text-xs text-[var(--text-secondary)]">
+                    Origin (Optional)
+                    <input type="text" maxLength={120} value={productForm.origin}
+                      onChange={(e) => setProductForm({ ...productForm, origin: e.target.value })}
+                      placeholder="Actual origin, if known"
+                      className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]" />
+                  </label>
+                </div>
+                <label className="block text-xs text-[var(--text-secondary)]">
+                  Description (Optional)
+                  <textarea rows={2} value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    placeholder="Describe the actual product without invented claims"
+                    className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]" />
+                </label>
+
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => setProductModalOpen(false)}>
                     Cancel
@@ -1745,6 +1796,26 @@ export const SupplierCatalogPage = () => {
                   </div>
                 </div>
 
+                <label className="block text-xs text-[var(--text-secondary)]">
+                  Packaging Specification (Optional)
+                  <input type="text" maxLength={200} value={skuForm.pack_specification}
+                    onChange={(e) => setSkuForm({ ...skuForm, pack_specification: e.target.value })}
+                    placeholder="e.g., heat-sealed food-grade tin"
+                    className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]" />
+                </label>
+                <label className="block text-xs text-[var(--text-secondary)]">
+                  Storage Requirements (Optional)
+                  <input type="text" maxLength={255} value={skuForm.storage_requirements}
+                    onChange={(e) => setSkuForm({ ...skuForm, storage_requirements: e.target.value })}
+                    placeholder="Supplier-defined storage instructions"
+                    className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]" />
+                </label>
+                <label className="block text-xs text-[var(--text-secondary)]">
+                  Shelf Life in Days (Optional)
+                  <input type="number" min="1" max="36500" step="1" value={skuForm.shelf_life_days}
+                    onChange={(e) => setSkuForm({ ...skuForm, shelf_life_days: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]" />
+                </label>
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => setSkuModalOpen(false)}>
                     Cancel
@@ -1754,6 +1825,23 @@ export const SupplierCatalogPage = () => {
                   </Button>
                 </div>
               </form>
+            </Card>
+          </div>
+        )}
+
+        {/* B2: Archiving is intentionally explicit and does not bypass open pools. */}
+        {confirmArchive && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <Card className="w-full max-w-md p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-4">
+              <h3 className="text-base font-bold text-[var(--text-primary)]">Archive {confirmArchive.kind === 'product' ? 'Product' : 'SKU'}?</h3>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {confirmArchive.title} will stop accepting new commercial offers. Published physical identity and historical records remain locked.
+                Archiving is blocked if any related non-terminal pool still has commitments.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" disabled={archiveSubmitting} onClick={() => setConfirmArchive(null)}>Keep Active</Button>
+                <Button size="sm" disabled={archiveSubmitting} onClick={handleConfirmArchive}>{archiveSubmitting ? 'Archiving...' : 'Confirm Archive'}</Button>
+              </div>
             </Card>
           </div>
         )}
