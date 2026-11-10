@@ -90,10 +90,10 @@ class InvoiceService {
 
   /**
    * Generates an invoice for an authorized order inside an atomic transaction.
-   * Service-level issuance boundary: Enforces caller authorization at the service layer (Repair P0-D).
+   * Service-level issuance boundary: Enforces caller authorization at the service layer (Repair P0-D, B0.2 Fix 2).
    *
    * @param {number} orderId
-   * @param {Object} callerContext { id, role, isSystemInternal }
+   * @param {Object} callerContext { id, role }
    * @returns {Promise<Object>}
    */
   async generateInvoiceForOrder(orderId, callerContext = null) {
@@ -105,9 +105,9 @@ class InvoiceService {
       throw err;
     }
 
-    // Service Boundary Guard: Reject unauthenticated direct generator invocations (Repair P0-D)
-    if (!callerContext || (!callerContext.isSystemInternal && !callerContext.id)) {
-      const err = new Error('Direct invoice generation requires authenticated caller context or system authorization');
+    // Service Boundary Guard: Reject unauthenticated direct generator invocations or forged boolean bypasses (B0.2 Fix 2)
+    if (!callerContext || !callerContext.id || !callerContext.role) {
+      const err = new Error('Direct invoice generation requires verified authenticated caller context ({ id, role })');
       err.code = 'INVOICE_ACCESS_FORBIDDEN';
       err.statusCode = 403;
       throw err;
@@ -140,7 +140,7 @@ class InvoiceService {
       const o = orderRows[0];
 
       // Service-level RBAC check against authoritative database row
-      const isAdmin = callerContext.isSystemInternal || ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'].includes(callerContext.role);
+      const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'].includes(callerContext.role);
       const isOrderBuyer = Number(o.buyer_id) === Number(callerContext.id);
       const isOrderSupplier = Number(o.supplier_id) === Number(callerContext.id);
 

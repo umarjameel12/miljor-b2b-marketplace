@@ -179,7 +179,7 @@ class PaymentController {
         });
       }
 
-      // Resolve provider provenance (Repair P0-B)
+      // Resolve provider provenance uniquely linked to exact payment/attempt/tracker (Fix 3)
       let provider = null;
       if (payment.provider_response) {
         try {
@@ -191,19 +191,32 @@ class PaymentController {
           }
         } catch (e) {}
       }
-      if (!provider && (payment.transaction_ref || payment.order_id)) {
+
+      // If not established by provider_response, lookup strictly by exact transaction_ref / tracker token
+      if (!provider && payment.transaction_ref) {
         const [attemptRows] = await db.query(
-          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? OR order_id = ? LIMIT 1',
-          [payment.transaction_ref, payment.order_id]
+          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? LIMIT 1',
+          [payment.transaction_ref]
         );
         if (attemptRows[0]?.provider) {
           provider = String(attemptRows[0].provider).toUpperCase();
         }
       }
+
+      // Fallback only if payment_method is explicitly 'SAFEPAY'
       if (!provider && payment.payment_method === 'SAFEPAY') {
         provider = 'SAFEPAY';
-      } else if (!provider && payment.payment_method) {
-        provider = payment.payment_method;
+      }
+
+      // Missing or ambiguous provenance must fail closed (Fix 3)
+      if (!provider) {
+        return res.status(402).json({
+          success: false,
+          error: {
+            code: 'PAYMENT_VERIFICATION_FAILED',
+            message: 'Payment verification failed: ambiguous or missing payment provider provenance.'
+          }
+        });
       }
 
       // Verify with provider (server-side — never trust frontend)
@@ -374,7 +387,7 @@ class PaymentController {
         });
       }
 
-      // Resolve provider provenance from immutable evidence (Repair P0-B)
+      // Resolve provider provenance uniquely linked to exact payment/attempt/tracker (Fix 3)
       let provider = null;
       if (payment.provider_response) {
         try {
@@ -386,24 +399,34 @@ class PaymentController {
           }
         } catch (e) {}
       }
-      if (!provider && (payment.transaction_ref || payment.order_id)) {
+
+      // If not established by provider_response, lookup strictly by exact transaction_ref / tracker token
+      if (!provider && payment.transaction_ref) {
         const [attemptRows] = await db.query(
-          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? OR order_id = ? LIMIT 1',
-          [payment.transaction_ref, payment.order_id]
+          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? LIMIT 1',
+          [payment.transaction_ref]
         );
         if (attemptRows[0]?.provider) {
           provider = String(attemptRows[0].provider).toUpperCase();
         }
       }
+
+      // Fallback only if payment_method is explicitly 'SAFEPAY'
       if (!provider && payment.payment_method === 'SAFEPAY') {
         provider = 'SAFEPAY';
-      } else if (!provider && payment.payment_method) {
-        provider = payment.payment_method;
+      }
+
+      // If still missing, reject refund initiation immediately
+      if (!provider) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'UNSUPPORTED_PAYMENT_PROVIDER', message: 'Payment record lacks identifiable provider provenance' }
+        });
       }
 
       // Initiate refund with provider
       const refundResult = await paymentProviderService.initiateRefund({
-        provider: provider || payment.payment_method,
+        provider,
         transaction_ref: payment.transaction_ref,
         amount: payment.amount,
         reason: reason || 'Admin-initiated refund'
@@ -417,25 +440,19 @@ class PaymentController {
         });
       }
 
-      // If an external provider ever succeeded, confirm with settlement evidence (Safe money movement remains DISABLED)
-      await paymentRepo.updateStatus(id, 'REFUNDED', { escrow_status: 'REFUNDED' });
-
-      await db.query(
-        `UPDATE platform_ledger SET payout_status = 'REFUNDED_TO_BUYER', updated_at = NOW()
-         WHERE payment_id = ?`,
-        [id]
-      );
-
+      // FIX 5: Legacy refund endpoint MUST NOT independently finalize refunds or mark REFUNDED.
+      // External money movement is DISABLED. Refund request/approval != external refund completion.
+      // Authoritative settlement completion is strictly governed by financialSettlementService.
       await db.query(
         `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-         VALUES (?, ?, 'PAYMENT_REFUNDED', 'payments', ?, ?)`,
+         VALUES (?, ?, 'PAYMENT_REFUND_REQUESTED', 'payments', ?, ?)`,
         [req.user.id, req.user.role, id, JSON.stringify({ reason, refund_ref: refundResult.refund_ref })]
       );
 
       return res.status(200).json({
         success: true,
-        message: 'Refund initiated successfully',
-        data: { payment_id: parseInt(id), status: 'REFUNDED', refund_ref: refundResult.refund_ref }
+        message: 'Refund requested successfully. Awaiting verified external/manual settlement evidence.',
+        data: { payment_id: parseInt(id), status: payment.status, refund_ref: refundResult.refund_ref }
       });
 
     } catch (error) {

@@ -55,7 +55,7 @@
    - All tests, fixtures, and failure simulations run strictly in `miljor_test_db`.
    - `miljor_db` must remain pristine. Never modify `miljor_db` without explicit authorization.
    - Never perform live financial transactions. Preserve existing accounts, pools, quotes, and records.
-   - Zero git mutations without user approval (`git commit`, `git push`, `git merge`, `git rebase`). Never reset uncommitted user work.
+   - **Git Authorization Policy:** Explicit user approval to implement a named phase also authorizes committing and pushing that phase's verified changes to its approved feature branch. No separate commit/push confirmation is required. A new phase, force-push, merge to main, destructive database action, unrelated change or external money movement still requires its own authorization. If verification fails, do not label the phase complete. Never reset uncommitted user work.
 
 10. **Strict Stop Rule:**
     - Complete only the authorized task. Produce the final report. Output `CAN START NEXT PHASE: NO` and stop cleanly. Do not launch autonomous tasks.
@@ -107,7 +107,7 @@ Where any installed skill instruction conflicts with MilJor project policies, **
 1. **Protocol & Invariant Supremacy:** `MILJOR_ENGINEERING_EXECUTION_PROTOCOL.md` and `MILJOR_BUSINESS_INVARIANTS.md` take absolute precedence over all skill suggestions (as explicitly conceded by `using-superpowers/SKILL.md` line 63).
 2. **Financial Safety & Money Movement:** No agent skill has authorization to move funds, initiate live external refunds, execute supplier payouts, or alter financial ledgers. External execution remains strictly `DISABLED`.
 3. **Database Isolation & Evidence Preservation:** All testing and dynamic fixtures run strictly against `miljor_test_db`. Never run dynamic test fixtures against `miljor_db` or mutate `miljor_sandbox_db`. Never delete or overwrite historical commercial evidence.
-4. **Git Mutation Prohibition:** Skills suggesting automated git actions (such as `finishing-a-development-branch` or `using-git-worktrees`) are strictly barred from running `git commit`, `git push`, `git merge`, or `git rebase` without explicit user command.
+4. **Git Mutation Safeguards:** Skills suggesting automated git actions (such as `finishing-a-development-branch` or `using-git-worktrees`) cannot push to unapproved branches or execute merges without explicit user command. Explicit user approval to implement a named phase authorizes committing and pushing that phase's verified changes to its approved feature branch.
 5. **Graceful Fallback:** If a skill is unavailable, broken, or ambiguous, immediately fall back to standard MilJor Protocol v2.0 engineering conventions.
 6. **Reporting:** When a substantial phase or task utilizes one or more installed skills, document the exact skills applied and their outcome in the phase report.
 

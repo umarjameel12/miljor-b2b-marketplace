@@ -266,7 +266,7 @@ Do not introduce arbitrary delays:
    - Never perform live financial transactions, gateway charges, or external disbursements.
    - Preserve existing accounts, pools, quotes, orders, and historical business records.
    - Do not delete unrelated data or drop active tables.
-   - **Zero Git Mutations:** Do not commit, push, merge, or rebase without explicit user approval. Never reset uncommitted user work.
+   - **Git Authorization Policy:** Explicit user approval to implement a named phase also authorizes committing and pushing that phase's verified changes to its approved feature branch. No separate commit/push confirmation is required. A new phase, force-push, merge to main, destructive database action, unrelated change or external money movement still requires its own authorization. If verification fails, do not label the phase complete. Never reset uncommitted user work.
 
 2. **Migration Workflow:**
    1. Check current schema and latest applied migration in `schema_migrations`.

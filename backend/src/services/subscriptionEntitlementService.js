@@ -212,9 +212,11 @@ class SubscriptionEntitlementService {
     }
 
     // Enforce payment gating for paid plans (GROWTH and BUSINESS)
+    // FIX B0.2: Block ordinary supplier self-activation and block unpaid administrative grants
+    // until an explicit approved commercial grant policy is enacted.
     if (normalizedPlan === 'GROWTH' || normalizedPlan === 'BUSINESS') {
       if (!isAdmin) {
-        // Phase B0: Ordinary suppliers cannot activate paid plans without verified Safepay payment
+        // Ordinary suppliers cannot activate paid plans without verified Safepay payment
         const err = new Error('Paid plan activation requires verified Safepay payment. Online automated subscription billing will be enabled in Phase B11.');
         err.code = 'SUBSCRIPTION_PAYMENT_REQUIRED';
         err.statusCode = 402;
@@ -225,6 +227,16 @@ class SubscriptionEntitlementService {
         };
         throw err;
       }
+
+      // Administrative grant check: New unpaid paid-plan grants are blocked until an explicit commercial grant policy is approved
+      const err = new Error(`Administrative grant of paid subscription plan '${normalizedPlan}' is disabled. Unpaid administrative grants require an approved commercial grant policy.`);
+      err.code = 'COMMERCIAL_GRANT_POLICY_REQUIRED';
+      err.statusCode = 403;
+      err.details = {
+        requested_plan: normalizedPlan,
+        actor_role: actor?.role || 'ADMIN'
+      };
+      throw err;
     }
 
     const planConfig = PLAN_LIMITS[normalizedPlan];

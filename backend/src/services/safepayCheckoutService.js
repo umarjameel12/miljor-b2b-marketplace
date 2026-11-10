@@ -405,7 +405,7 @@ class SafepayCheckoutService {
         throw err;
       }
 
-      // Exact Amount check (fail-closed - Repair P0-C)
+      // Exact Amount check (fail-closed - Repair P0-C & B0.2 Fix 4)
       if (providerAmount === null || providerAmount === undefined || isNaN(providerAmount) || providerAmount <= 0) {
         const err = new Error('Safepay webhook payment event must contain a valid positive amount');
         err.code = 'INVALID_PAYLOAD';
@@ -413,15 +413,10 @@ class SafepayCheckoutService {
         throw err;
       }
 
-      // Safepay amount in order/v1 is in major units (e.g. 192450.00)
-      // If provider reports subunits (>10000x), convert, but standard init returns exact decimal
-      let normalizedProviderAmount = providerAmount;
-      if (providerAmount === Number(order.total_amount) * 100) {
-        normalizedProviderAmount = Number((providerAmount / 100).toFixed(2));
-      }
-
+      // Safepay official contract: tracker amount is in major units (PKR decimal e.g. 192450.00).
+      // Speculative 100x subunit normalizations are strictly eliminated (B0.2 Fix 4).
       const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
-      const receivedAmountStr = exactDecimal.toCanonicalString(normalizedProviderAmount, 2);
+      const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
 
       if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
         const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);

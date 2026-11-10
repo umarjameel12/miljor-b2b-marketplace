@@ -819,33 +819,27 @@ async function runB0Gate() {
       pass('U11: Over-limit detection: Active families exceeding quota correctly flag is_over_limit without truncation');
     } catch (e) { fail('U11: Over-limit flag', e); }
 
-    // U12: Admin override: ADMIN role CAN upgrade a supplier subscription
+    // U12: Admin override: Unpaid administrative grants are blocked without commercial grant policy (B0.2 Fix 1)
     try {
       const res = await api('/api/v1/supplier/subscription/upgrade', {
         method: 'POST',
         headers: { Authorization: `Bearer ${adminToken}` },
         body: { plan_code: 'GROWTH', supplier_id: supplierId }
       });
-      assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.body.success, true);
-      assert.strictEqual(res.body.data.entitlements.plan_code, 'GROWTH');
-      assert.strictEqual(res.body.data.entitlements.max_allowed_families, 13);
-      pass('U12: Administrator override: ADMIN role successfully upgrades supplier subscription to GROWTH (13 slots)');
-    } catch (e) { fail('U12: Admin subscription override', e); }
+      assert.strictEqual(res.status, 403);
+      assert.strictEqual(res.body.error.code, 'COMMERCIAL_GRANT_POLICY_REQUIRED');
+      pass('U12: Unpaid administrative grant of GROWTH blocked with 403 COMMERCIAL_GRANT_POLICY_REQUIRED');
+    } catch (e) { fail('U12: Admin subscription override denied', e); }
 
-    // U13: Admin override generates audit log in system_audit_logs
+    // U13: Verify supplier profile plan remains unmodified after blocked administrative grant
     try {
-      const [logs] = await db.query(
-        `SELECT * FROM system_audit_logs
-         WHERE entity_name = 'supplier_profiles' AND entity_id = ? AND action = 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN'
-         ORDER BY id DESC LIMIT 1`,
+      const [profiles] = await db.query(
+        `SELECT subscription_plan FROM supplier_profiles WHERE supplier_id = ?`,
         [supplierId]
       );
-      assert.strictEqual(logs.length, 1, 'Audit log row must exist for admin plan override');
-      assert.strictEqual(Number(logs[0].actor_id), adminId);
-      assert.strictEqual(logs[0].actor_role, 'ADMIN');
-      pass('U13: System audit log created with action SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN and actor details');
-    } catch (e) { fail('U13: Admin audit log verified', e); }
+      assert.strictEqual(profiles[0].subscription_plan, 'STARTER');
+      pass('U13: Supplier profile plan remains STARTER after blocked administrative grant');
+    } catch (e) { fail('U13: Profile remains STARTER', e); }
 
     // U14: GET /api/v1/supplier/subscription returns accurate read model
     try {
@@ -855,8 +849,8 @@ async function runB0Gate() {
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.success, true);
       const ent = res.body.data.entitlements;
-      assert.strictEqual(ent.plan_code, 'GROWTH');
-      assert.strictEqual(ent.max_allowed_families, 13);
+      assert.strictEqual(ent.plan_code, 'STARTER');
+      assert.strictEqual(ent.max_allowed_families, 4);
       assert.ok(typeof ent.active_families_count === 'number');
       assert.ok(typeof ent.remaining_family_slots === 'number');
       pass('U14: GET /supplier/subscription returns complete, accurate entitlements read model');

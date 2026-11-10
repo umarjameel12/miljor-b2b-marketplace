@@ -528,13 +528,23 @@ async function runAllTests() {
 
     // Test 16: Concurrency serialization: 5 concurrent generations yield exactly 1 invoice record
     {
+      // Test 15.1: Forged internal boolean is denied with 403 (B0.2 Fix 2)
+      let forgedCaught = false;
+      try {
+        await invoiceService.generateInvoiceForOrder(invOrder, { isSystemInternal: true });
+      } catch (err) {
+        forgedCaught = true;
+        assert.strictEqual(err.statusCode, 403);
+      }
+      assert.strictEqual(forgedCaught, true, 'Forged isSystemInternal boolean must be rejected');
+
       const concOrder = await createTestOrder(invOrderBuyer, invOrderSupplier, '3333.33', 'PAID', 'PAID');
       const results = await Promise.all([
         invoiceService.generateInvoiceForOrder(concOrder, { id: invOrderBuyer, role: 'BUYER' }),
         invoiceService.generateInvoiceForOrder(concOrder, { id: invOrderBuyer, role: 'BUYER' }),
-        invoiceService.generateInvoiceForOrder(concOrder, { isSystemInternal: true }),
+        invoiceService.generateInvoiceForOrder(concOrder, { id: invOrderSupplier, role: 'SUPPLIER' }),
         invoiceService.generateInvoiceForOrder(concOrder, { id: invOrderBuyer, role: 'BUYER' }),
-        invoiceService.generateInvoiceForOrder(concOrder, { isSystemInternal: true })
+        invoiceService.generateInvoiceForOrder(concOrder, { id: 1, role: 'ADMIN' })
       ]);
 
       const [invRows] = await db.query('SELECT * FROM invoices WHERE order_id = ?', [concOrder]);
@@ -637,25 +647,27 @@ async function runAllTests() {
       pass('5.4: Buyer role changeSupplierPlan attempt throws 403 FORBIDDEN');
     }
 
-    // Test 21: Admin override succeeds and logs audit entry
+    // Test 21: Admin unpaid grant is denied without approved commercial grant policy (B0.2 Fix 1)
     {
       const adminId = await createTestUser('ADMIN');
-      const updated = await subscriptionEntitlementService.changeSupplierPlan({
-        supplierId: subSupplier,
-        newPlanCode: 'BUSINESS',
-        actor: { id: adminId, role: 'ADMIN', full_name: 'Test Admin' }
-      });
-      assert.strictEqual(updated.current_plan, 'BUSINESS');
-      assert.strictEqual(updated.max_families, 25);
+      let adminCaught = false;
+      try {
+        await subscriptionEntitlementService.changeSupplierPlan({
+          supplierId: subSupplier,
+          newPlanCode: 'BUSINESS',
+          actor: { id: adminId, role: 'ADMIN', full_name: 'Test Admin' }
+        });
+      } catch (err) {
+        adminCaught = true;
+        assert.strictEqual(err.statusCode, 403);
+        assert.strictEqual(err.code, 'COMMERCIAL_GRANT_POLICY_REQUIRED');
+      }
+      assert.strictEqual(adminCaught, true, 'Admin unpaid grant must be blocked with 403 COMMERCIAL_GRANT_POLICY_REQUIRED');
 
-      // Verify audit log
-      const [logs] = await db.query(
-        `SELECT * FROM system_audit_logs WHERE entity_id = ? AND action = 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN' ORDER BY id DESC LIMIT 1`,
-        [subSupplier]
-      );
-      assert.strictEqual(logs.length, 1);
-      cleanup.audit_logs.push(logs[0].id);
-      pass('5.5: Admin override changes plan to BUSINESS and records audit log');
+      // Verify supplier profile remains STARTER
+      const [spRows] = await db.query('SELECT subscription_plan FROM supplier_profiles WHERE supplier_id = ?', [subSupplier]);
+      assert.strictEqual(spRows[0].subscription_plan, 'STARTER');
+      pass('5.5: Admin unpaid paid-plan grant denied with 403 and plan remains STARTER');
     }
 
   } catch (err) {

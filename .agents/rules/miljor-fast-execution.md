@@ -28,4 +28,4 @@ These instructions optimize agent execution velocity, eliminate redundant tool c
 - **Database Isolation:** All automated tests run strictly against `miljor_test_db`. `miljor_db` must remain pristine.
 - **Zero Live Transactions:** Payment provider is Safepay sandbox only. Client-sent `PAID` statuses and mock payment references are strictly rejected.
 - **Phase Gate Integrity:** Never advance across milestone or phase boundaries without explicit authorization.
-- **Zero Git Mutations:** Never run `git commit`, `git push`, `git merge`, or `git rebase` without explicit user command.
+- **Git Authorization Policy:** Explicit user approval to implement a named phase also authorizes committing and pushing that phase's verified changes to its approved feature branch. No separate commit/push confirmation is required. A new phase, force-push, merge to main, destructive database action, unrelated change or external money movement still requires its own authorization. If verification fails, do not label the phase complete. Never reset uncommitted user work.

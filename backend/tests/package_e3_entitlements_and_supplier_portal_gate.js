@@ -321,11 +321,25 @@ async function runE3Gate() {
       assert.strictEqual(blockedRes.status, 402);
       assert.strictEqual(blockedRes.body.error.code, 'SUBSCRIPTION_PAYMENT_REQUIRED');
 
-      // 9B: Administrative upgrade unlocks GROWTH plan (allows up to 13 families)
-      const upRes = await api('/api/v1/supplier/subscription/upgrade', {
+      // 9B: Administrative upgrade without commercial grant policy is blocked with 403 (Fix B0.2)
+      const blockedAdminRes = await api('/api/v1/supplier/subscription/upgrade', {
         method: 'POST',
         headers: { Authorization: `Bearer ${adminToken}` },
         body: { plan_code: 'GROWTH', billing_cycle: 'MONTHLY', supplier_id: supplierId }
+      });
+      assert.strictEqual(blockedAdminRes.status, 403);
+      assert.strictEqual(blockedAdminRes.body.error.code, 'COMMERCIAL_GRANT_POLICY_REQUIRED');
+
+      // 9C: Simulate verified paid upgrade in database (e.g. historical / verified subscription state)
+      await db.query(
+        `UPDATE supplier_profiles 
+         SET subscription_plan = 'GROWTH', max_active_listings = 13, updated_at = NOW() 
+         WHERE supplier_id = ?`,
+        [supplierId]
+      );
+
+      const upRes = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
       });
       assert.strictEqual(upRes.status, 200);
       assert.strictEqual(upRes.body.data.entitlements.plan_code, 'GROWTH');
