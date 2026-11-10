@@ -42,7 +42,7 @@ async function runMigrations(targetDb) {
     }
 
     const files = fs.readdirSync(migrationsDir)
-      .filter(f => f.endsWith('.sql'))
+      .filter(f => f.endsWith('.sql') && !f.includes('rollback'))
       .sort();
 
     let count = 0;
@@ -64,6 +64,7 @@ async function runMigrations(targetDb) {
         [version, file]
       );
       console.log(`✅ Applied and recorded: ${file}`);
+      appliedVersions.add(version);
       count++;
     }
 
