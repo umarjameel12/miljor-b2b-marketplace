@@ -179,6 +179,9 @@ When any test fails:
 5. Do not run browser E2E, frontend builds, load tests, or real external-money operations without a phase-specific reason or authorization.
 
 **Persistent Phase Evidence — Mandatory After Final Verification:**
+- **Original repository synchronization, B0 through future B phases:** Before each final phase gate, Antigravity must safely sync the approved `feature/package-e` GitHub branch while preserving any uncommitted local edits. Treat already tracked original code/docs paths as authoritative; do not create alternate reports outside the repository or overwrite historical B0/B0.1/B0.2 PASS evidence. Reconcile legacy status text without erasing original counts/commits. For B1 and all later approved B phases, append truthful execution results to the phase's dedicated `backend/docs/` report and `backend/docs/MILJOR_PHASE_LOG.md`, commit and push to the approved branch.
+- **Quick but sufficient acceptance:** Run one selected final affected suite set with explicit DB-identity guard. Prefer E2 catalog/moderation/security/ownership and E3 entitlement plus directly impacted listing/pool checks for B1; reuse B0/B0.1/B0.2 historical accepted test evidence unless a code dependency actually requires a relevant rerun. Avoid repeated full master suites, frontend builds, redundant fixtures or test runs after every edit. A failure permits targeted diagnosis/repair and relevant re-verification, never false PASS.
+
 - Save a dedicated factual phase acceptance report under `backend/docs/`, with actual commands and exit codes, test counts and statuses, isolated database identity, unchanged protected-data checks, affected files, limitations, unresolved issues, branch, and final commit SHA.
 - Update `backend/docs/MILJOR_PHASE_LOG.md` with PASS/FAIL/BLOCKED and the report path.
 - Include both files in the authorized phase's verified Git commit/push. Never invent test evidence or alter prior reports to conceal defects.
