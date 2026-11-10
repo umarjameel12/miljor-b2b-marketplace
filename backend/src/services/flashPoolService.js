@@ -387,8 +387,12 @@ class FlashPoolService {
         `UPDATE flash_pools SET remaining_stock=remaining_stock-?,held_stock=held_stock+?,
            version_number=version_number+1 WHERE id=?`,[quantity,quantity,flashId]
       );
+      const [[holdClock]]=await conn.query(
+        "SELECT DATE_FORMAT(expires_at,'%Y-%m-%dT%H:%i:%sZ') AS hold_expires_at FROM flash_purchase_holds WHERE id=?",
+        [h.insertId]);
       await conn.commit();
       return {id:h.insertId,order_id:order.insertId,order_code:orderCode,
+        hold_expires_at:holdClock.hold_expires_at,
         quantity,locked_unit_price:offer.discounted_unit_price,subtotal_amount:subtotal,
         buyer_platform_fee:buyerFee,delivery_fee:deliveryFee,total_amount:amount,
         checkout_endpoint:`/api/v1/orders/${order.insertId}/checkout`,hold_expires_in_seconds:900};
