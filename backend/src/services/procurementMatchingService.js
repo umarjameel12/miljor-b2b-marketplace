@@ -102,16 +102,25 @@ class ProcurementMatchingService {
       let item=grouped.get(Number(row.supplier_id));
       if(!item){
         item={supplier_id:Number(row.supplier_id),supplier_name:row.supplier_name,
-          eligible_lines:new Set(),eligible_listing_ids:new Set()};
+          eligible_lines:new Set(),eligible_listing_ids:new Set(),eligible_offers:[]};
         grouped.set(item.supplier_id,item);
       }
-      lines.forEach(line=>item.eligible_lines.add(Number(line.id)));
+      lines.forEach(line=>{
+        item.eligible_lines.add(Number(line.id));
+        item.eligible_offers.push({
+          request_item_id:Number(line.id),supplier_listing_id:Number(row.listing_id),
+          supplier_sku_id:Number(row.supplier_sku_id),
+          product_title:row.product_title,purchasing_unit:row.purchasing_unit,
+          pack_size:String(row.pack_size),pack_unit:row.pack_unit
+        });
+      });
       item.eligible_listing_ids.add(Number(row.listing_id));
     }
     return [...grouped.values()].map(item=>({
       supplier_id:item.supplier_id,supplier_name:item.supplier_name,
       eligible_line_ids:[...item.eligible_lines].sort((a,b)=>a-b),
       eligible_listing_ids:[...item.eligible_listing_ids].sort((a,b)=>a-b),
+      eligible_offers:item.eligible_offers,
       covered_item_count:item.eligible_lines.size,
       total_item_count:request.items.length
     })).sort((a,b)=>b.covered_item_count-a.covered_item_count ||
@@ -171,9 +180,18 @@ class ProcurementMatchingService {
     );
     for(const row of rows){
       const [items]=await this.database.query(
-        `SELECT line_number,family_id,quantity,unit,requirements,allow_substitutions
+        `SELECT id,line_number,family_id,quantity,unit,requirements,allow_substitutions
          FROM procurement_request_items WHERE request_id=? ORDER BY line_number`,[row.request_id]
       );
+      const [requestRows]=await this.database.query(
+        'SELECT id,delivery_area FROM procurement_requests WHERE id=?',[row.request_id]
+      );
+      if(requestRows.length){
+        const potential=await this._candidates(this.database,{...requestRows[0],items});
+        row.eligible_offers=potential.find(match=>match.supplier_id===id)?.eligible_offers||[];
+      }else{
+        row.eligible_offers=[];
+      }
       row.items=items.map(item => ({
         ...item,
         // Request text is user-controlled. Never relay phone, email or
