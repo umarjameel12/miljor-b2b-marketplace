@@ -700,7 +700,9 @@ async function runAllTests() {
       if (cleanup.supplier_profiles.length > 0) {
         await db.query(`DELETE FROM supplier_profiles WHERE id IN (?)`, [cleanup.supplier_profiles]);
       }
+      // Refund endpoints now audit blocked attempts; remove only this suite's own actors' audit rows.
       if (cleanup.users.length > 0) {
+        await db.query(`DELETE FROM system_audit_logs WHERE actor_id IN (?)`, [cleanup.users]);
         await db.query(`DELETE FROM users WHERE id IN (?)`, [cleanup.users]);
       }
       console.log('✅ All test fixtures safely removed from miljor_test_db');
