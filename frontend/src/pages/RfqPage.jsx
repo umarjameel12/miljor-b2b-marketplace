@@ -47,6 +47,15 @@ export const RfqPage = () => {
   const [recurringUpcoming,setRecurringUpcoming] = useState(null);
   const [reviewedAwardLines,setReviewedAwardLines] = useState({});
   const [awardPreview,setAwardPreview] = useState(null);
+  const [collectiveSupplierId,setCollectiveSupplierId]=useState('');
+  const [collectiveBids,setCollectiveBids]=useState([]);
+  const [collectiveBidGroupId,setCollectiveBidGroupId]=useState(null);
+  const [collectiveApprovalPreview,setCollectiveApprovalPreview]=useState(null);
+  const [collectiveSupplierInbox,setCollectiveSupplierInbox]=useState([]);
+  const [collectiveSellerDrafts,setCollectiveSellerDrafts]=useState({});
+  const [recurringCycles,setRecurringCycles]=useState([]);
+  const [recurringCyclesContract,setRecurringCyclesContract]=useState(null);
+
   const [familyChoices, setFamilyChoices] = useState([]);
   const [savedRequests, setSavedRequests] = useState([]);
   const [activeRequest, setActiveRequest] = useState(null);
@@ -542,6 +551,131 @@ export const RfqPage = () => {
     try{
       const result=await procurementApi(`/api/v1/procurement/recurring/${contractId}/upcoming`);
       setRecurringUpcoming(result);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  // B6-J/K: private supplier bids and independent buyer consent.
+  const openGroupBidding=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${groupId}/open-bidding`,{method:'POST'});
+      toast.success('Qualified group is now accepting private supplier bids.');
+      await refreshProcurementModes();
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const inviteGroupSupplier=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${groupId}/supplier-invitations`,{
+        method:'POST',body:JSON.stringify({supplier_id:Number(collectiveSupplierId)})
+      });
+      setCollectiveSupplierId('');
+      toast.success('Verified supplier invited privately.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const showCollectiveBids=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(`/api/v1/procurement/collectives/${groupId}/bids`);
+      setCollectiveBidGroupId(groupId);setCollectiveBids(data.bids||[]);
+      setCollectiveApprovalPreview(null);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const previewCollectiveBid=async(groupId,bidId)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(`/api/v1/procurement/collectives/${groupId}/bids/${bidId}/approval-preview`);
+      setCollectiveApprovalPreview(data.preview);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const acceptCollectivePreview=async()=>{
+    const view=collectiveApprovalPreview;
+    if(!view)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${view.group_id}/bids/${view.bid_id}/consent`,{
+        method:'POST',
+        headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({bid_version_id:view.bid_version_id,
+          total_preview:view.total_preview,physical_specifications_accepted:true,
+          buyer_total_confirmed:true})
+      });
+      toast.success('Your quote consent saved. No money charged or order created.');
+      setCollectiveApprovalPreview(null);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const refreshCollectiveSellerInbox=async()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    try{
+      const data=await procurementApi('/api/v1/procurement/supplier/collectives/invitations');
+      setCollectiveSupplierInbox(data.invitations||[]);
+    }catch(e){toast.error(e.message);}
+  };
+  const updateCollectiveSellerDraft=(groupId,patch)=>{
+    setCollectiveSellerDrafts(old=>({...old,[groupId]:{...(old[groupId]||{}),...patch}}));
+  };
+  const submitCollectiveSupplierBid=async invitation=>{
+    const draft=collectiveSellerDrafts[invitation.group_id]||{};
+    const lines=(invitation.items||[]).flatMap(item=>{
+      const row=draft.lines?.[item.request_item_id]||{};
+      return row.supplier_listing_id&&row.unit_price&&row.min_aggregate_quantity
+        ?[{request_item_id:item.request_item_id,
+           supplier_listing_id:Number(row.supplier_listing_id),
+           unit_price:row.unit_price,
+           min_aggregate_quantity:row.min_aggregate_quantity}]:[];
+    });
+    if(!lines.length){toast.error('Choose at least one listing, unit price and group minimum.');return;}
+    setQuoteBusy(true);
+    try{
+      await procurementApi(`/api/v1/procurement/supplier/collectives/${invitation.group_id}/bids`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({lines,
+          delivery_fee_per_buyer:draft.delivery_fee_per_buyer||'0',
+          valid_until:draft.valid_until
+            ?new Date(draft.valid_until).toISOString()
+            :new Date(Date.now()+24*3600000).toISOString()})
+      });
+      toast.success('Collective bid submitted with immutable supplier specifications.');
+      await refreshCollectiveSellerInbox();
+    }catch(e){toast.error(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  // B6-M: no-charge recurring cycle draft preparation.
+  const loadActualRecurringCycles=async contractId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(`/api/v1/procurement/recurring/${contractId}/cycles`);
+      setRecurringCyclesContract(contractId);setRecurringCycles(data.cycles||[]);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const scheduleRecurringCycles=async contractId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/recurring/${contractId}/cycles/schedule`,{
+        method:'POST',body:JSON.stringify({limit:6})
+      });
+      await loadActualRecurringCycles(contractId);
+      toast.success('Upcoming recurring proposals scheduled. No payments initiated.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const prepareRecurringDraft=async(contractId,cycleId)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/recurring/${contractId}/cycles/${cycleId}/prepare`,{
+        method:'POST',body:JSON.stringify({})
+      });
+      await loadActualRecurringCycles(contractId);
+      await refreshRequests();
+      toast.success(`Cycle shopping-list draft #${result.request_id} created. Review and publish it yourself.`);
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
