@@ -39,7 +39,8 @@ class ProcurementRequestService {
       [buyerId]
     );
     if (!rows.length || rows[0].role !== 'BUYER' ||
-        rows[0].verification_status === 'BLOCKED' ||
+        Number(rows[0].is_verified) !== 1 ||
+        rows[0].verification_status !== 'VERIFIED' ||
         rows[0].buyer_trust_status === 'SUSPENDED') {
       throw issue('BUYER_NOT_ELIGIBLE', 'An active B2B buyer account is required.', 403);
     }
@@ -125,15 +126,29 @@ class ProcurementRequestService {
     } finally { conn.release(); }
   }
 
-  async updateDraft(buyerId,requestId,payload,expectedVersion) {
+  async updateDraft(buyerId,requestId,payload,expectedVersion,key) {
     const buyer=positiveId(buyerId),id=positiveId(requestId);
     const version=Number(expectedVersion);
     if (!Number.isSafeInteger(version) || version<1) throw issue('VERSION_REQUIRED','Provide the current request version.');
     const draft=normalizeRequestDraft(payload);
+    const idem=idempotency(key);
+    const hash=normalizedHash({ operation:'UPDATE_DRAFT',id,version,draft });
     const conn=await this.database.getConnection();
     try {
       await conn.beginTransaction();
       await this._buyer(conn,buyer);
+      const [previous]=await conn.query(
+        'SELECT request_id,operation,request_hash,response_snapshot FROM procurement_request_mutations WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
+        [buyer,idem]
+      );
+      if(previous.length){
+        if(Number(previous[0].request_id)!==id || previous[0].operation!=='UPDATE_DRAFT' || previous[0].request_hash!==hash)
+          throw issue('IDEMPOTENCY_CONFLICT','Idempotency key already belongs to another operation.',409);
+        const saved=typeof previous[0].response_snapshot==='string'
+          ? JSON.parse(previous[0].response_snapshot):previous[0].response_snapshot;
+        await conn.commit();
+        return saved;
+      }
       const current=await this._load(id,buyer,conn,true);
       if (current.status!=='DRAFT') throw issue('REQUEST_IMMUTABLE','Only a draft may be edited.',409);
       if (Number(current.version_number)!==version) throw issue('REQUEST_VERSION_CONFLICT','Draft changed elsewhere. Refresh before editing.',409);
@@ -156,23 +171,39 @@ class ProcurementRequestService {
         );
       }
       const request=await this._load(id,buyer,conn);
+      await conn.query(
+        `INSERT INTO procurement_request_mutations
+         (request_id,buyer_id,operation,idempotency_key,request_hash,response_snapshot)
+         VALUES (?,?,'UPDATE_DRAFT',?,?,?)`,
+        [id,buyer,idem,hash,JSON.stringify(request)]
+      );
       await conn.commit();
       return request;
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
 
-  async publish(buyerId,requestId,expectedVersion) {
+  async publish(buyerId,requestId,expectedVersion,key) {
     const buyer=positiveId(buyerId),id=positiveId(requestId),version=Number(expectedVersion);
     if (!Number.isSafeInteger(version) || version<1) throw issue('VERSION_REQUIRED','Provide the current request version.');
+    const idem=idempotency(key);
+    const hash=normalizedHash({ operation:'PUBLISH',id,version });
     const conn=await this.database.getConnection();
     try{
       await conn.beginTransaction();
       await this._buyer(conn,buyer);
-      const current=await this._load(id,buyer,conn,true);
-      if (current.status==='OPEN' && Number(current.version_number)===version+1) {
+      const [previous]=await conn.query(
+        'SELECT request_id,operation,request_hash,response_snapshot FROM procurement_request_mutations WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
+        [buyer,idem]
+      );
+      if(previous.length){
+        if(Number(previous[0].request_id)!==id || previous[0].operation!=='PUBLISH' || previous[0].request_hash!==hash)
+          throw issue('IDEMPOTENCY_CONFLICT','Idempotency key already belongs to another operation.',409);
+        const saved=typeof previous[0].response_snapshot==='string'
+          ? JSON.parse(previous[0].response_snapshot):previous[0].response_snapshot;
         await conn.commit();
-        return {request:current,is_replay:true};
+        return {request:saved,is_replay:true};
       }
+      const current=await this._load(id,buyer,conn,true);
       if(current.status!=='DRAFT'||Number(current.version_number)!==version)
         throw issue('REQUEST_STATE_CONFLICT','Request state/version has changed.',409);
       // Collective and recurring are deliberately fail-closed until their own
@@ -191,6 +222,12 @@ class ProcurementRequestService {
          version_number=version_number+1 WHERE id=? AND buyer_id=? AND status='DRAFT'`,[id,buyer]
       );
       const request=await this._load(id,buyer,conn);
+      await conn.query(
+        `INSERT INTO procurement_request_mutations
+         (request_id,buyer_id,operation,idempotency_key,request_hash,response_snapshot)
+         VALUES (?,?,'PUBLISH',?,?,?)`,
+        [id,buyer,idem,hash,JSON.stringify(request)]
+      );
       await conn.commit();
       return {request,is_replay:false};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
