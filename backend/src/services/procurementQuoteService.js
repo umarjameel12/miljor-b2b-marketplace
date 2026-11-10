@@ -79,6 +79,27 @@ class ProcurementQuoteService{
         `SELECT id, status, quote_deadline, delivery_area
            FROM procurement_requests WHERE id=? FOR UPDATE`,[rid]);
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
+      // Durable response replay precedes expiry and stock checks: retries must
+      // return the exact historic quote even if it has since expired or sold out.
+      const [existingQuotes]=await conn.query(
+        'SELECT id,status,current_version FROM procurement_quotes WHERE request_id=? AND supplier_id=? FOR UPDATE',
+        [rid,supplier]
+      );
+      let quote=existingQuotes[0];
+      if(quote){
+        const [prior]=await conn.query(
+          'SELECT payload_hash,immutable_snapshot FROM procurement_quote_versions WHERE quote_id=? AND idempotency_key=?',
+          [quote.id,idem]
+        );
+        if(prior.length){
+          if(prior[0].payload_hash!==hash)
+            throw failure('IDEMPOTENCY_CONFLICT','This key was used for a different quote.',409);
+          const original=typeof prior[0].immutable_snapshot==='string'
+            ?JSON.parse(prior[0].immutable_snapshot):prior[0].immutable_snapshot;
+          await conn.commit();
+          return {...original,is_replay:true};
+        }
+      }
       if(requests[0].status!=='OPEN')throw failure('REQUEST_NOT_OPEN','Request is not open.',409);
       const [[fresh]]=await conn.query(
         'SELECT (quote_deadline > UTC_TIMESTAMP()) AS active FROM procurement_requests WHERE id=?',[rid]);
@@ -161,22 +182,7 @@ class ProcurementQuoteService{
       );
       if(Number(clock?.future_validity)!==1)
         throw failure('QUOTE_EXPIRED','Supplier quote validity expired while submitting.',409);
-      // Query duplicate key before creating quote version to preserve exact replay.
-      const [quotes]=await conn.query(
-        'SELECT id,status,current_version FROM procurement_quotes WHERE request_id=? AND supplier_id=? FOR UPDATE',[rid,supplier]);
-      let quote=quotes[0];
       if(quote){
-        const [prior]=await conn.query(
-          'SELECT payload_hash,immutable_snapshot FROM procurement_quote_versions WHERE quote_id=? AND idempotency_key=?',
-          [quote.id,idem]);
-        if(prior.length){
-          if(prior[0].payload_hash!==hash)
-            throw failure('IDEMPOTENCY_CONFLICT','This key was used for a different quote.',409);
-          const snapshot=typeof prior[0].immutable_snapshot==='string'
-            ?JSON.parse(prior[0].immutable_snapshot):prior[0].immutable_snapshot;
-          await conn.commit();
-          return {...snapshot,is_replay:true};
-        }
         if(quote.status!=='ACTIVE')throw failure('QUOTE_WITHDRAWN','Withdrawn quotes cannot be revised.',409);
       }else{
         const [created]=await conn.query(
