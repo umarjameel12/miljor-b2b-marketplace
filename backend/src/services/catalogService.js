@@ -1975,8 +1975,10 @@ class CatalogService {
         );
       }
       await connection.query(
-        `UPDATE supplier_listings SET status = 'ARCHIVED' WHERE (supplier_sku_id = ? OR (product_spec_id = ? AND supplier_id = ?)) AND status = 'ACTIVE'`,
-        [sku.id, sku.linked_spec_id || -1, supplierId]
+        `UPDATE supplier_listings SET status = 'ARCHIVED'
+         WHERE supplier_id = ? AND status = 'ACTIVE'
+           AND (supplier_sku_id = ? OR product_spec_id = ?)`,
+        [Number(supplierId), sku.id, sku.linked_spec_id || -1]
       );
 
       await connection.commit();
