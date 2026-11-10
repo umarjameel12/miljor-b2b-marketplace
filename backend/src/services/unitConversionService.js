@@ -99,7 +99,11 @@ class UnitConversionService {
       // From packs (e.g., bags/tins) to base units (e.g. kg, L)
       const skuPurchasingUnit = this.normalizeUnit(spec.purchasing_unit);
       const matchesPurchasing = (unit) => skuPurchasingUnit === unit ||
-        (this.DISCRETE_PACKAGING_UNITS.has(unit.toLowerCase()) && !skuPurchasingUnit);
+        // Historical global specs predate supplier-owned SKU packs and allowed
+        // standard bag/pack/tin aliases. Keep only that legacy bridge compatible.
+        (!spec.supplier_sku_id &&
+          this.DISCRETE_PACKAGING_UNITS.has(unit.toLowerCase()) &&
+          (!skuPurchasingUnit || this.DISCRETE_PACKAGING_UNITS.has(skuPurchasingUnit.toLowerCase())));
       if (this.isDiscreteUnit(from) && matchesPurchasing(from) && to === packUnit) {
         return qty * packSize;
       }
