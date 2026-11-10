@@ -69,7 +69,10 @@ export const SupplierSubscriptionPage = () => {
     }
   };
 
-  const currentPlan = subscription?.current_plan || 'STARTER';
+  const currentPlan = subscription?.plan_code || subscription?.current_plan || 'STARTER';
+  const usedFamilies = subscription?.active_families_count ?? subscription?.used_distinct_families ?? 0;
+  const maxFamilies = subscription?.max_allowed_families ?? subscription?.max_families ?? 4;
+  const remainingSlots = subscription?.remaining_family_slots ?? subscription?.remaining_slots ?? Math.max(0, maxFamilies - usedFamilies);
 
   const plans = [
     {
@@ -94,13 +97,13 @@ export const SupplierSubscriptionPage = () => {
       code: 'GROWTH',
       name: 'Growth Plan',
       tagline: 'For established distributors expanding bulk B2B restaurant reach',
-      price: 'Rs. 15,000',
-      period: '/ month',
-      fee: '3.5%',
+      price: 'Pricing pending confirmation',
+      period: '',
+      fee: 'Fee policy pending Phase B11',
       families: 13,
       features: [
         'Up to 13 active canonical product families',
-        'Reduced 3.5% transaction commission',
+        'Online automated subscription billing scheduled for Phase B11',
         'Priority matching on buyer RFQs & Demand Requests',
         'Flash pool clearance capability',
         'Dedicated dispatch & multi-hub cluster routing',
@@ -113,17 +116,17 @@ export const SupplierSubscriptionPage = () => {
       code: 'BUSINESS',
       name: 'Business Enterprise',
       tagline: 'For major mills, commodity importers & large-scale FMCG wholesalers',
-      price: 'Rs. 35,000',
-      period: '/ month',
-      fee: '2.0%',
+      price: 'Pricing pending confirmation',
+      period: '',
+      fee: 'Fee policy pending Phase B11',
       families: 25,
       features: [
         'Up to 25 active canonical product families',
-        'Lowest 2.0% platform fee in Pakistan',
+        'Online automated subscription billing scheduled for Phase B11',
         'Sponsored catalog placements & promotions',
-        'Dedicated Lahore account executive',
+        'Dedicated Lahore account coordinator',
         'Custom recurring procurement contracts',
-        'Early settlement & API catalog sync'
+        'Standard escrow settlement & API catalog sync'
       ],
       icon: Crown,
       popular: false
@@ -151,10 +154,10 @@ export const SupplierSubscriptionPage = () => {
         <div className="max-w-xl mx-auto mb-10 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center">
           <span className="text-xs text-[var(--text-muted)]">Active Allocation:</span>{' '}
           <span className="font-semibold text-sm text-[var(--text-primary)]">
-            {subscription?.used_distinct_families || 0} / {subscription?.max_families || 4} canonical families active
+            {usedFamilies} / {maxFamilies} canonical families active
           </span>
           <span className="text-xs text-[var(--text-muted)] ml-2">
-            ({subscription?.remaining_slots || 0} slots remaining)
+            ({remainingSlots} slots remaining)
           </span>
         </div>
 

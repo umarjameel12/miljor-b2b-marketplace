@@ -267,7 +267,7 @@ class SafepayCheckoutService {
     }
 
     const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
-    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.webhook_event_type || 'unknown';
+    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.event || parsedPayload.webhook_event_type || 'unknown';
 
     // 2. Check for duplicate webhook receipt (Idempotency)
     const [existingEvent] = await db.query(
@@ -300,7 +300,9 @@ class SafepayCheckoutService {
 
     const providerAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
       ? Number(data.tracker.amount)
-      : (data.amount !== undefined ? Number(data.amount) : null);
+      : (data.amount !== undefined
+          ? Number(data.amount)
+          : (data.net !== undefined && data.net !== null ? Number(data.net) : null));
     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
       || data.currency
       || parsedPayload.currency
@@ -403,24 +405,29 @@ class SafepayCheckoutService {
         throw err;
       }
 
-      // Exact Amount check (fail-closed)
-      if (providerAmount !== null) {
-        // Safepay amount in order/v1 is in major units (e.g. 192450.00)
-        // If provider reports subunits (>10000x), convert, but standard init returns exact decimal
-        let normalizedProviderAmount = providerAmount;
-        if (providerAmount === Number(order.total_amount) * 100) {
-          normalizedProviderAmount = Number((providerAmount / 100).toFixed(2));
-        }
+      // Exact Amount check (fail-closed - Repair P0-C)
+      if (providerAmount === null || providerAmount === undefined || isNaN(providerAmount) || providerAmount <= 0) {
+        const err = new Error('Safepay webhook payment event must contain a valid positive amount');
+        err.code = 'INVALID_PAYLOAD';
+        err.statusCode = 422;
+        throw err;
+      }
 
-        const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
-        const receivedAmountStr = exactDecimal.toCanonicalString(normalizedProviderAmount, 2);
+      // Safepay amount in order/v1 is in major units (e.g. 192450.00)
+      // If provider reports subunits (>10000x), convert, but standard init returns exact decimal
+      let normalizedProviderAmount = providerAmount;
+      if (providerAmount === Number(order.total_amount) * 100) {
+        normalizedProviderAmount = Number((providerAmount / 100).toFixed(2));
+      }
 
-        if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
-          const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
-          err.code = 'AMOUNT_MISMATCH';
-          err.statusCode = 422;
-          throw err;
-        }
+      const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
+      const receivedAmountStr = exactDecimal.toCanonicalString(normalizedProviderAmount, 2);
+
+      if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
+        const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
+        err.code = 'AMOUNT_MISMATCH';
+        err.statusCode = 422;
+        throw err;
       }
 
       // Check if order was already confirmed PAID
@@ -509,40 +516,42 @@ class SafepayCheckoutService {
         ]
       );
 
-      // 9. Transactional Outbox Event: ORDER_PAID
-      const eventIdOutbox = reservationEventService.generateEventId({
-        event_type: 'ORDER_PAID',
-        pool_id: order.pool_id || 0,
-        reservation_id: order.reservation_id || 0,
-        actor_id: order.buyer_id,
-        mutation_type: 'PAYMENT_CONFIRMATION',
-        idempotency_key: effectiveEventId,
-        event_sequence: 1
-      });
+      // 9. Transactional Outbox Event: ORDER_PAID (only if associated with a pool)
+      if (order.pool_id) {
+        const eventIdOutbox = reservationEventService.generateEventId({
+          event_type: 'ORDER_PAID',
+          pool_id: order.pool_id,
+          reservation_id: order.reservation_id || 0,
+          actor_id: order.buyer_id,
+          mutation_type: 'PAYMENT_CONFIRMATION',
+          idempotency_key: effectiveEventId,
+          event_sequence: 1
+        });
 
-      await connection.query(
-        `INSERT INTO reservation_business_events (
-          event_id, pool_id, reservation_id, actor_id, actor_role,
-          event_type, event_payload, idempotency_key, created_at
-        ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_PAID', ?, ?, NOW())`,
-        [
-          eventIdOutbox,
-          order.pool_id || 0,
-          order.reservation_id || 0,
-          order.buyer_id,
-          JSON.stringify({
-            order_id: order.id,
-            order_code: order.order_code,
-            amount: Number(order.total_amount),
-            currency: order.currency || 'PKR',
-            provider: 'SAFEPAY',
-            tracker_token: trackerToken,
-            payment_status: 'PAID',
-            order_status: 'PAID'
-          }),
-          effectiveEventId
-        ]
-      );
+        await connection.query(
+          `INSERT INTO reservation_business_events (
+            event_id, pool_id, reservation_id, actor_id, actor_role,
+            event_type, event_payload, idempotency_key, created_at
+          ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_PAID', ?, ?, NOW())`,
+          [
+            eventIdOutbox,
+            order.pool_id,
+            order.reservation_id || null,
+            order.buyer_id,
+            JSON.stringify({
+              order_id: order.id,
+              order_code: order.order_code,
+              amount: Number(order.total_amount),
+              currency: order.currency || 'PKR',
+              provider: 'SAFEPAY',
+              tracker_token: trackerToken,
+              payment_status: 'PAID',
+              order_status: 'PAID'
+            }),
+            effectiveEventId
+          ]
+        );
+      }
 
       await connection.commit();
 

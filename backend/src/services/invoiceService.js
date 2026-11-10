@@ -1,17 +1,22 @@
 // =============================================================================
 // src/services/invoiceService.js
-// MilJor Phase B0: Invoices & Receipts Module (Security & Concurrency Hardened)
+// MilJor Phase B0.1: Invoices & Receipts Module (Security, Uniqueness & Monetary Hardened)
 //
 // ENFORCES:
-// 1. Authorization-before-generation: Third parties are blocked with 403 BEFORE any
-//    invoice row is created or returned.
-// 2. Strict RBAC: Accessible only by purchasing buyer, fulfilling supplier, or admin.
-// 3. Exactly-once concurrent generation: Serialized under row lock to prevent duplicate
-//    snapshots or conflicting invoice identities.
-// 4. Immutability: Once issued, snapshot content is permanently preserved.
+// 1. Authorization-before-generation: Service boundary and retrieval require verified
+//    caller identity (buyer, supplier, admin); unauthorized callers are rejected with 403
+//    before ANY invoice row is created.
+// 2. Strict Service Boundary Protection: Direct invocation of generateInvoiceForOrder
+//    without valid authorized context fails closed.
+// 3. Collision-Safe Deterministic Numbering: Invoice numbers use deterministic
+//    INV-YYYY-XXXXXX format based on immutable MySQL order ID.
+// 4. Exact Decimal Monetary Integrity: Subtotal, fees, and totals reflect locked
+//    order contracts with zero floating-point drift (exactDecimal).
+// 5. Concurrency Serialization: Concurrent requests serialized under order row locks.
 // =============================================================================
 
 const db = require('../config/db');
+const exactDecimal = require('./exactDecimal');
 
 class InvoiceService {
 
@@ -80,17 +85,34 @@ class InvoiceService {
     }
 
     // 4. Safe concurrent generation under transaction row lock
-    return await this.generateInvoiceForOrder(numericOrderId, order);
+    return await this.generateInvoiceForOrder(numericOrderId, { id: callerId, role: callerRole });
   }
 
   /**
    * Generates an invoice for an authorized order inside an atomic transaction.
+   * Service-level issuance boundary: Enforces caller authorization at the service layer (Repair P0-D).
    *
    * @param {number} orderId
-   * @param {Object} [cachedOrder] Pre-fetched and authorized order details
+   * @param {Object} callerContext { id, role, isSystemInternal }
    * @returns {Promise<Object>}
    */
-  async generateInvoiceForOrder(orderId, cachedOrder = null) {
+  async generateInvoiceForOrder(orderId, callerContext = null) {
+    const numericOrderId = parseInt(orderId, 10);
+    if (!numericOrderId || isNaN(numericOrderId) || numericOrderId <= 0) {
+      const err = new Error('Valid numeric order ID is required');
+      err.code = 'INVALID_ORDER_ID';
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Service Boundary Guard: Reject unauthenticated direct generator invocations (Repair P0-D)
+    if (!callerContext || (!callerContext.isSystemInternal && !callerContext.id)) {
+      const err = new Error('Direct invoice generation requires authenticated caller context or system authorization');
+      err.code = 'INVOICE_ACCESS_FORBIDDEN';
+      err.statusCode = 403;
+      throw err;
+    }
+
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
@@ -105,7 +127,7 @@ class InvoiceService {
          JOIN users u_supp ON o.supplier_id = u_supp.id
          JOIN supplier_profiles sp ON sp.supplier_id = u_supp.id
          WHERE o.id = ? FOR UPDATE`,
-        [orderId]
+        [numericOrderId]
       );
 
       if (orderRows.length === 0) {
@@ -115,20 +137,44 @@ class InvoiceService {
         throw err;
       }
 
+      const o = orderRows[0];
+
+      // Service-level RBAC check against authoritative database row
+      const isAdmin = callerContext.isSystemInternal || ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'].includes(callerContext.role);
+      const isOrderBuyer = Number(o.buyer_id) === Number(callerContext.id);
+      const isOrderSupplier = Number(o.supplier_id) === Number(callerContext.id);
+
+      if (!isAdmin && !isOrderBuyer && !isOrderSupplier) {
+        const err = new Error('You do not have permission to generate an invoice for this order');
+        err.code = 'INVOICE_ACCESS_FORBIDDEN';
+        err.statusCode = 403;
+        throw err;
+      }
+
       // Check again inside transaction: if another worker generated it concurrently, return existing
-      const [existing] = await conn.query('SELECT * FROM invoices WHERE order_id = ? FOR UPDATE', [orderId]);
+      const [existing] = await conn.query('SELECT * FROM invoices WHERE order_id = ? FOR UPDATE', [numericOrderId]);
       if (existing.length > 0) {
         await conn.commit();
         return existing[0];
       }
 
-      const o = orderRows[0];
-      const invoiceNumber = `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
-      const subtotal = Number(o.subtotal_amount);
-      const deliveryFee = Number(o.delivery_fee || 0);
-      const platformFee = Number(o.buyer_platform_fee || 0);
-      const taxAmount = 0.00;
-      const totalAmount = subtotal + deliveryFee + platformFee + taxAmount;
+      // Collision-Safe Deterministic Invoice Numbering (Repair P1-A)
+      // Suffix is keyed on unique MySQL order ID to eliminate timestamp-based collision vulnerability
+      const currentYear = new Date().getFullYear();
+      const invoiceNumber = `INV-${currentYear}-${String(o.id).padStart(6, '0')}`;
+
+      // Exact Decimal Monetary Reconcilation (Repair P1-B)
+      const subtotalStr = exactDecimal.toCanonicalString(o.subtotal_amount, 2);
+      const deliveryFeeStr = exactDecimal.toCanonicalString(o.delivery_fee || '0.00', 2);
+      const platformFeeStr = exactDecimal.toCanonicalString(o.buyer_platform_fee || '0.00', 2);
+      const taxAmountStr = '0.00';
+      const totalAmountStr = exactDecimal.toCanonicalString(o.total_amount, 2);
+
+      const subtotal = Number(subtotalStr);
+      const deliveryFee = Number(deliveryFeeStr);
+      const platformFee = Number(platformFeeStr);
+      const taxAmount = Number(taxAmountStr);
+      const totalAmount = Number(totalAmountStr);
 
       const snapshot = {
         invoice_number: invoiceNumber,

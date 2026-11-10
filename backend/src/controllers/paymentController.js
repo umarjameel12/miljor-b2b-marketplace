@@ -179,21 +179,50 @@ class PaymentController {
         });
       }
 
+      // Resolve provider provenance (Repair P0-B)
+      let provider = null;
+      if (payment.provider_response) {
+        try {
+          const parsedResp = typeof payment.provider_response === 'string'
+            ? JSON.parse(payment.provider_response)
+            : payment.provider_response;
+          if (parsedResp && parsedResp.provider) {
+            provider = String(parsedResp.provider).toUpperCase();
+          }
+        } catch (e) {}
+      }
+      if (!provider && (payment.transaction_ref || payment.order_id)) {
+        const [attemptRows] = await db.query(
+          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? OR order_id = ? LIMIT 1',
+          [payment.transaction_ref, payment.order_id]
+        );
+        if (attemptRows[0]?.provider) {
+          provider = String(attemptRows[0].provider).toUpperCase();
+        }
+      }
+      if (!provider && payment.payment_method === 'SAFEPAY') {
+        provider = 'SAFEPAY';
+      } else if (!provider && payment.payment_method) {
+        provider = payment.payment_method;
+      }
+
       // Verify with provider (server-side — never trust frontend)
       const verifyResult = await paymentProviderService.verifyPayment({
-        provider: payment.payment_method,
+        provider: provider || payment.payment_method,
         transaction_ref,
         expected_amount: payment.amount
       });
 
       if (!verifyResult.verified) {
-        // Mark as FAILED
-        await paymentRepo.updateStatus(payment_id, 'FAILED', {
-          provider_response: verifyResult
-        });
+        // Repair P0-A: Do NOT mark pending Safepay payment as FAILED!
+        // A missing confirmation or unverified client reference must not corrupt genuine pending payments
+        // awaiting asynchronous provider webhook confirmation.
         return res.status(402).json({
           success: false,
-          error: { code: 'PAYMENT_VERIFICATION_FAILED', message: 'Payment could not be verified with the provider.' }
+          error: {
+            code: 'PAYMENT_VERIFICATION_FAILED',
+            message: 'Payment could not be verified with the provider. Genuine Safepay payments confirm authoritatively via cryptographic webhooks.'
+          }
         });
       }
 
@@ -345,9 +374,36 @@ class PaymentController {
         });
       }
 
+      // Resolve provider provenance from immutable evidence (Repair P0-B)
+      let provider = null;
+      if (payment.provider_response) {
+        try {
+          const parsedResp = typeof payment.provider_response === 'string'
+            ? JSON.parse(payment.provider_response)
+            : payment.provider_response;
+          if (parsedResp && parsedResp.provider) {
+            provider = String(parsedResp.provider).toUpperCase();
+          }
+        } catch (e) {}
+      }
+      if (!provider && (payment.transaction_ref || payment.order_id)) {
+        const [attemptRows] = await db.query(
+          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? OR order_id = ? LIMIT 1',
+          [payment.transaction_ref, payment.order_id]
+        );
+        if (attemptRows[0]?.provider) {
+          provider = String(attemptRows[0].provider).toUpperCase();
+        }
+      }
+      if (!provider && payment.payment_method === 'SAFEPAY') {
+        provider = 'SAFEPAY';
+      } else if (!provider && payment.payment_method) {
+        provider = payment.payment_method;
+      }
+
       // Initiate refund with provider
       const refundResult = await paymentProviderService.initiateRefund({
-        provider: payment.payment_method,
+        provider: provider || payment.payment_method,
         transaction_ref: payment.transaction_ref,
         amount: payment.amount,
         reason: reason || 'Admin-initiated refund'
@@ -361,6 +417,7 @@ class PaymentController {
         });
       }
 
+      // If an external provider ever succeeded, confirm with settlement evidence (Safe money movement remains DISABLED)
       await paymentRepo.updateStatus(id, 'REFUNDED', { escrow_status: 'REFUNDED' });
 
       await db.query(

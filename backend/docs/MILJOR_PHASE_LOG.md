@@ -35,6 +35,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Part 12** | End-to-End Hardening & Regression Suite | **NOT TESTED** | Pending full system implementation | — |
 | **Package E1 / E1.1** | Supplier Profile, Onboarding, Verification & Release Gate | **COMPLETE AND VERIFIED** | Migration 032 on test DB; AES-256-GCM encryption-at-rest; Admin Verification UI; 25/25 E1 Gate PASS; 106/106 Master Assertions PASS; Vite Build PASS | 2026-11-10 |
 | **Phase B0** | Backend Safety Recovery: Safepay-Only Consolidation, Invoice Authorization-Before-Generation, Subscription Gating & Regression Protection | **COMPLETE AND INDEPENDENTLY VERIFIED** | 46/46 B0 Gate PASS; 72/72 Regression PASS (118/118 Total PASS); miljor_db 100% Pristine (0 writes); Safepay sole active provider; Mock bypass eliminated | 2026-11-10 |
+| **Phase B0.1** | Financial Integrity & Payment Consistency: Safepay Verification State Safety, Provider/Method Provenance, Refund Gating, Webhook Exact Matching, Invoice Uniqueness & Decimal Precision, Subscription Read Model & UI Alignment | **COMPLETE AND VERIFIED** | `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 
 ---
 

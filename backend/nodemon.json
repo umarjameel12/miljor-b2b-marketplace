@@ -1,0 +1,22 @@
+{
+  "restartable": "rs",
+  "watch": [
+    "src/",
+    "server.js",
+    "database/"
+  ],
+  "ignore": [
+    "tests/**",
+    "docs/**",
+    "logs/**",
+    "*.log",
+    "database/backups/**",
+    "coverage/**",
+    "*.md"
+  ],
+  "ext": "js,json",
+  "delay": 500,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

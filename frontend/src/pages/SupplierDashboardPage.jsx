@@ -56,9 +56,12 @@ export const SupplierDashboardPage = () => {
     }
   }, [token]);
 
-  const maxFam = subscription?.max_families || 4;
-  const usedFam = subscription?.used_distinct_families || 0;
-  const remainingFam = subscription?.remaining_slots !== undefined ? subscription.remaining_slots : Math.max(0, maxFam - usedFam);
+  const currentPlan = subscription?.plan_code || subscription?.current_plan || 'STARTER';
+  const maxFam = subscription?.max_allowed_families ?? subscription?.max_families ?? 4;
+  const usedFam = subscription?.active_families_count ?? subscription?.used_distinct_families ?? 0;
+  const remainingFam = subscription?.remaining_family_slots !== undefined 
+    ? subscription.remaining_family_slots 
+    : (subscription?.remaining_slots !== undefined ? subscription.remaining_slots : Math.max(0, maxFam - usedFam));
   const percentUsed = Math.min(100, Math.round((usedFam / maxFam) * 100));
 
   return (
@@ -127,7 +130,7 @@ export const SupplierDashboardPage = () => {
                 Catalog Allowance
               </span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-[var(--brand-accent)]/15 text-[var(--brand-accent)]">
-                {subscription?.current_plan || 'STARTER'}
+                {currentPlan}
               </span>
             </div>
             <div className="flex items-baseline gap-2 mb-2">
