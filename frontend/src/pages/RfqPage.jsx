@@ -44,7 +44,7 @@ export const RfqPage = () => {
       .filter(x => typeof x === 'string').map(x => x.toLowerCase().trim());
     return [...new Set(listed)].filter(x => ['kg','g','l','ml','bag','tin','carton','sack','pack'].includes(x));
   };
-  const newRequestKey = () => `buyer-${Date.now()}-${Math.random().toString(36).slice(2, 13)}`;
+  const newRequestKey = () => `buyer-${crypto.randomUUID()}`;
   const toLocalInput = value => {
     if (!value) return '';
     const date = new Date(value);
@@ -168,7 +168,7 @@ export const RfqPage = () => {
         setQuoteDeadline('');
       }
       await refreshRequests();
-      toast.success(publish ? 'Shopping list published for supplier quotations' : 'Shopping list draft saved');
+      toast.success(publish ? 'Shopping list published. Supplier quotations are the next rollout stage.' : 'Shopping list draft saved');
     } catch (error) {
       setShoppingError(error.message);
     } finally { setShoppingBusy(false); }
