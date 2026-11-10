@@ -20,6 +20,14 @@ router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,
 router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
 router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));
 
+// B6-D supplier matching; buyer-only discovery and invitations.
+// Never expose procurement request addresses or identities to suppliers.
+router.get('/procurement/requests/:id/matches',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartRequestMatches(req,res));
+router.get('/procurement/requests/:id/invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartInvitations(req,res));
+router.post('/procurement/requests/:id/invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.inviteSmartSupplier(req,res));
+router.get('/procurement/supplier/invitations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.smartSupplierInbox(req,res));
+router.post('/procurement/supplier/invitations/:invitationId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondSmartInvitation(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
