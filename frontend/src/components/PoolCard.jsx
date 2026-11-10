@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { Package, Truck, Store, Zap, ShieldCheck, MapPin, Clock, Lock } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
+import { CountdownTimer } from './ui/CountdownTimer';
 
 const formatLahoreTimestamp = (ts) => {
   if (!ts) return null;
@@ -214,7 +215,15 @@ export const PoolCard = ({ pool, onSelect }) => {
                     <Clock className="w-3 h-3 text-amber-600" />
                     <span>Closes (PKT):</span>
                   </span>
-                  <strong className="font-mono text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <CountdownTimer
+                      deadline={pool.scheduled_close_at || pool.expires_at}
+                      serverTime={pool.server_time || null}
+                      compact
+                      label="Closes in"
+                    />
+                    <strong className="font-mono text-[10px] text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                  </div>
                 </div>
               )}
               {promisedDeliveryFormatted && (
