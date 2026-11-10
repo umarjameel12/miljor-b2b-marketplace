@@ -1406,3 +1406,17 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 - **B6-B source hardening update:** Migration 037 includes original create-response snapshots and mutation replay snapshots; request service validates family plus parent category, allowed units, verified buyer and immutable original create replay.
 - **Direct code-level execution:** 8/8 mocked persistence lifecycle assertions PASS on the current GitHub service source, distinct from prior 41/41 pure helper assertions. **No real MySQL/API/Node/Vite test execution claimed.** Full B6-B gate remains BLOCKED pending test DB migration and actual runtime acceptance.
+
+
+---
+
+## B6-D — Supplier Matching & Private Invitations (2026-11-10)
+
+- **Branch:** `feature/b6-private-rfq` — preserve B4/B5/main branches; no renames or duplicate app trees.
+- **Schema source:** additive `038_procurement_supplier_invitations.sql`, durable (request,supplier) unique invitation key, supplier response status and JSON matched item IDs. Migration NOT EXECUTED on MySQL in this GitHub-only session.
+- **Backend source:** `procurementMatchingService.js` verified supplier-owned listing/physical SKU eligibility, approved spec/family, qty/unit and declared service area; parent request ownership/deadline enforcement and transactional invitation/response. Existing `procurementController.js` and `procurementRoutes.js` extended with strict buyer/supplier role endpoints.
+- **Frontend source:** original `RfqPage.jsx` extended with matching supplier list, per-item coverage, invite/status, private supplier inbox and interest/decline interactions. No separate duplicate page.
+- **Focused final gate file:** `backend/tests/b6_supplier_matching_gate.js` created; test DB integration to execute at consolidated end gate per user's instruction.
+- **Actual source checks:** JS parses; 7/7 isolated mocked-adapter supplier matching lifecycle checks PASS. NOT a full DB/API/browser PASS; no live migration, frontend build, financial processing or stock allocation.
+- **Evidence:** `backend/docs/MILJOR_B6_SUPPLIER_MATCHING_REPORT.md`.
+- **Verdict:** B6-D SOURCE IMPLEMENTED; FINAL INTEGRATION VERIFICATION DEFERRED. `CAN START NEXT PHASE: NO` under strict phase stop rule until next explicit approval.
