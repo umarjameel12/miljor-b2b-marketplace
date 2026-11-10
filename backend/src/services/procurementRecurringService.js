@@ -316,6 +316,92 @@ class ProcurementRecurringService {
     return cycles;
   }
 
+  // B6-M internal worker entrypoint. Call from a separately controlled job
+  // runner; never from a public buyer URL. This only creates unpaid drafts.
+  async runDueBatch({limit=20}={}){
+    if(!Number.isSafeInteger(limit)||limit<1||limit>100)
+      throw fail('INVALID_WORKER_LIMIT','Recurring worker batch size must be 1–100.');
+    const [due]=await this.database.query(
+      `SELECT cy.id,cy.contract_id,cy.buyer_id,cy.attempt_count
+         FROM procurement_recurring_cycles cy
+         JOIN procurement_recurring_contracts contract ON contract.id=cy.contract_id
+         WHERE cy.status='SCHEDULED' AND contract.status='ACTIVE'
+           AND cy.due_at_utc<=UTC_TIMESTAMP()
+           AND (cy.retry_after_utc IS NULL OR cy.retry_after_utc<=UTC_TIMESTAMP())
+         ORDER BY cy.due_at_utc,cy.id LIMIT ?`,
+      [limit]
+    );
+    const result={checked:due.length,prepared:0,replayed:0,retried:0,failed:0,
+      created_orders:0,created_payments:0,outcomes:[]};
+    for(const cycle of due){
+      try{
+        const prepared=await this.prepareDueCycle(
+          cycle.buyer_id,cycle.contract_id,cycle.id
+        );
+        if(prepared.is_replay)result.replayed++;
+        else result.prepared++;
+        result.outcomes.push({cycle_id:cycle.id,status:prepared.status,
+          request_id:prepared.request_id});
+      }catch(error){
+        // A second worker may have completed the same cycle first.
+        if(['CYCLE_NOT_PREPARABLE','CYCLE_NOT_FOUND'].includes(error.code)){
+          result.replayed++;
+          result.outcomes.push({cycle_id:cycle.id,status:'ALREADY_HANDLED'});
+          continue;
+        }
+        const conn=await this.database.getConnection();
+        try{
+          await conn.beginTransaction();
+          // Consistent contract-before-cycle lock order, same as prepareDueCycle.
+          await conn.query(
+            'SELECT id FROM procurement_recurring_contracts WHERE id=? FOR UPDATE',
+            [cycle.contract_id]
+          );
+          const [rows]=await conn.query(
+            'SELECT id,status,attempt_count FROM procurement_recurring_cycles WHERE id=? AND contract_id=? FOR UPDATE',
+            [cycle.id,cycle.contract_id]
+          );
+          if(!rows.length||rows[0].status!=='SCHEDULED'){
+            await conn.commit();result.replayed++;
+            continue;
+          }
+          const attempts=Number(rows[0].attempt_count)+1;
+          const permanent=['CYCLE_CONTRACT_CHANGED','RECURRING_TEMPLATE_MISSING',
+            'BUYER_NOT_ELIGIBLE','CYCLE_WITHOUT_ITEMS'].includes(error.code);
+          const terminal=attempts>=5||permanent;
+          const retryMinutes=[5,15,60,240][Math.min(attempts-1,3)];
+          await conn.query(
+            `UPDATE procurement_recurring_cycles SET
+               attempt_count=?,last_attempt_at=UTC_TIMESTAMP(),failure_code=?,
+               status=?,retry_after_utc=CASE WHEN ? THEN NULL
+                 ELSE DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE) END
+             WHERE id=? AND status='SCHEDULED'`,
+            [attempts,String(error.code||'CYCLE_PREPARATION_FAILED').slice(0,100),
+              terminal?'FAILED':'SCHEDULED',terminal?1:0,retryMinutes,cycle.id]
+          );
+          await conn.query(
+            `INSERT INTO procurement_recurring_cycle_events
+              (cycle_id,event_key,event_type,event_snapshot)
+             VALUES (?,?,'PREPARATION_RETRY',?)
+             ON DUPLICATE KEY UPDATE id=id`,
+            [cycle.id,'PREPARATION_ATTEMPT_'+attempts,
+              JSON.stringify({attempt:attempts,error_code:String(error.code||'UNKNOWN'),
+                terminal,no_payment_created:true})]
+          );
+          await conn.commit();
+          if(terminal)result.failed++;else result.retried++;
+          result.outcomes.push({cycle_id:cycle.id,
+            status:terminal?'FAILED':'SCHEDULED_FOR_RETRY',
+            error_code:error.code||'PREPARATION_FAILED'});
+        }catch(updateError){
+          await conn.rollback();
+          throw updateError;
+        }finally{conn.release();}
+      }
+    }
+    return result;
+  }
+
   async scheduleUpcomingForBuyer(buyerId,contractId,{limit=6}={}){
     const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract');
     const [owned]=await this.database.query(
