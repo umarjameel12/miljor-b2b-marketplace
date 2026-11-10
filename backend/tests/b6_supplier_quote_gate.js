@@ -49,7 +49,7 @@ async function main(){
      JOIN users u ON u.id=sl.supplier_id AND u.role='SUPPLIER'
        AND u.is_verified=1 AND u.verification_status='VERIFIED'
      JOIN supplier_profiles sf ON sf.supplier_id=u.id AND sf.verification_status='VERIFIED'
-     WHERE sl.status='ACTIVE' AND sl.currency='PKR' AND sl.available_stock>=2
+     WHERE sl.status='ACTIVE' AND sl.currency='PKR' AND sl.available_stock>=2 AND sl.buyer_min_qty<=1
      ORDER BY sl.id LIMIT 40`
   );
   const fixture=listings.map(row=>{
