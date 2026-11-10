@@ -41,6 +41,19 @@ class ProcurementController {
     }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_HOLD_FAILED',message:e.statusCode?e.message:'Unable to reserve Flash Pool'}});}
   }
 
+  async getFlashHold(req,res) {
+    try {
+      const hold=await require('../services/flashPoolService').getHoldForBuyer(req.user.id,Number(req.params.holdId));
+      res.status(200).json({success:true,data:{hold}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_HOLD_STATUS_FAILED',message:e.statusCode?e.message:'Unable to retrieve hold status'}});}
+  }
+  async expireFlashPool(req,res) {
+    try {
+      const flash=await require('../services/flashPoolService').closeExpiredOffer(req.user.id,Number(req.params.id));
+      res.status(200).json({success:true,data:{flash_pool:flash}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_EXPIRY_FAILED',message:e.statusCode?e.message:'Unable to expire Flash Pool'}});}
+  }
+
   // Demand Requests ("Request a Pool")
   async createDemandRequest(req, res) {
     try {
