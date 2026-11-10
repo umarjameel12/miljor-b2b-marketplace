@@ -103,6 +103,26 @@ async function main(){
   assert.equal(again.version_number,1);
   pass('same idempotency key returns original immutable version');
 
+  await rejects(
+    ()=>quotes.submit(fixture.supplier_id,draft.request.id,
+      {...offer,delivery_fee:'999.00'},'quote-first-'+tag),
+    'IDEMPOTENCY_CONFLICT'
+  );
+  pass('same idempotency key with changed quote rejected');
+
+  await rejects(
+    ()=>quotes.submit(fixture.supplier_id,draft.request.id,
+      {...offer,supplier_notes:'Contact 0300-1234567'},'quote-direct-'+tag),
+    'DIRECT_CONTACT_NOT_ALLOWED'
+  );
+  pass('supplier off-platform contact attempts rejected');
+
+  await rejects(
+    ()=>quotes.submit(2147483000,draft.request.id,offer,'quote-outsider-'+tag),
+    'INVITATION_REQUIRED'
+  );
+  pass('supplier without accepted invitation cannot quote');
+
   const updated={...offer,delivery_fee:'400.00',supplier_notes:'Revised delivery'};
   const versionTwo=await quotes.submit(
     fixture.supplier_id,draft.request.id,updated,'quote-second-'+tag);
