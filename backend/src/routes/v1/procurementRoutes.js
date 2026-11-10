@@ -53,6 +53,8 @@ router.get('/procurement/collectives/my-invitations',protect,authorizeStrict('BU
 
 // B6-J: verified supplier quotation on qualified collective demand.
 router.post('/procurement/collectives/:groupId/open-bidding',protect,authorizeStrict('BUYER'),(req,res)=>controller.openCollectiveBidding(req,res));
+router.post('/procurement/collectives/:groupId/supplier-invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.inviteCollectiveSupplier(req,res));
+router.get('/procurement/supplier/collectives/invitations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.collectiveSupplierInbox(req,res));
 router.post('/procurement/supplier/collectives/:groupId/bids',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitCollectiveBid(req,res));
 router.get('/procurement/collectives/:groupId/bids',protect,authorizeStrict('BUYER'),(req,res)=>controller.listCollectiveBids(req,res));
 // B6-K: individual buyer consent only, not an order or checkout.
