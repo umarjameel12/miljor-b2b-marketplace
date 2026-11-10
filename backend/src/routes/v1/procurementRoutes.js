@@ -70,6 +70,7 @@ router.post('/procurement/recurring/:contractId/:action(activate|pause|resume|ca
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/skip',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringSkip(req,res));
 
 // B6-M: inspect and prepare recurring cycle drafts without payment authority.
+router.post('/procurement/recurring/:contractId/cycles/schedule',protect,authorizeStrict('BUYER'),(req,res)=>controller.scheduleRecurringCycles(req,res));
 router.get('/procurement/recurring/:contractId/cycles',protect,authorizeStrict('BUYER'),(req,res)=>controller.listRecurringCycles(req,res));
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/prepare',protect,authorizeStrict('BUYER'),(req,res)=>controller.prepareRecurringCycle(req,res));
 
