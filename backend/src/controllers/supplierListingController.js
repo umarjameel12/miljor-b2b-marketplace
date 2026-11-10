@@ -193,30 +193,31 @@ class SupplierListingController {
       const pricePerBaseUnit = packSize > 0 ? Number((Number(base_unit_price) / packSize).toFixed(4)) : null;
       const pricingUnit = spec.purchasing_unit || 'pack';
 
-      // 4B. Enforce Subscription Family & Listing Entitlements (Package E3)
-      if (spec.family_id) {
-        const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
-        const conn = await db.getConnection();
-        try {
-          await conn.beginTransaction();
-          await subscriptionEntitlementService.assertCanPublishInFamily(supplierId, spec.family_id, conn);
-          // B1: Subscription caps DISTINCT active families, not the number of
-          // different commercial listings/SKUs inside a family. Legacy
-          // max_active_listings is not an independent entitlement ceiling.
-          await conn.commit();
-        } catch (err) {
-          await conn.rollback();
-          conn.release();
-          return res.status(err.statusCode || 403).json({
-            success: false,
-            error: { code: err.code || 'ENTITLEMENT_LIMIT_EXCEEDED', message: err.message, details: err.details }
-          });
+      // B1: Keep the family-cap row lock until the ACTIVE listing exists.
+      // This closes the gap between entitlement validation and listing insertion.
+      // There is no separate SKUs/listings count cap inside an already-active family.
+      const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
+      const conn = await db.getConnection();
+      let listingId;
+      try {
+        await conn.beginTransaction();
+        if (spec.family_id) {
+          await subscriptionEntitlementService.assertCanPublishInFamily(
+            supplierId, spec.family_id, conn
+          );
         }
-        conn.release();
-      }
-
-      // 5. Create listing
-      const listingId = await listingRepo.create({
+        // Recheck duplicate after obtaining the supplier-profile lock.
+        // The earlier lookup is only a fast-path optimization.
+        const duplicateUnderLock = await listingRepo.findBySupplierAndSpec(
+          supplierId, resolvedSpecId, conn
+        );
+        if (duplicateUnderLock) {
+          const err = new Error('A commercial listing already exists for this supplier and physical SKU.');
+          err.statusCode = 409;
+          err.code = 'LISTING_ALREADY_EXISTS';
+          throw err;
+        }
+        listingId = await listingRepo.create({
         listing_code: listingCode,
         supplier_id: supplierId,
         product_spec_id: resolvedSpecId,
@@ -234,7 +235,17 @@ class SupplierListingController {
         fulfilment_lead_time_days: Number(fulfilment_lead_time_days || 2),
         status: 'ACTIVE',
         notes: notes || null
-      });
+        }, conn);
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        return res.status(err.statusCode || 500).json({
+          success: false,
+          error: { code: err.code || 'LISTING_CREATION_FAILED', message: err.message }
+        });
+      } finally {
+        conn.release();
+      }
 
       const newListing = await listingRepo.findById(listingId);
 
