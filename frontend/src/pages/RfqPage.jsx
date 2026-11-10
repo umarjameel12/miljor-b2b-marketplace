@@ -1073,6 +1073,60 @@ export const RfqPage = () => {
                 ))}
               </div>
             )}
+            {collectiveBidGroupId && (
+              <section className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3" aria-label="Collective supplier bids">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Group #{collectiveBidGroupId} — Private Bids</h3>
+                  <button type="button" className="text-xs underline"
+                    onClick={()=>{setCollectiveBidGroupId(null);setCollectiveApprovalPreview(null);}}>
+                    Close
+                  </button>
+                </div>
+                {collectiveBids.length===0 &&
+                  <p className="text-xs text-[var(--text-muted)]">No eligible supplier bid has been submitted yet.</p>}
+                {collectiveBids.map(bid=>(
+                  <div key={bid.id} className="border-t border-[var(--border-subtle)] pt-2 space-y-1">
+                    <p className="text-xs font-semibold">Supplier #{bid.supplier_id} · v{bid.current_version} · {bid.status}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {bid.full_snapshot?.coverage} · Group items Rs. {bid.full_snapshot?.aggregate_item_subtotal}
+                      · Delivery per buyer Rs. {bid.full_snapshot?.delivery_fee_per_buyer}
+                    </p>
+                    <button type="button" disabled={shoppingBusy||bid.status!=='ACTIVE'}
+                      onClick={()=>previewCollectiveBid(collectiveBidGroupId,bid.id)}
+                      className="text-xs underline disabled:opacity-50">
+                      Review my exact supplier terms
+                    </button>
+                  </div>
+                ))}
+                {collectiveApprovalPreview && (
+                  <div className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                    <h4 className="text-sm font-semibold">Your individual quotation preview</h4>
+                    {(collectiveApprovalPreview.items||[]).map(item=>(
+                      <p key={item.request_item_id} className="text-xs">
+                        {item.physical_snapshot?.title||'Supplier SKU'} ·
+                        {item.quantity} {item.purchasing_unit} ·
+                        Grade {item.physical_snapshot?.quality_grade||'Supplier specified'} ·
+                        Rs. {item.subtotal}
+                      </p>
+                    ))}
+                    <p className="text-xs">
+                      Items Rs. {collectiveApprovalPreview.item_subtotal} +
+                      Delivery Rs. {collectiveApprovalPreview.supplier_delivery_fee} +
+                      Processing Rs. {collectiveApprovalPreview.buyer_platform_fee}
+                    </p>
+                    <p className="text-base font-semibold">Your preview total: Rs. {collectiveApprovalPreview.total_preview}</p>
+                    <p className="text-xs text-amber-700">
+                      This action stores your agreement to the quote only. It does not reserve stock, create an order or charge your account.
+                    </p>
+                    <button type="button" disabled={shoppingBusy}
+                      onClick={acceptCollectivePreview}
+                      className="rounded-lg px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                      Approve exact quote (No Payment)
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
             {recurringContracts.length>0 && (
               <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
                 <h3 className="text-sm font-semibold">My Recurring Procurement</h3>
