@@ -695,6 +695,22 @@ async function runGate() {
       pass('12. Rule P7: Invalid promised_delivery_at offsets (-2h, +12h, +23h59m, +72h01m, +96h) strictly rejected with 422 DELIVERY_SLA_OUT_OF_RANGE');
     } catch (e) { fail('12. Delivery SLA invalid boundaries', e); }
 
+    // B4-B: Reject invalid precision before creating a draft or reserving stock.
+    try {
+      const invalidDecimal = await api('/api/v1/pools', {
+        method: 'POST', headers: { Authorization: `Bearer ${supAToken}` },
+        body: {
+          supplier_sku_id: sku25kgId, supplier_listing_id: listingAId,
+          target_qty: '40.00001', supplier_min_qty: 10, buyer_min_qty: 2,
+          max_capacity: 80, scheduled_close_at: closeTime.toISOString(),
+          promised_delivery_at: new Date(closeTime.getTime() + 48 * 3600 * 1000).toISOString()
+        }
+      });
+      assert.strictEqual(invalidDecimal.status, 400, JSON.stringify(invalidDecimal.body));
+      assert.strictEqual(invalidDecimal.body.error.code, 'INVALID_POOL_DECIMAL');
+      pass('B4-B: Pool target exceeding exact 4-decimal quantity contract rejected');
+    } catch (e) { fail('B4-B: Exact pool quantity validation', e); }
+
     // 13. Rule P6 & P7: Missing promised_delivery_at at publish time is rejected (422 PROMISED_DELIVERY_REQUIRED)
     let draftPoolId;
     try {
