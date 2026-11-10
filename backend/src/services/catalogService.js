@@ -1266,7 +1266,23 @@ class CatalogService {
         throw err;
       }
 
-      const targetFamilyId = payload.family_id !== undefined ? Number(payload.family_id) : Number(existing.family_id);
+      // B2: A draft product with child SKUs must not change canonical family.
+      // Child records carry their own family/category IDs, and silently
+      // reclassifying only the parent would invalidate commodity and unit checks.
+      const requestedFamilyId = payload.family_id !== undefined ? Number(payload.family_id) : Number(existing.family_id);
+      if (requestedFamilyId !== Number(existing.family_id)) {
+        const [[childCount]] = await connection.query(
+          'SELECT COUNT(*) AS total FROM supplier_skus WHERE supplier_product_id = ?',
+          [existing.id]
+        );
+        if (Number(childCount.total) > 0) {
+          const err = new Error('Cannot change product family after adding SKUs. Create a new draft product under the correct family.');
+          err.status = 409;
+          err.code = 'PRODUCT_FAMILY_HAS_SKUS';
+          throw err;
+        }
+      }
+      const targetFamilyId = requestedFamilyId;
       const family = await catalogRepo.findFamilyById(targetFamilyId, connection);
       if (!family || !family.is_active || family.approval_status !== 'APPROVED') {
         const err = new Error('Selected product family does not exist or is inactive.');
@@ -1284,6 +1300,12 @@ class CatalogService {
       }
 
       const category = await catalogRepo.findCategoryById(targetCategoryId, connection);
+      if (!category || !category.is_active || category.approval_status !== 'APPROVED') {
+        const err = new Error('Selected canonical category is missing or inactive.');
+        err.status = 400;
+        err.code = 'INACTIVE_OR_MISSING_CATEGORY';
+        throw err;
+      }
 
       const mergedInput = {
         brand: payload.brand !== undefined ? payload.brand : existing.brand,
@@ -1339,6 +1361,8 @@ class CatalogService {
         {
           category_id: category.id,
           family_id: family.id,
+          // The FK-compatible base product reference must track family changes.
+          legacy_product_id: (await this.ensureDefaultProductForFamily(family, connection)).id,
           title: computedTitle,
           brand: norm.brand,
           is_unbranded: norm.is_unbranded,
