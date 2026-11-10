@@ -123,6 +123,23 @@ async function main(){
  pass('Original consent preserved as revoked, only one active consent',
   savedApprovals.length===2 && savedApprovals[0].status==='REVOKED' &&
   savedApprovals[1].status==='CONSENTED_NOT_PAYABLE');
+ const organizerPreview=await approvals.preview(buyers[0].id,groupId,first.bid.bid_id);
+ await reject(()=>approvals.qualifyGroup(buyers[0].id,groupId,updatedPreview.bid_version_id),
+   'GROUP_BUYER_CONSENT_INCOMPLETE');
+ pass('Group cannot qualify until organizer separately approves same bid',true);
+ const organizerApproval=await approvals.consent(buyers[0].id,groupId,first.bid.bid_id,{
+   bid_version_id:organizerPreview.bid_version_id,
+   total_preview:organizerPreview.total_preview,
+   physical_specifications_accepted:true,buyer_total_confirmed:true
+ },'b6jk-organizer-consent-'+tag);
+ pass('Organizer has independent buyer consent, not proxy consent',
+   organizerApproval.approval.status==='CONSENTED_NOT_PAYABLE');
+ const qualified=await approvals.qualifyGroup(buyers[0].id,groupId,updatedPreview.bid_version_id);
+ pass('All buyers approved same quote; group qualified without payment',
+   qualified.qualification.status==='QUALIFIED_AWAITING_INDIVIDUAL_PAYMENT' &&
+   qualified.qualification.stock_reserved===false);
+ const qualifiedReplay=await approvals.qualifyGroup(buyers[0].id,groupId,updatedPreview.bid_version_id);
+ pass('Group qualification idempotently replays',qualifiedReplay.is_replay===true);
  const [[afterOrders]]=await db.query('SELECT COUNT(*) AS n FROM orders');
  const [[afterPayments]]=await db.query('SELECT COUNT(*) AS n FROM payments');
  pass('No phantom order or payment',String(ordersBefore[0].n)===String(afterOrders.n)&&
