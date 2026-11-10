@@ -153,6 +153,11 @@ class SupplierListingMutationService {
            AND status NOT IN ('CANCELLED','EXPIRED','COMPLETED','DELIVERED','FAILED','SUPPLIER_FAILED','REJECTED')
            LIMIT 1`, [listingId]);
         if (pools.length) throw invalid('ACTIVE_POOL_LISTING_LOCKED', 'Resolve related open pools before changing contractual terms or archiving listing', 409);
+        const [flash] = await conn.query(
+          `SELECT id FROM flash_pools WHERE supplier_listing_id=?
+           AND status IN ('ACTIVE','SOLD_OUT') LIMIT 1`,[listingId]);
+        if (flash.length) throw invalid('ACTIVE_FLASH_LISTING_LOCKED',
+          'Resolve the active Flash offer before changing its listed commercial conditions or availability',409);
       }
       if (listing.status === 'ARCHIVED' && Object.keys(changes).length) {
         throw invalid('LISTING_ARCHIVED', 'Archived offer is immutable', 409);
