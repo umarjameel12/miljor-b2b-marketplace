@@ -336,6 +336,22 @@ class ProcurementController {
     }catch(e){this._smartError(res,e);}
   }
 
+  // B6-M cycle buyer approval: prepares a fresh, unpaid shopping-list draft.
+  async prepareRecurringCycle(req,res){
+    try{
+      const result=await procurementRecurringService.prepareDueCycle(
+        req.user.id,req.params.contractId,req.params.cycleId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async listRecurringCycles(req,res){
+    try{
+      const cycles=await procurementRecurringService.listCycles(
+        req.user.id,req.params.contractId);
+      res.json({success:true,data:{cycles}});
+    }catch(e){this._smartError(res,e);}
+  }
+
   // Flash Pools
   async createFlashPool(req, res) {
     try {
