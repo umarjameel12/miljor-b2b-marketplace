@@ -63,3 +63,11 @@ From clean isolated B6 worktree with safe DB credentials:
 7. Audit `miljor_db` untouched, record actual assertions/exit codes/commit SHA and update `MILJOR_PHASE_LOG.md` PASS/FAIL/BLOCKED.
 
 **Final state of this checkpoint: SOURCE ADVANCED, ACCEPTANCE BLOCKED. DO NOT ENABLE REAL BUYER PAYMENTS OR CLAIM B6 G–M COMPLETE.**
+
+## Recurring worker & group qualification update
+
+- Existing scheduler now has an optional, five-minute B6-M due-cycle task. It requires both `B6_RECURRING_WORKER_ENABLED=true` and `B6_RECURRING_RUNTIME_APPROVED=true`. It produces only buyer-reviewed shopping-list drafts.
+- `procurementRecurringService.runDueBatch` finds due cycles by server UTC; calls the locked, replay-safe draft creator; records retries with 5/15/60/240-minute backoff and marks permanent errors / fifth failed attempt FAILED. No automatic order or payment.
+- `backend/tests/b6_recurring_worker_gate.js` executed against the fetched current service using a mock DB adapter: **8/8 PASS**. Together with earlier **58/58** pure-policy checks, **66/66 source-level checks PASS**; this is not real MySQL/API/gateway proof.
+- B6-K `qualifyGroup` now freezes a current full-basket group bid only when every JOINED buyer independently consents to that same bid version, minimum buyers are met, quote remains valid and shared stock passes locked readiness checks. The response explicitly says that stock is NOT reserved and payment is NOT authorized.
+- Outstanding true blockers: actual G/H Safepay/schema/inventory collision gate, K individual buyer order/payment/failed-threshold refunds, M automatic re-quote-to-G/H order callbacks, live test DB migrations 036 and 037–045, browser/Vite build, and regressions.
