@@ -1501,3 +1501,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **Report:** `backend/docs/MILJOR_B6_PHASE1_INTEGRATION_REPORT.md` lists exact implemented source and critical gaps.
 - **Financial blockers:** B5 + B4 + B6 shared inventory races, signed Safepay payment/escrow, order release/refunds and full K per-buyer paid settlement still require implementation/acceptance; recurring worker dispatch and integration are pending.
 - **Verdict:** **SOURCE ADVANCED / FULL G–M ACCEPTANCE BLOCKED.** Do not begin N–Q or turn on payment gate.
+
+- **B6-M worker follow-up:** Existing `schedulerService.js` now optionally runs `procurementRecurringService.runDueBatch` every five minutes under two explicit enable/approval flags; durable bounded retries and buyer-review draft-only semantics. `b6_recurring_worker_gate.js`: **8/8 isolated JS mock PASS**, separate from earlier **58/58 pure-policy PASS**, combined 66/66 source-level checks; not MySQL or frontend PASS.
+- **B6-K group readiness:** organizer-only atomic `qualifyGroup` checks all buyer consents on the same current supplier bid/version, minimum independent buyers, expiry and shared stock; freezes group only, no stock allocation or payment.
+- **B6 G–M acceptance stays BLOCKED:** K financial settlement/refund requirements and full G/H cross-pool Safepay/MySQL tests pending. Report `backend/docs/MILJOR_B6_PHASE1_INTEGRATION_REPORT.md` updated.
