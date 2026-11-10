@@ -99,6 +99,16 @@ class FlashPoolService {
       const {listing,spec}=await this._lockListing(conn,Number(payload.supplier_listing_id),supplierId);
       if(payload.supplier_sku_id && Number(payload.supplier_sku_id)!==Number(spec.supplier_sku_id))
         throw fail('FLASH_SKU_MISMATCH','SKU must match the linked published listing.',409);
+      // A physical SKU is sold in its published purchasing unit. Never treat
+      // fractional bags/tins/bundles as physically split purchasing packs.
+      const loose=new Set(['kg','g','mg','l','litre','liter','ml']);
+      if(!loose.has(String(spec.purchasing_unit||'').toLowerCase()) &&
+          [stock,min,max].some(value=>!Number.isInteger(Number(value))))
+        throw fail('FRACTIONAL_PHYSICAL_PACK','Supplier-defined purchasing packs must be whole units.',400);
+      const listingUnit=String(listing.pricing_unit||'').trim().toLowerCase();
+      const skuUnit=String(spec.purchasing_unit||'').trim().toLowerCase();
+      if(!listingUnit || !skuUnit || listingUnit!==skuUnit)
+        throw fail('FLASH_UNIT_MISMATCH','Flash quantities must use the listing physical purchasing unit.',409);
       const [result]=await conn.query(
         `INSERT INTO flash_pools
           (flash_code,supplier_id,product_id,supplier_sku_id,supplier_listing_id,product_spec_id,
@@ -132,8 +142,11 @@ class FlashPoolService {
       const offer=offers[0];
       if(!offer)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
       if(offer.status!=='DRAFT')throw fail('FLASH_NOT_DRAFT','Only a draft Flash Pool may be published.',409);
-      const [[deadline]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS future',[offer.expiry_time]);
-      if (!deadline.future) throw fail('FLASH_EXPIRED','Flash expiry must still be in the future.',409);
+      // The supplier-selected duration starts at actual publication, not at
+      // draft save. A draft stored for a day does not lose a day of sale time.
+      const durationMinutes=Number(offer.configured_duration_minutes);
+      if(!Number.isSafeInteger(durationMinutes)||durationMinutes<2)
+        throw fail('INVALID_FLASH_DURATION','Supplier sale duration must be at least two whole minutes.',400);
       const {listing,spec}=await this._lockListing(conn,offer.supplier_listing_id,supplierId);
       if(Number(spec.supplier_sku_id)!==Number(offer.supplier_sku_id))
         throw fail('FLASH_SKU_MISMATCH','Linked SKU changed before publish.',409);
@@ -156,7 +169,12 @@ class FlashPoolService {
         [listing.id,id,offer.total_stock,unit]
       );
       await conn.query(
-        `UPDATE flash_pools SET status='ACTIVE',published_at=UTC_TIMESTAMP(),version_number=version_number+1 WHERE id=?`,[id]);
+        `UPDATE flash_pools SET status='ACTIVE',published_at=UTC_TIMESTAMP(),
+           expiry_time=DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE),
+           snapshot_json=JSON_SET(snapshot_json,'$.configured_duration_minutes',?,
+             '$.expiry_time',DATE_FORMAT(DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE),'%Y-%m-%dT%H:%i:%sZ')),
+           version_number=version_number+1 WHERE id=?`,
+        [durationMinutes,durationMinutes,durationMinutes,id]);
       await conn.commit();
       return this.getSupplierOffer(supplierId,id);
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
