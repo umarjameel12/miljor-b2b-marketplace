@@ -4,7 +4,7 @@
 // Un-slopped hierarchy, fulfillment mode availability indicators,
 // clean progress mechanics, and responsive card rhythm
 // =============================================================================
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Package, Truck, Store, Zap, ShieldCheck, MapPin, Clock, Lock } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
 import { CountdownTimer } from './ui/CountdownTimer';
@@ -38,6 +38,8 @@ const DEFAULT_CARD_IMAGES = {
 
 export const PoolCard = ({ pool, onSelect }) => {
   const [imgError, setImgError] = useState(false);
+  const [deadlineExpired, setDeadlineExpired] = useState(false);
+  useEffect(() => setDeadlineExpired(false), [pool.scheduled_close_at, pool.expires_at]);
 
   // Safe progress percentage clamped between 0 and 100
   const progressPercent = Math.min(
@@ -45,7 +47,7 @@ export const PoolCard = ({ pool, onSelect }) => {
     Math.max(0, parseFloat(pool.fill_percentage || pool.progress_percentage || 0))
   );
 
-  const isClosed = pool.status === 'CLOSED';
+  const isClosed = pool.status === 'CLOSED' || deadlineExpired;
   const estimatedPrice = pool.estimated_unit_price || pool.current_unit_price || pool.current_price_per_unit || pool.base_unit_price;
   const unit = pool.pack_unit || pool.pool_unit || 'kg';
   const buyerMoq = pool.min_order_qty || pool.buyer_min_qty || pool.moq_buyer || 1;
@@ -221,6 +223,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                       serverTime={pool.server_time || null}
                       compact
                       label="Closes in"
+                      onExpire={() => setDeadlineExpired(true)}
                     />
                     <strong className="font-mono text-[10px] text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
                   </div>
