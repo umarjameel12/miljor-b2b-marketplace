@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test": "node tests/design_system_tokens.test.js",
+    "test": "node tests/design_system_tokens.test.js && node tests/parse_deadline.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
