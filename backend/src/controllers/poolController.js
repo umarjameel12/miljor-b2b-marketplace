@@ -1521,10 +1521,26 @@ class PoolController {
          WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')`,
         [pool.supplier_listing_id]
       );
-      const activeAllocated = Number(allocRows[0].total_allocated);
-      const availableToPromise = Number(listing.available_stock) - activeAllocated;
+      // B4-C: compare DECIMAL quantities exactly; binary floats can permit
+      // a final fractional over-allocation at the capacity boundary.
+      const exactDecimal = require('../services/exactDecimal');
+      let requiredStockExact, allocationSumExact, listingStockExact;
+      try {
+        requiredStockExact = exactDecimal.toCanonical(requiredStockInListingUnits, 4);
+        allocationSumExact = exactDecimal.toCanonical(allocRows[0].total_allocated, 4);
+        listingStockExact = exactDecimal.toCanonical(listing.available_stock, 4);
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'INVALID_INVENTORY_PRECISION', message: 'Inventory units cannot be represented exactly in the allocation ledger.' }
+        });
+      }
+      const totalPromisedExact = exactDecimal.exactDecimalSum([allocationSumExact, requiredStockExact], 4);
+      const availableToPromise = exactDecimal.exactDecimalSum([listingStockExact, '-' + allocationSumExact], 4);
 
-      if (requiredStockInListingUnits > availableToPromise) {
+      if (!exactDecimal.exactDecimalGte(listingStockExact, totalPromisedExact, 4)) {
         await connection.rollback();
         connection.release();
         return res.status(409).json({
@@ -1541,7 +1557,7 @@ class PoolController {
         `INSERT INTO supplier_inventory_allocations
           (supplier_listing_id, allocation_type, reference_id, allocated_qty, unit, status)
          VALUES (?, 'REGULAR_POOL', ?, ?, ?, 'COMMITTED')`,
-        [pool.supplier_listing_id, id, requiredStockInListingUnits, listingUnit]
+        [pool.supplier_listing_id, id, requiredStockExact, listingUnit]
       );
 
       // Fetch delivery clusters for immutable snapshot
@@ -1627,7 +1643,7 @@ class PoolController {
             is_terms_locked: 1,
             scheduled_close_at: scheduledCloseDate.toISOString(),
             promised_delivery_at: promisedDeliveryDate.toISOString(),
-            allocated_qty: requiredStockInListingUnits,
+            allocated_qty: requiredStockExact,
             allocation_unit: listingUnit,
             idempotency_key: req.idempotency ? req.idempotency.key : null
           })
