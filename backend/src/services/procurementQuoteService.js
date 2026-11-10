@@ -4,6 +4,7 @@
 const crypto = require('node:crypto');
 const db = require('../config/db');
 const exact = require('./exactDecimal');
+const matching = require('./procurementMatchingService');
 
 const failure = (code,message,statusCode=400) => Object.assign(new Error(message),{code,statusCode});
 function positiveId(value){
@@ -96,11 +97,17 @@ class ProcurementQuoteService{
       const [items]=await conn.query(
         'SELECT id,family_id,quantity,unit,allow_substitutions FROM procurement_request_items WHERE request_id=? ORDER BY line_number',[rid]);
       const itemMap=new Map(items.map(item=>[Number(item.id),item]));
+      const candidates=await matching._candidates(conn,{...requests[0],items});
+      const supplierCandidate=candidates.find(candidate=>candidate.supplier_id===supplier);
+      if(!supplierCandidate)throw failure('SUPPLIER_NOT_ELIGIBLE','No eligible supplier listing remains in this delivery area.',409);
+      const listingAllowed=new Set(supplierCandidate.eligible_listing_ids.map(Number));
       let total='0.00';
       const snapshots=[];
       for(const line of input.lines){
         const item=itemMap.get(line.request_item_id);
         if(!item)throw failure('INVALID_QUOTE_ITEM','Quotation contains an unrequested line.',409);
+        if(!listingAllowed.has(line.supplier_listing_id))
+          throw failure('LISTING_NOT_ELIGIBLE','Listing is not eligible for this delivery area and request.',409);
         const [rows]=await conn.query(
           `SELECT sl.id AS listing_id, sl.supplier_id, sl.supplier_sku_id,
                   sl.available_stock,sl.currency,sl.status,sl.delivery_zones,
@@ -148,6 +155,12 @@ class ProcurementQuoteService{
         snapshots.push({...line,quantity:qty,unit_price:line.unit_price,subtotal,
           supplier_sku_id:sku.supplier_sku_id,snapshot});
       }
+      // Quote validity must remain in the future after obtaining parent lock.
+      const [[clock]]=await conn.query(
+        'SELECT (UTC_TIMESTAMP() < ?) AS future_validity',[input.valid_until]
+      );
+      if(Number(clock?.future_validity)!==1)
+        throw failure('QUOTE_EXPIRED','Supplier quote validity expired while submitting.',409);
       // Query duplicate key before creating quote version to preserve exact replay.
       const [quotes]=await conn.query(
         'SELECT id,status,current_version FROM procurement_quotes WHERE request_id=? AND supplier_id=? FOR UPDATE',[rid,supplier]);
