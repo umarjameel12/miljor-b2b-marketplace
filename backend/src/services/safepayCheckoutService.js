@@ -120,6 +120,11 @@ class SafepayCheckoutService {
       throw err;
     }
 
+    // B5: Before contacting Safepay, atomically claim this buyer's Flash
+    // checkout lease. An expired untouched hold must never initiate payment.
+    // Non-Flash orders return a no-op and preserve B0–B4 behavior.
+    await require('./flashPoolService').claimCheckout(orderId,actor.id);
+
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
     if (!totalPayable || totalPayable <= 0 || isNaN(totalPayable)) {
