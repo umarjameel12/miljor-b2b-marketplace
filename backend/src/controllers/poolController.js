@@ -1486,6 +1486,44 @@ class PoolController {
         });
       }
 
+      // B4-D: Revalidate identity and physical publication *at the final
+      // publication boundary*. Draft-time validation is not authoritative.
+      if (Number(listing.supplier_id) !== Number(supplier_id) ||
+          Number(listing.product_spec_id) !== Number(pool.product_spec_id)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'POOL_LISTING_IDENTITY_MISMATCH', message: 'Published pool must use an owned listing for its exact physical specification.' }
+        });
+      }
+      if (pool.supplier_sku_id) {
+        const [physical] = await connection.query(
+          `SELECT ps.supplier_id, ps.supplier_sku_id, ps.supplier_product_id, ps.lifecycle_status,
+                  sk.status AS sku_status, pr.status AS product_status
+           FROM product_specifications ps
+           LEFT JOIN supplier_skus sk ON sk.id = ps.supplier_sku_id
+           LEFT JOIN supplier_products pr ON pr.id = ps.supplier_product_id
+           WHERE ps.id = ?`,
+          [pool.product_spec_id]
+        );
+        const physicalItem = physical[0];
+        if (!physicalItem ||
+            Number(physicalItem.supplier_id) !== Number(supplier_id) ||
+            Number(physicalItem.supplier_sku_id) !== Number(pool.supplier_sku_id) ||
+            Number(physicalItem.supplier_product_id) !== Number(pool.supplier_product_id) ||
+            physicalItem.lifecycle_status !== 'PUBLISHED' ||
+            physicalItem.sku_status !== 'PUBLISHED' ||
+            physicalItem.product_status !== 'PUBLISHED') {
+          await connection.rollback();
+          connection.release();
+          return res.status(409).json({
+            success: false,
+            error: { code: 'POOL_SKU_NOT_ELIGIBLE', message: 'Supplier-owned product and physical SKU must remain published before pool activation.' }
+          });
+        }
+      }
+
       // Fetch specification for unit conversion
       const spec = await productSpecificationRepo.findById(pool.product_spec_id);
 
