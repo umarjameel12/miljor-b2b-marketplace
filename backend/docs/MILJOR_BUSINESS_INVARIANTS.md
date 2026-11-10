@@ -10,10 +10,11 @@
 
 ## 1. Product Identity & Indivisible Packaging
 
-1. **Four-Way Product Linkage:**
+1. **Authoritative Six-Level Supplier-Owned Architecture (B1):**
    ```
-   Product (Catalog) -> Product Specification (Standardized) -> Supplier Listing (Inventory Anchor) -> Verified Supplier
+   MilJor Category -> MilJor Family -> Supplier Product -> Supplier Physical SKU -> Commercial Listing -> Regular Pool
    ```
+   The older `products` / `product_specifications` linkage remains a legacy compatibility bridge, not a requirement that MilJor pre-approve each supplier-defined physical variant.
 2. **Indivisible Packaging Rules:**
    - Units such as `bag`, `tin`, `carton`, `sack` are strictly indivisible discrete integers.
    - No fractional quantities are permitted for discrete packaging units (`step_size = 1.00`, integer validation enforced).
@@ -171,6 +172,13 @@
 2. **Permanent Commercial Immutability Upon Publish (Rules P3 & P4):** Publishing a pool sets `status = 'ACTIVE'`, `is_terms_locked = 1`, `terms_locked_at = NOW()`, and records `published_terms_snapshot`. Once published, all commercial terms and delivery clusters are permanently immutable (`422 POOL_TERMS_IMMUTABLE`), **even when the pool has zero buyer reservations**.
 3. **Mandatory 24-to-72 Hour Promised Delivery SLA (Rules P6 & P7):** Publishing requires `promised_delivery_at` within `[scheduled_close_at + 24 hours, scheduled_close_at + 72 hours]` inclusive (`422 PROMISED_DELIVERY_REQUIRED` / `422 DELIVERY_SLA_OUT_OF_RANGE`).
 
+## B1 Canonical Catalog Ownership & Commercial Scope
+1. MilJor owns category/family taxonomy only; suppliers own brands, variety, processing, grades, packaging, arbitrary valid positive pack sizes, units and specifications.
+2. The subscription plan's 4/13/25 limits apply solely to distinct active canonical families; multiple products, physical SKUs and active listings in the same family do not consume new family slots or trigger a separate listing-count restriction. Legacy `max_active_listings` values must not be used as a parallel quota.
+3. The initial food catalog comprises eight categories from migration 033 (including Bakery Ingredients, excluding packaging/tissues/boxes). The market-priority list of 25 product families is a proposed expansion roadmap, not a requirement to insert 25 rows or automatically authorize historical reclassification.
+4. Supplier-facing product creation is direct within approved families; historical `NEW_VARIANT` workflows remain only for compatibility and must not be marketed as mandatory moderation.
+5. Physical SKU identity is immutable after publication. New material specifications require a new SKU or product, preserving all historical orders and pools.
+
 ## 11. Subscription Entitlements & Distinct Family Counting (Package E3)
 1. **Distinct Canonical Family Metric:** Plan quotas (`STARTER=4`, `GROWTH=13`, `BUSINESS=25`) govern distinct active canonical product families (`catalog_product_families.id`).
 2. **Multi-SKU Same-Family Rule:** A supplier may create and publish unlimited physical SKUs, pack sizes, varieties, brands, commercial listings, and pools within an active canonical family without consuming additional quota slots.
@@ -200,5 +208,5 @@
 1. **Paid Plan Gating Invariant:** Ordinary suppliers cannot self-activate paid subscription tiers (`GROWTH`, `BUSINESS`) without verified Safepay checkout. Unverified upgrade requests fail closed with `402 SUBSCRIPTION_PAYMENT_REQUIRED`.
 2. **Annual Billing Guardrail:** Annual billing cycles are rejected with `400 INVALID_BILLING_CYCLE` until full annual prorated billing is introduced in Phase B11.
 3. **Cross-Supplier Isolation Invariant:** Ordinary suppliers cannot view or modify another supplier's subscription or entitlements (`403 FORBIDDEN`).
-4. **Administrative Override & Audit Logging:** Only `ADMIN` and `SUPER_ADMIN` may apply subscription plan overrides without immediate checkout, generating an immutable record in `system_audit_logs` (`action = 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN'`).
+4. **Paid Administrative Grants — B0.2 Binding Rule:** Even `ADMIN` and `SUPER_ADMIN` cannot activate unpaid GROWTH/BUSINESS plans unless a future commercial grant policy is explicitly authorized and implemented. Until then such attempts fail with `403 COMMERCIAL_GRANT_POLICY_REQUIRED`. Successful STARTER transitions remain subject to authorization and audit. Historical paid subscriptions remain preserved.
 5. **Historical Preservation Guarantee:** Downgrades to `STARTER` (free tier) preserve all historical products, SKUs, and listings with zero data truncation; excess families are flagged via `is_over_limit = true` without deleting catalog records.
