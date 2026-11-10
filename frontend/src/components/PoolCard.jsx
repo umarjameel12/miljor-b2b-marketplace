@@ -215,7 +215,10 @@ export const PoolCard = ({ pool, onSelect }) => {
                     <Clock className="w-3 h-3 text-amber-600" />
                     <span>Closes (PKT):</span>
                   </span>
-                  <strong className="font-mono text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                  <div className="flex flex-col gap-0.5">
+                    <CountdownTimer deadline={pool.scheduled_close_at || pool.expires_at} compact label="Closes in" />
+                    <strong className="font-mono text-[10px] text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                  </div>
                 </div>
               )}
               {promisedDeliveryFormatted && (
