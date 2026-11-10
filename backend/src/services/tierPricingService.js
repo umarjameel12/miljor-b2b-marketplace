@@ -6,6 +6,7 @@
 // =============================================================================
 
 const unitConversionService = require('./unitConversionService');
+const exactDecimal = require('./exactDecimal');
 
 class TierPricingService {
   /**
@@ -39,6 +40,22 @@ class TierPricingService {
       };
     }
 
+    // B4-E: The tier engine may return Number for legacy read models, but
+    // must reject excess precision, NaN, Infinity and exponential strings
+    // BEFORE any Number() rounding or SQL persistence.
+    const invalidDecimal = (value, maxIntegerDigits = 8) => {
+      try {
+        const exact = exactDecimal.toCanonical(value, 4);
+        if (exact.split('.')[0].replace('-', '').length > maxIntegerDigits ||
+            !exactDecimal.exactDecimalGte(exact, '0.0001', 4)) return true;
+        return false;
+      } catch (_) { return true; }
+    };
+    if (['supplier_min_qty', 'target_qty', 'purchase_increment'].some(
+      key => invalidDecimal(poolConfig[key] === undefined ? (key === 'purchase_increment' ? 1 : null) : poolConfig[key])
+    ) || (poolConfig.max_capacity != null && invalidDecimal(poolConfig.max_capacity))) {
+      return { valid: false, error: { code: 'INVALID_TIER_BOUNDARY', message: 'Pool tier boundaries must use valid positive DECIMAL(12,4) quantities.' } };
+    }
     const supplierMin = Number(poolConfig.supplier_min_qty);
     const targetQty = Number(poolConfig.target_qty);
     const maxCapacity = poolConfig.max_capacity !== undefined && poolConfig.max_capacity !== null
@@ -58,6 +75,13 @@ class TierPricingService {
 
     for (let i = 0; i < sorted.length; i++) {
       const raw = sorted[i];
+      if (invalidDecimal(raw.min_qty) || invalidDecimal(raw.max_qty) ||
+          invalidDecimal(raw.price_per_unit, 10)) {
+        return { valid: false, error: {
+          code: 'INVALID_TIER_DECIMAL',
+          message: `Tier ${i + 1} contains an invalid or excess-precision quantity/price.`
+        } };
+      }
       const minQty = Number(raw.min_qty);
       const maxQty = Number(raw.max_qty);
       const price = Number(raw.price_per_unit);
@@ -147,12 +171,12 @@ class TierPricingService {
         const prevMax = normalized[i - 1].max_qty;
         // Allowed next min_qty: either prevMax (continuous) or prevMax + increment / 1 (discrete/stepped)
         const expectedContiguousMinA = prevMax;
-        const expectedContiguousMinB = isDiscrete ? prevMax + 1 : prevMax + increment;
+        const expectedContiguousMinB = prevMax + increment;
 
         const matchesA = Math.abs(minQty - expectedContiguousMinA) < 0.0001;
         const matchesB = Math.abs(minQty - expectedContiguousMinB) < 0.0001;
 
-        if (minQty < prevMax) {
+        if (minQty < prevMax || (isDiscrete && minQty === prevMax)) {
           return {
             valid: false,
             error: {
