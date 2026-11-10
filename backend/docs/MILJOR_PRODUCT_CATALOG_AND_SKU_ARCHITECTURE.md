@@ -22,17 +22,24 @@ flowchart LR
 
 ## 2. Canonical Taxonomy Rules (Levels 1 & 2)
 
-### 2.1 Canonical Categories (`canonical_categories`)
-1. `Grains, Rice & Staples` (`grains-rice-staples`)
-2. `Edible Oils & Ghee` (`edible-oils-ghee`)
-3. `Flour, Atta & Baking Inputs` (`flour-atta-baking`)
-4. `Pulses, Lentils & Chickpeas` (`pulses-lentils-chickpeas`)
-5. `Sugar, Sweeteners & Jaggery` (`sugar-sweeteners-jaggery`)
-6. `Spices, Condiments & Seasonings` (`spices-condiments-seasonings`)
-7. `Dairy, Beverage & Tea Inputs` (`dairy-beverage-tea`)
-8. `HoReCa Packaging & Disposables` (`horeca-packaging-disposables`)
+### 2.1 Canonical Categories (`catalog_categories`)
 
-### 2.2 Canonical Product Families (`canonical_product_families`)
+These are the **actual eight initial food categories** seeded in migration 033. The platform can approve more categories later; eight is not a hardcoded global ceiling.
+
+1. `Grains & Rice` (`grains-rice`)
+2. `Cooking Oils & Ghee` (`cooking-oils-ghee`)
+3. `Flour & Milling Products` (`flour-milling-products`)
+4. `Pulses & Legumes` (`pulses-legumes`)
+5. `Sugar & Sweeteners` (`sugar-sweeteners`)
+6. `Spices & Seasonings` (`spices-seasonings`)
+7. `Tea & Beverages` (`tea-beverages`)
+8. `Bakery Ingredients` (`bakery-ingredients`)
+
+**Launch exclusion:** HoReCa packaging, tissue, boxes and disposables are **not** initial launch-facing product categories. Do not substitute them for Bakery Ingredients or insert them automatically. Historical data must still be preserved.
+
+**B1 owner separation:** MilJor approves only category/family taxonomy. Every supplier owns their product identity, grade, brand, packaging, pack quantity and physical SKU. Ordinary new SKUs under existing approved families do not require new-variant approval.
+
+### 2.2 Canonical Product Families (`catalog_product_families`)
 - **Commodity Consolidation & Separation:**
   - Both *Basmati Rice* and *Non-Basmati Rice* belong to the single canonical **`Rice`** family (`slug = 'rice'`, `measurement_dimension = 'MASS'`, `allowed_units_json = ["kg", "g"]`).
   - Both *Cooking Oil* and *Commercial Cooking Oil* belong to **`Cooking Oil`** (`slug = 'cooking-oil'`, `measurement_dimension = 'VOLUME'`, `allowed_units_json = ["L", "mL"]`), strictly separate from **`Banaspati Ghee`** (`slug = 'banaspati-ghee'`).
