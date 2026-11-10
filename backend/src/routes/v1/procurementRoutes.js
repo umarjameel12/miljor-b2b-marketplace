@@ -41,6 +41,10 @@ router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authoriz
 router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
 router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
 
+// B6-G/H award preview: buyer explicitly selects quote version and physical SKU.
+// No order, hold, ledger or checkout route is exposed before inventory/Safepay gate.
+router.post('/procurement/requests/:id/award-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartAward(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
