@@ -12,6 +12,14 @@ const { protect, authorize, authorizeStrict } = require('../../middlewares/authG
 router.get('/flash-pools', (req, res) => controller.getFlashPools(req, res));
 router.post('/flash-pools', protect, authorize('SUPPLIER', 'ADMIN'), (req, res) => controller.createFlashPool(req, res));
 
+// B6 Smart Procurement: safe buyer-only multi-item draft and publish API.
+// Registered before legacy RFQ routes, preserving B0-B4 compatibility.
+router.post('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.createSmartRequest(req,res));
+router.get('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.listSmartRequests(req,res));
+router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.getSmartRequest(req,res));
+router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
+router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
