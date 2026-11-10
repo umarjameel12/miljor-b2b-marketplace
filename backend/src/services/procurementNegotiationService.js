@@ -38,8 +38,9 @@ class ProcurementNegotiationService{
   constructor(database=db){this.database=database;}
   async requestBetterOffer(buyerId,requestId,quoteId,payload,rawKey){
     const buyer=id(buyerId),rid=id(requestId),qid=id(quoteId),idem=key(rawKey);
+    const requestedVersion=id(payload?.version_number);
     const input={message:message(payload?.message),target_total:money(payload?.target_total)};
-    const hash=crypto.createHash('sha256').update(JSON.stringify({rid,qid,...input})).digest('hex');
+    const hash=crypto.createHash('sha256').update(JSON.stringify({rid,qid,requestedVersion,...input})).digest('hex');
     const conn=await this.database.getConnection();
     try{
       await conn.beginTransaction();
@@ -47,13 +48,14 @@ class ProcurementNegotiationService{
         'SELECT id,status FROM procurement_requests WHERE id=? AND buyer_id=? FOR UPDATE',[rid,buyer]);
       if(!owned.length)throw fail('REQUEST_NOT_FOUND','Buyer request not found.',404);
       const [previous]=await conn.query(
-        'SELECT id,request_id,quote_id,payload_hash,status,requested_version FROM procurement_quote_negotiations WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
+        'SELECT id,request_id,quote_id,requested_version,status,buyer_message,buyer_target_total,created_at,payload_hash FROM procurement_quote_negotiations WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
         [buyer,idem]);
       if(previous.length){
         if(previous[0].payload_hash!==hash)
           throw fail('IDEMPOTENCY_CONFLICT','Key already used for a different negotiation.',409);
+        const {payload_hash, ...negotiation}=previous[0];
         await conn.commit();
-        return {negotiation:previous[0],is_replay:true};
+        return {negotiation,is_replay:true};
       }
       if(owned[0].status!=='OPEN')
         throw fail('REQUEST_NOT_OPEN','Only open procurement requests support negotiation.',409);
@@ -68,6 +70,8 @@ class ProcurementNegotiationService{
          WHERE q.id=? AND q.request_id=? FOR UPDATE`,[qid,rid]);
       const quote=quotes[0];
       if(!quote)throw fail('QUOTE_NOT_FOUND','Quote not found on this request.',404);
+      if(Number(quote.current_version)!==requestedVersion)
+        throw fail('QUOTE_VERSION_CHANGED','Supplier changed the quote. Refresh before requesting an improvement.',409);
       if(quote.status!=='ACTIVE')throw fail('QUOTE_NOT_ACTIVE','Cannot negotiate a withdrawn quotation.',409);
       const [[fresh]]=await conn.query(
         'SELECT (? > UTC_TIMESTAMP()) AS quote_valid',[quote.valid_until]);
