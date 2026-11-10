@@ -333,6 +333,13 @@ class ProcurementController {
     }catch(e){this._smartError(res,e);}
   }
   // B6-K: buyer-only quote/version acknowledgement. No financial mutation.
+  async qualifyCollectiveGroup(req,res){
+    try{
+      const result=await procurementCollectiveApprovalService.qualifyGroup(
+        req.user.id,req.params.groupId,req.body?.bid_version_id);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
   async previewCollectiveApproval(req,res){
     try{
       const preview=await procurementCollectiveApprovalService.preview(
