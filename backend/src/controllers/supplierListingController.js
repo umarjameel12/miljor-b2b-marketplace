@@ -13,6 +13,9 @@ class SupplierListingController {
   // 1. Create Supplier Listing (Verified Suppliers Only — supports supplier_sku_id or product_spec_id)
   async createListing(req, res) {
     try {
+      if (req.user.role !== 'SUPPLIER') {
+        return res.status(403).json({ success: false, error: { code: 'SUPPLIER_ONLY', message: 'Only suppliers can create commercial listings.' } });
+      }
       const supplierId = req.user.id;
       const {
         supplier_sku_id,
@@ -148,43 +151,30 @@ class SupplierListingController {
         });
       }
 
-      // 2. Validate price and quantities
-      const validation = unitService.validateQuantityAndPrice(
-        buyer_min_qty || 1,
-        base_unit_price
-      );
-      if (!validation.valid) {
+      // B3: Strict MySQL-compatible decimal inputs, no IEEE rounding or NaN.
+      const exact = require('../services/exactDecimal');
+      let stock, suppMin, buyerMin, price;
+      try {
+        const parseQty = (val, defaultValue, positive, maxIntegerDigits) => {
+          const out = exact.toCanonical(val === undefined ? defaultValue : val, 2);
+          const digits = out.replace('-', '').split('.')[0].length;
+          if (digits > maxIntegerDigits || !exact.exactDecimalGte(out, positive ? '0.01' : '0.00', 2)) throw new Error('Out of range');
+          return out;
+        };
+        price = parseQty(base_unit_price, undefined, true, 10);
+        stock = parseQty(available_stock, '0', false, 10);
+        suppMin = parseQty(supplier_min_qty, '1', true, 8);
+        buyerMin = parseQty(buyer_min_qty, '1', true, 8);
+      } catch (_) {
         return res.status(400).json({
           success: false,
-          error: { code: validation.code, message: validation.message }
+          error: { code: 'INVALID_COMMERCIAL_AMOUNT', message: 'Price, stock and MOQ must be finite decimals with no more than 2 fractional digits and within supported ranges.' }
         });
       }
-
-      const stock = available_stock !== undefined ? Number(available_stock) : 0;
-      const suppMin = supplier_min_qty !== undefined ? Number(supplier_min_qty) : 1;
-      const buyerMin = buyer_min_qty !== undefined ? Number(buyer_min_qty) : 1;
-
-      if (stock < 0) {
+      if (exact.exactDecimalGte(stock, '0.01', 2) && !exact.exactDecimalGte(stock, buyerMin, 2)) {
         return res.status(400).json({
           success: false,
-          error: { code: 'INVALID_STOCK', message: 'Available stock cannot be negative' }
-        });
-      }
-
-      if (suppMin <= 0 || buyerMin <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_MIN_QTY', message: 'Supplier and buyer minimum quantities must be greater than zero' }
-        });
-      }
-
-      // 2. Clear MOQ & Stock Semantics:
-      // buyer_min_qty: minimum quantity a single buyer may purchase/request
-      // supplier_min_qty: minimum batch threshold the supplier requires for fulfillment/dispatch
-      if (stock > 0 && buyerMin > stock) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_BUYER_MIN_QTY', message: 'Buyer minimum quantity cannot exceed available stock' }
+          error: { code: 'INVALID_BUYER_MIN_QTY', message: 'Buyer minimum cannot exceed positive available stock.' }
         });
       }
 
@@ -203,8 +193,11 @@ class SupplierListingController {
 
       // 4. Generate listing code & compute base unit pricing
       const listingCode = `LST-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const packSize = Number(spec.pack_size);
-      const pricePerBaseUnit = packSize > 0 ? Number((Number(base_unit_price) / packSize).toFixed(4)) : null;
+      const packSize = String(spec.pack_size);
+      if (!Number.isFinite(Number(packSize)) || Number(packSize) <= 0) {
+        return res.status(422).json({ success: false, error: { code: 'INVALID_PACK_SIZE', message: 'Product pack size must be positive.' } });
+      }
+      // Computed inside the transactional connection below using MySQL decimal arithmetic.
       const pricingUnit = spec.purchasing_unit || 'pack';
 
       // B1: Keep the family-cap row lock until the ACTIVE listing exists.
@@ -229,6 +222,10 @@ class SupplierListingController {
           err.code = 'LISTING_ALREADY_EXISTS';
           throw err;
         }
+        const [unitRows] = await conn.query(
+          'SELECT CAST(ROUND(CAST(? AS DECIMAL(12,2)) / CAST(? AS DECIMAL(12,4)), 4) AS CHAR) AS unit_price',
+          [price, packSize]
+        );
         listingId = await listingRepo.create({
         listing_code: listingCode,
         supplier_id: supplierId,
@@ -236,9 +233,9 @@ class SupplierListingController {
         supplier_product_id: resolvedSupplierProductId,
         supplier_sku_id: resolvedSupplierSkuId,
         available_stock: stock,
-        base_unit_price: Number(base_unit_price).toFixed(2),
+        base_unit_price: price,
         pricing_unit: pricingUnit,
-        price_per_base_unit: pricePerBaseUnit,
+        price_per_base_unit: unitRows[0].unit_price,
         currency: currency || 'PKR',
         supplier_min_qty: suppMin,
         buyer_min_qty: buyerMin,
