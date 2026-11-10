@@ -12,7 +12,7 @@ class CatalogController {
   // Helper: Standardized Error Response
   // ---------------------------------------------------------------------------
   _handleError(res, err, contextLabel) {
-    const status = err.status || 500;
+    const status = err.status || err.statusCode || 500;
     const code = err.code || 'SERVER_ERROR';
     if (status >= 500) {
       console.error(`[CatalogController:${contextLabel}]`, err);
@@ -24,6 +24,8 @@ class CatalogController {
         message: err.message || 'An unexpected catalog error occurred.'
       }
     };
+    if (err.subcode) payload.error.subcode = err.subcode;
+    if (err.details) payload.error.details = err.details;
     if (err.existingFamily) payload.error.existing_family = err.existingFamily;
     if (err.existingSpecification) payload.error.existing_specification = err.existingSpecification;
     if (err.existingRequest) payload.error.existing_request = err.existingRequest;

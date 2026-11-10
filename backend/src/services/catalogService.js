@@ -1503,6 +1503,11 @@ class CatalogService {
         err.code = 'INVALID_LIFECYCLE_TRANSITION';
         throw err;
       }
+
+      // Enforce subscription family limit
+      const subscriptionEntitlementService = require('./subscriptionEntitlementService');
+      await subscriptionEntitlementService.assertCanPublishInFamily(supplierId, existing.family_id, connection);
+
       const updated = await catalogRepo.transitionSupplierProductStatus(existing.id, 'PUBLISHED', connection);
       await connection.commit();
       return updated;
@@ -1852,6 +1857,10 @@ class CatalogService {
         err.code = 'FAMILY_INACTIVE';
         throw err;
       }
+
+      // 0. Enforce Subscription Family Entitlements under row lock (Package E3)
+      const subscriptionEntitlementService = require('./subscriptionEntitlementService');
+      await subscriptionEntitlementService.assertCanPublishInFamily(supplierId, sku.family_id, connection);
 
       // 1. Lock parent product to PUBLISHED as well
       await catalogRepo.transitionSupplierProductStatus(product.id, 'PUBLISHED', connection);

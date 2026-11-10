@@ -1203,3 +1203,30 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - `node tests/part_6d3_buyer_onboarding_pool_clusters_gate.js`: **11/11 PASS**
   - `node tests/part_6d3_2_backend_hardening_gate.js`: **11/11 PASS**
 - **Status:** **PASS (COMPLETE — READY FOR GITHUB SYNC)**.
+
+---
+
+## Packages E3–E6: Complete Marketplace Experience Implementation & Release
+- **Execution Date:** 2026-11-10
+- **Scope:** Package E3 (Subscriptions & Entitlements Engine), Package E4 (Advanced Procurement Modes: Flash Pools, Demand Requests, RFQs/Quotes, Recurring Contracts, Supplier Matching), Package E5 (Invoicing & JazzCash Gateway Sandbox Adapter), Package E6 (Two-Way Reviews, In-App Contextual Messaging & Anti-Bypass Filter, Sponsored Campaigns).
+- **Database Migration:**
+  - Migration `035`: `database/migrations/035_package_e3_e6_complete_marketplace_schema.sql` (and rollback script).
+  - Applied and verified on `miljor_test_db`.
+  - Consistent mysqldump backup of `miljor_db` verified via restoration parity check on temporary `miljor_recovery_verify_db` (64/64 tables, 8/8 users).
+  - Migration 035 applied to development database `miljor_db` with zero data loss.
+- **Architectural Deliverables:**
+  1. `subscriptionEntitlementService.js`: Distinct active canonical product family counting (`STARTER=4`, `GROWTH=13`, `BUSINESS=25`), multi-SKU family rule, concurrency-safe row locking, downgrade preservation guarantee.
+  2. `procurementService.js`: Flash clearance pools, buyer demand requests ("Request a Pool"), RFQ bidding with automatic order generation in `AWAITING_PAYMENT`, recurring procurement contracts, and multi-factor supplier matching.
+  3. `jazzcashAdapter.js`: HMAC-SHA256 signature calculation over sorted transaction parameters and server-side callback tamper detection.
+  4. `invoiceService.js`: Immutable commercial and tax invoice snapshots (`INV-YYYY-XXXXX`) with strict RBAC order party access control.
+  5. `reviewService.js`: Two-way ratings and reviews requiring completed/delivered orders, duplicate prevention, and anti-self-dealing verification.
+  6. `messagingService.js`: In-app conversation threads with automated heuristic detection of external contact leaks (Pakistani mobile numbers, WhatsApp, email) to preserve platform escrow guarantees.
+  7. `promotionService.js`: Sponsored campaigns and featured pool placements for verified suppliers.
+  8. Frontend Pages & Routes: `SupplierDashboardPage.jsx`, `SupplierSubscriptionPage.jsx`, `FlashPoolsPage.jsx`, `DemandRequestsPage.jsx`, `RfqPage.jsx`, wired cleanly into `App.jsx` with responsive AppShell layout.
+- **Automated Gate Results:**
+  - `package_e1_supplier_profile_gate.js`: **28/28 PASS (100%)**
+  - `package_e2_product_ownership_and_immutable_pools_gate.js`: **20/20 PASS (100%)**
+  - `package_e3_entitlements_and_supplier_portal_gate.js`: **14/14 PASS (100%)**
+  - `package_e4_e6_marketplace_engine_gate.js`: **10/10 PASS (100%)**
+  - Frontend production build (`vite build`): **PASS (0 errors, 5.72s)**
+- **Status:** **COMPLETE AND INDEPENDENTLY VERIFIED**.

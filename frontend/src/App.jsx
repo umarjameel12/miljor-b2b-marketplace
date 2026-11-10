@@ -19,6 +19,11 @@ import { SupplierOnboardingPage } from './pages/SupplierOnboardingPage';
 import { SupplierCatalogPage } from './pages/SupplierCatalogPage';
 import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { AdminCatalogPage } from './pages/AdminCatalogPage';
+import { SupplierDashboardPage } from './pages/SupplierDashboardPage';
+import { SupplierSubscriptionPage } from './pages/SupplierSubscriptionPage';
+import { FlashPoolsPage } from './pages/FlashPoolsPage';
+import { DemandRequestsPage } from './pages/DemandRequestsPage';
+import { RfqPage } from './pages/RfqPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -36,7 +41,7 @@ function AppContent() {
 
   // Showcase (/), marketplace (/pools), orders (/orders), profile (/profile), supplier (/supplier), and admin (/admin) use the responsive AppShell layout with sidebar.
   // Auth routes (/login, /register, /verify-email, /forgot-password) use the clean standalone Navbar.
-  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin');
+  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
 
   return (
     <div
@@ -54,6 +59,11 @@ function AppContent() {
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/flash-pools" element={<FlashPoolsPage />} />
+          <Route path="/demand-requests" element={<DemandRequestsPage />} />
+          <Route path="/rfqs" element={<RfqPage />} />
+          <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
+          <Route path="/supplier/subscription" element={<SupplierSubscriptionPage />} />
           <Route path="/supplier/profile" element={<SupplierProfilePage />} />
           <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />
           <Route path="/supplier/catalog" element={<SupplierCatalogPage />} />

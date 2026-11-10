@@ -170,3 +170,26 @@
 1. **Supplier-Only Creation & Publishing (Rule P1):** Only the verified owning `SUPPLIER` may create, edit in draft, configure clusters, or publish a Regular Pool. `ADMIN` is strictly blocked (`403 FORBIDDEN`, `subcode: 'SUPPLIER_CONSENT_REQUIRED'`).
 2. **Permanent Commercial Immutability Upon Publish (Rules P3 & P4):** Publishing a pool sets `status = 'ACTIVE'`, `is_terms_locked = 1`, `terms_locked_at = NOW()`, and records `published_terms_snapshot`. Once published, all commercial terms and delivery clusters are permanently immutable (`422 POOL_TERMS_IMMUTABLE`), **even when the pool has zero buyer reservations**.
 3. **Mandatory 24-to-72 Hour Promised Delivery SLA (Rules P6 & P7):** Publishing requires `promised_delivery_at` within `[scheduled_close_at + 24 hours, scheduled_close_at + 72 hours]` inclusive (`422 PROMISED_DELIVERY_REQUIRED` / `422 DELIVERY_SLA_OUT_OF_RANGE`).
+
+## 11. Subscription Entitlements & Distinct Family Counting (Package E3)
+1. **Distinct Canonical Family Metric:** Plan quotas (`STARTER=4`, `GROWTH=13`, `BUSINESS=25`) govern distinct active canonical product families (`catalog_product_families.id`).
+2. **Multi-SKU Same-Family Rule:** A supplier may create and publish unlimited physical SKUs, pack sizes, varieties, brands, commercial listings, and pools within an active canonical family without consuming additional quota slots.
+3. **Enforcement Boundaries:** Server-side entitlement validation is enforced under `SELECT ... FOR UPDATE` row locking at: SKU publish, Product publish, Listing creation, and Regular Pool publication.
+4. **Historical Preservation Guarantee:** Downgrades preserve all historical products, SKUs, listings, and pools. Downgrading flags `is_over_limit = true` without deleting or archiving existing records. Adding subsequent families beyond the new quota is fail-closed blocked (`403 ENTITLEMENT_LIMIT_EXCEEDED`).
+
+## 12. Advanced Procurement Modes & Supplier Matching (Package E4)
+1. **Flash Clearance Pools:** Time-delimited inventory clearance (`flash_pools`) with fixed discount pricing, remaining stock countdowns, and maximum clearance limits.
+2. **Buyer-Initiated Demand Requests:** Buyers can aggregate demand ("Request a Pool") by specifying desired commodity specifications, target volume, unit, and cluster.
+3. **RFQs & Supplier Quotations:** Direct B2B RFQs accept competing supplier bids. Buyer acceptance automatically transitions accepted bid to `ACCEPTED`, rejects other bids, and generates an authoritative order in `AWAITING_PAYMENT`.
+4. **Recurring Contracts:** Scheduled periodic procurement contracts (`WEEKLY`, `BIWEEKLY`, `MONTHLY`) with agreed volume pricing and automated next-delivery scheduling.
+5. **Supplier Matching Engine:** Algorithmic ranking prioritizing verified suppliers, price competitiveness, inventory stock feasibility, and Lahore cluster proximity.
+
+## 13. Financial Invoicing & JazzCash Payment Gateway (Package E5)
+1. **Immutable Invoicing Snapshot:** Invoices (`INV-YYYY-XXXXX`) freeze tax/commercial snapshot JSON (`invoice_snapshot_json`) upon order placement.
+2. **Strict Invoice RBAC:** Only the purchasing buyer, fulfilling supplier, or system admin can view order invoice snapshots (`403 FORBIDDEN` for third parties).
+3. **JazzCash Sandbox Payment Adapter:** Computes HMAC-SHA256 signatures over alphabetically sorted transaction parameters. Server-to-server callback verification detects parameter tampering and rejects fraudulent payment confirmations.
+
+## 14. Trust, Messaging & Promotion Marketplace Invariants (Package E6)
+1. **Two-Way Verified Reviews:** Ratings and reviews require order status `COMPLETED` or `DELIVERED`. Strictly one review per party per order (`409 DUPLICATE_REVIEW`). Self-reviews are strictly forbidden (`403 SELF_REVIEW_PROHIBITED`).
+2. **In-App Messaging & Anti-Bypass Guardrails:** Contextual messaging tied to orders or pools. Automated heuristic filter flags Pakistani telephone numbers, WhatsApp contact requests, and emails with safety reminders to maintain escrow guarantees within MilJor.
+3. **Sponsored Promotions:** Suppliers can sponsor listings or feature pools within budget and date constraints (`start_date <= CURDATE() <= end_date`).

@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../../controllers/adminController');
 const catalogController = require('../../controllers/catalogController');
+const subscriptionController = require('../../controllers/subscriptionController');
 const {
   protect,
   authorizeVerification,
@@ -132,6 +133,21 @@ router.put(
   '/users/:id/reactivate',
   authorize('SUPER_ADMIN'),
   (req, res) => adminController.reactivateUser(req, res)
+);
+
+// ---------------------------------------------------------------------------
+// Subscription Plans Administration (Package E3)
+// ---------------------------------------------------------------------------
+router.get(
+  '/subscriptions/plans',
+  authorizeOperations,
+  (req, res) => subscriptionController.getPlans(req, res)
+);
+
+router.put(
+  '/subscriptions/plans/:planCode',
+  authorize('SUPER_ADMIN', 'OPERATIONS_ADMIN', 'ADMIN'),
+  (req, res) => subscriptionController.adminUpdatePlan(req, res)
 );
 
 module.exports = router;

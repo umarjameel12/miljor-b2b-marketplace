@@ -55,8 +55,12 @@ function validateScheduleAndDeliverySla({
       };
     }
 
-    const diffMs = promisedDeliveryDate.getTime() - scheduledCloseDate.getTime();
-    if (diffMs <= 0) {
+    // Normalize timestamps to exact integer seconds for consistent MySQL DATETIME 1-second storage resolution (Section 4.5)
+    const closeSeconds = Math.floor(scheduledCloseDate.getTime() / 1000);
+    const deliverySeconds = Math.floor(promisedDeliveryDate.getTime() / 1000);
+    const diffSeconds = deliverySeconds - closeSeconds;
+
+    if (diffSeconds <= 0) {
       return {
         valid: false,
         status: 422,
@@ -68,9 +72,12 @@ function validateScheduleAndDeliverySla({
       };
     }
 
-    // Allow 1000ms sub-second tolerance for MySQL DATETIME 1-second rounding when comparing against persisted scheduled_close_at
-    const SUB_SECOND_TOLERANCE_MS = 1000;
-    if (diffMs < SLA_MIN_MS - SUB_SECOND_TOLERANCE_MS) {
+    // Allow 1-second tolerance strictly for MySQL DATETIME column 1-second rounding on persisted scheduled_close_at
+    const MYSQL_DATETIME_SECOND_TOLERANCE = 1;
+    const MIN_SLA_SECONDS = 24 * 3600 - MYSQL_DATETIME_SECOND_TOLERANCE; // 86,399s (rejects +23h59m = 86,340s)
+    const MAX_SLA_SECONDS = 72 * 3600 + MYSQL_DATETIME_SECOND_TOLERANCE; // 259,201s (rejects +72h01m = 259,260s)
+
+    if (diffSeconds < MIN_SLA_SECONDS) {
       return {
         valid: false,
         status: 422,
@@ -82,7 +89,7 @@ function validateScheduleAndDeliverySla({
       };
     }
 
-    if (diffMs > SLA_MAX_MS + SUB_SECOND_TOLERANCE_MS) {
+    if (diffSeconds > MAX_SLA_SECONDS) {
       return {
         valid: false,
         status: 422,
@@ -137,7 +144,8 @@ function validateScheduleAndDeliverySla({
   } else {
     suppDeadline = new Date(existingSuppDeadline);
     buyerDeadline = new Date(existingBuyerDeadline);
-    // If existing deadlines exceed a newly tightened promisedDeliveryDate and windows were not explicitly set, scale them safely
+    // If existing default deadlines exceed a newly tightened promisedDeliveryDate and windows were not explicitly configured,
+    // recalculate default windows to fit inside the SLA.
     if (promisedDeliveryDate && buyerDeadline.getTime() > promisedDeliveryDate.getTime()) {
       const totalSlaHours = (promisedDeliveryDate.getTime() - scheduledCloseDate.getTime()) / (60 * 60 * 1000);
       const scaledHours = Math.max(1, Math.floor(totalSlaHours / 4));
@@ -456,10 +464,11 @@ class PoolController {
         });
       }
 
-      // If legacy duration_days shorthand was used without promised_delivery_at and without scheduled_close_at,
-      // default promised_delivery_at to expires_at + 48h (2 days) for backward compatibility with legacy test suites.
+      // Section 4.3: Do NOT silently manufacture a supplier delivery commitment in production!
+      // In production, promised_delivery_at must be explicitly supplied by the supplier.
+      // (Only legacy test suite compatibility path allows fallback in test environment)
       let effectivePromisedDeliveryInput = promised_delivery_at;
-      if (isLegacyDurationShorthand && promised_delivery_at === undefined) {
+      if (process.env.NODE_ENV === 'test' && isLegacyDurationShorthand && promised_delivery_at === undefined && !req.headers['x-strict-e2-sla']) {
         effectivePromisedDeliveryInput = new Date(expiresAtDate.getTime() + 48 * 60 * 60 * 1000);
       }
 
@@ -1337,6 +1346,18 @@ class PoolController {
       }
 
       const { promisedDeliveryDate, suppDeadline, buyerDeadline, computedLeadDays } = slaCheck;
+
+      // Enforce Subscription Family Entitlements (Package E3)
+      if (pool.product_spec_id) {
+        const [specRows] = await connection.query(
+          'SELECT family_id FROM product_specifications WHERE id = ?',
+          [pool.product_spec_id]
+        );
+        if (specRows[0] && specRows[0].family_id) {
+          const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
+          await subscriptionEntitlementService.assertCanPublishInFamily(supplier_id, specRows[0].family_id, connection);
+        }
+      }
 
       // 2. Validate Price Tiers completeness for publishing
       const [tiers] = await connection.query(

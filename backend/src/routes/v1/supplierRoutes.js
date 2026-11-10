@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const profileController = require('../../controllers/supplierProfileController');
 const supDelivController = require('../../controllers/supplierDeliveryController');
+const subscriptionController = require('../../controllers/subscriptionController');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
 
 // All supplier portal routes require authenticated session
@@ -21,7 +22,14 @@ router.post('/verification/submit', authorizeStrict('SUPPLIER'), (req, res) => p
 router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => profileController.getVerificationStatus(req, res));
 
 // ---------------------------------------------------------------------------
-// 2. Supplier Delivery Settings & Pickup Points (Special Phase G2 Backward Compatibility)
+// 2. Supplier Subscriptions & Entitlements (Package E3)
+// ---------------------------------------------------------------------------
+router.get('/subscription', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.getMySubscription(req, res));
+router.post('/subscription/upgrade', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.changePlan(req, res));
+router.get('/subscription/plans', (req, res) => subscriptionController.getPlans(req, res));
+
+// ---------------------------------------------------------------------------
+// 3. Supplier Delivery Settings & Pickup Points (Special Phase G2 Backward Compatibility)
 // ---------------------------------------------------------------------------
 router.get('/delivery-settings', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => supDelivController.getSettings(req, res));
 router.put('/delivery-settings', authorizeStrict('SUPPLIER'), (req, res) => supDelivController.updateSettings(req, res));

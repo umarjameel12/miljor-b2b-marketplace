@@ -7,6 +7,7 @@ const listingRepo = require('../repositories/supplierListingRepo');
 const specRepo = require('../repositories/productSpecificationRepo');
 const catalogRepo = require('../repositories/catalogRepository');
 const unitService = require('../services/unitConversionService');
+const db = require('../config/db');
 
 class SupplierListingController {
   // 1. Create Supplier Listing (Verified Suppliers Only — supports supplier_sku_id or product_spec_id)
@@ -191,6 +192,33 @@ class SupplierListingController {
       const packSize = Number(spec.pack_size);
       const pricePerBaseUnit = packSize > 0 ? Number((Number(base_unit_price) / packSize).toFixed(4)) : null;
       const pricingUnit = spec.purchasing_unit || 'pack';
+
+      // 4B. Enforce Subscription Family & Listing Entitlements (Package E3)
+      if (spec.family_id) {
+        const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
+        const conn = await db.getConnection();
+        try {
+          await conn.beginTransaction();
+          await subscriptionEntitlementService.assertCanPublishInFamily(supplierId, spec.family_id, conn);
+          const entitlements = await subscriptionEntitlementService.getSupplierEntitlements(supplierId, conn);
+          if (entitlements.active_listings_count >= entitlements.max_active_listings) {
+            const err = new Error(`Supplier plan ${entitlements.plan_code} allows a maximum of ${entitlements.max_active_listings} active listings. Upgrade your subscription plan.`);
+            err.code = 'ENTITLEMENT_LIMIT_EXCEEDED';
+            err.subcode = 'LISTINGS_CAP_REACHED';
+            err.statusCode = 403;
+            throw err;
+          }
+          await conn.commit();
+        } catch (err) {
+          await conn.rollback();
+          conn.release();
+          return res.status(err.statusCode || 403).json({
+            success: false,
+            error: { code: err.code || 'ENTITLEMENT_LIMIT_EXCEEDED', message: err.message, details: err.details }
+          });
+        }
+        conn.release();
+      }
 
       // 5. Create listing
       const listingId = await listingRepo.create({
