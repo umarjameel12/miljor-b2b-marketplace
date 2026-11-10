@@ -10,7 +10,10 @@ const { protect, authorize, authorizeStrict } = require('../../middlewares/authG
 
 // Flash Pools
 router.get('/flash-pools', (req, res) => controller.getFlashPools(req, res));
-router.post('/flash-pools', protect, authorize('SUPPLIER', 'ADMIN'), (req, res) => controller.createFlashPool(req, res));
+router.post('/flash-pools', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.createFlashPool(req, res));
+router.get('/flash-pools/mine', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.getMyFlashPools(req, res));
+router.post('/flash-pools/:id/publish', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.publishFlashPool(req, res));
+router.post('/flash-pools/:id/hold', protect, authorizeStrict('BUYER'), (req, res) => controller.reserveFlashPool(req, res));
 
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
