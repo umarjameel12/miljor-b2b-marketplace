@@ -51,13 +51,31 @@ class ProcurementRequestService {
     if (!unique.length) throw issue('INVALID_REQUEST_ITEMS','At least one item is required.');
     const placeholders = unique.map(() => '?').join(',');
     const [rows] = await conn.query(
-      `SELECT id FROM catalog_product_families WHERE id IN (${placeholders})
+      `SELECT id,allowed_pack_units,allowed_purchasing_units FROM catalog_product_families WHERE id IN (${placeholders})
          AND is_active=1 AND approval_status='APPROVED'`,
       unique
     );
-    const found = new Set(rows.map(r => Number(r.id)));
+    const found = new Map(rows.map(row => [Number(row.id), row]));
     if (unique.some(id => !found.has(id))) {
       throw issue('FAMILY_NOT_AVAILABLE', 'One or more product families are unavailable.', 409);
+    }
+    for (const item of items) {
+      const family = found.get(item.family_id);
+      // Catalog 033 stores physical/packaging options in two JSON columns.
+      // Accept only units explicitly whitelisted by the canonical family.
+      const allowed = [];
+      for (const field of ['allowed_pack_units','allowed_purchasing_units']) {
+        const raw = family[field];
+        let values;
+        try { values = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+        catch { throw issue('FAMILY_UNITS_INVALID','Product family units are not configured safely.',409); }
+        if (!Array.isArray(values)) throw issue('FAMILY_UNITS_INVALID','Product family units are not configured safely.',409);
+        allowed.push(...values.filter(value => typeof value === 'string')
+          .map(value => value.trim().toLowerCase()));
+      }
+      if (!allowed.includes(item.unit)) {
+        throw issue('INCOMPATIBLE_FAMILY_UNIT', 'The selected product family does not support the requested unit.', 409);
+      }
     }
   }
 
