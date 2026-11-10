@@ -260,7 +260,22 @@ class PoolController {
         }
         if (!product_spec_id) product_spec_id = sku.linked_spec_id;
         if (!supplier_product_id) supplier_product_id = sku.supplier_product_id;
-        if (!product_id) product_id = sku.family_id;
+        // B4-A: canonical family_id is NOT the legacy products.id FK.
+        // The SKU's immutable published specification owns the correct
+        // legacy product reference used by pools and existing orders.
+        if (!product_id) {
+          const publishedSpec = await productSpecificationRepo.findById(sku.linked_spec_id);
+          if (!publishedSpec || !publishedSpec.is_active ||
+              Number(publishedSpec.supplier_sku_id) !== Number(sku.id) ||
+              Number(publishedSpec.supplier_id) !== Number(supplier_id) ||
+              publishedSpec.lifecycle_status !== 'PUBLISHED') {
+            return res.status(422).json({
+              success: false,
+              error: { code: 'SKU_SPECIFICATION_MISMATCH', message: 'Published SKU has no eligible matching physical specification.' }
+            });
+          }
+          product_id = publishedSpec.product_id;
+        }
       }
 
       // 1. Mandatory Identity Validations
