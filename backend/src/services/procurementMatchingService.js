@@ -173,8 +173,17 @@ class ProcurementMatchingService {
         `SELECT line_number,family_id,quantity,unit,requirements,allow_substitutions
          FROM procurement_request_items WHERE request_id=? ORDER BY line_number`,[row.request_id]
       );
-      row.items=items;
-      // Never expose buyer_id, individual delivery address, account or contact.
+      row.items=items.map(item => ({
+        ...item,
+        // Request text is user-controlled. Never relay phone, email or
+        // WhatsApp contact details to suppliers via invitation previews.
+        requirements: typeof item.requirements === 'string'
+          ? item.requirements
+              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
+              .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')
+          : null
+      }));
+      // Never expose buyer_id, delivery address, account or contact.
     }
     return rows;
   }
@@ -213,6 +222,23 @@ class ProcurementMatchingService {
            AND u.verification_status='VERIFIED' AND sp.verification_status='VERIFIED'`,[id]
       );
       if(!verified.length)throw error('SUPPLIER_NOT_VERIFIED','A verified supplier is required.',403);
+      // Interest is informational, but the supplier must still have at least
+      // one qualifying active listing today; stale invitations cannot be used
+      // to imply an eligible offer.
+      if(decision==='INTERESTED'){
+        const [requestRows]=await conn.query(
+          `SELECT id,buyer_id,request_code,status,delivery_area,quote_deadline
+           FROM procurement_requests WHERE id=?`,[lookup[0].request_id]
+        );
+        const [requestItems]=await conn.query(
+          'SELECT id,line_number,family_id,quantity,unit,requirements,allow_substitutions FROM procurement_request_items WHERE request_id=? ORDER BY line_number',
+          [lookup[0].request_id]
+        );
+        if(!requestRows.length || !(await this._candidates(conn,{...requestRows[0],items:requestItems}))
+            .some(candidate=>candidate.supplier_id===id)) {
+          throw error('SUPPLIER_NOT_ELIGIBLE','Supplier no longer has a qualifying offer for this request.',409);
+        }
+      }
       await conn.query(
         'UPDATE procurement_supplier_invitations SET status=?,responded_at=UTC_TIMESTAMP() WHERE id=?',
         [decision,iid]
