@@ -319,7 +319,7 @@ export const RfqPage = () => {
     finally{setQuoteBusy(false);}
   };
 
-  const requestBetterSmartOffer = async (quoteId) => {
+  const requestBetterSmartOffer = async (quoteId,versionNumber) => {
     if(!compareRequestId)return;
     const message=improvementNotes[quoteId]?.trim()||'';
     if(message.length<5){setShoppingError('Describe the requested improvement (at least 5 characters).');return;}
@@ -328,7 +328,8 @@ export const RfqPage = () => {
     try{
       await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quoteId}/improve`,{
         method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
-        body:JSON.stringify({message,target_total:improvementTargets[quoteId]||null})
+        body:JSON.stringify({message,target_total:improvementTargets[quoteId]||null,
+          version_number:versionNumber})
       });
       const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/negotiations`);
       setBuyerNegotiations(data.negotiations||[]);
@@ -687,7 +688,7 @@ export const RfqPage = () => {
                       <button type="button" disabled={quoteBusy ||
                         buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
                           Number(n.requested_version)===Number(quote.current_version))}
-                        onClick={()=>requestBetterSmartOffer(quote.id)}
+                        onClick={()=>requestBetterSmartOffer(quote.id,quote.current_version)}
                         className="text-xs underline disabled:opacity-40">
                         {buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
                           Number(n.requested_version)===Number(quote.current_version))
