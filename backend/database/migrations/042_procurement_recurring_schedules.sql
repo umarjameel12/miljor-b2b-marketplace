@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS procurement_recurring_contracts (
   payment_policy ENUM('EXPLICIT_PER_CYCLE') NOT NULL DEFAULT 'EXPLICIT_PER_CYCLE',
   pricing_policy ENUM('REQUOTE_EACH_CYCLE') NOT NULL DEFAULT 'REQUOTE_EACH_CYCLE',
   status ENUM('DRAFT','ACTIVE','PAUSED','CANCELLED','EXPIRED') NOT NULL DEFAULT 'DRAFT',
+  activated_at TIMESTAMP NULL DEFAULT NULL,
   created_idempotency_key VARCHAR(120) NOT NULL,
   request_hash CHAR(64) NOT NULL,
   original_response_snapshot JSON NULL,
