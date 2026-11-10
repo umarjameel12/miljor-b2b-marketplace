@@ -34,7 +34,7 @@ A proposed `briefs`, `listings`, `secretary`, `backend-v2`, `src-copy` or `B4-co
 4. Preserve uncommitted changes, never force reset or overwrite. Do not bulk-copy source between local folders, GitHub branches or chat transcripts.
 5. After a verified branch sync, ensure `git rev-parse HEAD` matches `git rev-parse origin/<branch>` and `git diff --exit-code` is clean. A clean GitHub source tree **does not prove** a user's local files are synchronized.
 6. B2 accepted `feature/package-e` current final SHA: `fcbd82dafcb236f9cee980904ebddba5c1ab1999`.
-7. B3 acceptance on `feature/b3-commercial-offers` is running independently. B4 source branch `feature/b4-regular-pools` was created from B3 **pre-acceptance** checkpoint `fd3d116098abfe00e0ce9f22eb9b0d46514a38c6`. The branch must eventually **integrate accepted B2 fixes and B3 corrections** before B4 final tests. No assertion of B4 release readiness before this reconciliation.
+7. B3 acceptance on `feature/b3-commercial-offers` **PASSED** (81/81, SHA `44f591d7fdd9c16f7a43c10d01de2b50bb637e7e`). B4 initially branched from pre-acceptance `fd3d1160`, but the actual accepted B2/B3 source files were reconciled into their original paths and the **two-parent Git merge commit `9f2e057fc3fd2d3bf7ebc0e614079e7ad8b89ea1`** made accepted B3 a proper ancestor of B4. The B4 branch still requires its OWN final DB/API/React acceptance gate.
 8. No two mutable test suites may run concurrently on the same `miljor_test_db`. Preserve protected `miljor_db` state and verify test DB identity.
 9. Commit actual code + corresponding tests + factual report in canonical paths; verify final remote/local branch parity after Antigravity sync.
 
