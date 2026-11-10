@@ -4,8 +4,73 @@
 // =============================================================================
 
 const procurementService = require('../services/procurementService');
+const procurementRequestService = require('../services/procurementRequestService');
 
 class ProcurementController {
+
+  // B6: buyer-owned shopping lists (no checkout, inventory allocation or quotes).
+  async createSmartRequest(req, res) {
+    try {
+      const result = await procurementRequestService.createDraft(
+        req.user.id, req.body, req.headers['x-idempotency-key']
+      );
+      res.status(result.is_replay ? 200 : 201).json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async listSmartRequests(req, res) {
+    try {
+      const requests = await procurementRequestService.listMine(req.user.id);
+      res.json({ success: true, data: { requests } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async getSmartRequest(req, res) {
+    try {
+      const request = await procurementRequestService.getMine(req.user.id,req.params.id);
+      res.json({ success: true, data: { request } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async updateSmartRequest(req, res) {
+    try {
+      this._smartKey(req);
+      const request = await procurementRequestService.updateDraft(
+        req.user.id, req.params.id, req.body, req.body?.version_number
+      );
+      res.json({ success: true, data: { request } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async publishSmartRequest(req, res) {
+    try {
+      this._smartKey(req);
+      const result = await procurementRequestService.publish(
+        req.user.id, req.params.id, req.body?.version_number
+      );
+      res.json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  _smartKey(req) {
+    const value = req.headers['x-idempotency-key'];
+    if (typeof value !== 'string' || !/^[a-zA-Z0-9:_-]{12,120}$/.test(value.trim())) {
+      const err = new Error('A valid X-Idempotency-Key is required.');
+      err.code = 'INVALID_IDEMPOTENCY_KEY';
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  _smartError(res, err) {
+    res.status(err.statusCode || 500).json({
+      success: false,
+      error: {
+        code: err.statusCode ? err.code : 'SERVER_ERROR',
+        message: err.statusCode ? err.message : 'Procurement request could not be processed.'
+      }
+    });
+  }
 
   // Flash Pools
   async createFlashPool(req, res) {
