@@ -32,6 +32,8 @@ router.post('/procurement/supplier/invitations/:invitationId/respond',protect,au
 router.post('/procurement/supplier/requests/:id/quotes',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitSmartQuote(req,res));
 router.get('/procurement/supplier/quotes',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listMySmartQuotes(req,res));
 router.get('/procurement/requests/:id/quotes',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartQuotes(req,res));
+router.get('/procurement/requests/:id/quotes/:quoteId/versions',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartQuoteHistory(req,res));
+router.post('/procurement/supplier/quotes/:quoteId/withdraw',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.withdrawSmartQuote(req,res));
 
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
