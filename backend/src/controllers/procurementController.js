@@ -13,6 +13,8 @@ const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 const procurementCollectiveService = require('../services/procurementCollectiveService');
 const procurementRecurringService = require('../services/procurementRecurringService');
 const procurementAwardService = require('../services/procurementAwardService');
+const procurementCollectiveBidService = require('../services/procurementCollectiveBidService');
+const procurementCollectiveApprovalService = require('../services/procurementCollectiveApprovalService');
 
 class ProcurementController {
 
@@ -293,6 +295,45 @@ class ProcurementController {
       const award=await procurementAwardService.getMine(req.user.id,req.params.awardId);
       res.json({success:true,data:{award}});
     }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-J: supplier-owned collective group bidding.
+  async openCollectiveBidding(req,res){
+    try{
+      const result=await procurementCollectiveBidService.openBidding(
+        req.user.id,req.params.groupId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async submitCollectiveBid(req,res){
+    try{
+      const result=await procurementCollectiveBidService.submitBid(
+        req.user.id,req.params.groupId,req.body,req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async listCollectiveBids(req,res){
+    try{
+      const bids=await procurementCollectiveBidService.listForBuyer(
+        req.user.id,req.params.groupId);
+      res.json({success:true,data:{bids}});
+    }catch(e){this._smartError(res,e);}
+  }
+  // B6-K: buyer-only quote/version acknowledgement. No financial mutation.
+  async previewCollectiveApproval(req,res){
+    try{
+      const preview=await procurementCollectiveApprovalService.preview(
+        req.user.id,req.params.groupId,req.params.bidId);
+      res.json({success:true,data:{preview}});
+    }catch(e){this._smartError(res,e);}
+  }
+  async consentCollectiveApproval(req,res){
+    try{
+      const result=await procurementCollectiveApprovalService.consent(
+        req.user.id,req.params.groupId,req.params.bidId,req.body,
+        req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
   }
 
   // Flash Pools
