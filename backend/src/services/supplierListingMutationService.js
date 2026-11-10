@@ -93,7 +93,8 @@ class SupplierListingMutationService {
 
       const nextStock = changes.available_stock ?? String(listing.available_stock);
       const nextBuyerMin = changes.buyer_min_qty ?? String(listing.buyer_min_qty);
-      if (!exact.exactDecimalGte(nextStock, nextBuyerMin, 2) && changes.status === 'ACTIVE') {
+      const nextStatus = changes.status || listing.status;
+      if (!exact.exactDecimalGte(nextStock, nextBuyerMin, 2) && nextStatus === 'ACTIVE') {
         throw invalid('INSUFFICIENT_STOCK', 'ACTIVE listing requires stock at least buyer minimum', 409);
       }
       if (changes.status === 'ACTIVE') {
