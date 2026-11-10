@@ -41,6 +41,11 @@ export const RfqPage = () => {
   const [supplierInvitations, setSupplierInvitations] = useState([]);
   const [supplierInbox, setSupplierInbox] = useState([]);
   const [matchingBusy, setMatchingBusy] = useState(false);
+  const [selectedQuotesRequest,setSelectedQuotesRequest] = useState(null);
+  const [buyerQuotes,setBuyerQuotes] = useState([]);
+  const [supplierQuoteDrafts,setSupplierQuoteDrafts] = useState({});
+  const [quoteBusy,setQuoteBusy] = useState(false);
+
 
 
   const availableUnits = familyId => {
@@ -247,6 +252,54 @@ export const RfqPage = () => {
       toast.success(decision==='INTERESTED'?'Interest registered':'Invitation declined');
     }catch(err){toast.error(err.message);}
     finally{setMatchingBusy(false);}
+  };
+
+  const viewBuyerQuotes = async requestId => {
+    setQuoteBusy(true);
+    setShoppingError('');
+    try {
+      const data=await procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`);
+      setSelectedQuotesRequest(requestId);
+      setBuyerQuotes(data.quotes || []);
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const updateQuoteDraft = (invitationId,patch) => {
+    setSupplierQuoteDrafts(old=>({
+      ...old,[invitationId]:{...(old[invitationId]||{}),...patch}
+    }));
+  };
+
+  const submitSmartSupplierQuote = async invitation => {
+    setQuoteBusy(true);
+    try {
+      const saved=supplierQuoteDrafts[invitation.invitation_id]||{};
+      const lines=(invitation.items||[]).flatMap(item=>{
+        const line=saved.lines?.[item.id];
+        return line?.supplier_listing_id && line?.unit_price ? [{
+          request_item_id:item.id,
+          supplier_listing_id:Number(line.supplier_listing_id),
+          quantity:String(item.quantity),
+          unit_price:String(line.unit_price)
+        }] : [];
+      });
+      if(!lines.length)throw Error('Select an eligible listing and price for at least one item.');
+      const deadline=saved.valid_until || new Date(Date.now()+24*60*60*1000).toISOString();
+      const result=await procurementApi(`/api/v1/procurement/supplier/requests/${invitation.request_id}/quotes`,{
+        method:'POST',
+        headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({
+          lines,delivery_fee:saved.delivery_fee||'0',
+          delivery_lead_days:Number(saved.delivery_lead_days??2),
+          valid_until:new Date(deadline).toISOString(),
+          supplier_notes:saved.supplier_notes||''
+        })
+      });
+      toast.success(`Quotation version ${result.quote.version_number} submitted`);
+      setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
+    }catch(error){toast.error(error.message);}
+    finally{setQuoteBusy(false);}
   };
 
   // Buyer RFQ Form
@@ -467,7 +520,7 @@ export const RfqPage = () => {
                 onClick={()=>{setActiveRequest(null);setShoppingList([emptyItem()]);setDeliveryArea('');setQuoteDeadline('');setShoppingError('');}}
                 className="text-sm px-3 py-2 underline">Start New</button>}
             </div>
-            <p className="text-xs text-[var(--text-muted)]">No payment or stock reservation happens when you publish. Supplier bidding and quote comparison will activate in the next verified implementation stage.</p>
+            <p className="text-xs text-[var(--text-muted)]">No payment or stock reservation happens when you publish. Suppliers can now submit quotations. Buyer acceptance and payment will activate after the secure ordering stage.</p>
             {savedRequests.length>0 && (
               <div className="border-t border-[var(--border-subtle)] pt-3">
                 <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
@@ -482,10 +535,40 @@ export const RfqPage = () => {
                         {request.status==='OPEN' &&
                           <button type="button" disabled={matchingBusy} onClick={()=>viewSupplierMatches(request.id)}
                             className="text-[var(--brand-accent)] underline text-xs">Find suppliers</button>}
+                        {request.status==='OPEN' &&
+                          <button type="button" disabled={quoteBusy} onClick={()=>viewBuyerQuotes(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">View quotes</button>}
                       </div>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {selectedQuotesRequest && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Supplier Quotations</p>
+                  <button type="button" className="text-xs underline"
+                    onClick={()=>{setSelectedQuotesRequest(null);setBuyerQuotes([]);}}>Close</button>
+                </div>
+                {buyerQuotes.length===0 && <p className="text-xs text-[var(--text-muted)]">No quotations received yet.</p>}
+                {buyerQuotes.map(quote=>(
+                  <article key={quote.id} className="border-t border-[var(--border-subtle)] pt-3">
+                    <p className="text-sm font-semibold">{quote.supplier_name} · Version {quote.current_version}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{quote.coverage} · {quote.quote_snapshot?.lines?.length||0} lines</p>
+                    {(quote.quote_snapshot?.lines||[]).map(line=>(
+                      <p key={line.request_item_id} className="text-xs">
+                        {line.snapshot?.product_title} · {line.quantity} {line.snapshot?.purchasing_unit}
+                        · Rs. {line.subtotal} (Grade: {line.snapshot?.quality_grade||'Supplier-specified'})
+                      </p>
+                    ))}
+                    <p className="text-sm font-semibold mt-1">
+                      Items Rs. {quote.items_total} + Delivery Rs. {quote.delivery_fee}
+                      = Rs. {quote.quoted_total}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">Valid until {String(quote.valid_until)}. Buyer acceptance and payments will be enabled in B6-G.</p>
+                  </article>
+                ))}
               </div>
             )}
             {selectedMatchRequest && (
@@ -535,6 +618,60 @@ export const RfqPage = () => {
                     </p>
                   ))}
                 </div>
+                {invitation.status==='INTERESTED' && (
+                  <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-3">
+                    <p className="text-sm font-semibold">Submit a supplier quotation</p>
+                    <p className="text-xs text-[var(--text-muted)]">Choose which requested items you can supply. Your exact physical SKU, price and delivery will be shown to the buyer. Leave an item blank to omit it.</p>
+                    {(invitation.items||[]).map(item=>{
+                      const eligible=(invitation.eligible_offers||[]).filter(offer=>Number(offer.request_item_id)===Number(item.id));
+                      const draft=supplierQuoteDrafts[invitation.invitation_id]||{};
+                      const line=draft.lines?.[item.id]||{};
+                      return <div key={item.id} className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-[var(--border-subtle)] pt-2">
+                        <label className="text-xs font-semibold">Product family #{item.family_id} — {item.quantity} {item.unit}
+                          <select value={line.supplier_listing_id||''}
+                            onChange={event=>updateQuoteDraft(invitation.invitation_id,{
+                              lines:{...(draft.lines||{}),[item.id]:{...line,supplier_listing_id:event.target.value}}
+                            })}
+                            className="block w-full mt-1 rounded-lg p-2 border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                            <option value="">Do not quote this item</option>
+                            {eligible.map(offer=><option key={offer.supplier_listing_id} value={offer.supplier_listing_id}>
+                              {offer.product_title} · {offer.pack_size}{offer.pack_unit} · listing #{offer.supplier_listing_id}
+                            </option>)}
+                          </select>
+                        </label>
+                        <label className="text-xs font-semibold">Price per {item.unit} (Rs.)
+                          <input inputMode="decimal" value={line.unit_price||''} placeholder="0.00"
+                            onChange={event=>updateQuoteDraft(invitation.invitation_id,{
+                              lines:{...(draft.lines||{}),[item.id]:{...line,unit_price:event.target.value}}
+                            })}
+                            className="block w-full mt-1 rounded-lg p-2 border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                        </label>
+                      </div>;
+                    })}
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      <label className="text-xs font-semibold">Delivery fee (Rs.)
+                        <input value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_fee??'0'}
+                          onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_fee:event.target.value})}
+                          className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      </label>
+                      <label className="text-xs font-semibold">Lead time (days)
+                        <input type="number" min="0" max="90" value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_lead_days??2}
+                          onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_lead_days:event.target.value})}
+                          className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      </label>
+                      <label className="text-xs font-semibold">Quote valid until
+                        <input type="datetime-local" value={(supplierQuoteDrafts[invitation.invitation_id]||{}).valid_until||''}
+                          onChange={event=>updateQuoteDraft(invitation.invitation_id,{valid_until:event.target.value})}
+                          className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      </label>
+                    </div>
+                    <button type="button" disabled={quoteBusy}
+                      onClick={()=>submitSmartSupplierQuote(invitation)}
+                      className="rounded-lg px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                      {quoteBusy?'Submitting...':'Submit Quotation'}
+                    </button>
+                  </div>
+                )}
                 {invitation.status==='INVITED' && <div className="flex gap-2">
                   <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'INTERESTED')}
                     className="text-xs font-semibold rounded-lg px-3 py-2 border border-[var(--border-subtle)]">I'm interested</button>
