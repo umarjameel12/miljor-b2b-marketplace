@@ -342,11 +342,11 @@ export const RfqPage = () => {
           physical_specifications_accepted:true
         };
       });
-      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award-preview`,{
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/checkout-preview`,{
         method:'POST',body:JSON.stringify({selections})
       });
       setAwardPreview(data.preview);
-      toast.success('Nonbinding quote review prepared. Checkout is not available at this stage.');
+      toast.success('Fee-inclusive nonbinding preview created. Real checkout remains gated.');
     }catch(e){setShoppingError(e.message);}
     finally{setQuoteBusy(false);}
   };
@@ -1054,8 +1054,11 @@ export const RfqPage = () => {
                       </div>
                     ))}
                     <p className="text-sm font-semibold">Supplier quote total: Rs. {awardPreview.supplier_quoted_total}</p>
+                    <p className="text-sm font-semibold">MilJor buyer processing fee: Rs. {awardPreview.buyer_platform_fee_total}</p>
+                    <p className="text-base font-semibold">Calculated basket payable: Rs. {awardPreview.total_payable}</p>
                     <p className="text-xs text-amber-700">
-                      NOT the final payable amount. Buyer processing fee, tax, inventory lock and secure checkout remain unavailable until the B6-G/H financial gate passes.
+                      Nonbinding preflight only. Tax policy and authoritative inventory checkout gate are not yet approved.
+                      No stock is reserved, order created or payment requested.
                     </p>
                   </section>
                 )}
