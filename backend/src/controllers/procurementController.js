@@ -350,6 +350,13 @@ class ProcurementController {
   }
 
   // B6-M cycle buyer approval: prepares a fresh, unpaid shopping-list draft.
+  async scheduleRecurringCycles(req,res){
+    try{
+      const result=await procurementRecurringService.scheduleUpcomingForBuyer(
+        req.user.id,req.params.contractId,{limit:req.body?.limit??6});
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
   async prepareRecurringCycle(req,res){
     try{
       const result=await procurementRecurringService.prepareDueCycle(
