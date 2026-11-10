@@ -1447,6 +1447,25 @@ class CatalogService {
        LIMIT 1 FOR UPDATE`,
       [Number(supplierId), Number(identity), Number(identity), Number(identity)]
     );
+    // B5: A supplier product/SKU cannot be archived out from under a DRAFT
+    // or active Flash Pool. The existing B2 Regular Pool guard remains intact.
+    const [flashPools] = await connection.query(
+      `SELECT fp.id, fp.status
+       FROM flash_pools fp
+       JOIN product_specifications fs ON fs.id = fp.product_spec_id
+       WHERE fp.supplier_id = ?
+         AND ${productId ? 'fs.supplier_product_id = ?' : 'fp.supplier_sku_id = ?'}
+         AND fp.status IN ('DRAFT','ACTIVE','SOLD_OUT')
+       LIMIT 1 FOR UPDATE`,
+      [Number(supplierId), Number(identity)]
+    );
+    if (flashPools.length > 0) {
+      const err = new Error('Cancel or resolve your linked Flash offer before archiving its physical product/SKU.');
+      err.status = 409;
+      err.code = 'FLASH_POOL_ARCHIVE_BLOCKED';
+      err.details = { flash_pool_id: flashPools[0].id, status: flashPools[0].status };
+      throw err;
+    }
     if (openPools.length > 0) {
       const err = new Error('This product/SKU has a non-terminal pool. Resolve the pool through its normal workflow before archiving.');
       err.status = 409;
