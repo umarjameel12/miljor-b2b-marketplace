@@ -1355,3 +1355,16 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - Invoices Count: **0**
   - Test Rows Leaked: **0** (100% PRISTINE)
 - **Status:** **COMPLETE AND INDEPENDENTLY VERIFIED (STOPPING — PHASE B1 NOT STARTED)**.
+
+
+---
+
+## Phase B6-A — Smart Procurement Hub Foundation Checkpoint (2026-11-10)
+
+- **Branch:** `feature/b6-private-rfq` — B4 accepted base `5689c377ffe80b1c94c37ddaa84d57bf569e9ea0`; B4/B5/main remain unmodified.
+- **Master scope:** Unified Multi-Product Personalized RFQ + Collective Quote + single/collective Recurring + Demand-First + area/delivery-day matching; buyer-facing **Get Best Quotes**. Subphases B6-A–B6-Q in `backend/docs/MILJOR_B6_PRIVATE_RFQ_IMPLEMENTATION_PLAN.md`.
+- **Actual source added:** `backend/src/services/procurementRequestPolicy.js` pure exact-decimal request normalization; `backend/tests/b6_procurement_request_policy_gate.js` focused planned cases. Does not mutate DB, create orders or charge buyer.
+- **Audit:** Legacy `procurementService.js` RFQ/recurring paths lack robust multi-product SKU financial invariants; must not be treated as accepted B6.
+- **Test status:** NOT RUN; GitHub interface cannot execute local MySQL, Node or Vite. Need local test execution and schema contract gate, with B5 shared-inventory reconciliation.
+- **Evidence:** `backend/docs/MILJOR_B6_A_FOUNDATION_IMPLEMENTATION_REPORT.md`. No production/development DB mutations.
+- **Verdict:** PARTIAL — B6-A source foundation committed, full B6-A acceptance BLOCKED. B6-B NOT STARTED. **CAN START NEXT PHASE: NO**.
