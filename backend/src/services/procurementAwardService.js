@@ -162,6 +162,17 @@ class ProcurementAwardService{
     if(!flashReady)
       throw fail('B5_SHARED_STOCK_INTEGRATION_REQUIRED',
         'Accepted B5 Flash checkout/release contracts are not installed in this B6 source.',503);
+    // Real schema proof is required as well as the accepted code and flags:
+    // 036 Flash holds and the shared B4/B5 inventory allocation ledger.
+    const [schema]=await this.database.query(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN
+         ('flash_purchase_holds','supplier_inventory_allocations','procurement_awards',
+          'procurement_award_orders','procurement_award_lines')`
+    );
+    if(schema.length!==5)
+      throw fail('B6_FINANCIAL_SCHEMA_NOT_READY',
+        'Required accepted Flash, shared-stock and procurement award tables are missing.',503);
     const buyer=id(buyerId,'Buyer'),rid=id(requestId,'Request'),idem=key(rawKey);
     if(!payload||!Array.isArray(payload.selections)||
        payload.buyer_total_confirmed!==true)
