@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS procurement_requests (
   published_at DATETIME NULL,
   idempotency_key VARCHAR(120) NOT NULL,
   request_hash CHAR(64) NOT NULL,
+  create_response_snapshot JSON NULL,
   version_number INT NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
