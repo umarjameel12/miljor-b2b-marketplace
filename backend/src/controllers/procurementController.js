@@ -305,6 +305,19 @@ class ProcurementController {
       res.json({success:true,data:result});
     }catch(e){this._smartError(res,e);}
   }
+  async inviteCollectiveSupplier(req,res){
+    try{
+      const invitation=await procurementCollectiveBidService.inviteSupplier(
+        req.user.id,req.params.groupId,req.body?.supplier_id);
+      res.status(201).json({success:true,data:{invitation}});
+    }catch(e){this._smartError(res,e);}
+  }
+  async collectiveSupplierInbox(req,res){
+    try{
+      const invitations=await procurementCollectiveBidService.supplierInbox(req.user.id);
+      res.json({success:true,data:{invitations}});
+    }catch(e){this._smartError(res,e);}
+  }
   async submitCollectiveBid(req,res){
     try{
       const result=await procurementCollectiveBidService.submitBid(
