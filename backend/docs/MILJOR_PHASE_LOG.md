@@ -4,14 +4,25 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
-## B0.2 Follow-up Closure — Implementation Recorded, Final Testing Pending
+## B0.2 Follow-up Closure — Final Integration Accepted
 
 - **Review basis:** B0.2 committed source at `47a9ed058b1376d1e38ec49ad28045937267cae2`, subsequently aligned agent execution policy on `feature/package-e`.
 - **Direct GitHub repairs:** Legacy payment verification PAID/ledger mutation removed; exact payment attempt provider provenance scoped to buyer/order; blocked refund audit outcomes added; focused B0.2 test assertions strengthened and B0.1 audit fixture cleanup updated.
 - **Evidence file:** `backend/docs/MILJOR_B0_2_FOLLOWUP_CLOSURE_REPORT.md`.
-- **Current follow-up status:** **IMPLEMENTED — PENDING FINAL ANTIGRAVITY INTEGRATION/REGRESSION GATE**. Historic B0.2 `18/18` PASS remains historical evidence from before these edits and must not be reused to assert newly changed code is verified.
+- **Final follow-up status:** **PASS — Antigravity final gate accepted**, with 22/22 updated B0.2 safety assertions and 161/161 total backend assertions reported in `MILJOR_B0_2_FOLLOWUP_CLOSURE_REPORT.md`. The prior 18/18 result was superseded by the updated final B0.2 gate.
 - **Database:** No MySQL connection or local application test execution was performed during GitHub-only corrections; protected databases were not directly accessed. Antigravity must verify actual `miljor_test_db` identity, protected DB preservation, and complete negative/regression checks at phase end.
 - **Next phase:** **B1 NOT STARTED — DO NOT ADVANCE**.
+
+---
+
+## Phase B1 — Implementation Complete, Final Local Integration Pending
+
+- **Authorized scope:** Canonical categories/families controlled by MilJor; supplier-owned physical products, variable packaging/SKUs and unlimited same-family listings; launch food-only category policy.
+- **Source implementation:** Supplier catalog portal now accepts supplier-defined packaging and no longer advertises mandatory variant requests. Legacy family FK anchors no longer invent physical details. Direct admin physical-variant creation is blocked while historical moderation remains compatible. Supplier listing family quota and insert now share an atomic transaction; legacy listing-count cap no longer blocks valid same-family offers.
+- **Source verification:** GitHub file review and JavaScript syntax-only static parsing. **No local MySQL/API/frontend integration suite has yet been run for B1.**
+- **Authoritative report:** `backend/docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`.
+- **State:** **IMPLEMENTED — PENDING FINAL ANTIGRAVITY ACCEPTANCE GATE**; not yet PASS/COMPLETE AND VERIFIED.
+- **B2:** **NOT AUTHORIZED / NOT STARTED**.
 
 ---
 
@@ -48,6 +59,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B0** | Backend Safety Recovery: Safepay-Only Consolidation, Invoice Authorization-Before-Generation, Subscription Gating & Regression Protection | **COMPLETE AND INDEPENDENTLY VERIFIED** | 46/46 B0 Gate PASS; 72/72 Regression PASS (118/118 Total PASS); miljor_db 100% Pristine (0 writes); Safepay sole active provider; Mock bypass eliminated | 2026-11-10 |
 | **Phase B0.1** | Financial Integrity & Payment Consistency: Safepay Verification State Safety, Provider/Method Provenance, Refund Gating, Webhook Exact Matching, Invoice Uniqueness & Decimal Precision, Subscription Read Model & UI Alignment | **COMPLETE AND VERIFIED** | `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B0.2** | Backend Safety Closure & Final Acceptance Gate: Admin Subscription Bypass Hardening, Invoice Internal Authority Hardening, Exact Payment Provider Provenance, Safepay Amount Contract, and Legacy Refund False Completion Prevention | **COMPLETE AND VERIFIED** | `tests/phase_b0_2_safety_closure_gate.js` (22/22 PASS); `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Total 161/161 Assertions PASS; Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
+| **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **IMPLEMENTED — FINAL INTEGRATION PENDING** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; new/updated E2/E3 assertions committed but NOT YET EXECUTED; Antigravity gate required | — |
 
 ---
 
