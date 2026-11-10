@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS procurement_quote_negotiations (
   buyer_target_total DECIMAL(14,2) NULL,
   idempotency_key VARCHAR(120) NOT NULL,
   payload_hash CHAR(64) NOT NULL,
+  response_snapshot JSON NULL,
   responded_version INT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   responded_at TIMESTAMP NULL,
