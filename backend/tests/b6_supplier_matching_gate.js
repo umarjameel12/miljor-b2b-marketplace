@@ -37,7 +37,7 @@ async function main(){
      JOIN users u ON u.id=sl.supplier_id AND u.role='SUPPLIER'
        AND u.is_verified=1 AND u.verification_status='VERIFIED'
      JOIN supplier_profiles pr ON pr.supplier_id=u.id AND pr.verification_status='VERIFIED'
-     WHERE sl.status='ACTIVE' AND sl.available_stock>=1 AND sl.currency='PKR'
+     WHERE sl.status='ACTIVE' AND sl.available_stock>=1 AND sl.buyer_min_qty<=1 AND sl.currency='PKR'
      LIMIT 30`
   );
   let fixture=null;
