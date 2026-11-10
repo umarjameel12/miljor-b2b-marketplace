@@ -382,6 +382,27 @@ class PoolController {
       const resolvedSupplierProductId = spec.supplier_product_id || listing.supplier_product_id || null;
       const resolvedSupplierSkuId = spec.supplier_sku_id || listing.supplier_sku_id || null;
 
+      // B4-B: Reject Infinity, exponential/invalid decimals, precision
+      // overflow and fractional scale that MySQL would silently round.
+      const exactDecimal = require('../services/exactDecimal');
+      const poolQuantities = [target_qty, supplier_min_qty, buyer_min_qty];
+      if (max_capacity !== undefined && max_capacity !== null) poolQuantities.push(max_capacity);
+      if (purchase_increment !== undefined && purchase_increment !== null) poolQuantities.push(purchase_increment);
+      try {
+        for (const input of poolQuantities) {
+          const normalized = exactDecimal.toCanonical(input, 4);
+          const integerPart = normalized.split('.')[0].replace('-', '');
+          if (integerPart.length > 8 || !exactDecimal.exactDecimalGte(normalized, '0.0001', 4)) {
+            throw new Error('Out of range');
+          }
+        }
+      } catch (_) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Pool quantities must be valid positive decimals with up to 4 fractional digits and within database precision.' }
+        });
+      }
+
       // 4. Commercial Quantity Validations
       const parsedTarget = Number(target_qty);
       const parsedSuppMin = Number(supplier_min_qty);
