@@ -61,8 +61,9 @@ class SupplierListingRepository {
   }
 
   // Find listing by ID with complete spec, canonical family/category, and supplier information
-  async findById(id) {
-    const [rows] = await db.query(
+  async findById(id, connection = null, forUpdate = false) {
+    const executor = connection || db;
+    const [rows] = await executor.query(
       `SELECT sl.*,
               u.full_name as supplier_name,
               u.email as supplier_email,
@@ -95,7 +96,7 @@ class SupplierListingRepository {
        JOIN products p ON ps.product_id = p.id
        LEFT JOIN catalog_categories c ON COALESCE(ps.category_id, p.category_id) = c.id
        LEFT JOIN catalog_product_families f ON COALESCE(ps.family_id, p.family_id) = f.id
-       WHERE sl.id = ?`,
+       WHERE sl.id = ?${forUpdate ? ' FOR UPDATE' : ''}`,
       [id]
     );
 
@@ -230,7 +231,8 @@ class SupplierListingRepository {
   }
 
   // Update listing with ownership verification
-  async update(id, updateData) {
+  async update(id, updateData, connection = null) {
+    const executor = connection || db;
     const allowed = [
       'available_stock',
       'base_unit_price',
@@ -258,7 +260,7 @@ class SupplierListingRepository {
     if (sets.length === 0) return false;
 
     params.push(id);
-    const [result] = await db.query(
+    const [result] = await executor.query(
       `UPDATE supplier_listings SET ${sets.join(', ')} WHERE id = ?`,
       params
     );
@@ -267,8 +269,9 @@ class SupplierListingRepository {
   }
 
   // Update listing status (e.g. ACTIVE <-> PAUSED)
-  async updateStatus(id, newStatus) {
-    const [result] = await db.query(
+  async updateStatus(id, newStatus, connection = null) {
+    const executor = connection || db;
+    const [result] = await executor.query(
       'UPDATE supplier_listings SET status = ? WHERE id = ?',
       [newStatus, id]
     );
@@ -276,8 +279,9 @@ class SupplierListingRepository {
   }
 
   // Record price change history
-  async recordPriceChange(listingId, previousPrice, newPrice, changedBy, reason = null) {
-    const [result] = await db.query(
+  async recordPriceChange(listingId, previousPrice, newPrice, changedBy, reason = null, connection = null) {
+    const executor = connection || db;
+    const [result] = await executor.query(
       `INSERT INTO supplier_listing_price_history (
         listing_id, previous_price, new_price, changed_by, change_reason
       ) VALUES (?, ?, ?, ?, ?)`,
