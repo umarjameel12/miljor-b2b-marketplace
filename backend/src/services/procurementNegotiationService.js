@@ -70,7 +70,11 @@ class ProcurementNegotiationService{
       const [quotes]=await conn.query(
         `SELECT q.id,q.supplier_id,q.status,q.current_version,v.valid_until
          FROM procurement_quotes q JOIN procurement_quote_versions v
-         ON v.quote_id=q.id AND v.version_number=q.current_version
+           ON v.quote_id=q.id AND v.version_number=q.current_version
+         JOIN users u ON u.id=q.supplier_id AND u.role='SUPPLIER'
+           AND u.is_verified=1 AND u.verification_status='VERIFIED'
+         JOIN supplier_profiles p ON p.supplier_id=u.id
+           AND p.verification_status='VERIFIED'
          WHERE q.id=? AND q.request_id=? FOR UPDATE`,[qid,rid]);
       const quote=quotes[0];
       if(!quote)throw fail('QUOTE_NOT_FOUND','Quote not found on this request.',404);
