@@ -1397,6 +1397,83 @@ export const RfqPage = () => {
         )}
 
         {user?.role === 'SUPPLIER' && (
+          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3"
+            aria-label="Collective group supplier bidding">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-serif font-semibold">Collective Supplier Bids</h2>
+              <button type="button" className="text-xs underline"
+                onClick={refreshCollectiveSellerInbox}>Refresh invitations</button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              Only private invitations appear here. All buyers consent individually and no payment is taken when you submit a bid.
+            </p>
+            {collectiveSupplierInbox.length===0 &&
+              <p className="text-sm text-[var(--text-muted)]">No qualifying group invitations yet.</p>}
+            {collectiveSupplierInbox.map(invitation=>{
+              const draft=collectiveSellerDrafts[invitation.group_id]||{};
+              return <article key={invitation.invitation_id}
+                className="border-t border-[var(--border-subtle)] pt-3 space-y-3">
+                <p className="text-sm font-semibold">
+                  Group #{invitation.group_id} · {invitation.minimum_buyers} buyers minimum ·
+                  Quotes until {String(invitation.quote_deadline)}
+                </p>
+                {(invitation.items||[]).map(item=>{
+                  const row=draft.lines?.[item.request_item_id]||{};
+                  const listings=collectiveSupplierListings.filter(listing=>
+                    Number(listing.family_id)===Number(item.family_id)&&
+                    String(listing.purchasing_unit).toLowerCase()===String(item.unit).toLowerCase());
+                  const update=(key,value)=>updateCollectiveSellerDraft(invitation.group_id,{
+                    lines:{...(draft.lines||{}),[item.request_item_id]:{...row,[key]:value}}
+                  });
+                  return <div key={item.request_item_id}
+                    className="grid sm:grid-cols-3 gap-2 border-t border-[var(--border-subtle)] pt-2">
+                    <label className="text-xs font-semibold">Product family #{item.family_id} · {item.unit}
+                      <select value={row.supplier_listing_id||''}
+                        onChange={e=>update('supplier_listing_id',e.target.value)}
+                        className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                        <option value="">Do not quote this item</option>
+                        {listings.map(listing=><option key={listing.id} value={listing.id}>
+                          #{listing.id} · {listing.spec_title||listing.variant_title||listing.family_name||'Supplier SKU'}
+                        </option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold">Price per {item.unit} (Rs.)
+                      <input inputMode="decimal" placeholder="0.00" value={row.unit_price||''}
+                        onChange={e=>update('unit_price',e.target.value)}
+                        className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                    </label>
+                    <label className="text-xs font-semibold">Minimum combined quantity
+                      <input inputMode="decimal" placeholder="e.g. 10" value={row.min_aggregate_quantity||''}
+                        onChange={e=>update('min_aggregate_quantity',e.target.value)}
+                        className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                    </label>
+                  </div>;
+                })}
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <label className="text-xs font-semibold">Delivery per buyer (Rs.)
+                    <input inputMode="decimal" value={draft.delivery_fee_per_buyer??'0'}
+                      onChange={e=>updateCollectiveSellerDraft(invitation.group_id,{
+                        delivery_fee_per_buyer:e.target.value})}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                  </label>
+                  <label className="text-xs font-semibold">Bid expires
+                    <input type="datetime-local" value={draft.valid_until||''}
+                      onChange={e=>updateCollectiveSellerDraft(invitation.group_id,{
+                        valid_until:e.target.value})}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                  </label>
+                </div>
+                <button type="button" disabled={quoteBusy}
+                  onClick={()=>submitCollectiveSupplierBid(invitation)}
+                  className="px-4 py-2 rounded-lg bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                  Submit Group Bid
+                </button>
+              </article>;
+            })}
+          </section>
+        )}
+
+        {user?.role === 'SUPPLIER' && (
           <section aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
             <div className="flex justify-between items-center gap-3">
               <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
