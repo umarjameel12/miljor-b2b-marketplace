@@ -91,9 +91,9 @@ class ProcurementRecurringService {
   }
   async changeStatus(buyerId,contractId,action,expectedVersion,consent){
     const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract');
-    const transitions={ACTIVATE:['DRAFT','ACTIVE'],
-      PAUSE:['ACTIVE','PAUSED'],RESUME:['PAUSED','ACTIVE'],
-      CANCEL:['DRAFT','ACTIVE','PAUSED','CANCELLED']};
+    const transitions={ACTIVATE:['DRAFT'],
+      PAUSE:['ACTIVE'],RESUME:['PAUSED'],
+      CANCEL:['DRAFT','ACTIVE','PAUSED']};
     if(!transitions[action])throw fail('INVALID_RECURRING_ACTION','Unknown contract action.');
     const version=id(expectedVersion,'Current contract version');
     if(action==='ACTIVATE'&&consent!==true)
@@ -114,9 +114,9 @@ class ProcurementRecurringService {
       }
       if(Number(contract.version_number)!==version)
         throw fail('RECURRING_VERSION_CONFLICT','Schedule changed. Refresh before retrying.',409);
-      const expected=transitions[action][0];
-      if(contract.status!==expected)
+      if(!transitions[action].includes(contract.status))
         throw fail('RECURRING_STATE_CONFLICT','This schedule cannot perform the requested action.',409);
+      const expected=contract.status;
       const [updated]=await conn.query(
         `UPDATE procurement_recurring_contracts
          SET status=?,version_number=version_number+1,
@@ -125,6 +125,16 @@ class ProcurementRecurringService {
         [target,action,cid,buyer,expected,version]
       );
       if(updated.affectedRows!==1)throw fail('RECURRING_RACE','Contract was concurrently modified.',409);
+      if(action==='CANCEL'){
+        // Only future, unpaid proposals are cancelled. Historical payment,
+        // supplier fulfillment and settled cycles are immutable.
+        await conn.query(
+          `UPDATE procurement_recurring_cycles SET status='SKIPPED',
+           failure_code='CONTRACT_CANCELLED'
+           WHERE contract_id=? AND status='SCHEDULED' AND due_at_utc>UTC_TIMESTAMP()`,
+          [cid]
+        );
+      }
       const [saved]=await conn.query(
         'SELECT * FROM procurement_recurring_contracts WHERE id=?',[cid]);
       await conn.commit();
