@@ -35,3 +35,24 @@
 No live DB connections, schema migrations, money movements, HTTP API tests or frontend build executed by the GitHub connector in this checkpoint. No B4/B5/main mutations. A no-database policy helper being present does not make the buyer-facing feature functional.
 **B6-A VERDICT: PARTIAL / BLOCKED FOR ACCEPTANCE.**
 **CAN START NEXT PHASE: NO**.
+
+
+---
+
+## 2026-11-10 incremental source and verification update
+
+**New original backend files**
+- `backend/src/services/procurementQuoteComparisonService.js`: pure exact-DECIMAL supplier basket quote preview, full vs split suppliers, unit/physical compatibility guard, real delivery and buyer fee inclusion, explicit quote expiry, bounded combinations. No order, stock, checkout or DB side effects.
+- `backend/tests/b6_quote_comparison_gate.js`: deterministic pure JS checks.
+
+**Direct source verification executed:** Using the GitHub plugin, downloaded exact B6 branch `exactDecimal.js`, `procurementRequestPolicy.js`, `procurementQuoteComparisonService.js` and both test files; evaluated CommonJS source in a sandboxed V8 JavaScript runtime with explicit `require` bindings and assertion adapter (no Node/Express/MySQL process). Actual observed:
+- Request policy test file: **15/15 PASS**.
+- Quote comparison test file: **12/12 PASS**.
+- Total: **27/27 PASS** in the pure JS sandbox.
+This establishes actual domain helper execution, not full Node runner parity or integrated MySQL acceptance. Must rerun through `cd backend && node tests/b6_procurement_request_policy_gate.js && node tests/b6_quote_comparison_gate.js` locally before complete phase signoff. No frontend build executed.
+
+**B5/B4 remote verification:** At inspection, `feature/b5-flash-pools` head `bda92da5f5838999e9c58ef160ef00189ced757c`, accepted B4 head `5689c377ffe80b1c94c37ddaa84d57bf569e9ea0`. B5 ahead 39 and behind 38 commits (diverged). B6 head was on B4 ancestry; do not treat B5 source as accepted compatibility.
+
+**Plan package division:** P1 (A–D), P2 (E–H), P3 (I–N), P4 (O–Q); individual gates retained and cross-package finance dependencies mandatory.
+
+**B6 gate remains PARTIAL / BLOCKED:** No schema audit against live `miljor_test_db`, migration applied, live API integration, real checkout, B4/B5 shared listing concurrency or Vite build. B6-B and all buyer-facing acceptance remain unverified. The early quote-comparison helper is a bounded independent non-mutating source module, not completion of B6-F. No changes to `miljor_db`, B4 or B5.
