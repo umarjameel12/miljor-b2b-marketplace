@@ -1420,3 +1420,18 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **Actual source checks:** JS parses; 7/7 isolated mocked-adapter supplier matching lifecycle checks PASS. NOT a full DB/API/browser PASS; no live migration, frontend build, financial processing or stock allocation.
 - **Evidence:** `backend/docs/MILJOR_B6_SUPPLIER_MATCHING_REPORT.md`.
 - **Verdict:** B6-D SOURCE IMPLEMENTED; FINAL INTEGRATION VERIFICATION DEFERRED. `CAN START NEXT PHASE: NO` under strict phase stop rule until next explicit approval.
+
+
+---
+
+## B6-E — Versioned Supplier Quotations (2026-11-10)
+
+- **Branch:** `feature/b6-private-rfq`. Original project files updated; B4/B5/main untouched.
+- **Migration source:** `039_procurement_supplier_quotes.sql` adds durable quote headers, append-only version snapshots and SKU/item quote lines. NOT APPLIED to any database in this GitHub-only session.
+- **Backend:** `procurementQuoteService.js` implements strict supplier invitation/role/spec/listing eligibility, subset/full shopping list quotations, purchasing-unit exact quantity validation, exact unit prices/delivery, immutable revisions, supplier and buyer scoped reads, SHA-256 idempotency and old-response replay after quote expiry. No buyer order/hold/payment.
+- **B6-D bridge:** `procurementMatchingService.js` now exposes eligible physical listings in supplier private inbox. Existing `procurementController.js`/`procurementRoutes.js` extended with strictly SUPPLIER / BUYER quote routes.
+- **Buyer/supplier UI:** Existing `RfqPage.jsx` updated with line-level supplier quotes and buyer quote viewing; supplier can quote partial item coverage; no buyer quote acceptance until B6-G.
+- **Testing source:** `backend/tests/b6_supplier_quote_gate.js`; existing `b6_supplier_matching_gate.js` enhanced for eligible SKU choices.
+- **Observed mocked source execution:** B6-E quotation lifecycle **9/9 PASS** (revisions, exact money, idempotency, supplier/tenant privacy). No real Node/MySQL/HTTP/Vite tests executed; no protected database writes. Final integration deferred per user.
+- **Dedicated report:** `backend/docs/MILJOR_B6_SUPPLIER_QUOTE_REPORT.md`.
+- **Verdict:** B6-E SOURCE IMPLEMENTED / INTEGRATION NOT VERIFIED. **CAN START NEXT PHASE: NO** until explicit subsequent instruction.
