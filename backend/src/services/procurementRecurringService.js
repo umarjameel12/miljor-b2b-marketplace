@@ -316,6 +316,16 @@ class ProcurementRecurringService {
     return cycles;
   }
 
+  async scheduleUpcomingForBuyer(buyerId,contractId,{limit=6}={}){
+    const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract');
+    const [owned]=await this.database.query(
+      'SELECT id FROM procurement_recurring_contracts WHERE id=? AND buyer_id=?',
+      [cid,buyer]
+    );
+    if(!owned.length)throw fail('CONTRACT_NOT_FOUND','Buyer recurring contract not found.',404);
+    return this.prepareUpcoming(cid,{limit});
+  }
+
   async prepareUpcoming(contractId,{limit=6}={}){
     const cid=id(contractId,'Contract');
     if(!Number.isInteger(limit)||limit<1||limit>24)
