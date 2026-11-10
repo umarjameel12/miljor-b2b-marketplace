@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Clock } from 'lucide-react';
+import { parseDeadline } from '../../utils/parseDeadline';
 
 /**
  * Reusable deadline countdown (Regular Pools, Flash Pools, RFQ/quote deadlines).
@@ -9,9 +10,9 @@ import { Clock } from 'lucide-react';
 export function CountdownTimer({
   deadline, serverTime = null, onExpire, compact = false, label = 'Time left'
 }) {
-  const expiryMs = useMemo(() => Date.parse(deadline || ''), [deadline]);
+  const expiryMs = useMemo(() => parseDeadline(deadline), [deadline]);
   const clock = useMemo(() => {
-    const serverMs = Date.parse(serverTime || '');
+    const serverMs = parseDeadline(serverTime);
     return { startedAt: Date.now(), serverMs: Number.isFinite(serverMs) ? serverMs : null };
   }, [serverTime]);
   const [nowMs, setNowMs] = useState(Date.now());
