@@ -31,6 +31,20 @@ export const RfqPage = () => {
   const [shoppingList, setShoppingList] = useState([emptyItem()]);
   const [deliveryArea, setDeliveryArea] = useState('');
   const [quoteDeadline, setQuoteDeadline] = useState('');
+  const [buyerMode,setBuyerMode] = useState('SINGLE_BUYER');
+  const [purchaseCadence,setPurchaseCadence] = useState('ONE_TIME');
+  const [joinDeadline,setJoinDeadline] = useState('');
+  const [minimumBuyers,setMinimumBuyers] = useState(2);
+  const [collectiveGroup,setCollectiveGroup] = useState(null);
+  const [myCollectiveInvites,setMyCollectiveInvites] = useState([]);
+  const [inviteBuyerId,setInviteBuyerId] = useState('');
+  const [joinQuantities,setJoinQuantities] = useState({});
+  const [recurringContracts,setRecurringContracts] = useState([]);
+  const [recurringCadenceDay,setRecurringCadenceDay] = useState(1);
+  const [recurringTime,setRecurringTime] = useState('09:00');
+  const [recurringStart,setRecurringStart] = useState('');
+  const [recurringEnd,setRecurringEnd] = useState('');
+  const [recurringUpcoming,setRecurringUpcoming] = useState(null);
   const [familyChoices, setFamilyChoices] = useState([]);
   const [savedRequests, setSavedRequests] = useState([]);
   const [activeRequest, setActiveRequest] = useState(null);
@@ -123,6 +137,9 @@ export const RfqPage = () => {
       })));
       setDeliveryArea(request.delivery_area || '');
       setQuoteDeadline(toLocalInput(request.quote_deadline));
+      setBuyerMode(request.ownership||'SINGLE_BUYER');
+      setPurchaseCadence(request.frequency||'ONE_TIME');
+      setJoinDeadline(toLocalInput(request.join_deadline));
     } catch (error) {
       setShoppingError(error.message);
     } finally { setShoppingBusy(false); }
@@ -133,12 +150,16 @@ export const RfqPage = () => {
     setShoppingError('');
     setShoppingBusy(true);
     try {
+      if (publish && (buyerMode!=='SINGLE_BUYER'||purchaseCadence!=='ONE_TIME'))
+        throw Error('Group and recurring requests use their dedicated consent setup, not one-time publishing.');
       if (publish && !quoteDeadline) throw Error('Please choose a quotation closing time.');
       const payload = {
-        ownership: 'SINGLE_BUYER', frequency: 'ONE_TIME',
+        ownership: buyerMode, frequency: purchaseCadence,
         award_policy: 'SPLIT_ALLOWED', priority: 'BEST_VALUE',
         delivery_area: deliveryArea,
         quote_deadline: quoteDeadline ? new Date(quoteDeadline).toISOString() : null,
+        join_deadline: buyerMode==='COLLECTIVE' && joinDeadline
+          ? new Date(joinDeadline).toISOString() : null,
         items: shoppingList.map(item => ({
           family_id: Number(item.family_id),
           quantity: item.quantity,
