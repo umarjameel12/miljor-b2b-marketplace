@@ -159,7 +159,19 @@ class SupplierListingRepository {
 
     // Buyer-facing active query: must be active AND in stock
     if (filters.activeOnly !== false) {
-      sql += " AND sl.status = 'ACTIVE' AND sl.available_stock > 0 AND sl.available_stock >= sl.buyer_min_qty";
+      // B3: Buyer discovery must never expose stale or unverified supplier offers.
+      sql += ` AND sl.status = 'ACTIVE'
+        AND sl.available_stock > 0 AND sl.available_stock >= sl.buyer_min_qty
+        AND u.role = 'SUPPLIER' AND u.verification_status = 'VERIFIED'
+        AND sp.verification_status = 'VERIFIED'
+        AND ps.is_active = 1 AND ps.approval_status = 'APPROVED'
+        AND ps.lifecycle_status IN ('PUBLISHED', 'LEGACY_GLOBAL')
+        AND c.is_active = 1 AND c.approval_status = 'APPROVED'
+        AND f.is_active = 1 AND f.approval_status = 'APPROVED'
+        AND NOT EXISTS (
+          SELECT 1 FROM supplier_skus sk
+          WHERE sk.id = ps.supplier_sku_id AND sk.status <> 'PUBLISHED'
+        )`;
     } else if (filters.status) {
       sql += ' AND sl.status = ?';
       params.push(filters.status);
