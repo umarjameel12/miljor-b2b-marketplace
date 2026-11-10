@@ -111,14 +111,6 @@ class CatalogService {
     } = payload || {};
 
     const reqType = String(request_type || '').trim().toUpperCase();
-    // B1: Suppliers define their own products/SKUs inside approved families.
-    // Legacy NEW_VARIANT requests remain readable for historical compatibility.
-    if (reqType === 'NEW_VARIANT') {
-      const err = new Error('New physical variants do not need platform approval. Create your own supplier product and SKU under an approved family.');
-      err.status = 409;
-      err.code = 'SUPPLIER_OWNED_VARIANTS';
-      throw err;
-    }
     if (!['NEW_FAMILY', 'NEW_VARIANT'].includes(reqType)) {
       const err = new Error('request_type must be either NEW_FAMILY or NEW_VARIANT.');
       err.status = 400;
@@ -1086,7 +1078,7 @@ class CatalogService {
       description: payload.description || null,
       allowed_pack_units: Array.isArray(payload.allowed_pack_units) ? payload.allowed_pack_units : ['kg', 'g'],
       allowed_purchasing_units: Array.isArray(payload.allowed_purchasing_units) ? payload.allowed_purchasing_units : ['bag', 'sack'],
-      required_attributes: Array.isArray(payload.required_attributes) ? payload.required_attributes : ['brand', 'variety', 'processing_method', 'quality_grade', 'packaging_type', 'pack_size', 'pack_unit'],
+      required_attributes: Array.isArray(payload.required_attributes) ? payload.required_attributes : ['variety', 'packaging_type', 'pack_size', 'pack_unit'],
       aliases: Array.isArray(payload.aliases) ? payload.aliases : [],
       approval_status: 'APPROVED',
       is_active: payload.is_active !== undefined ? Boolean(payload.is_active) : true,
@@ -1111,12 +1103,131 @@ class CatalogService {
   }
 
   async createAdminVariant(adminId, adminRole, payload) {
-    // Legacy administrative physical-variant creation is retired for new requests.
-    // Historical product_specifications remain preserved for compatibility.
-    const err = new Error('MilJor approves families; suppliers define their own physical products and SKUs.');
-    err.status = 409;
-    err.code = 'SUPPLIER_OWNED_VARIANTS';
-    throw err;
+    const familyId = Number(payload.family_id);
+    if (!familyId) {
+      const err = new Error('family_id is required to create an approved variant.');
+      err.status = 400;
+      err.code = 'INVALID_FAMILY';
+      throw err;
+    }
+
+    const family = await catalogRepo.findFamilyById(familyId);
+    if (!family) {
+      const err = new Error('Product family not found.');
+      err.status = 404;
+      err.code = 'FAMILY_NOT_FOUND';
+      throw err;
+    }
+
+    if (payload.category_id && Number(payload.category_id) !== Number(family.category_id)) {
+      const err = new Error(`Product family '${family.name}' does not belong to category_id ${payload.category_id}.`);
+      err.status = 400;
+      err.code = 'CATEGORY_FAMILY_MISMATCH';
+      throw err;
+    }
+
+    const baseProduct = await this.ensureDefaultProductForFamily(family);
+
+    const cleanBrand = specificationService.normalizeText(payload.brand);
+    const cleanVariety = specificationService.normalizeText(payload.variety);
+    const cleanCropYear = specificationService.normalizeText(payload.crop_year || 'N/A') || 'N/A';
+    const cleanProcessing = specificationService.normalizeText(payload.processing_method || 'Standard') || 'Standard';
+    const cleanGrade = specificationService.normalizeText(payload.quality_grade || 'Standard') || 'Standard';
+    const cleanPackaging = specificationService.normalizeText(payload.packaging_type);
+    const cleanPurchasingUnit = specificationService.normalizeText(payload.purchasing_unit || 'bag').toLowerCase() || 'bag';
+
+    const validation = specificationService.validateSpecificationInput(
+      {
+        product_id: baseProduct.id,
+        brand: cleanBrand,
+        variety: cleanVariety,
+        crop_year: cleanCropYear,
+        processing_method: cleanProcessing,
+        quality_grade: cleanGrade,
+        packaging_type: cleanPackaging,
+        pack_size: payload.pack_size,
+        pack_unit: payload.pack_unit,
+        purchasing_unit: cleanPurchasingUnit,
+        spec_attributes: payload.spec_attributes
+      },
+      family.category_name,
+      family
+    );
+
+    if (!validation.valid) {
+      const err = new Error(validation.message);
+      err.status = 400;
+      err.code = validation.code || 'SPECIFICATION_VALIDATION_ERROR';
+      throw err;
+    }
+
+    const specHash = specificationService.computeSpecHash({
+      productId: baseProduct.id,
+      brand: cleanBrand,
+      variety: cleanVariety,
+      cropYear: cleanCropYear,
+      processingMethod: cleanProcessing,
+      qualityGrade: cleanGrade,
+      packagingType: cleanPackaging,
+      packSize: validation.normalizedPackSize,
+      packUnit: validation.normalizedPackUnit,
+      purchasingUnit: cleanPurchasingUnit,
+      specAttributes: validation.normalizedAttributes
+    });
+
+    const existing = await productSpecRepo.findByHash(specHash);
+    if (existing) {
+      const err = new Error('An identical physical variant already exists in the canonical catalog.');
+      err.status = 409;
+      err.code = 'DUPLICATE_APPROVED_VARIANT';
+      err.existingSpecification = existing;
+      throw err;
+    }
+
+    const specCode = specificationService.generateSpecCode(family.category_name, cleanVariety);
+    const title = payload.title || `${cleanBrand} ${family.name} - ${cleanVariety} (${cleanGrade}) - ${validation.normalizedPackSize}${validation.normalizedPackUnit} ${cleanPackaging}`;
+    const variantTitle = `${cleanBrand} — ${cleanVariety} (${cleanGrade}) — ${validation.normalizedPackSize}${validation.normalizedPackUnit} ${cleanPackaging}`;
+
+    const newId = await productSpecRepo.create({
+      product_id: baseProduct.id,
+      category_id: family.category_id,
+      family_id: family.id,
+      variant_title: variantTitle,
+      spec_code: specCode,
+      title,
+      brand: cleanBrand,
+      variety: cleanVariety,
+      crop_year: cleanCropYear,
+      processing_method: cleanProcessing,
+      quality_grade: cleanGrade,
+      packaging_type: cleanPackaging,
+      pack_size: validation.normalizedPackSize,
+      pack_unit: validation.normalizedPackUnit,
+      purchasing_unit: cleanPurchasingUnit,
+      storage_requirements: payload.storage_requirements || null,
+      shelf_life_days: payload.shelf_life_days || null,
+      spec_attributes: validation.normalizedAttributes,
+      spec_hash: specHash,
+      approval_status: 'APPROVED',
+      created_by: adminId,
+      approved_by: adminId,
+      approved_at: new Date()
+    });
+
+    const createdVariant = await catalogRepo.findVariantById(newId);
+
+    await catalogRepo.insertModerationLog({
+      entity_type: 'VARIANT',
+      entity_id: newId,
+      actor_id: adminId,
+      actor_role: adminRole,
+      from_status: null,
+      to_status: 'APPROVED',
+      action: 'ADMIN_CREATE_VARIANT',
+      metadata: { spec_code: createdVariant.spec_code, family_id: family.id }
+    });
+
+    return createdVariant;
   }
 
   // ===========================================================================
