@@ -30,6 +30,7 @@ const invoiceService = require('../src/services/invoiceService');
 const subscriptionEntitlementService = require('../src/services/subscriptionEntitlementService');
 const safepayAdapter = require('../src/services/safepayAdapter');
 const safepayCheckoutService = require('../src/services/safepayCheckoutService');
+const paymentProviderService = require('../src/services/paymentProviderService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'miljor_dev_jwt_secret_key_2026';
 
@@ -337,16 +338,27 @@ async function runB02Gate() {
     {
       const pmt = await createTestPayment(provOrder, provBuyer, '2000.00', 'PENDING', 'CARD', null, tracker2);
 
-      // Verify payment with mock/unverified reference fails closed with 402, NOT 400 UNSUPPORTED
-      const res = await api('/api/v1/payments/verify', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${provBuyerToken}` },
-        body: { payment_id: pmt, transaction_ref: tracker2 }
-      });
-      // Should fail closed with 402 PAYMENT_VERIFICATION_FAILED (because provider was resolved as SAFEPAY)
+      // Capture the provider actually passed to the verifier; HTTP 402 alone cannot prove provenance.
+      const originalVerify = paymentProviderService.verifyPayment;
+      let observedProvider = null;
+      let res;
+      try {
+        paymentProviderService.verifyPayment = async (args) => {
+          observedProvider = args.provider;
+          return originalVerify.call(paymentProviderService, args);
+        };
+        res = await api('/api/v1/payments/verify', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${provBuyerToken}` },
+          body: { payment_id: pmt, transaction_ref: tracker2 }
+        });
+      } finally {
+        paymentProviderService.verifyPayment = originalVerify;
+      }
       assert.strictEqual(res.status, 402);
       assert.strictEqual(res.data?.error?.code, 'PAYMENT_VERIFICATION_FAILED');
-      pass('3.1: Order with two attempts resolves the exact attempt linked to tracker');
+      assert.strictEqual(observedProvider, 'SAFEPAY', 'Must use exact linked attempt, not first attempt on order');
+      pass('3.1: Correct SAFEPAY provider actually selected from exact tracker');
     }
 
     // 3.2: Payment with missing provenance and non-SAFEPAY method fails closed with 402
@@ -360,6 +372,57 @@ async function runB02Gate() {
       assert.strictEqual(res.status, 402);
       assert.strictEqual(res.data?.error?.code, 'PAYMENT_VERIFICATION_FAILED');
       pass('3.2: Ambiguous or missing provenance fails closed');
+    }
+    
+    // 3.3: A tracker owned by another order must not be accepted as this payment's provenance.
+    {
+      const otherOrder = await createTestOrder(provBuyer, provSupplier, '2000.00', 'AWAITING_PAYMENT', 'AWAITING_PAYMENT');
+      const mismatchedPayment = await createTestPayment(otherOrder, provBuyer, '2000.00', 'PENDING', 'CARD', null, tracker2);
+      const originalVerify = paymentProviderService.verifyPayment;
+      let invoked = false;
+      let res;
+      try {
+        paymentProviderService.verifyPayment = async (...args) => {
+          invoked = true;
+          return originalVerify.apply(paymentProviderService, args);
+        };
+        res = await api('/api/v1/payments/verify', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${provBuyerToken}` },
+          body: { payment_id: mismatchedPayment, transaction_ref: tracker2 }
+        });
+      } finally {
+        paymentProviderService.verifyPayment = originalVerify;
+      }
+      assert.strictEqual(res.status, 402);
+      assert.strictEqual(invoked, false, 'Do not invoke provider verifier for tracker/order mismatch');
+      const [paymentRows] = await db.query('SELECT status FROM payments WHERE id = ?', [mismatchedPayment]);
+      assert.strictEqual(paymentRows[0].status, 'PENDING');
+      pass('3.3: Foreign-order tracker fails closed without provider call or financial mutation');
+    }
+
+    // 3.4: Even a future adapter returning verified=true must not reactivate legacy financial writes.
+    {
+      const payment = await createTestPayment(provOrder, provBuyer, '2000.00', 'PENDING', 'CARD', { provider: 'SAFEPAY' }, tracker2);
+      const originalVerify = paymentProviderService.verifyPayment;
+      let res;
+      try {
+        paymentProviderService.verifyPayment = async () => ({ verified: true, raw: { test: true } });
+        res = await api('/api/v1/payments/verify', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${provBuyerToken}` },
+          body: { payment_id: payment, transaction_ref: tracker2 }
+        });
+      } finally {
+        paymentProviderService.verifyPayment = originalVerify;
+      }
+      assert.strictEqual(res.status, 409);
+      assert.strictEqual(res.data?.error?.code, 'LEGACY_VERIFICATION_DISABLED');
+      const [paymentRows] = await db.query('SELECT status FROM payments WHERE id = ?', [payment]);
+      assert.strictEqual(paymentRows[0].status, 'PENDING');
+      const [ledgerRows] = await db.query('SELECT COUNT(*) AS c FROM platform_ledger WHERE payment_id = ?', [payment]);
+      assert.strictEqual(Number(ledgerRows[0].c), 0);
+      pass('3.4: Even verified-like legacy response cannot create PAID or ledger mutations');
     }
 
     // -------------------------------------------------------------------------
@@ -463,6 +526,16 @@ async function runB02Gate() {
       assert.strictEqual(rows[0].status, 'PAID');
       assert.strictEqual(rows[0].escrow_status, 'HELD_IN_ESCROW');
       pass('5.1: Payment remains PAID and escrow remains HELD_IN_ESCROW in DB');
+      const [blockedLogs] = await db.query(
+        `SELECT id, new_value FROM system_audit_logs
+         WHERE actor_id = ? AND entity_name = 'payments' AND entity_id = ?
+           AND action = 'PAYMENT_REFUND_ATTEMPT_BLOCKED' ORDER BY id DESC LIMIT 1`,
+        [financeAdmin, refPayment]
+      );
+      assert.strictEqual(blockedLogs.length, 1, 'Blocked refund attempt must have a truthful audit trail');
+      assert.strictEqual(JSON.parse(blockedLogs[0].new_value).outcome, 'REFUND_PENDING_GATEWAY');
+      cleanup.audit_logs.push(blockedLogs[0].id);
+      pass('5.1a: Pending Safepay refund attempt audited as blocked, not completed');
     }
 
     // 5.2: Platform ledger payout_status is NOT mutated to REFUNDED_TO_BUYER
@@ -486,6 +559,16 @@ async function runB02Gate() {
       assert.strictEqual(res.status, 400);
       assert.strictEqual(res.data?.error?.code, 'UNSUPPORTED_PAYMENT_PROVIDER');
       pass('5.3: Unsupported provider refund rejected with 400');
+      const [blockedLogs] = await db.query(
+        `SELECT id, new_value FROM system_audit_logs
+         WHERE actor_id = ? AND entity_name = 'payments' AND entity_id = ?
+           AND action = 'PAYMENT_REFUND_ATTEMPT_BLOCKED' ORDER BY id DESC LIMIT 1`,
+        [financeAdmin, unsuppPayment]
+      );
+      assert.strictEqual(blockedLogs.length, 1);
+      assert.strictEqual(JSON.parse(blockedLogs[0].new_value).outcome, 'UNSUPPORTED_PAYMENT_PROVIDER');
+      cleanup.audit_logs.push(blockedLogs[0].id);
+      pass('5.3a: Unsupported refund attempt audited as blocked');
     }
 
   } catch (err) {
