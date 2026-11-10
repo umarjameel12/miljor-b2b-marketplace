@@ -28,6 +28,11 @@ router.post('/procurement/requests/:id/invitations',protect,authorizeStrict('BUY
 router.get('/procurement/supplier/invitations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.smartSupplierInbox(req,res));
 router.post('/procurement/supplier/invitations/:invitationId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondSmartInvitation(req,res));
 
+// B6-E supplier-owned versioned quotations; buyer reads are strictly scoped.
+router.post('/procurement/supplier/requests/:id/quotes',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitSmartQuote(req,res));
+router.get('/procurement/supplier/quotes',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listMySmartQuotes(req,res));
+router.get('/procurement/requests/:id/quotes',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartQuotes(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
