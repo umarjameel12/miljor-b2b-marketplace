@@ -37,7 +37,10 @@ class SupplierListingMutationService {
       if (!listingOwner.length) throw invalid('NOT_FOUND', 'Supplier listing not found', 404);
       await conn.query('SELECT supplier_id FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE', [listingOwner[0].supplier_id]);
       // The supplier listing lock protects concurrent updates and price-history order.
-      const listing = await listingRepo.findById(listingId, conn, true);
+      // Lock only the actual offer row; joined LEFT-table locks risk unnecessary contention.
+      const [locked] = await conn.query('SELECT id FROM supplier_listings WHERE id = ? FOR UPDATE', [listingId]);
+      if (!locked.length) throw invalid('NOT_FOUND', 'Supplier listing not found', 404);
+      const listing = await listingRepo.findById(listingId, conn);
       if (!listing) throw invalid('NOT_FOUND', 'Supplier listing not found', 404);
       if (Number(listing.supplier_id) !== Number(actor.id) && actor.role !== 'SUPER_ADMIN') {
         throw invalid('FORBIDDEN', 'You do not own this commercial listing', 403);
@@ -104,7 +107,7 @@ class SupplierListingMutationService {
                   sp.verification_status AS profile_status
            FROM users u JOIN supplier_profiles sp ON sp.supplier_id = u.id
            WHERE u.id = ?`, [listing.supplier_id]);
-        if (!eligible[0] || eligible[0].role !== 'SUPPLIER' || Number(eligible[0].is_verified) !== 1 ||
+        if (!eligible[0] || eligible[0].role !== 'SUPPLIER' ||
             eligible[0].user_status !== 'VERIFIED' || eligible[0].profile_status !== 'VERIFIED') {
           throw invalid('SUPPLIER_NOT_VERIFIED', 'Supplier must be verified before listing activation', 403);
         }
@@ -143,7 +146,8 @@ class SupplierListingMutationService {
 
       // Prevent commercial conditions being silently edited out from underneath ongoing pools.
       const contractualFields = ['supplier_min_qty', 'buyer_min_qty', 'delivery_zones', 'delivery_fee_policy', 'fulfilment_lead_time_days'];
-      if (contractualFields.some(k => changes[k] !== undefined) || changes.status === 'ARCHIVED') {
+      if (contractualFields.some(k => changes[k] !== undefined) ||
+          (changes.status !== undefined && changes.status !== 'ACTIVE' && listing.status === 'ACTIVE')) {
         const [pools] = await conn.query(
           `SELECT id FROM pools WHERE supplier_listing_id = ?
            AND status NOT IN ('CANCELLED','EXPIRED','COMPLETED','DELIVERED','REJECTED')
