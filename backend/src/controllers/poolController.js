@@ -278,6 +278,14 @@ class PoolController {
         }
       }
 
+      // B4-A: Older legitimate commercial offers may supply a legacy
+      // product_spec_id without product_id. Resolve the FK from the spec
+      // itself; never guess products.id from canonical family.id.
+      if (!product_id && product_spec_id) {
+        const existingSpec = await productSpecificationRepo.findById(Number(product_spec_id));
+        if (existingSpec) product_id = existingSpec.product_id;
+      }
+
       // 1. Mandatory Identity Validations
       if (!product_id || !product_spec_id || !supplier_listing_id) {
         return res.status(400).json({
