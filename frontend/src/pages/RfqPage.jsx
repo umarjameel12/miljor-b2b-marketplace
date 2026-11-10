@@ -276,6 +276,7 @@ export const RfqPage = () => {
         body:JSON.stringify({})
       });
       await refreshMySmartQuotes();
+      await refreshSupplierNegotiations();
       toast.success('Quotation withdrawn; historical versions retained');
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -377,6 +378,7 @@ export const RfqPage = () => {
       });
       toast.success(`Quotation version ${result.quote.version_number} submitted`);
       await refreshMySmartQuotes();
+      await refreshSupplierNegotiations();
       setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
