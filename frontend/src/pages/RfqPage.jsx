@@ -37,6 +37,13 @@ export const RfqPage = () => {
   const [shoppingBusy, setShoppingBusy] = useState(false);
   const [shoppingError, setShoppingError] = useState('');
 
+  const availableUnits = familyId => {
+    const family = familyChoices.find(choice => String(choice.id) === String(familyId));
+    if (!family) return ['kg','g','l','ml','bag','tin','carton','sack','pack'];
+    const listed = [...(family.allowed_pack_units || []), ...(family.allowed_purchasing_units || [])]
+      .filter(x => typeof x === 'string').map(x => x.toLowerCase().trim());
+    return [...new Set(listed)].filter(x => ['kg','g','l','ml','bag','tin','carton','sack','pack'].includes(x));
+  };
   const newRequestKey = () => `buyer-${Date.now()}-${Math.random().toString(36).slice(2, 13)}`;
   const toLocalInput = value => {
     if (!value) return '';
@@ -322,7 +329,7 @@ export const RfqPage = () => {
               {shoppingList.map((item, index) => (
                 <div key={index} className="rounded-xl border border-[var(--border-subtle)] p-3 grid grid-cols-1 sm:grid-cols-12 gap-3">
                   <label className="sm:col-span-4 text-xs font-semibold">Product family
-                    <select required value={item.family_id} onChange={e => setShoppingList(old => old.map((row,i)=>i===index?{...row,family_id:e.target.value}:row))}
+                    <select required value={item.family_id} onChange={e => setShoppingList(old => old.map((row,i)=>i===index?{...row,family_id:e.target.value,unit:availableUnits(e.target.value)[0]||'kg'}:row))}
                       className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm">
                       <option value="">Choose product</option>
                       {familyChoices.map(family => <option key={family.id} value={family.id}>{family.name}</option>)}
@@ -336,7 +343,7 @@ export const RfqPage = () => {
                   <label className="sm:col-span-2 text-xs font-semibold">Unit
                     <select value={item.unit} onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,unit:e.target.value}:row))}
                       className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm">
-                      {['kg','g','l','ml','bag','tin','carton','sack','pack'].map(unit=><option key={unit} value={unit}>{unit}</option>)}
+                      {availableUnits(item.family_id).map(unit=><option key={unit} value={unit}>{unit}</option>)}
                     </select>
                   </label>
                   <label className="sm:col-span-3 text-xs font-semibold">Quality / packaging (optional)
