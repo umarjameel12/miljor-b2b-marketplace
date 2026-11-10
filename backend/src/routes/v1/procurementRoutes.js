@@ -45,6 +45,12 @@ router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIE
 // No order, hold, ledger or checkout route is exposed before inventory/Safepay gate.
 router.post('/procurement/requests/:id/award-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartAward(req,res));
 
+// B6-I — Private collective business invitations and explicit join consent.
+router.post('/procurement/requests/:id/collective',protect,authorizeStrict('BUYER'),(req,res)=>controller.createCollectiveGroup(req,res));
+router.post('/procurement/collectives/:groupId/invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.inviteCollectiveBuyer(req,res));
+router.post('/procurement/collectives/:groupId/join',protect,authorizeStrict('BUYER'),(req,res)=>controller.joinCollectiveGroup(req,res));
+router.get('/procurement/collectives/my-invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.myCollectiveInvites(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
