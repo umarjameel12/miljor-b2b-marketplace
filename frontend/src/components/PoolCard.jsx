@@ -295,8 +295,9 @@ export const PoolCard = ({ pool, onSelect }) => {
           </div>
 
           {/* Price & Fill Percentage Row */}
-          <div className="mt-3 flex items-baseline justify-between" title="Current Price Per Unit">
+          <div className="mt-3 flex items-baseline justify-between" title="Estimated Price">
             <div className="flex items-baseline gap-1">
+              <span className="sr-only">Estimated Price: </span>
               <span className="font-sans font-bold text-base sm:text-lg tabular-nums" style={{ color: 'var(--text-primary)' }}>
                 {estimatedPrice ? `Rs. ${Number(estimatedPrice).toLocaleString()}` : 'Price on Tier'}
               </span>

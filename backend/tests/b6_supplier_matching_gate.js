@@ -27,7 +27,7 @@ async function main(){
   // Verify matching with actual supplier-owned physical SKU, spec, verified
   // seller and delivery zone rather than bypassing the service's eligibility.
   const [listings]=await db.query(
-    `SELECT sl.supplier_id,sl.delivery_zones,sk.family_id,sk.purchasing_unit
+    `SELECT sl.id AS listing_id,sl.supplier_id,sl.delivery_zones,sk.family_id,sk.purchasing_unit
      FROM supplier_listings sl
      JOIN supplier_skus sk ON sk.id=sl.supplier_sku_id AND sk.status='PUBLISHED'
      JOIN supplier_products sp ON sp.id=sk.supplier_product_id AND sp.status='PUBLISHED'
