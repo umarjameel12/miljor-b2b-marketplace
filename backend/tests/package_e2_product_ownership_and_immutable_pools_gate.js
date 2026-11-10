@@ -332,6 +332,20 @@ async function runGate() {
       assert.strictEqual(customPack.body.data.sku.purchasing_unit, 'bundle');
       pass('B1: Supplier-defined 37kg packaging and custom purchasing unit accepted without canonical variant approval');
 
+      // B2: Once child SKUs exist, the parent cannot switch family silently.
+      const invalidFamilyChange = await api(`/api/v1/catalog/supplier-products/${brandedProdId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: { family_id: oilFamily.id }
+      });
+      assert.strictEqual(invalidFamilyChange.status, 409, JSON.stringify(invalidFamilyChange.body));
+      assert.strictEqual(invalidFamilyChange.body.error.code, 'PRODUCT_FAMILY_HAS_SKUS');
+      const unchangedProduct = await api(`/api/v1/catalog/supplier-products/${brandedProdId}`, {
+        headers: { Authorization: `Bearer ${supAToken}` }
+      });
+      assert.strictEqual(Number(unchangedProduct.body.data.product.family_id), Number(riceFamily.id));
+      pass('B2: Draft product family cannot change after child SKUs exist; parent remains Rice');
+
       pass('5. Supplier A creates distinct 25kg and 50kg Physical SKUs under the same Supplier Product');
     } catch (e) { fail('5. Separate 25kg and 50kg SKUs', e); }
 
@@ -738,6 +752,26 @@ async function runGate() {
       lockedPromisedDelivery = pool.promised_delivery_at;
 
       pass('16. Supplier A publishes pool: status = ACTIVE, is_terms_locked = 1, published_terms_snapshot recorded');
+
+      // B2: Archiving an SKU or product used by an active pool must fail
+      // without altering published commercial terms or SKU lifecycle.
+      const blockedSkuArchive = await api(`/api/v1/catalog/supplier-skus/${sku25kgId}/archive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` }
+      });
+      assert.strictEqual(blockedSkuArchive.status, 409, JSON.stringify(blockedSkuArchive.body));
+      assert.strictEqual(blockedSkuArchive.body.error.code, 'ACTIVE_POOL_ARCHIVE_BLOCKED');
+      const blockedProductArchive = await api(`/api/v1/catalog/supplier-products/${brandedProdId}/archive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` }
+      });
+      assert.strictEqual(blockedProductArchive.status, 409, JSON.stringify(blockedProductArchive.body));
+      assert.strictEqual(blockedProductArchive.body.error.code, 'ACTIVE_POOL_ARCHIVE_BLOCKED');
+      const stillPublished = await api(`/api/v1/catalog/supplier-skus/${sku25kgId}`, {
+        headers: { Authorization: `Bearer ${supAToken}` }
+      });
+      assert.strictEqual(stillPublished.body.data.sku.status, 'PUBLISHED');
+      pass('B2: Open-pool obligations prevent archiving products/SKUs; published state preserved');
     } catch (e) { fail('16. Publish pool & lock terms', e); }
 
     // 17. Rule P3 & P4: Published pool WITH ZERO RESERVATIONS is 100% immutable across all commercial fields & clusters!
