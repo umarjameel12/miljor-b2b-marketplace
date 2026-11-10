@@ -15,14 +15,25 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
-## Phase B1 — Implementation Complete, Final Local Integration Pending
+## Phase B1 — Final Antigravity Integration Accepted (73/73 PASS)
 
 - **Authorized scope:** Canonical categories/families controlled by MilJor; supplier-owned physical products, variable packaging/SKUs and unlimited same-family listings; launch food-only category policy.
 - **Source implementation:** Supplier catalog portal now accepts supplier-defined packaging and no longer advertises mandatory variant requests. Legacy family FK anchors no longer invent physical details. Direct admin physical-variant creation is blocked while historical moderation remains compatible. Supplier listing family quota and insert now share an atomic transaction; legacy listing-count cap no longer blocks valid same-family offers.
 - **Source verification:** GitHub file review and JavaScript syntax-only static parsing. **No local MySQL/API/frontend integration suite has yet been run for B1.**
 - **Authoritative report:** `backend/docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`.
-- **State:** **IMPLEMENTED — PENDING FINAL ANTIGRAVITY ACCEPTANCE GATE**; not yet PASS/COMPLETE AND VERIFIED.
+- **State:** **COMPLETE AND VERIFIED — Antigravity reported 73/73 relevant assertions PASS and 0 frontend build errors**. Source and local originals synced; evidence recorded in B1 implementation report.
 - **B2:** **NOT AUTHORIZED / NOT STARTED**.
+
+---
+
+## Phase B2 — Supplier Product/SKU Lifecycle Core; Media Workstream Separated
+
+- **Authorized source implementation:** On `feature/package-e`: supplier draft family cannot change after child SKUs; supplier SKU creation serialized with parent lock; optional shelf-life and purchasing unit validated; archived supplier products/SKUs block on open pools and retire supplier-owned legacy specification bridges; UI supplier physical fields, actual titles and explicit archive confirmation.
+- **B2 source report:** `backend/docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`.
+- **Current gate status:** **B2-CORE IMPLEMENTED — INTEGRATION PENDING**. No local DB/API build run by GitHub-only implementation. Final test count and PASS unclaimed.
+- **B2-Media:** No secure upload/storage infrastructure yet; tracked separately, not implemented; do not state full B2/media completion.
+- **Parallel B3 planning (explicit user authorization):** B2 acceptance runs on frozen `feature/package-e` while B3 independent implementation uses `feature/b3-commercial-offers`. No B3 merge/release or phase PASS until dependent B2 gate passes.
+- **B4:** NOT STARTED.
 
 ---
 
@@ -60,6 +71,8 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B0.1** | Financial Integrity & Payment Consistency: Safepay Verification State Safety, Provider/Method Provenance, Refund Gating, Webhook Exact Matching, Invoice Uniqueness & Decimal Precision, Subscription Read Model & UI Alignment | **COMPLETE AND VERIFIED** | `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B0.2** | Backend Safety Closure & Final Acceptance Gate: Admin Subscription Bypass Hardening, Invoice Internal Authority Hardening, Exact Payment Provider Provenance, Safepay Amount Contract, and Legacy Refund False Completion Prevention | **COMPLETE AND VERIFIED** | `tests/phase_b0_2_safety_closure_gate.js` (22/22 PASS); `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Total 161/161 Assertions PASS; Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **COMPLETE AND VERIFIED** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; 73/73 Assertions PASS across E2/E3/E4-E6 gates; Frontend Vite Build PASS (2,216 modules, 0 errors); miljor_db 100% Pristine; Verified SHA: `986b2737` | 2026-11-10 |
+| **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **IMPLEMENTED — FINAL ANTIGRAVITY GATE PENDING** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; focused E2 negative assertions committed but not yet run; protected DB safety and frontend build pending | — |
+| **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
 ---
 
