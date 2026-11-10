@@ -95,6 +95,18 @@ const toDatetimeLocalString = (dateObj) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+// The E2 supplier SKU repository returns sk.*, product_title and physical pack
+// fields; it does NOT expose an invented `sku_title` column.
+const supplierSkuDisplayTitle = (sku) => {
+  if (!sku) return 'Physical SKU';
+  if (sku.sku_title) return sku.sku_title;
+  const product = sku.product_title || sku.variety || sku.family_name || 'Supplier Product';
+  const quantity = sku.pack_size != null && sku.pack_unit
+    ? `${sku.pack_size} ${sku.pack_unit}`
+    : '';
+  return [product, quantity, sku.packaging_type].filter(Boolean).join(' — ');
+};
+
 export const SupplierCatalogPage = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -1265,7 +1277,7 @@ export const SupplierCatalogPage = () => {
                               {sp.status}
                             </span>
                           </div>
-                          <h3 className="text-sm font-bold text-[var(--text-primary)]">{sp.display_title}</h3>
+                          <h3 className="text-sm font-bold text-[var(--text-primary)]">{sp.title || sp.variety}</h3>
                           <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-secondary)]">
                             <span><strong>Brand:</strong> {sp.is_unbranded || !sp.brand ? 'Unbranded / Commodity' : sp.brand}</span>
                             <span><strong>Variety:</strong> {sp.variety}</span>
@@ -1286,7 +1298,7 @@ export const SupplierCatalogPage = () => {
                             </Button>
                           )}
                           {sp.status !== 'ARCHIVED' && (
-                            <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'product', id: sp.id, title: sp.display_title || sp.title })}>
+                            <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'product', id: sp.id, title: sp.title || sp.variety })}>
                               <Archive className="w-3.5 h-3.5" />
                             </Button>
                           )}
@@ -1319,7 +1331,7 @@ export const SupplierCatalogPage = () => {
                                     {sku.status}
                                   </span>
                                 </div>
-                                <div className="text-xs font-bold text-[var(--text-primary)]">{sku.sku_title}</div>
+                                <div className="text-xs font-bold text-[var(--text-primary)]">{supplierSkuDisplayTitle(sku)}</div>
                                 <div className="text-[11px] text-[var(--text-secondary)]">
                                   Pack: <strong>{sku.pack_size}{sku.pack_unit}</strong> ({sku.packaging_type}) • Purchasing Unit: <strong>{sku.purchasing_unit}</strong>
                                 </div>
@@ -1342,7 +1354,7 @@ export const SupplierCatalogPage = () => {
                                   </Button>
                                 )}
                                 {sku.status !== 'ARCHIVED' && (
-                                  <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'sku', id: sku.id, title: sku.sku_title || sku.sku_code })}>
+                                  <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'sku', id: sku.id, title: supplierSkuDisplayTitle(sku) })}>
                                     Archive
                                   </Button>
                                 )}
@@ -1855,7 +1867,7 @@ export const SupplierCatalogPage = () => {
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Publish & Lock Physical SKU?</h3>
               </div>
               <p className="text-xs text-[var(--text-secondary)]">
-                Once published, the physical identity of <strong>{confirmPublishSku.sku_title}</strong> (variety, brand/unbranded status, grade, pack size, and unit) is permanently locked and cannot be edited.
+                Once published, the physical identity of <strong>{supplierSkuDisplayTitle(confirmPublishSku)}</strong> (variety, brand/unbranded status, grade, pack size, and unit) is permanently locked and cannot be edited.
               </p>
               <div className="flex items-center justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => setConfirmPublishSku(null)}>
@@ -1879,7 +1891,7 @@ export const SupplierCatalogPage = () => {
                     {editingListing ? 'Update Commercial Offer' : 'Publish Commercial Offer'}
                   </span>
                   <h3 className="text-base font-bold text-[var(--text-primary)]">
-                    {offerModalVariant.sku_title || offerModalVariant.variant_title || offerModalVariant.title}
+                    {offerModalVariant.variant_title || offerModalVariant.title || supplierSkuDisplayTitle(offerModalVariant)}
                   </h3>
                 </div>
                 <button type="button" onClick={() => setOfferModalVariant(null)} className="p-1 text-[var(--text-muted)]">
