@@ -91,6 +91,12 @@ class FlashPoolService {
     if(reason.length<3 || reason.length>255) throw fail('INVALID_CLEARANCE_REASON','Provide a truthful clearance reason.');
     const deliveryFee = dec(payload.delivery_fee ?? '0', {positive:false});
     const condition=payload.condition_notes == null?'':String(payload.condition_notes).trim();
+    const bestBefore=payload.best_before_date==null||payload.best_before_date===''?null:String(payload.best_before_date);
+    if(bestBefore && (!/^\\d{4}-\\d{2}-\\d{2}$/.test(bestBefore) ||
+        Number.isNaN(Date.parse(bestBefore)) || Date.parse(bestBefore+'T23:59:59Z')<=Date.now()))
+      throw fail('INVALID_BEST_BEFORE','Best-before date must be a valid future date; expired food cannot be listed.');
+    if(/near[- ]?expir|best.before/i.test(reason) && !bestBefore)
+      throw fail('BEST_BEFORE_REQUIRED','Expiry-related clearance requires a truthful best-before date.');
     if(condition.length>2000)throw fail('INVALID_CONDITION_NOTES','Condition details exceed the permitted size.');
     const conn=await db.getConnection();
     try {
@@ -114,15 +120,15 @@ class FlashPoolService {
           (flash_code,supplier_id,product_id,supplier_sku_id,supplier_listing_id,product_spec_id,
            total_stock,remaining_stock,discounted_unit_price,original_unit_price,min_quantity,
            max_quantity_per_buyer,selling_mode,clearance_reason,condition_notes,expiry_time,
-           configured_duration_minutes,delivery_fee,status,snapshot_json)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?)`,
+           configured_duration_minutes,delivery_fee,best_before_date,status,snapshot_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?)`,
         ['FL-'+crypto.randomBytes(10).toString('hex'),supplierId,spec.product_id,
          spec.supplier_sku_id,listing.id,spec.id,stock,stock,price,original,min,max,mode,
-         reason,condition,padSqlDate(expiry),Math.ceil((expiry.getTime()-Date.now())/60000),deliveryFee,
+         reason,condition,padSqlDate(expiry),Math.ceil((expiry.getTime()-Date.now())/60000),deliveryFee,bestBefore,
          JSON.stringify({sku_id:spec.supplier_sku_id,sku_title:spec.title,
            product_id:spec.product_id,pack_size:spec.pack_size,pack_unit:spec.pack_unit,
            purchasing_unit:spec.purchasing_unit,listing_id:listing.id,price_per_pack:price,
-           original_price:original,selling_mode:mode,offer_stock:stock,condition_notes:condition,delivery_fee:deliveryFee})]
+           original_price:original,selling_mode:mode,offer_stock:stock,condition_notes:condition,delivery_fee:deliveryFee,best_before_date:bestBefore})]
       );
       await conn.commit();
       return this.getSupplierOffer(supplierId,result.insertId);
@@ -147,6 +153,13 @@ class FlashPoolService {
       const durationMinutes=Number(offer.configured_duration_minutes);
       if(!Number.isSafeInteger(durationMinutes)||durationMinutes<2)
         throw fail('INVALID_FLASH_DURATION','Supplier sale duration must be at least two whole minutes.',400);
+      if(offer.best_before_date) {
+        const [[safeDate]]=await conn.query(
+          'SELECT (DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE) < DATE_ADD(?,INTERVAL 1 DAY)) AS within_safe_date',
+          [durationMinutes,offer.best_before_date]);
+        if(!safeDate.within_safe_date)
+          throw fail('FLASH_BEYOND_BEST_BEFORE','The chosen sale duration would continue past the stated best-before date.',409);
+      }
       const {listing,spec}=await this._lockListing(conn,offer.supplier_listing_id,supplierId);
       if(Number(spec.supplier_sku_id)!==Number(offer.supplier_sku_id))
         throw fail('FLASH_SKU_MISMATCH','Linked SKU changed before publish.',409);
