@@ -900,6 +900,9 @@ class SafepayCheckoutService {
         ]
       );
 
+      // B4 pool outbox: only valid for actual pool-backed orders.
+      // B5/B6 poolless orders use verified payment rows and their own lifecycle events.
+      if (order.pool_id) {
       // Transactional Outbox Event: ORDER_PAID
       const eventIdOutbox = reservationEventService.generateEventId({
         event_type: 'ORDER_PAID',
@@ -936,6 +939,7 @@ class SafepayCheckoutService {
           reconciliationEventId
         ]
       );
+      }
 
       await connection.commit();
 
