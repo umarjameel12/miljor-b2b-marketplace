@@ -412,6 +412,110 @@ export const RfqPage = () => {
     }
   },[token,user?.role]);
 
+  const refreshProcurementModes = async () => {
+    if(!token||user?.role!=='BUYER')return;
+    const [invites,contracts]=await Promise.all([
+      procurementApi('/api/v1/procurement/collectives/my-invitations'),
+      procurementApi('/api/v1/procurement/recurring')
+    ]);
+    setMyCollectiveInvites(invites.invitations||[]);
+    setRecurringContracts(contracts.contracts||[]);
+  };
+
+  useEffect(()=>{
+    if(token&&user?.role==='BUYER'){
+      refreshProcurementModes().catch(error=>setShoppingError(error.message));
+    }
+  },[token,user?.role]);
+
+  const createCollectiveFromDraft = async request => {
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/requests/${request.id}/collective`,{
+        method:'POST',body:JSON.stringify({visibility:'PRIVATE_INVITE',minimum_buyers:Number(minimumBuyers)})
+      });
+      setCollectiveGroup(result.group);
+      await refreshProcurementModes();
+      toast.success('Private collective created. Every buyer must join with explicit quantities.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const inviteCollectiveBuyer = async () => {
+    if(!collectiveGroup)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${collectiveGroup.id}/invitations`,{
+        method:'POST',body:JSON.stringify({buyer_id:Number(inviteBuyerId)})
+      });
+      setInviteBuyerId('');
+      toast.success('Verified business invited. No obligation until they explicitly join.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const joinCollective = async invite => {
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const lines=(invite.items||[]).flatMap(item=>{
+        const qty=joinQuantities[`${invite.group_id}:${item.id}`];
+        return qty?[{request_item_id:item.id,quantity:qty}]:[];
+      });
+      if(!lines.length)throw Error('Choose quantities for at least one requested item.');
+      await procurementApi(`/api/v1/procurement/collectives/${invite.group_id}/join`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({lines})
+      });
+      await refreshProcurementModes();
+      toast.success('Your independent group participation has been recorded; no payment taken.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const createRecurringFromDraft = async request => {
+    if(!recurringStart)throw setShoppingError('Choose a recurring start date.');
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const cadence=request.frequency;
+      const rule={
+        cadence,timezone_name:'Asia/Karachi',local_run_time:recurringTime,
+        starts_on:recurringStart,ends_on:recurringEnd||null,
+        payment_policy:'EXPLICIT_PER_CYCLE',pricing_policy:'REQUOTE_EACH_CYCLE',
+        ...(cadence==='WEEKLY'?{weekday_number:Number(recurringCadenceDay)}
+          :{month_day:Number(recurringCadenceDay),month_end_policy:'LAST_DAY'})
+      };
+      await procurementApi(`/api/v1/procurement/requests/${request.id}/recurring`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify(rule)
+      });
+      await refreshProcurementModes();
+      toast.success('Recurring draft created. Activate only after reviewing the schedule.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const updateRecurringStatus=async(contract,action)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/recurring/${contract.id}/${action.toLowerCase()}`,{
+        method:'POST',body:JSON.stringify({version_number:contract.version_number,
+          explicit_consent:action==='ACTIVATE'})
+      });
+      await refreshProcurementModes();
+      toast.success('Recurring schedule updated without an automatic payment.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const previewRecurringCycles=async contractId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/recurring/${contractId}/upcoming`);
+      setRecurringUpcoming(result);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
   // Buyer RFQ Form
   const [rfqForm, setRfqForm] = useState({
     product_name: '',
