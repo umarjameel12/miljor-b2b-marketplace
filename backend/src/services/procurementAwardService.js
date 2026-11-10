@@ -135,9 +135,33 @@ class ProcurementAwardService{
       warning:'Current fee-inclusive checkout preflight only, tax policy not configured. Final acceptance revalidates all stock and prices under locks.'};
   }
   async accept(buyerId,requestId,payload,rawKey){
-    if(process.env.B6_FINANCIAL_GATE_ENABLED!=='true')
+    if(process.env.B6_FINANCIAL_GATE_ENABLED!=='true' ||
+       process.env.B6_B5_INVENTORY_RECONCILED!=='true' ||
+       process.env.B6_TAX_POLICY_APPROVED!=='true')
       throw fail('B6_FINANCIAL_GATE_BLOCKED',
-        'B6-G/H payment creation is disabled until B5 shared inventory, tax policy and Safepay regression pass.',503);
+        'B6-G/H checkout is blocked until accepted B5 inventory, exact tax policy and Safepay evidence pass.',503);
+    // This feature is sandbox/test only until real-money authorization is
+    // separately granted. Never mutate protected development miljor_db.
+    if(!['test','sandbox'].includes(process.env.NODE_ENV))
+      throw fail('B6_FINANCIAL_ENVIRONMENT_BLOCKED',
+        'B6 financial operations require an isolated approved test/sandbox environment.',503);
+    const [[identity]]=await this.database.query('SELECT DATABASE() AS db_name');
+    const expectedDatabase=process.env.NODE_ENV==='test'
+      ?'miljor_test_db':'miljor_sandbox_db';
+    if(identity?.db_name!==expectedDatabase)
+      throw fail('B6_PROTECTED_DATABASE_BLOCKED',
+        'B6 financial operations refused: database identity is not the approved isolated target.',503);
+    // Source-level prerequisite cannot be satisfied by environment flags:
+    // accepted B5 Flash checkout claim/release code must be integrated.
+    let flashReady=false;
+    try{
+      const flash=require('./flashPoolService');
+      flashReady=typeof flash.releaseCheckoutClaim==='function' &&
+        typeof flash.reconcilePaidOrder==='function';
+    }catch {flashReady=false;}
+    if(!flashReady)
+      throw fail('B5_SHARED_STOCK_INTEGRATION_REQUIRED',
+        'Accepted B5 Flash checkout/release contracts are not installed in this B6 source.',503);
     const buyer=id(buyerId,'Buyer'),rid=id(requestId,'Request'),idem=key(rawKey);
     if(!payload||!Array.isArray(payload.selections)||
        payload.buyer_total_confirmed!==true)
