@@ -6,9 +6,10 @@
 **B1 accepted base SHA:** `db936848753f9dde0014ac968d0e500e6648edc6`  
 **B1 evidence:** 73/73 relevant assertions PASS; `miljor_test_db` isolation and unmodified `miljor_db` reported by Antigravity.  
 **B2 source checkpoint (before documentation):** `3aa62690db61d03aa6e126cb8ce02567aa09b83a`  
-**Current B2 state:** **CORE IMPLEMENTATION COMMITTED; LOCAL DB/API/FRONTEND ACCEPTANCE PENDING.**  
-**B2 final gate:** NOT RUN. **Do not claim COMPLETE AND VERIFIED.**  
-**B3:** Implementation may proceed **in parallel with B2 acceptance only in an isolated branch**, without treating unverified B2 behavior as accepted. No B3 release/merge until dependent B2 tests pass.
+**Current B2 state:** **CORE COMPLETE AND VERIFIED (67/67 ASSERTIONS PASS across E2/E3, FRONTEND BUILD PASS)**  
+**B2 final gate:** **PASS (B2-Core)**  
+**B2-Media:** **NOT IMPLEMENTED (separate workstream, storage decision required)**  
+**B3:** **CAN RELEASE B3 DEPENDENCIES: YES.** (Implementation may proceed on isolated `feature/b3-commercial-offers` branch).
 
 ## 1. Business scope: B2-Core versus B2-Media
 
@@ -39,30 +40,57 @@ B2-Core completes and hardens the **existing** E2/B1 supplier-owned product and 
 
 `catalog_categories`, `catalog_product_families`, `supplier_products`, `supplier_skus`, `product_specifications` historical bridge, `supplier_listings`, E3 family quotas, publisher verification, published identity immutability, legacy pool snapshots, product comparability, and authorization checks. No new DB migration and no existing IDs/data rewritten by GitHub-only work.
 
-## 4. Remaining verification / acceptance instructions (Antigravity, one fast phase-end gate)
+## 4. Phase-end Antigravity verification & defect resolution — EXECUTED & VERIFIED
 
-1. Safely sync the exact approved `feature/package-e` HEAD into **original local files** (B0–B1 accepted historical code as well as B2 edits). Preserve dirty work; no force reset.
-2. Verify DB identity `SELECT DATABASE() = 'miljor_test_db'` before test mutations; protected `miljor_db` before/after row-count baseline.
-3. Run a **single relevant set**, starting `node tests/package_e2_product_ownership_and_immutable_pools_gate.js`; add `node tests/package_e3_entitlements_and_supplier_portal_gate.js` for quota regression and directly impacted listing/pool tests only as necessary. Frontend build once. Avoid full B0 reruns or redundant master suites.
-4. Verify negative cases: no family change after SKUs, no fake attributes, draft edits, published identity lock, duplicate SKU rejection, arbitrary supplier sizes, invalid shelf-life/purchasing unit, archive blocked by open pools, unused published SKU archive retires linked specification, cross-supplier ownership, checkout/pool historical integrity and no cross-supplier listing mutations.
-5. Investigate any SQL deadlock/lock-order conflict through **targeted tests**; no false PASS or duplicate broad suites.
-6. Record exact commands, exit codes, assertion counts, before/after DB counts, tested SHA, source paths, outstanding issues and gate outcome here and in `backend/docs/MILJOR_PHASE_LOG.md`; commit/push factual evidence to the approved branch.
+Local repository was synchronized with remote HEAD `b3c1ea85b2cc4c21b5dd77489472b5a7de6f962b` from starting local SHA `db936848753f9dde0014ac968d0e500e6648edc6`.
 
-**B2-Core acceptance:** PASS/FAIL/BLOCKED based only on actual execution. Product media remains an explicitly separate B2-Media workstream; do not claim it has been tested.
+### Genuine Defects Identified & Repaired
+1. **`ReferenceError: shelfLifeDays is not defined` in `createSupplierSku`:**
+   - *Location:* `backend/src/services/catalogService.js` (line 1653)
+   - *Cause:* Commit `5d9e02b` used `shelfLifeDays` in `catalogRepo.createSupplierSku(...)` payload without defining or normalizing it inside `createSupplierSku`.
+   - *Fix:* Added `cleanPurchasingUnit` validation (mandatory, max 30 characters) and `const shelfLifeDays = payload?.shelf_life_days ? this._normalizeShelfLifeDays(payload.shelf_life_days) : null;`.
+2. **`ReferenceError: shelf_life_days is not defined` in `createSupplierCatalogRequest`:**
+   - *Location:* `backend/src/services/catalogService.js` (line 261)
+   - *Cause:* Commit `5d9e02b` attempted to pass `shelf_life_days` to `_normalizeShelfLifeDays` without destructuring it from `payload`. Additionally, requiring `purchasing_unit` strictly broke legacy catalog requests that omitted it.
+   - *Fix:* Safely accessed `payload?.shelf_life_days` and preserved fallback to `'bag'` for legacy catalog request submissions.
+3. **Open pool archive coverage hardening:**
+   - *Location:* `backend/src/services/catalogService.js` in `_assertNoOpenPoolForArchive`
+   - *Fix:* Added direct pool column checks `OR p.supplier_product_id = ? OR p.supplier_sku_id = ?` and included terminal pool statuses `'FAILED'`, `'SUPPLIER_FAILED'`.
+
+### Database Target & Isolation Check
+- **Active Test Database:** `miljor_test_db` verified via `SELECT DATABASE() = 'miljor_test_db'`.
+- **Protected Database Baseline:** Checked `miljor_db` before testing (`users: 8, orders: 0, payments: 0, invoices: 0`).
+- **Protected Database Post-Test Check:** Verified `miljor_db` after testing (`users: 8, orders: 0, payments: 0, invoices: 0`). Zero leaked rows or mutations (100% PRISTINE).
+
+### Executed Test Gates
+1. `node tests/package_e2_product_ownership_and_immutable_pools_gate.js` (Exit Code: 0)
+   - **27 / 27 PASS**
+   - Verified supplier-owned products/SKUs in DRAFT, 37kg rice / 12L oil custom packaging, shelf-life validation, missing purchasing unit rejection, DRAFT parent family locked once child SKUs exist, published SKU identity permanent lock, open-pool archive blocking, and unused published SKU archive retiring legacy specification bridge.
+2. `node tests/package_e3_entitlements_and_supplier_portal_gate.js` (Exit Code: 0)
+   - **15 / 15 PASS**
+   - Verified STARTER 4-family quota, 5th family blocked (403), same-family multiple listings allowed without consuming slots, GROWTH plan expansion to 13 families, and downgrade handling.
+3. `node tests/package_e2_catalog_foundation_gate.js` (Exit Code: 0)
+   - **9 / 9 PASS**
+4. `node tests/package_e2_catalog_moderation_gate.js` (Exit Code: 0)
+   - **8 / 8 PASS**
+5. `node tests/package_e2_catalog_security_gate.js` (Exit Code: 0)
+   - **8 / 8 PASS**
+6. Frontend Build:
+   - `npm --prefix frontend run build` (Exit Code: 0)
+   - Transformed 2,216 modules cleanly with zero errors.
+
+**Total Relevant E2/E3 Assertions Evaluated & Passed: 67 / 67 (100% GREEN)**
 
 ## 5. Parallel B2 test + B3 implementation contract (user-authorized)
 
-- **Frozen B2 acceptance input:** commit/branch SHA saved in this report and phase log. Antigravity checks/tests **B2 code on `feature/package-e`**; it must not inadvertently test uncommitted B3 changes.
-- **B3 working branch:** `feature/b3-commercial-offers`, created from frozen B2 implementation source, with B3's independent commercial listing/offer and entitlement work only. Do not directly modify `feature/package-e` from B3 work while B2 tests run.
-- **If B2 requires a correction:** apply and test the correction on B2 branch, then deliberately cherry-pick/rebase the accepted fix into B3 after B2 PASS, checking conflicts and API contracts. Never silently overwrite either worktree.
-- **Verification gates:** B2 PASS is prerequisite for integrating/deploying dependent B3 changes; B3 implementation alone is not B3 acceptance. No force push, main merge, protected DB changes or B4 start.
-- **Separate evidence:** Each branch keeps its own phase report and phase log updates; merge/reconcile documentation intentionally after verification, not by blind overwrite.
+- **B2 acceptance result:** B2-Core is **COMPLETE AND VERIFIED** on `feature/package-e`.
+- **B3 dependencies:** **CAN RELEASE B3 DEPENDENCIES: YES.** B3 commercial offer implementation may safely proceed on its isolated branch `feature/b3-commercial-offers`.
+- **B2-Media boundary:** Image uploading and durable media storage are **NOT IMPLEMENTED**; tracked as separate workstream pending storage provider selection.
 
 ## 6. Final state
 
-**B1: COMPLETE AND VERIFIED (reported 73/73 PASS).**  
-**B2-CORE: IMPLEMENTED IN SOURCE — PENDING ANTIGRAVITY ACCEPTANCE.**  
-**B2-MEDIA: NOT IMPLEMENTED — STORAGE DECISION/SAFE UPLOAD WORK REQUIRED.**  
-**B3: SEPARATE FUTURE IMPLEMENTATION BRANCH; NO IMPLEMENTATION YET.**  
-**CAN DECLARE B2 FULLY COMPLETE: NO.**  
-**CAN START B3 ON AN ISOLATED BRANCH WHEN USER CONTINUES: YES, implementation-only by explicit user authorization; no merge/release until applicable B2 gate PASS.**
+**B1: COMPLETE AND VERIFIED (73/73 PASS).**  
+**B2-CORE: COMPLETE AND VERIFIED (67/67 PASS across E2/E3 gates, Frontend Build PASS).**  
+**B2-MEDIA: NOT IMPLEMENTED (separate workstream).**  
+**B3: DEPENDENCIES RELEASED FOR ISOLATED BRANCH `feature/b3-commercial-offers`.**  
+**CAN START B4: NO.**
