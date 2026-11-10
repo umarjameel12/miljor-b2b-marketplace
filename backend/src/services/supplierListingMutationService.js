@@ -15,14 +15,14 @@ function positiveDecimal(value, field, scale = 4) {
   try {
     const canonical = exact.toCanonical(value, scale);
     if (!exact.exactDecimalGte(canonical, scale === 2 ? '0.01' : '0.0001', scale)) throw new Error('not positive');
-    if (canonical.split('.')[0].length > (scale === 2 ? 10 : 8)) throw new Error('out of range');
+    if (canonical.split('.')[0].length > (scale === 2 ? (field === 'price' ? 10 : 8) : 8)) throw new Error('out of range');
     return canonical;
   } catch (_) { throw invalid('INVALID_' + field.toUpperCase(), field + ' must be a valid positive decimal'); }
 }
 function nonNegativeDecimal(value, field, scale = 4) {
   try {
     const canonical = exact.toCanonical(value, scale);
-    if (!exact.exactDecimalGte(canonical, '0', scale) || canonical.split('.')[0].length > 8) throw new Error('out of range');
+    if (!exact.exactDecimalGte(canonical, '0', scale) || canonical.split('.')[0].length > (scale === 2 ? 10 : 8)) throw new Error('out of range');
     return canonical;
   } catch (_) { throw invalid('INVALID_' + field.toUpperCase(), field + ' must be a valid non-negative decimal'); }
 }
@@ -32,6 +32,10 @@ class SupplierListingMutationService {
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
+      // Match creation/publishing lock order: supplier profile first, listing second.
+      const [listingOwner] = await conn.query('SELECT supplier_id FROM supplier_listings WHERE id = ?', [listingId]);
+      if (!listingOwner.length) throw invalid('NOT_FOUND', 'Supplier listing not found', 404);
+      await conn.query('SELECT supplier_id FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE', [listingOwner[0].supplier_id]);
       // The supplier listing lock protects concurrent updates and price-history order.
       const listing = await listingRepo.findById(listingId, conn, true);
       if (!listing) throw invalid('NOT_FOUND', 'Supplier listing not found', 404);
@@ -55,9 +59,9 @@ class SupplierListingMutationService {
         const [rows] = await conn.query('SELECT CAST(ROUND(CAST(? AS DECIMAL(12,2)) / CAST(? AS DECIMAL(12,4)), 4) AS CHAR) AS unit_price', [changes.base_unit_price, String(listing.pack_size)]);
         changes.price_per_base_unit = rows[0].unit_price;
       }
-      if (payload.available_stock !== undefined) changes.available_stock = nonNegativeDecimal(payload.available_stock, 'stock');
-      if (payload.buyer_min_qty !== undefined) changes.buyer_min_qty = positiveDecimal(payload.buyer_min_qty, 'buyer_min_qty');
-      if (payload.supplier_min_qty !== undefined) changes.supplier_min_qty = positiveDecimal(payload.supplier_min_qty, 'supplier_min_qty');
+      if (payload.available_stock !== undefined) changes.available_stock = nonNegativeDecimal(payload.available_stock, 'stock', 2);
+      if (payload.buyer_min_qty !== undefined) changes.buyer_min_qty = positiveDecimal(payload.buyer_min_qty, 'buyer_min_qty', 2);
+      if (payload.supplier_min_qty !== undefined) changes.supplier_min_qty = positiveDecimal(payload.supplier_min_qty, 'supplier_min_qty', 2);
       if (payload.delivery_zones !== undefined) {
         if (!Array.isArray(payload.delivery_zones) || payload.delivery_zones.length === 0 ||
             payload.delivery_zones.length > 40 ||
@@ -67,7 +71,7 @@ class SupplierListingMutationService {
         changes.delivery_zones = payload.delivery_zones.map(z => z.trim());
       }
       if (payload.delivery_fee_policy !== undefined) {
-        if (!['INCLUDED_IN_PRICE', 'FIXED_FEE', 'DISTANCE_BASED', 'BUYER_PAYS', 'SUPPLIER_PAYS'].includes(payload.delivery_fee_policy)) {
+        if (typeof payload.delivery_fee_policy !== 'string' || !payload.delivery_fee_policy.trim() || payload.delivery_fee_policy.length > 255) {
           throw invalid('INVALID_DELIVERY_POLICY', 'Unsupported delivery fee policy');
         }
         changes.delivery_fee_policy = payload.delivery_fee_policy;
@@ -89,7 +93,7 @@ class SupplierListingMutationService {
 
       const nextStock = changes.available_stock ?? String(listing.available_stock);
       const nextBuyerMin = changes.buyer_min_qty ?? String(listing.buyer_min_qty);
-      if (!exact.exactDecimalGte(nextStock, nextBuyerMin, 4) && changes.status === 'ACTIVE') {
+      if (!exact.exactDecimalGte(nextStock, nextBuyerMin, 2) && changes.status === 'ACTIVE') {
         throw invalid('INSUFFICIENT_STOCK', 'ACTIVE listing requires stock at least buyer minimum', 409);
       }
       if (changes.status === 'ACTIVE') {
