@@ -151,6 +151,71 @@ class ProcurementRecurringService {
         ORDER BY id DESC LIMIT 100`,[buyer]);
     return rows;
   }
+  async previewUpcoming(buyerId,contractId){
+    const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract');
+    const [rows]=await this.database.query(
+      `SELECT cadence,weekday_number,month_day,month_end_policy,
+        local_run_time,timezone_name,starts_on,ends_on,payment_policy,
+        pricing_policy,status,version_number
+        FROM procurement_recurring_contracts WHERE id=? AND buyer_id=?`,
+      [cid,buyer]
+    );
+    if(!rows.length)throw fail('CONTRACT_NOT_FOUND','Your recurring contract was not found.',404);
+    const r=rows[0];
+    const date=v=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);
+    const schedule={cadence:r.cadence,weekday_number:r.weekday_number,
+      month_day:r.month_day,month_end_policy:r.month_end_policy,
+      local_run_time:String(r.local_run_time).slice(0,5),
+      timezone_name:r.timezone_name,starts_on:date(r.starts_on),
+      ends_on:r.ends_on?date(r.ends_on):null,
+      payment_policy:r.payment_policy,pricing_policy:r.pricing_policy};
+    return {contract_id:cid,status:r.status,
+      upcoming:nextCycles(schedule,{from:new Date().toISOString(),limit:6}),
+      payment_authorized:false};
+  }
+  async skipCycle(buyerId,contractId,cycleId){
+    const buyer=id(buyerId,'Buyer'),cid=id(contractId,'Contract'),cyid=id(cycleId,'Cycle');
+    const conn=await this.database.getConnection();
+    try{
+      await conn.beginTransaction();
+      const [contracts]=await conn.query(
+        'SELECT id,buyer_id,status FROM procurement_recurring_contracts WHERE id=? AND buyer_id=? FOR UPDATE',
+        [cid,buyer]
+      );
+      if(!contracts.length)throw fail('CONTRACT_NOT_FOUND','Recurring contract not found.',404);
+      const [cycles]=await conn.query(
+        `SELECT id,status,due_at_utc FROM procurement_recurring_cycles
+         WHERE id=? AND contract_id=? AND buyer_id=? FOR UPDATE`,
+        [cyid,cid,buyer]
+      );
+      const cycle=cycles[0];
+      if(!cycle)throw fail('CYCLE_NOT_FOUND','Recurring cycle not found.',404);
+      if(cycle.status==='SKIPPED'){
+        await conn.commit();return {cycle_id:cyid,status:'SKIPPED',is_replay:true};
+      }
+      if(cycle.status!=='SCHEDULED')
+        throw fail('CYCLE_ALREADY_COMMITTED','Cannot skip a cycle that entered approval, payment or fulfillment.',409);
+      const [[clock]]=await conn.query(
+        'SELECT (? > UTC_TIMESTAMP()) AS before_cutoff',[cycle.due_at_utc]
+      );
+      if(Number(clock?.before_cutoff)!==1)
+        throw fail('CYCLE_CUTOFF_PASSED','Cycle cutoff has passed.',409);
+      await conn.query(
+        `UPDATE procurement_recurring_cycles
+         SET status='SKIPPED',failure_code='BUYER_SKIPPED'
+         WHERE id=? AND status='SCHEDULED'`,[cyid]
+      );
+      await conn.query(
+        `INSERT INTO procurement_recurring_cycle_events
+         (cycle_id,event_key,event_type,event_snapshot)
+         VALUES (?,'BUYER_SKIP','BUYER_SKIP',?)
+         ON DUPLICATE KEY UPDATE id=id`,
+        [cyid,JSON.stringify({buyer_id:buyer,skip_before_cutoff:true})]
+      );
+      await conn.commit();return {cycle_id:cyid,status:'SKIPPED',is_replay:false};
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
   async prepareUpcoming(contractId,{limit=6}={}){
     const cid=id(contractId,'Contract');
     if(!Number.isInteger(limit)||limit<1||limit>24)
