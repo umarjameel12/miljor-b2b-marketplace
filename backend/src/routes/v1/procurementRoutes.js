@@ -59,6 +59,11 @@ router.get('/procurement/recurring/:contractId/upcoming',protect,authorizeStrict
 router.post('/procurement/recurring/:contractId/:action(activate|pause|resume|cancel)',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringAction(req,res));
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/skip',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringSkip(req,res));
 
+// B6-G/H — Fee-inclusive preview and server-gated real order acceptance.
+router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartPayable(req,res));
+router.post('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptSmartAward(req,res));
+router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartAward(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
