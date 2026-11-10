@@ -107,14 +107,16 @@ class ProcurementRequestService {
       await this._buyer(conn,buyer);
       // Physical unique index ensures retries cannot create two drafts, even after a crash.
       const [existing] = await conn.query(
-        'SELECT id,request_hash FROM procurement_requests WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
+        'SELECT id,request_hash,create_response_snapshot FROM procurement_requests WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
         [buyer,idem]
       );
       if (existing.length) {
         if (existing[0].request_hash !== hash) {
           throw issue('IDEMPOTENCY_CONFLICT','This key already belongs to another request.',409);
         }
-        const saved = await this._load(existing[0].id,buyer,conn);
+        const raw = existing[0].create_response_snapshot;
+        const saved = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw)
+          : await this._load(existing[0].id,buyer,conn);
         await conn.commit();
         return {request:saved,is_replay:true};
       }
@@ -138,6 +140,10 @@ class ProcurementRequestService {
         );
       }
       const request = await this._load(created.insertId,buyer,conn);
+      await conn.query(
+        'UPDATE procurement_requests SET create_response_snapshot=? WHERE id=? AND buyer_id=?',
+        [JSON.stringify(request),created.insertId,buyer]
+      );
       await conn.commit();
       return {request,is_replay:false};
     } catch (e) {
