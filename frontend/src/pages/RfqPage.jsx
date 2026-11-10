@@ -36,6 +36,12 @@ export const RfqPage = () => {
   const [activeRequest, setActiveRequest] = useState(null);
   const [shoppingBusy, setShoppingBusy] = useState(false);
   const [shoppingError, setShoppingError] = useState('');
+  const [selectedMatchRequest, setSelectedMatchRequest] = useState(null);
+  const [supplierMatches, setSupplierMatches] = useState([]);
+  const [supplierInvitations, setSupplierInvitations] = useState([]);
+  const [supplierInbox, setSupplierInbox] = useState([]);
+  const [matchingBusy, setMatchingBusy] = useState(false);
+
 
   const availableUnits = familyId => {
     const family = familyChoices.find(choice => String(choice.id) === String(familyId));
@@ -172,6 +178,75 @@ export const RfqPage = () => {
     } catch (error) {
       setShoppingError(error.message);
     } finally { setShoppingBusy(false); }
+  };
+
+  // B6-D invitation workflow: no buyer contact/address is returned to suppliers.
+  const procurementApi = async (url, options={}) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw Error(body.error?.message || 'Supplier request failed');
+    return body.data || {};
+  };
+
+  const viewSupplierMatches = async requestId => {
+    setMatchingBusy(true);
+    setShoppingError('');
+    try {
+      const [matches, invitations] = await Promise.all([
+        procurementApi(`/api/v1/procurement/requests/${requestId}/matches`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/invitations`)
+      ]);
+      setSelectedMatchRequest(requestId);
+      setSupplierMatches(matches.matches || []);
+      setSupplierInvitations(invitations.invitations || []);
+    } catch(err) {setShoppingError(err.message);}
+    finally {setMatchingBusy(false);}
+  };
+
+  const inviteSupplier = async supplierId => {
+    if (!selectedMatchRequest) return;
+    setMatchingBusy(true);
+    setShoppingError('');
+    try {
+      await procurementApi(`/api/v1/procurement/requests/${selectedMatchRequest}/invitations`, {
+        method:'POST',body:JSON.stringify({supplier_id:supplierId})
+      });
+      const result = await procurementApi(`/api/v1/procurement/requests/${selectedMatchRequest}/invitations`);
+      setSupplierInvitations(result.invitations || []);
+      toast.success('Invitation sent to eligible supplier');
+    } catch(err){setShoppingError(err.message);}
+    finally{setMatchingBusy(false);}
+  };
+
+  const refreshSupplierInbox = async () => {
+    if(!token || user?.role!=='SUPPLIER')return;
+    try{
+      const result=await procurementApi('/api/v1/procurement/supplier/invitations');
+      setSupplierInbox(result.invitations || []);
+    }catch(err){toast.error(err.message);}
+  };
+
+  useEffect(()=>{
+    if(token && user?.role==='SUPPLIER')refreshSupplierInbox();
+  },[token,user?.role]);
+
+  const respondInvitation = async (invitationId, decision) => {
+    setMatchingBusy(true);
+    try{
+      await procurementApi(`/api/v1/procurement/supplier/invitations/${invitationId}/respond`,{
+        method:'POST',body:JSON.stringify({decision})
+      });
+      await refreshSupplierInbox();
+      toast.success(decision==='INTERESTED'?'Interest registered':'Invitation declined');
+    }catch(err){toast.error(err.message);}
+    finally{setMatchingBusy(false);}
   };
 
   // Buyer RFQ Form
@@ -400,14 +475,74 @@ export const RfqPage = () => {
                   {savedRequests.map(request=>(
                     <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                       <span>{request.request_code} · {request.status} · {request.delivery_area}</span>
-                      {request.status==='DRAFT' &&
-                        <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
-                          className="text-[var(--brand-accent)] underline text-xs">Edit Draft</button>}
+                      <div className="flex gap-3">
+                        {request.status==='DRAFT' &&
+                          <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">Edit Draft</button>}
+                        {request.status==='OPEN' &&
+                          <button type="button" disabled={matchingBusy} onClick={()=>viewSupplierMatches(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">Find suppliers</button>}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+            {selectedMatchRequest && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Matching suppliers</p>
+                  <button type="button" onClick={()=>{setSelectedMatchRequest(null);setSupplierMatches([]);setSupplierInvitations([]);}}
+                    className="text-xs underline">Close</button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">Matches reflect compatible listed items and declared delivery zones. Final stock, specifications and terms will be checked when suppliers submit quotes.</p>
+                {supplierMatches.length===0 && <p className="text-sm text-[var(--text-muted)]">No eligible suppliers currently match this request.</p>}
+                {supplierMatches.map(supplier=>{
+                  const invite=supplierInvitations.find(row=>Number(row.supplier_id)===Number(supplier.supplier_id));
+                  return <div key={supplier.supplier_id} className="flex justify-between gap-3 items-center border-t border-[var(--border-subtle)] pt-3">
+                    <div>
+                      <p className="text-sm font-semibold">{supplier.supplier_name}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{supplier.covered_item_count} of {supplier.total_item_count} product lines match</p>
+                    </div>
+                    <button type="button" disabled={matchingBusy||Boolean(invite)}
+                      onClick={()=>inviteSupplier(supplier.supplier_id)}
+                      className="px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs font-semibold disabled:opacity-50">
+                      {invite ? invite.status : 'Invite'}
+                    </button>
+                  </div>;
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {user?.role === 'SUPPLIER' && (
+          <section aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
+            <div className="flex justify-between items-center gap-3">
+              <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
+              <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
+            {supplierInbox.length===0 && <p className="text-sm text-[var(--text-muted)]">No open invitations yet.</p>}
+            {supplierInbox.map(invitation=>(
+              <article key={invitation.invitation_id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                <p className="text-sm font-semibold">{invitation.request_code} · {invitation.status}</p>
+                <div className="space-y-1">
+                  {(invitation.items||[]).map((item,index)=>(
+                    <p key={index} className="text-xs text-[var(--text-muted)]">
+                      Product family #{item.family_id}: {item.quantity} {item.unit}
+                      {item.requirements ? ` · ${item.requirements}` : ''}
+                    </p>
+                  ))}
+                </div>
+                {invitation.status==='INVITED' && <div className="flex gap-2">
+                  <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'INTERESTED')}
+                    className="text-xs font-semibold rounded-lg px-3 py-2 border border-[var(--border-subtle)]">I'm interested</button>
+                  <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'DECLINED')}
+                    className="text-xs rounded-lg px-3 py-2 border border-[var(--border-subtle)]">Decline</button>
+                </div>}
+              </article>
+            ))}
           </section>
         )}
 
