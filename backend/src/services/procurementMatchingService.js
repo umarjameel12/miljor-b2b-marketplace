@@ -28,7 +28,7 @@ function matchingArea(zones, area) {
   // Area matching is conservative. A supplier must explicitly cover the area,
   // or indicate all Lahore. No fuzzy proximity or invented route distances.
   return zones.some(z =>
-    ((z === 'all lahore' || z === 'lahore wide') && /\\blahore\\b/.test(normalized)) ||
+    ((z === 'all lahore' || z === 'lahore wide') && /\blahore\b/.test(normalized)) ||
     normalized === z || normalized.startsWith(z+' ')
   );
 }
