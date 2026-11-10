@@ -42,6 +42,18 @@ class ProcurementController {
     }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_HOLD_FAILED',message:e.statusCode?e.message:'Unable to reserve Flash Pool'}});}
   }
 
+  async updateFlashDraft(req,res) {
+    try {
+      const flash=await require('../services/flashPoolService').updateDraft(req.user.id,Number(req.params.id),req.body||{});
+      res.status(200).json({success:true,data:{flash_pool:flash}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_UPDATE_FAILED',message:e.statusCode?e.message:'Unable to edit Flash draft'}});}
+  }
+  async cancelFlashPool(req,res) {
+    try {
+      const flash=await require('../services/flashPoolService').cancelOffer(req.user.id,Number(req.params.id));
+      res.status(200).json({success:true,data:{flash_pool:flash}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_CANCEL_FAILED',message:e.statusCode?e.message:'Unable to cancel Flash offer'}});}
+  }
   async getFlashHold(req,res) {
     try {
       const hold=await require('../services/flashPoolService').getHoldForBuyer(req.user.id,Number(req.params.holdId));
