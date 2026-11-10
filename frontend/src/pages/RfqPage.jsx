@@ -668,6 +668,38 @@ export const RfqPage = () => {
                   ))}
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">{quoteComparison.best_value_rule}</p>
+                {(quoteComparison.options||[]).slice(0,3).map((option,index)=>(
+                  <div key={option.quote_ids.join('-')+'-'+index}
+                    className="rounded-lg border border-[var(--border-subtle)] p-3 space-y-2">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <p className="text-sm font-semibold">Shopping-list combination {index+1}</p>
+                      <p className="text-sm font-semibold">Supplier quoted: Rs. {option.total_delivered_cost}</p>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Items Rs. {option.item_subtotal} + supplier delivery Rs. {option.delivery_fee_total}.
+                      MilJor fees and taxes are not included.
+                    </p>
+                    {(option.lines||[]).map(line=>(
+                      <div key={line.request_item_id} className="text-xs border-t border-[var(--border-subtle)] pt-2">
+                        <p className="font-semibold">
+                          {line.supplier_sku_snapshot?.product_title||'Supplier SKU'} ·
+                          {line.quantity} {line.unit} · Rs. {line.subtotal}
+                        </p>
+                        <p className="text-[var(--text-muted)]">
+                          Quote #{line.quote_id} · Supplier #{line.supplier_id} ·
+                          Brand: {line.supplier_sku_snapshot?.brand||'Supplier specified'} ·
+                          Grade: {line.supplier_sku_snapshot?.quality_grade||'Supplier specified'} ·
+                          Pack: {line.supplier_sku_snapshot?.pack_size||'?'} {line.supplier_sku_snapshot?.pack_unit||''}
+                        </p>
+                        {line.buyer_requirements && (
+                          <p className="text-amber-700">
+                            Buyer requested: {line.buyer_requirements}. Check grade and packaging before accepting.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Ask a supplier for a better offer</p>
                   {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
