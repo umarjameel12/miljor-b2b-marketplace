@@ -167,7 +167,12 @@ class SubscriptionEntitlementService {
 
   /**
    * Safely changes a supplier's subscription plan.
-   * Downgrading NEVER deletes historical data; it preserves everything and marks over-limit status.
+   * ENFORCES:
+   * 1. Paid plan upgrades (GROWTH/BUSINESS) require payment verification; ordinary suppliers cannot self-activate.
+   * 2. Administrative overrides are strictly restricted to ADMIN / SUPER_ADMIN and audited.
+   * 3. Cross-supplier tampering is blocked (403).
+   * 4. Unsupported ANNUAL billing cycle is rejected (400 INVALID_BILLING_CYCLE).
+   * 5. Downgrading to STARTER preserves all historical data and marks over-limit status without deleting products.
    */
   async changeSupplierPlan({ supplierId, newPlanCode, billingCycle = 'MONTHLY', actor = null }) {
     const normalizedPlan = (newPlanCode || '').toUpperCase();
@@ -176,6 +181,46 @@ class SubscriptionEntitlementService {
       err.code = 'INVALID_PLAN_CODE';
       err.statusCode = 400;
       throw err;
+    }
+
+    const normalizedCycle = (billingCycle || 'MONTHLY').toUpperCase();
+    if (normalizedCycle === 'ANNUAL') {
+      const err = new Error('Annual billing cycle is unsupported in the current release. Only MONTHLY billing is supported.');
+      err.code = 'INVALID_BILLING_CYCLE';
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (normalizedCycle !== 'MONTHLY' && normalizedCycle !== 'FREE') {
+      const err = new Error(`Invalid billing cycle: ${billingCycle}. Supported cycles: MONTHLY.`);
+      err.code = 'INVALID_BILLING_CYCLE';
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Check caller authority: A supplier can only modify their own subscription
+    const isAdmin = actor && ['ADMIN', 'SUPER_ADMIN'].includes(actor.role);
+    if (!isAdmin && actor && actor.id && Number(actor.id) !== Number(supplierId)) {
+      const err = new Error("You cannot modify another supplier's subscription");
+      err.code = 'FORBIDDEN';
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Enforce payment gating for paid plans (GROWTH and BUSINESS)
+    if (normalizedPlan === 'GROWTH' || normalizedPlan === 'BUSINESS') {
+      if (!isAdmin) {
+        // Phase B0: Ordinary suppliers cannot activate paid plans without verified Safepay payment
+        const err = new Error('Paid plan activation requires verified Safepay payment. Online automated subscription billing will be enabled in Phase B11.');
+        err.code = 'SUBSCRIPTION_PAYMENT_REQUIRED';
+        err.statusCode = 402;
+        err.details = {
+          requested_plan: normalizedPlan,
+          payment_provider: 'SAFEPAY',
+          billing_phase: 'B11'
+        };
+        throw err;
+      }
     }
 
     const planConfig = PLAN_LIMITS[normalizedPlan];
@@ -216,25 +261,27 @@ class SubscriptionEntitlementService {
         `SELECT * FROM subscription_plans WHERE plan_code = ?`,
         [normalizedPlan]
       );
-      const pricePkr = planRows.length > 0 ? (billingCycle === 'ANNUAL' ? planRows[0].annual_price_pkr : planRows[0].monthly_price_pkr) : 0;
+      const pricePkr = planRows.length > 0 ? (normalizedCycle === 'ANNUAL' ? planRows[0].annual_price_pkr : planRows[0].monthly_price_pkr) : 0;
       const periodEnd = normalizedPlan === 'STARTER' ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
       await connection.query(
         `INSERT INTO supplier_subscriptions (supplier_id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr)
          VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
-        [supplierId, normalizedPlan, newStatus, periodEnd, billingCycle, pricePkr]
+        [supplierId, normalizedPlan, newStatus, periodEnd, normalizedCycle, pricePkr]
       );
 
       // System audit log
+      const auditAction = isAdmin ? 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN' : 'SUBSCRIPTION_PLAN_CHANGED';
       await connection.query(
         `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
-         VALUES (?, ?, 'SUBSCRIPTION_PLAN_CHANGED', 'supplier_profiles', ?, ?, ?)`,
+         VALUES (?, ?, ?, 'supplier_profiles', ?, ?, ?)`,
         [
           actor ? actor.id : supplierId,
           actor ? actor.role : 'SUPPLIER',
+          auditAction,
           supplierId,
           JSON.stringify({ plan: previousPlan }),
-          JSON.stringify({ plan: normalizedPlan, billing_cycle: billingCycle })
+          JSON.stringify({ plan: normalizedPlan, billing_cycle: normalizedCycle, administrative_grant: isAdmin })
         ]
       );
 

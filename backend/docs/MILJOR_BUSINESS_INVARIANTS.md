@@ -184,12 +184,21 @@
 4. **Recurring Contracts:** Scheduled periodic procurement contracts (`WEEKLY`, `BIWEEKLY`, `MONTHLY`) with agreed volume pricing and automated next-delivery scheduling.
 5. **Supplier Matching Engine:** Algorithmic ranking prioritizing verified suppliers, price competitiveness, inventory stock feasibility, and Lahore cluster proximity.
 
-## 13. Financial Invoicing & JazzCash Payment Gateway (Package E5)
+## 13. Financial Invoicing & Safepay Sole Active Payment Engine (Package E5 / Phase B0)
 1. **Immutable Invoicing Snapshot:** Invoices (`INV-YYYY-XXXXX`) freeze tax/commercial snapshot JSON (`invoice_snapshot_json`) upon order placement.
-2. **Strict Invoice RBAC:** Only the purchasing buyer, fulfilling supplier, or system admin can view order invoice snapshots (`403 FORBIDDEN` for third parties).
-3. **JazzCash Sandbox Payment Adapter:** Computes HMAC-SHA256 signatures over alphabetically sorted transaction parameters. Server-to-server callback verification detects parameter tampering and rejects fraudulent payment confirmations.
+2. **Invoice Authorization-Before-Generation Invariant:** Caller permissions are validated against order ownership strictly BEFORE invoice generation or row insertion. Unauthorized third parties are rejected with `403 INVOICE_ACCESS_FORBIDDEN` and zero rows are created in `invoices` table.
+3. **Serialized Concurrent Invoice Generation:** Simultaneous requests to generate an invoice for the same order are serialized under an atomic transaction with `SELECT ... FOR UPDATE` row locks, ensuring exactly one invoice row and snapshot is created without race conditions.
+4. **Safepay Sole Active Payment Gateway:** Safepay is the exclusive authorized active payment gateway for MilJor (`paymentProviderService.PROVIDERS.SAFEPAY = 'SAFEPAY'`). Legacy or unapproved providers (`JAZZCASH`, `EASYPAISA`, `MOCK_GATEWAY`) are strictly rejected with `400 UNSUPPORTED_PAYMENT_PROVIDER`. Mock gateways cannot transition payments or orders to `PAID` state.
+5. **Cryptographic Webhook Invariant:** Safepay webhooks are verified authoritatively using HMAC-SHA512 calculated over untouched raw request body bytes and constant-time buffer comparison (`crypto.timingSafeEqual`). Client-sent success signals are never trusted.
 
 ## 14. Trust, Messaging & Promotion Marketplace Invariants (Package E6)
 1. **Two-Way Verified Reviews:** Ratings and reviews require order status `COMPLETED` or `DELIVERED`. Strictly one review per party per order (`409 DUPLICATE_REVIEW`). Self-reviews are strictly forbidden (`403 SELF_REVIEW_PROHIBITED`).
 2. **In-App Messaging & Anti-Bypass Guardrails:** Contextual messaging tied to orders or pools. Automated heuristic filter flags Pakistani telephone numbers, WhatsApp contact requests, and emails with safety reminders to maintain escrow guarantees within MilJor.
 3. **Sponsored Promotions:** Suppliers can sponsor listings or feature pools within budget and date constraints (`start_date <= CURDATE() <= end_date`).
+
+## 15. Subscription Security & Billing Activation Gating (Phase B0)
+1. **Paid Plan Gating Invariant:** Ordinary suppliers cannot self-activate paid subscription tiers (`GROWTH`, `BUSINESS`) without verified Safepay checkout. Unverified upgrade requests fail closed with `402 SUBSCRIPTION_PAYMENT_REQUIRED`.
+2. **Annual Billing Guardrail:** Annual billing cycles are rejected with `400 INVALID_BILLING_CYCLE` until full annual prorated billing is introduced in Phase B11.
+3. **Cross-Supplier Isolation Invariant:** Ordinary suppliers cannot view or modify another supplier's subscription or entitlements (`403 FORBIDDEN`).
+4. **Administrative Override & Audit Logging:** Only `ADMIN` and `SUPER_ADMIN` may apply subscription plan overrides without immediate checkout, generating an immutable record in `system_audit_logs` (`action = 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN'`).
+5. **Historical Preservation Guarantee:** Downgrades to `STARTER` (free tier) preserve all historical products, SKUs, and listings with zero data truncation; excess families are flagged via `is_over_limit = true` without deleting catalog records.

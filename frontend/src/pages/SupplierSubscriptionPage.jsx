@@ -55,6 +55,9 @@ export const SupplierSubscriptionPage = () => {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 402) {
+          throw new Error(data.error?.message || 'Paid subscription plans require Safepay payment verification. Please complete payment checkout.');
+        }
         throw new Error(data.error?.message || 'Plan update failed');
       }
       toast.success(`Successfully updated subscription to ${targetPlan} plan!`);

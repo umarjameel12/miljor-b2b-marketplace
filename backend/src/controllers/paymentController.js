@@ -18,19 +18,29 @@ class PaymentController {
 
   // ---------------------------------------------------------------------------
   // POST /api/v1/payments/initiate
-  // Step 1: Buyer initiates payment for a CONFIRMED reservation
-  // BUG-11 FIX: Validates ownership + reservation status + amount
-  // BUG-01 FIX: Writes to 'payments' table only
+  // Buyer payment initiation (Safepay Only)
   // ---------------------------------------------------------------------------
   async initiatePayment(req, res) {
     try {
       const buyer_id = req.user.id;
-      const { reservation_id, payment_method = 'MOCK_GATEWAY' } = req.body;
+      const { reservation_id, payment_method = 'SAFEPAY' } = req.body;
 
       if (!reservation_id) {
         return res.status(400).json({
           success: false,
           error: { code: 'VALIDATION_ERROR', message: 'reservation_id is required' }
+        });
+      }
+
+      // Phase B0: Safepay is the SOLE active payment provider
+      const normalizedProvider = String(payment_method || '').toUpperCase();
+      if (normalizedProvider !== 'SAFEPAY') {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'UNSUPPORTED_PAYMENT_PROVIDER',
+            message: `Payment provider '${payment_method}' is not supported. Safepay is the sole active payment provider for MilJor.`
+          }
         });
       }
 
@@ -49,7 +59,7 @@ class PaymentController {
 
       const reservation = reservations[0];
 
-      // BUG-11 FIX: Ownership check
+      // Ownership check
       if (reservation.buyer_id !== buyer_id) {
         return res.status(403).json({
           success: false,
@@ -57,7 +67,7 @@ class PaymentController {
         });
       }
 
-      // BUG-11 FIX: Status check — must be CONFIRMED (price is locked)
+      // Status check — must be CONFIRMED (price is locked)
       if (reservation.status !== 'CONFIRMED') {
         return res.status(422).json({
           success: false,
@@ -81,76 +91,35 @@ class PaymentController {
         });
       }
 
-      // 2. Use locked price (never trust any amount from client)
-      const lockedAmount = parseFloat(reservation.locked_total_price);
+      // Canonical Safepay Flow: Check if an authoritative order has been converted for this reservation
+      const [orders] = await db.query(
+        'SELECT id, order_code, order_status FROM orders WHERE reservation_id = ?',
+        [reservation_id]
+      );
 
-      // 3. Calculate buyer marketplace fee using feeService
-      const feeResult = await feeService.calculateBuyerFee(lockedAmount);
-      const buyerFee = parseFloat(feeResult.buyer_fee);
-      const totalWithFee = (lockedAmount + buyerFee).toFixed(2);
-
-      // 4. Initiate with payment provider
-      const providerResult = await paymentProviderService.initiatePayment({
-        provider: payment_method,
-        amount: totalWithFee,
-        orderId: `RES-${reservation_id}`,
-        buyerId: buyer_id,
-        description: `MilJor Pool Reservation #${reservation.reservation_code}`
-      });
-
-      if (!providerResult.success) {
-        return res.status(503).json({
+      if (!orders[0]) {
+        return res.status(422).json({
           success: false,
           error: {
-            code: providerResult.status,
-            message: providerResult.message
+            code: 'ORDER_REQUIRED_FOR_PAYMENT',
+            message: 'Reservations must be converted to an authoritative order before Safepay checkout can initiate. Please use /api/v1/orders/:id/checkout once orders are generated.'
           }
         });
       }
 
-      // 5. Create payment record in 'payments' table (BUG-01 FIX)
-      const payment_code = 'MJ-PAY-' + Math.floor(100000 + Math.random() * 900000);
-
-      const paymentId = await paymentRepo.createPayment({
-        payment_code,
-        reservation_id,
-        buyer_id,
-        amount: totalWithFee,
-        buyer_fee: buyerFee.toFixed(2),
-        payment_method,
-        transaction_ref: providerResult.transaction_ref
-      });
-
-      // 6. Update reservation status to PAID (pending verify step)
-      await db.query(
-        "UPDATE payments SET status = 'PENDING' WHERE id = ?",
-        [paymentId]
-      );
-
-      // 7. Audit
-      await db.query(
-        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-         VALUES (?, 'BUYER', 'PAYMENT_INITIATED', 'payments', ?, ?)`,
-        [buyer_id, paymentId, JSON.stringify({ payment_code, reservation_id, amount: totalWithFee, payment_method })]
-      );
-
+      const order = orders[0];
+      // Redirect / delegate directly to canonical Safepay checkout flow
       return res.status(200).json({
         success: true,
-        message: 'Payment initiated. Call /verify to confirm payment with the transaction reference.',
+        message: 'Order identified for reservation. Please complete checkout via canonical Safepay order endpoint.',
         data: {
-          payment_id: paymentId,
-          payment_code,
           reservation_id,
-          status: 'PENDING',
-          payment_method,
-          base_amount: lockedAmount.toFixed(2),
-          buyer_fee: buyerFee.toFixed(2),
-          total_amount: totalWithFee,
-          transaction_ref: providerResult.transaction_ref,
-          provider_message: providerResult.message
+          order_id: order.id,
+          order_code: order.order_code,
+          checkout_endpoint: `/api/v1/orders/${order.id}/checkout`,
+          payment_method: 'SAFEPAY'
         }
       });
-
     } catch (error) {
       console.error('Payment Initiate Error:', error);
       return res.status(500).json({
@@ -385,7 +354,8 @@ class PaymentController {
       });
 
       if (!refundResult.success) {
-        return res.status(503).json({
+        const errStatus = refundResult.status === 'UNSUPPORTED_PAYMENT_PROVIDER' ? 400 : 503;
+        return res.status(errStatus).json({
           success: false,
           error: { code: refundResult.status, message: refundResult.message }
         });

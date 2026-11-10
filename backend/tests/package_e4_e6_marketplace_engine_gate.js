@@ -19,12 +19,14 @@ process.env.TEST_DB_NAME = 'miljor_test_db';
 
 const assert = require('assert');
 const path = require('path');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const db = require('../src/config/db');
 const app = require('../server');
-const jazzcashAdapter = require('../src/services/jazzcashAdapter');
+const paymentProviderService = require('../src/services/paymentProviderService');
+const safepayAdapter = require('../src/services/safepayAdapter');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'miljor_dev_jwt_secret_key_2026';
 
@@ -283,36 +285,54 @@ async function runE4E6Gate() {
     } catch (e) { fail('6. Invoices Module', e); }
 
     // -------------------------------------------------------------------------
-    // TEST 7: JazzCash Sandbox Payment Adapter (Package E5)
+    // TEST 7: Safepay Active Payment Provider & Provider Containment (Package E5 / Phase B0)
     // -------------------------------------------------------------------------
     try {
-      const paymentInit = jazzcashAdapter.initiatePayment({
-        orderId: createdRfqOrderId,
+      // 7A: Safepay is the sole authorized payment provider
+      assert.strictEqual(paymentProviderService.PROVIDERS.SAFEPAY, 'SAFEPAY');
+      assert.strictEqual(paymentProviderService.isProviderSupported('SAFEPAY'), true);
+      assert.strictEqual(paymentProviderService.isProviderSupported('JAZZCASH'), false);
+      assert.strictEqual(paymentProviderService.isProviderSupported('EASYPAISA'), false);
+      assert.strictEqual(paymentProviderService.isProviderSupported('MOCK_GATEWAY'), false);
+
+      // 7B: Rejected unapproved providers via initiatePayment
+      const badProviderRes = await paymentProviderService.initiatePayment({
+        provider: 'JAZZCASH',
         amount: 15000,
-        billReference: 'TEST-BILL-01'
+        orderId: createdRfqOrderId
       });
-      assert.ok(paymentInit.transaction_ref);
+      assert.strictEqual(badProviderRes.success, false);
+      assert.strictEqual(badProviderRes.status, 'UNSUPPORTED_PAYMENT_PROVIDER');
 
-      // Signature test with mock salt
-      const testFields = {
-        pp_Amount: '1500000',
-        pp_BillReference: 'TEST-BILL-01',
-        pp_MerchantID: 'MC12345',
-        pp_ResponseCode: '000'
-      };
-      jazzcashAdapter.integritySalt = 'test_salt_secret_123';
-      const hash = jazzcashAdapter.calculateHash(testFields);
-      assert.ok(typeof hash === 'string' && hash.length === 64, 'HMAC-SHA256 must produce 64-hex uppercase string');
+      // 7C: Mock gateway verification fails closed (NEVER verifies mock references)
+      const mockVerifyRes = await paymentProviderService.verifyPayment({
+        provider: 'MOCK_GATEWAY',
+        transaction_ref: 'MOCK-12345678'
+      });
+      assert.strictEqual(mockVerifyRes.verified, false);
+      assert.strictEqual(mockVerifyRes.status, 'UNSUPPORTED_PAYMENT_PROVIDER');
 
-      // Verify callback tampering detection
-      const validCallback = { ...testFields, pp_SecureHash: hash };
-      const tamperedCallback = { ...testFields, pp_Amount: '9999999', pp_SecureHash: hash };
-      jazzcashAdapter.isConfigured = true;
+      // 7D: Safepay HMAC-SHA512 webhook signature verification & tampering detection
+      const rawPayload = JSON.stringify({
+        data: {
+          tracker: 'track_test_safepay_123',
+          status: 'PAID',
+          amount: 1500000,
+          currency: 'PKR',
+          metadata: { order_id: createdRfqOrderId }
+        }
+      });
+      const webhookSecret = safepayAdapter.webhookSecret || 'test_safepay_webhook_secret_key';
+      safepayAdapter.webhookSecret = webhookSecret;
+      const validSignature = crypto.createHmac('sha512', webhookSecret).update(Buffer.from(rawPayload, 'utf8')).digest('hex');
 
-      assert.strictEqual(jazzcashAdapter.verifyCallback(validCallback).verified, true);
-      assert.strictEqual(jazzcashAdapter.verifyCallback(tamperedCallback).verified, false);
-      pass('7. JazzCash Adapter: Computes HMAC-SHA256 signature and reliably detects callback tampering');
-    } catch (e) { fail('7. JazzCash Adapter', e); }
+      assert.strictEqual(safepayAdapter.verifyWebhookSignature({ rawBody: rawPayload, signature: validSignature }), true);
+      assert.strictEqual(safepayAdapter.verifyWebhookSignature({ rawBody: rawPayload, signature: 'sha512=' + validSignature }), true);
+      assert.strictEqual(safepayAdapter.verifyWebhookSignature({ rawBody: rawPayload + 'tampered', signature: validSignature }), false);
+      assert.strictEqual(safepayAdapter.verifyWebhookSignature({ rawBody: rawPayload, signature: 'bad_signature_deadbeef' }), false);
+
+      pass('7. Safepay Provider: Sole authorized active provider; unapproved & mock gateways rejected; HMAC-SHA512 webhook signature verified');
+    } catch (e) { fail('7. Safepay Provider', e); }
 
     // -------------------------------------------------------------------------
     // TEST 8: Two-Way Ratings & Reviews (Package E6)

@@ -25,7 +25,7 @@ router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN')
 // 2. Supplier Subscriptions & Entitlements (Package E3)
 // ---------------------------------------------------------------------------
 router.get('/subscription', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.getMySubscription(req, res));
-router.post('/subscription/upgrade', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.changePlan(req, res));
+router.post('/subscription/upgrade', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.changePlan(req, res));
 router.get('/subscription/plans', (req, res) => subscriptionController.getPlans(req, res));
 
 // ---------------------------------------------------------------------------

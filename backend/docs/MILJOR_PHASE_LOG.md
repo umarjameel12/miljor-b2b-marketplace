@@ -34,6 +34,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Part 11** | Supplier Matching & MilJor Assistant | **MISSING** | Not implemented | — |
 | **Part 12** | End-to-End Hardening & Regression Suite | **NOT TESTED** | Pending full system implementation | — |
 | **Package E1 / E1.1** | Supplier Profile, Onboarding, Verification & Release Gate | **COMPLETE AND VERIFIED** | Migration 032 on test DB; AES-256-GCM encryption-at-rest; Admin Verification UI; 25/25 E1 Gate PASS; 106/106 Master Assertions PASS; Vite Build PASS | 2026-11-10 |
+| **Phase B0** | Backend Safety Recovery: Safepay-Only Consolidation, Invoice Authorization-Before-Generation, Subscription Gating & Regression Protection | **COMPLETE AND INDEPENDENTLY VERIFIED** | 46/46 B0 Gate PASS; 72/72 Regression PASS (118/118 Total PASS); miljor_db 100% Pristine (0 writes); Safepay sole active provider; Mock bypass eliminated | 2026-11-10 |
 
 ---
 
@@ -1230,3 +1231,52 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - `package_e4_e6_marketplace_engine_gate.js`: **10/10 PASS (100%)**
   - Frontend production build (`vite build`): **PASS (0 errors, 5.72s)**
 - **Status:** **COMPLETE AND INDEPENDENTLY VERIFIED**.
+
+---
+
+## Phase B0 Execution Detail — Backend Safety Recovery, Payment Consolidation & Protection Gate
+- **Execution Date:** 2026-11-10
+- **Directive Version:** B0-FINAL-2.0
+- **Working Branch:** `feature/package-e`
+- **Scope:** Phase B0 ONLY (Strict Stop — Do Not Start Phase B1).
+- **Schema Baseline:** Migration `035` (zero schema mutations performed in B0).
+- **Core Security & Architectural Fixes:**
+  1. **Safepay-Only Active Payment Provider Consolidation & Mock Gateway Containment:**
+     - Decommissioned `jazzcashAdapter.js` via `git rm`.
+     - Consolidated `paymentProviderService.js` to enforce `PROVIDERS.SAFEPAY = 'SAFEPAY'` as the sole active provider.
+     - Stripped mock payment completion: `verifyPayment` refuses `MOCK-` references and unapproved providers (`JAZZCASH`, `EASYPAISA`, `MOCK_GATEWAY`) with `UNSUPPORTED_PAYMENT_PROVIDER`.
+     - `paymentController.initiatePayment` rejects non-Safepay requests with 400 `UNSUPPORTED_PAYMENT_PROVIDER`, ignores client-sent `status: 'PAID'`, and mandates authoritative orders prior to checkout (`ORDER_REQUIRED_FOR_PAYMENT`).
+     - `paymentController.verifyPayment` fails closed against simulated client references; zero fraudulent PAID state transitions or ledger entries created.
+     - `paymentController.initiateRefund` blocks refunds for mock and unapproved providers with 400 `UNSUPPORTED_PAYMENT_PROVIDER`.
+  2. **Invoice Authorization-Before-Generation & Concurrency Safety:**
+     - Completely overhauled `invoiceService.js`: order details and authorization verified strictly BEFORE invoice generation or row insertion.
+     - Strict RBAC: only purchasing buyer, fulfilling supplier, or admin (`ADMIN`, `SUPER_ADMIN`, `FINANCE_ADMIN`) may access; unauthorized 3rd parties receive `403 INVOICE_ACCESS_FORBIDDEN` with **zero rows inserted into the `invoices` table**.
+     - Atomic concurrency serialization: multi-worker generation requests serialized inside MySQL transaction under `SELECT ... FOR UPDATE` row locks, ensuring exactly one invoice row and snapshot per order.
+  3. **Subscription Payment Gating & Entitlements Security:**
+     - Enforced server-side gating in `subscriptionEntitlementService.js`: ordinary suppliers cannot self-upgrade to paid plans (`GROWTH`, `BUSINESS`) without verified Safepay checkout (`402 SUBSCRIPTION_PAYMENT_REQUIRED`).
+     - Unsupported `ANNUAL` billing cycle strictly rejected (`400 INVALID_BILLING_CYCLE`) until Phase B11.
+     - Cross-supplier tampering blocked with `403 FORBIDDEN`.
+     - Administrative plan overrides restricted strictly to `ADMIN` / `SUPER_ADMIN` with audit trail in `system_audit_logs` (`action = 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN'`).
+     - Downgrade safety: downgrading to `STARTER` (free tier) preserves all historical products and SKUs with zero truncation, setting `is_over_limit = true` without deleting catalog records.
+  4. **Frontend Protection:**
+     - `SupplierSubscriptionPage.jsx` hardened to handle 402 `SUBSCRIPTION_PAYMENT_REQUIRED` with informative error notifications and zero false optimism.
+- **Automated Verification Evidence:**
+  - `phase_b0_backend_safety_recovery_gate.js`: **46/46 PASS (100% GREEN)**
+    - Suite 1 (Mock Containment & Provider Gating M1–M10): 10/10 PASS
+    - Suite 2 (Safepay Active Provider & Webhook HMAC S1–S10): 10/10 PASS
+    - Suite 3 (Invoice Authorization & Concurrency I1–I12): 12/12 PASS
+    - Suite 4 (Subscription Security & Entitlements U1–U14): 14/14 PASS
+  - Impacted Regression Gates:
+    - `package_e1_supplier_profile_gate.js`: **28/28 PASS (100%)**
+    - `package_e2_product_ownership_and_immutable_pools_gate.js`: **20/20 PASS (100%)**
+    - `package_e3_entitlements_and_supplier_portal_gate.js`: **14/14 PASS (100%)**
+    - `package_e4_e6_marketplace_engine_gate.js`: **10/10 PASS (100%)**
+  - Total Verified Assertions: **118/118 PASS (100% GREEN)**
+- **Development Database Protection Audit:**
+  - Database: `miljor_db`
+  - Users Count: **8** (exact initial state)
+  - Orders Count: **0**
+  - Payments Count: **0**
+  - Invoices Count: **0**
+  - Test Rows Leaked: **0** (100% PRISTINE)
+- **Status:** **COMPLETE AND INDEPENDENTLY VERIFIED (STOPPING — PHASE B1 NOT STARTED)**.

@@ -41,20 +41,32 @@ class SubscriptionController {
   // POST /api/v1/supplier/subscription/upgrade
   async changePlan(req, res) {
     try {
-      const supplierId = req.user.id;
-      const { plan_code, billing_cycle } = req.body;
+      const planCode = req.body.plan_code || req.body.targetPlan;
+      const billingCycle = req.body.billing_cycle || req.body.billingCycle || 'MONTHLY';
 
-      if (!plan_code) {
+      if (!planCode) {
         return res.status(400).json({
           success: false,
           error: { code: 'MISSING_PLAN_CODE', message: 'plan_code is required (STARTER, GROWTH, BUSINESS)' }
         });
       }
 
+      // Authorization guard: non-admin callers cannot modify another supplier's subscription
+      let targetSupplierId = req.user.id;
+      if (req.body.supplier_id) {
+        if (Number(req.body.supplier_id) !== Number(req.user.id) && !['ADMIN', 'SUPER_ADMIN'].includes(req.user.role)) {
+          return res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: "You cannot modify another supplier's subscription" }
+          });
+        }
+        targetSupplierId = Number(req.body.supplier_id);
+      }
+
       const updated = await subscriptionEntitlementService.changeSupplierPlan({
-        supplierId,
-        newPlanCode: plan_code,
-        billingCycle: billing_cycle || 'MONTHLY',
+        supplierId: targetSupplierId,
+        newPlanCode: planCode,
+        billingCycle: billingCycle,
         actor: req.user
       });
 
@@ -67,7 +79,7 @@ class SubscriptionController {
       console.error('Change Plan Error:', error);
       return res.status(error.statusCode || 500).json({
         success: false,
-        error: { code: error.code || 'SERVER_ERROR', message: error.message }
+        error: { code: error.code || 'SERVER_ERROR', message: error.message, details: error.details }
       });
     }
   }

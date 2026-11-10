@@ -81,6 +81,8 @@ async function runE3Gate() {
   const testSupplierEmail = `e3_supplier_${ts}@miljor.com`;
   let supplierId;
   let supplierToken;
+  let adminId;
+  let adminToken;
 
   const createdProductIds = [];
   const createdSkuIds = [];
@@ -96,6 +98,15 @@ async function runE3Gate() {
     );
     supplierId = uRes.insertId;
     supplierToken = generateToken(supplierId, 'SUPPLIER', 'VERIFIED');
+
+    // Setup test admin user
+    const [aRes] = await db.query(
+      `INSERT INTO users (full_name, email, phone, password_hash, role, verification_status)
+       VALUES (?, ?, ?, 'testhash', 'ADMIN', 'VERIFIED')`,
+      [`E3 Admin ${ts}`, `e3_admin_${ts}@miljor.com`, `+92301${String(ts).slice(-7)}`]
+    );
+    adminId = aRes.insertId;
+    adminToken = generateToken(adminId, 'ADMIN', 'VERIFIED');
 
     // Create supplier profile with STARTER plan (max 4 families, max 4 listings)
     await db.query(
@@ -301,10 +312,20 @@ async function runE3Gate() {
 
     // 9. Plan Upgrade: Upgrade to GROWTH plan (allows up to 13 families)
     try {
-      const upRes = await api('/api/v1/supplier/subscription/upgrade', {
+      // 9A: Ordinary supplier self-upgrade is blocked with 402 (payment required)
+      const blockedRes = await api('/api/v1/supplier/subscription/upgrade', {
         method: 'POST',
         headers: { Authorization: `Bearer ${supplierToken}` },
         body: { plan_code: 'GROWTH', billing_cycle: 'MONTHLY' }
+      });
+      assert.strictEqual(blockedRes.status, 402);
+      assert.strictEqual(blockedRes.body.error.code, 'SUBSCRIPTION_PAYMENT_REQUIRED');
+
+      // 9B: Administrative upgrade unlocks GROWTH plan (allows up to 13 families)
+      const upRes = await api('/api/v1/supplier/subscription/upgrade', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: { plan_code: 'GROWTH', billing_cycle: 'MONTHLY', supplier_id: supplierId }
       });
       assert.strictEqual(upRes.status, 200);
       assert.strictEqual(upRes.body.data.entitlements.plan_code, 'GROWTH');
@@ -488,6 +509,9 @@ async function runE3Gate() {
       await db.query(`DELETE FROM supplier_subscriptions WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_profiles WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM users WHERE id = ?`, [supplierId]);
+    }
+    if (adminId) {
+      await db.query(`DELETE FROM users WHERE id = ?`, [adminId]);
     }
     if (server) server.close();
   }
