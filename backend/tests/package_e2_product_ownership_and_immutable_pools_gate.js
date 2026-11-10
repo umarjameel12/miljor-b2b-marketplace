@@ -300,6 +300,25 @@ async function runGate() {
       unbrandedSkuId = resUnbSku.body.data.sku.id;
       createdSupplierSkuIds.push(unbrandedSkuId);
 
+      // B1: A supplier may choose an uncommon pack size and packaging term.
+      // No global 25/50kg or fixed purchasing-unit list may be imposed.
+      const customPack = await api('/api/v1/catalog/supplier-skus', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: {
+          supplier_product_id: brandedProdId,
+          packaging_type: 'Custom Wholesale Sack',
+          pack_size: 37,
+          pack_unit: 'kg',
+          purchasing_unit: 'bundle'
+        }
+      });
+      assert.strictEqual(customPack.status, 201, JSON.stringify(customPack.body));
+      createdSupplierSkuIds.push(customPack.body.data.sku.id);
+      assert.strictEqual(Number(customPack.body.data.sku.pack_size), 37);
+      assert.strictEqual(customPack.body.data.sku.purchasing_unit, 'bundle');
+      pass('B1: Supplier-defined 37kg packaging and custom purchasing unit accepted without canonical variant approval');
+
       pass('5. Supplier A creates distinct 25kg and 50kg Physical SKUs under the same Supplier Product');
     } catch (e) { fail('5. Separate 25kg and 50kg SKUs', e); }
 
@@ -346,6 +365,22 @@ async function runGate() {
       });
       assert.strictEqual(badOilSku.status, 400);
       assert.strictEqual(badOilSku.body.error.code, 'INCOMPATIBLE_FAMILY_UNIT');
+
+      const customOil = await api('/api/v1/catalog/supplier-skus', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: {
+          supplier_product_id: oilProdId,
+          packaging_type: 'Bulk Jerrycan',
+          pack_size: 12,
+          pack_unit: 'L',
+          purchasing_unit: 'jerrycan'
+        }
+      });
+      assert.strictEqual(customOil.status, 201, JSON.stringify(customOil.body));
+      createdSupplierSkuIds.push(customOil.body.data.sku.id);
+      assert.strictEqual(Number(customOil.body.data.sku.pack_size), 12);
+      pass('B1: Supplier-defined 12L oil SKU accepted; compatible volume dimension enforced');
 
       pass('6. Mass vs Volume unit separation enforced: Rice rejects L and Cooking Oil rejects kg (400 INCOMPATIBLE_FAMILY_UNIT)');
     } catch (e) { fail('6. Mass vs Volume unit separation', e); }
