@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS procurement_quotes (
   invitation_id BIGINT NOT NULL,
   status ENUM('ACTIVE','WITHDRAWN') NOT NULL DEFAULT 'ACTIVE',
   current_version INT NOT NULL DEFAULT 1,
+  withdrawal_key VARCHAR(120) NULL,
+  withdrawn_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_proc_quote_request FOREIGN KEY (request_id) REFERENCES procurement_requests(id),
