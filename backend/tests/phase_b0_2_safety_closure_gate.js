@@ -570,7 +570,8 @@ async function runB02Gate() {
         [financeAdmin, unsuppPayment]
       );
       assert.strictEqual(blockedLogs.length, 1);
-      assert.strictEqual(JSON.parse(blockedLogs[0].new_value).outcome, 'UNSUPPORTED_PAYMENT_PROVIDER');
+      const parsedVal = typeof blockedLogs[0].new_value === 'string' ? JSON.parse(blockedLogs[0].new_value) : blockedLogs[0].new_value;
+      assert.strictEqual(parsedVal.outcome, 'UNSUPPORTED_PAYMENT_PROVIDER');
       cleanup.audit_logs.push(blockedLogs[0].id);
       pass('5.3a: Unsupported refund attempt audited as blocked');
     }
