@@ -132,6 +132,23 @@ class ProcurementController {
     }catch(err){this._smartError(res,err);}
   }
 
+  async withdrawSmartQuote(req,res){
+    try{
+      const quote=await procurementQuoteService.withdraw(
+        req.user.id,req.params.quoteId,req.headers['x-idempotency-key']
+      );
+      res.json({success:true,data:{quote}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async smartQuoteHistory(req,res){
+    try{
+      const history=await procurementQuoteService.getVersionsForBuyer(
+        req.user.id,req.params.id,req.params.quoteId
+      );
+      res.json({success:true,data:history});
+    }catch(err){this._smartError(res,err);}
+  }
+
   // Flash Pools
   async createFlashPool(req, res) {
     try {
