@@ -52,20 +52,19 @@ Phase B5 establishes supplier-owned, ready-stock Flash Clearance Pools and deliv
 
 ## 3. Test & Verification Evidence
 
-### 3.1 Preflight & Lifecycle Gate Results
+### 3.1 Consolidated Flash Pool Gate Results
 
 | Test Gate | Assertions | Status |
 | :--- | :---: | :---: |
-| `tests/b5_flash_pool_preflight_gate.js` | 13 / 13 | **PASS (100%)** |
-| `tests/b5_flash_pool_lifecycle_gate.js` | 27 / 27 | **PASS (100%)** |
+| `tests/part5_flash_pool_gate.js` | 39 / 39 | **PASS (100%)** |
 
-#### Lifecycle Breakdown (`b5_flash_pool_lifecycle_gate.js`):
-- **Section A (A01–A06):** Physical SKU & supplier ownership checks; verified supplier gating (403); non-owner rejection (403); fabricated comparison price rejection (409); flash price exceeding normal price rejection (400); indivisible pack rejection for non-loose units (400); valid DRAFT creation (201). **(6/6 PASS)**
-- **Section B (B01–B06):** Duration and selling modes; configured duration stored without prematurely starting countdown clock; publication computes authoritative expiry from UTC_TIMESTAMP; MULTI_BUYER increment enforcement (409 on unaligned, 201 on aligned); WHOLE_LOT single-buyer full lot requirement (409 on partial, 201 on full). **(6/6 PASS)**
-- **Section C (C01–C04):** Inventory allocation ledger updates; `FLASH_POOL` `COMMITTED` allocation created on publish; stock feasibility rejection on excess allocation (409); concurrent buyer hold race safety (5 concurrent requests, 0 oversell, invariant holds); expired hold stock reclamation returning stock to `remaining_stock` and cancelling uninitiated orders. **(4/4 PASS)**
-- **Section D (D01–D06):** Checkout flow & Safepay reconciliation; hold creation persists order in `AWAITING_PAYMENT` with `DOORSTEP` delivery; claim checkout lease transitions to `PAYMENT_PENDING`; failed checkout release cleanly reverts to `HELD`; reconcile paid order rejects unverified payments (409 `PAYMENT_NOT_VERIFIED`); reconcile paid order with verified Safepay payment shifts held to committed stock; pool automatically transitions to `SOLD_OUT` when remaining stock reaches 0. **(6/6 PASS)**
-- **Section E (E01–E04):** Public discovery returns only ACTIVE, unexpired pools with `server_time`; supplier cancellation releases inventory allocation to `RELEASED`; `closeExpiredOffer` preserves committed stock allocations and releases unsold allocations; countdown timer `parseDeadline` handles MySQL strings as UTC, ISO formats, offsets, and invalid inputs. **(4/4 PASS)**
-- **Database Identity:** `miljor_test_db` verified. **(1/1 PASS)**
+#### Gate Verification Breakdown (`part5_flash_pool_gate.js`):
+- **Phase 1 (Database & Schema Preflight):** Database identity verified; 8 transactional tables schema & column checks; InnoDB engines confirmed; durable unique idempotency indexes verified; explicit selling modes confirmed; stock conservation upper bound verified. **(13/13 PASS)**
+- **Phase 2 (Section A — Physical SKU & Ownership):** Verified supplier gating (403); non-owner rejection (403); fabricated comparison price rejection (409); flash price exceeding normal price rejection (400); indivisible pack rejection for non-loose units (400); valid DRAFT creation (201). **(6/6 PASS)**
+- **Phase 3 (Section B — Duration & Increments):** Configured duration unstarted in DRAFT; publication computes authoritative expiry from UTC_TIMESTAMP; MULTI_BUYER increment modular enforcement (409 on unaligned, 201 on aligned); WHOLE_LOT single-buyer full lot requirement (409 on partial, 201 on full). **(6/6 PASS)**
+- **Phase 4 (Section C — Inventory & Concurrency):** `FLASH_POOL` `COMMITTED` allocation created on publish; stock feasibility rejection on excess allocation (409); concurrent buyer hold race safety (5 concurrent requests, 0 oversell, invariant holds); expired hold stock reclamation returning stock to `remaining_stock` and cancelling uninitiated orders. **(4/4 PASS)**
+- **Phase 5 (Section D — Checkout & Safepay Reconciliation):** Hold creation persists order in `AWAITING_PAYMENT` with `DOORSTEP` delivery; claim checkout lease transitions to `PAYMENT_PENDING`; failed checkout release cleanly reverts to `HELD`; reconcile paid order rejects unverified payments (409 `PAYMENT_NOT_VERIFIED`); reconcile paid order with verified Safepay payment shifts held to committed stock; pool automatically transitions to `SOLD_OUT` when remaining stock reaches 0. **(6/6 PASS)**
+- **Phase 6 (Section E — Discovery, Expiry & Countdown):** Public discovery returns only ACTIVE, unexpired pools with `server_time`; supplier cancellation releases inventory allocation to `RELEASED`; `closeExpiredOffer` preserves committed stock allocations and releases unsold allocations; countdown timer `parseDeadline` handles MySQL strings as UTC, ISO formats, offsets, and invalid inputs. **(4/4 PASS)**
 
 ### 3.2 Sequential Platform Regression Suite
 

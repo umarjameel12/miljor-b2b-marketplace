@@ -75,12 +75,11 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - Added `parseDeadline` export handling timezone-less MySQL DATETIME strings as UTC with `server_time` offset to eliminate clock drift.
   - Disables Regular and Flash Pool join CTA upon countdown expiry, presenting "Pool Concluded".
 - **Verification Evidence:**
-  - Preflight gate: `node tests/b5_flash_pool_preflight_gate.js` (13/13 PASS).
-  - Lifecycle gate: `node tests/b5_flash_pool_lifecycle_gate.js` (27/27 PASS).
-  - Sequential regressions (B0.2, E2, E3, 4B.2, 4B.3, 4B.4, 4C.1, 4D.2, 4D.3, 4D.4, B4 tier contract): 302/302 total assertions PASS (100% GREEN).
+  - Consolidated Flash Pool Gate: `node tests/part5_flash_pool_gate.js` (39/39 PASS: 13 schema/invariants + 26 runtime lifecycle & countdown).
+  - Sequential regressions (B0.2, E2, E3, 4B.2, 4B.3, 4B.4, 4C.1, 4D.2, 4D.3, 4D.4, 4B.3 tier decimal contract): 302/302 total assertions PASS (100% GREEN).
   - Frontend Vite build: 2,217 modules transformed, 0 errors, exit code 0.
 - **Database isolation:** All mutable tests executed strictly on `miljor_test_db`. `miljor_db` baseline verified 100% pristine: `{ users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0 }` (0 writes, 0 leaks).
-- **Authoritative report:** `backend/docs/MILJOR_B5_FLASH_POOL_ACCEPTANCE_REPORT.md`.
+- **Authoritative report:** `backend/docs/MILJOR_B5_FLASH_POOL_IMPLEMENTATION_REPORT.md`.
 - **State:** **COMPLETE AND INDEPENDENTLY VERIFIED — CAN START B6: NO**.
 
 ---
@@ -106,7 +105,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Part 4E.1** | Order Architecture & Commercial Reconciliation | **COMPLETE AND VERIFIED** | Migration 018; `tests/part4e1_order_foundation_gate.js` (23/23 PASS); Master Regression (23 suites, 532/532 assertions PASS) | 2026-10-19 |
 | **Part 4E.1.1** | Exact Financial Arithmetic & Reconciliation Hardening | **COMPLETE AND VERIFIED** | `src/services/exactDecimal.js`; `tests/part4e1_1_financial_hardening_gate.js` (22/22 PASS); Master Regression (24 suites, 554/554 assertions PASS, 37.13s) | 2026-10-19 |
 | **Part 4E.2** | Authoritative Order Conversion & Order Lifecycle Engine | **NOT STARTED** | Requires explicit user authorization | — |
-| **Part 5** | Flash Clearance Pools Engine | **MISSING** | Database schema only; zero mounted routes | — |
+| **Part 5 (Phase B5)** | Flash Clearance Pools & Regular Countdown Engine | **COMPLETE AND VERIFIED** | Migration 036; tests/part5_flash_pool_gate.js (39/39 PASS); docs/MILJOR_B5_FLASH_POOL_IMPLEMENTATION_REPORT.md; Frontend Build PASS; miljor_db Pristine | 2026-11-10 |
 | **Part 6** | Private RFQs & Versioned Quotes | **MISSING** | Database schema only; zero mounted routes | — |
 | **Part 7** | Recurring Procurement Engine | **MISSING** | Database schema only; zero mounted routes | — |
 | **Part 8** | Orders, Fulfillment & Delivery Logistics | **MISSING** | Database schema only; zero mounted routes | — |
@@ -122,7 +121,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **COMPLETE AND VERIFIED** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; 67/67 Assertions PASS across E2/E3 gates; Frontend Build PASS (0 errors); miljor_db 100% Pristine; Verified SHA: `b3c1ea85` | 2026-11-10 |
 | **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **COMPLETE AND VERIFIED** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; 81/81 Assertions PASS across E2/E3/E4-E6 gates; Frontend Build PASS (0 errors); miljor_db 100% Pristine; B2 fixes integrated | 2026-11-10 |
 | **Phase B4** | Regular Pool lifecycle A–H: physical FK, exact pool quantities, inventory, publishing/terms lock, tier pricing/progress, qualification, buyer reservations, supplier UI | **COMPLETE AND VERIFIED** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; 266/266 assertions PASS across 11 suites; Vite Build PASS; miljor_db 100% Pristine | 2026-11-10 |
-| **Phase B5** | Flash Clearance Pools & Regular Countdown: ready-stock flash lifecycle, multi-buyer purchase increments, whole lot single buyer, inventory ledger serialization, Safepay checkout reconciliation, countdown UTC parsing & expiry CTA disable | **COMPLETE AND VERIFIED** | `docs/MILJOR_B5_FLASH_POOL_ACCEPTANCE_REPORT.md`; 302/302 assertions PASS across 13 suites; Vite Build PASS; miljor_db 100% Pristine | 2026-11-10 |
+| **Phase B5** | Flash Clearance Pools & Regular Countdown: ready-stock flash lifecycle, multi-buyer purchase increments, whole lot single buyer, inventory ledger serialization, Safepay checkout reconciliation, countdown UTC parsing & expiry CTA disable | **COMPLETE AND VERIFIED** | `docs/MILJOR_B5_FLASH_POOL_IMPLEMENTATION_REPORT.md`; 302/302 assertions PASS across 12 suites; Vite Build PASS; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
 ---
