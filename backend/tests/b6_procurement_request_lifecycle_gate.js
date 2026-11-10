@@ -45,6 +45,21 @@ async function main() {
   if (families.length < 2) throw Error('BLOCKED: test DB requires two approved family fixtures');
   pass('Existing verified buyer and two approved families available');
 
+  const [columns] = await db.query(
+    `SELECT TABLE_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN
+       ('procurement_requests','procurement_request_items','procurement_request_mutations')`
+  );
+  const found = new Set(columns.map(x=>`${x.TABLE_NAME}.${x.COLUMN_NAME}`));
+  for (const name of [
+    'procurement_requests.buyer_id','procurement_requests.idempotency_key',
+    'procurement_requests.version_number','procurement_requests.request_hash',
+    'procurement_request_items.request_id','procurement_request_items.family_id',
+    'procurement_request_items.quantity','procurement_request_mutations.response_snapshot',
+    'procurement_request_mutations.idempotency_key'
+  ]) assert.ok(found.has(name), `Migration 037 column missing: ${name}`);
+  pass('All essential new request/line/replay columns exist');
+
   const beforeOrders = (await db.query('SELECT COUNT(*) AS total FROM orders'))[0][0].total;
   const beforePayments = (await db.query('SELECT COUNT(*) AS total FROM payments'))[0][0].total;
   const tag = crypto.randomUUID();
@@ -105,6 +120,14 @@ async function main() {
     'IDEMPOTENCY_CONFLICT'
   );
   pass('Same edit key with changed request rejected');
+
+  await expectError(
+    () => service.createDraft(buyerId,{
+      ...payload,items:[{family_id:families[0].id,quantity:'5',unit:'tin'}]
+    },'badunit-'+tag),
+    'INCOMPATIBLE_FAMILY_UNIT'
+  );
+  pass('Incompatible rice/tin purchasing unit blocked by canonical family policy');
 
   const published = await service.publish(buyerId,created.request.id,edited.version_number,'publish-'+tag);
   assert.equal(published.request.status,'OPEN');
