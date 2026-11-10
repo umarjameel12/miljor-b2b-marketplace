@@ -23,8 +23,8 @@ These instructions optimize agent execution velocity, eliminate redundant tool c
 - **Concise Reporting:** Provide standard 10–20 line structured summaries (`TASK`, `IMPLEMENTED`, `FILES`, `TESTS`, `EVIDENCE`, `DATABASE`, `UNRESOLVED`, `RESULT`). Output `CAN START NEXT PHASE: NO` and stop cleanly.
 
 ## 3. Testing & Verification Safety
-- **Risk-Based Testing:** Run Level 1 focused tests (<5s) immediately after editing. Do not rerun unchanged successful tests without reason.
-- **Rerun Only Failed Tests:** On test failure, isolate the root cause, apply the minimal fix, and rerun only the failed test before confirming the suite.
+- **One Final Phase Test Gate:** During an approved phase, implement all scoped changes first. Do not repeatedly run integration, regression, frontend build, or master suites after each edit. At the end of the phase, run one consolidated, relevant integration/regression gate against the isolated test database; targeted checks are allowed only when needed to diagnose failures or protect critical transaction/data safety. If the final gate fails, fix the root cause and rerun only affected failures, then verify the final gate once after stabilization. Never claim PASS on unexecuted tests.
+- **Persistent Phase Evidence:** After the final test gate, save the exact executed commands, PASS/FAIL/BLOCKED evidence, database isolation verification, changed files, final git SHA, unresolved issues, and phase decision to a dedicated report in `backend/docs/` and update `backend/docs/MILJOR_PHASE_LOG.md`. Commit/push the report with verified phase changes. Never replace failed evidence with a false PASS.
 - **Database Isolation:** All automated tests run strictly against `miljor_test_db`. `miljor_db` must remain pristine.
 - **Zero Live Transactions:** Payment provider is Safepay sandbox only. Client-sent `PAID` statuses and mock payment references are strictly rejected.
 - **Phase Gate Integrity:** Never advance across milestone or phase boundaries without explicit authorization.
