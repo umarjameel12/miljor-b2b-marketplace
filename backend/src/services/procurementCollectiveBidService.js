@@ -55,6 +55,35 @@ class ProcurementCollectiveBidService {
    await conn.commit();return {group_id:group.id,status:'QUOTING',qualified_buyers:count,is_replay:false};
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
+ async inviteSupplier(organizerId,groupId,supplierId){
+  const buyer=id(organizerId),gid=id(groupId),supplier=id(supplierId);
+  const conn=await this.database.getConnection();
+  try{await conn.beginTransaction();
+   const group=await loadGroup(conn,gid,true);
+   if(Number(group.organizer_buyer_id)!==buyer)
+    throw err('ORGANIZER_ONLY','Only the organizer may invite suppliers.',403);
+   if(group.status!=='QUOTING')
+    throw err('GROUP_NOT_QUOTING','Supplier invitation requires qualified collective bidding.',409);
+   const [verified]=await conn.query("SELECT u.id FROM users u JOIN supplier_profiles p ON p.supplier_id=u.id WHERE u.id=? AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED' AND p.verification_status='VERIFIED'",[supplier]);
+   if(!verified.length)throw err('SUPPLIER_NOT_VERIFIED','Verified supplier required.',403);
+   await conn.query("INSERT INTO procurement_collective_supplier_invitations (group_id,supplier_id,status) VALUES (?,?,'INVITED') ON DUPLICATE KEY UPDATE id=id",[gid,supplier]);
+   const [rows]=await conn.query('SELECT id,group_id,supplier_id,status FROM procurement_collective_supplier_invitations WHERE group_id=? AND supplier_id=?',[gid,supplier]);
+   if(rows[0].status!=='INVITED')throw err('INVITATION_REVOKED','Supplier invitation is not active.',409);
+   await conn.commit();return rows[0];
+  }catch(e){await conn.rollback();throw e}finally{conn.release()}
+ }
+ async supplierInbox(supplierId){
+  const supplier=id(supplierId);
+  const [rows]=await this.database.query("SELECT i.id AS invitation_id,i.group_id,i.status,g.join_deadline,g.minimum_buyers,r.quote_deadline,r.delivery_area FROM procurement_collective_supplier_invitations i JOIN procurement_collective_groups g ON g.id=i.group_id JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.quote_deadline>UTC_TIMESTAMP() ORDER BY i.invited_at DESC LIMIT 100",[supplier]);
+  // Only aggregate request lines are visible; buyer identities and addresses are excluded.
+  for(const row of rows){
+   const [items]=await this.database.query("SELECT ri.id AS request_item_id,ri.family_id,ri.unit,ri.requirements FROM procurement_request_items ri JOIN procurement_collective_groups g ON g.request_id=ri.request_id WHERE g.id=? ORDER BY ri.line_number",[row.group_id]);
+   row.items=items.map(x=>({...x,requirements:String(x.requirements||'')
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
+      .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')}));
+  }
+  return rows;
+ }
  async submitBid(supplierId,groupId,payload,rawKey){
   const supplier=id(supplierId),gid=id(groupId),key=idem(rawKey);
   if(!Array.isArray(payload?.lines)||!payload.lines.length||payload.lines.length>50)
@@ -81,6 +110,8 @@ class ProcurementCollectiveBidService {
     }
    }
    if(group.status!=='QUOTING')throw err('GROUP_NOT_QUOTING','Supplier bidding is not open.',409);
+   const [invited]=await conn.query("SELECT id FROM procurement_collective_supplier_invitations WHERE group_id=? AND supplier_id=? AND status='INVITED'",[gid,supplier]);
+   if(!invited.length)throw err('COLLECTIVE_SUPPLIER_INVITATION_REQUIRED','Supplier has not been invited to this private collective.',403);
    const [[clock]]=await conn.query('SELECT (? > UTC_TIMESTAMP()) AS group_open,(? > UTC_TIMESTAMP()) AS bid_valid',[group.quote_deadline,validUntil]);
    if(Number(clock?.group_open)!==1||Number(clock?.bid_valid)!==1)throw err('GROUP_EXPIRED','Bidding window expired.',409);
    const [verified]=await conn.query("SELECT u.id FROM users u JOIN supplier_profiles p ON p.supplier_id=u.id WHERE u.id=? AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED' AND p.verification_status='VERIFIED'",[supplier]);
@@ -126,8 +157,9 @@ class ProcurementCollectiveBidService {
  }
  async listForBuyer(buyerId,groupId){
   const buyer=id(buyerId),group=await loadGroup(this.database,groupId);
-  const [members]=await this.database.query('SELECT id FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?',[group.id,buyer]);
-  if(!members.length)throw err('GROUP_NOT_FOUND','Group invitation not found.',404);
+  const [members]=await this.database.query('SELECT id,status FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?',[group.id,buyer]);
+  if(!members.length || !['JOINED','LOCKED'].includes(members[0].status))
+   throw err('PARTICIPANT_NOT_JOINED','Only participating buyers may review private group bids.',403);
   const [bids]=await this.database.query("SELECT b.id,b.supplier_id,b.status,b.current_version,v.id AS bid_version_id,v.valid_until,v.full_snapshot FROM procurement_collective_bids b JOIN procurement_collective_bid_versions v ON v.bid_id=b.id AND v.version_number=b.current_version WHERE b.group_id=? ORDER BY b.id",[group.id]);
   return bids.map(b=>({...b,full_snapshot:unpack(b.full_snapshot)}));
  }
