@@ -48,6 +48,21 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
+## Phase B4 — Regular Pool Lifecycle Hardening (Isolated Parallel Development)
+
+- **Branch:** `feature/b4-regular-pools` (created from B3 pre-acceptance `fd3d1160`).
+- **B4-A:** Correct `supplier_sku_id` -> immutable published spec -> legacy `products.id` mapping; reject mismatched supplier product/SKU identity; tests added.
+- **B4-B (partial):** Strict positive pool quantity precision/scale validation on DRAFT creation; negative test added.
+- **B4-C through B4-H:** Pending targeted implementation after audit; existing engine reused.
+- **B4-I:** No runtime/MySQL/frontend gate executed by GitHub-only work.
+- **B2 reconciliation:** Accepted `fcbd82dafcb236f9cee980904ebddba5c1ab1999` must be integrated into B4's inherited pre-B2-acceptance source before B4 final gate.
+- **B3 reconciliation:** Antigravity final B3 acceptance currently separate/pending; merge only verified B3 fixes into B4 after evidence. Do not disturb B3 local worktree or run concurrent mutable tests on `miljor_test_db`.
+- **Source location parity:** See `backend/docs/MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md`; original repo folders only, no duplicate business source directories.
+- **Report:** `backend/docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`.
+- **Result:** **PARTIAL IMPLEMENTATION — NO B4 PASS; B5 NOT AUTHORIZED**.
+
+---
+
 ## Approved Engineering Roadmap & Phase Status Summary
 
 | Phase / Part | Description | Status | Gate Evidence | Completion Date |
@@ -84,6 +99,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **COMPLETE AND VERIFIED** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; 73/73 Assertions PASS across E2/E3/E4-E6 gates; Frontend Vite Build PASS (2,216 modules, 0 errors); miljor_db 100% Pristine; Verified SHA: `986b2737` | 2026-11-10 |
 | **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **IMPLEMENTED — FINAL ANTIGRAVITY GATE PENDING** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; focused E2 negative assertions committed but not yet run; protected DB safety and frontend build pending | — |
 | **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **SOURCE IMPLEMENTED — REGRESSION PENDING** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; modified E2/E3 B3 test assertions NOT YET EXECUTED; B2 acceptance prerequisite for final B3 integration | — |
+| **Phase B4** | Regular Pools: supplier physical ID/FK correctness, draft decimal validation, inventory/publish/tiers/progress/reservations/lifecycle (remaining scope pending) | **B4-A/B PARTIAL SOURCE IMPLEMENTATION — TEST PENDING** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; source parity policy; B3/B2 accepted dependency integration not yet done | — |
 | **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
 ---
