@@ -341,6 +341,49 @@ class ProcurementAwardService{
       throw e;
     }finally{conn.release();}
   }
+  // Safepay calls this INSIDE its cryptographically verified PAID transaction.
+  // Existing B4/B5 orders not linked to a B6 award return without mutation.
+  async reconcilePaidOrder(conn,orderId){
+    const oid=id(orderId,'Order');
+    const [links]=await conn.query(
+      'SELECT award_id FROM procurement_award_orders WHERE order_id=?',
+      [oid]
+    );
+    if(!links.length)return {handled:false};
+    const awardId=Number(links[0].award_id);
+    const [awards]=await conn.query(
+      'SELECT id,request_id,status FROM procurement_awards WHERE id=? FOR UPDATE',
+      [awardId]
+    );
+    if(!awards.length)
+      throw fail('AWARD_INTEGRITY_ERROR','Payment references a missing procurement award.',500);
+    const [orders]=await conn.query(
+      `SELECT ao.order_id,o.payment_status
+         FROM procurement_award_orders ao JOIN orders o ON o.id=ao.order_id
+         WHERE ao.award_id=? ORDER BY ao.order_id`,[awardId]
+    );
+    if(!orders.length||!orders.some(row=>Number(row.order_id)===oid&&row.payment_status==='PAID'))
+      throw fail('AWARD_PAYMENT_NOT_VERIFIED','Cannot commit stock for an unverified order.',409);
+    await conn.query(
+      `UPDATE supplier_inventory_allocations
+         SET status='COMMITTED'
+         WHERE allocation_type='ORDER_DIRECT' AND reference_id=? AND status='PENDING'`,
+      [oid]
+    );
+    const paid=orders.filter(row=>row.payment_status==='PAID').length;
+    const allPaid=paid===orders.length;
+    await conn.query(
+      'UPDATE procurement_awards SET status=? WHERE id=?',
+      [allPaid?'PAID':'PARTIALLY_PAID',awardId]
+    );
+    if(allPaid)await conn.query(
+      "UPDATE procurement_requests SET status='AWARDED' WHERE id=? AND status='AWARD_PENDING'",
+      [awards[0].request_id]
+    );
+    return {handled:true,award_id:awardId,paid_orders:paid,
+      total_orders:orders.length,status:allPaid?'PAID':'PARTIALLY_PAID'};
+  }
+
   async getMine(buyerId,awardId){
     const buyer=id(buyerId,'Buyer'),aid=id(awardId,'Award');
     const [awards]=await this.database.query(
