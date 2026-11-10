@@ -200,14 +200,9 @@ class SupplierListingController {
         try {
           await conn.beginTransaction();
           await subscriptionEntitlementService.assertCanPublishInFamily(supplierId, spec.family_id, conn);
-          const entitlements = await subscriptionEntitlementService.getSupplierEntitlements(supplierId, conn);
-          if (entitlements.active_listings_count >= entitlements.max_active_listings) {
-            const err = new Error(`Supplier plan ${entitlements.plan_code} allows a maximum of ${entitlements.max_active_listings} active listings. Upgrade your subscription plan.`);
-            err.code = 'ENTITLEMENT_LIMIT_EXCEEDED';
-            err.subcode = 'LISTINGS_CAP_REACHED';
-            err.statusCode = 403;
-            throw err;
-          }
+          // B1: Subscription caps DISTINCT active families, not the number of
+          // different commercial listings/SKUs inside a family. Legacy
+          // max_active_listings is not an independent entitlement ceiling.
           await conn.commit();
         } catch (err) {
           await conn.rollback();
