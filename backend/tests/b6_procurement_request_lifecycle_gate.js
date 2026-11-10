@@ -54,6 +54,7 @@ async function main() {
   for (const name of [
     'procurement_requests.buyer_id','procurement_requests.idempotency_key',
     'procurement_requests.version_number','procurement_requests.request_hash',
+    'procurement_requests.create_response_snapshot',
     'procurement_request_items.request_id','procurement_request_items.family_id',
     'procurement_request_items.quantity','procurement_request_mutations.response_snapshot',
     'procurement_request_mutations.idempotency_key'
@@ -107,6 +108,12 @@ async function main() {
   assert.equal(edited.items.length,2);
   assert.equal(Number(edited.version_number),Number(created.request.version_number)+1);
   pass('Draft edit atomically replaces item list and increments version');
+
+  const originalCreateReplay = await service.createDraft(buyerId,payload,'req-'+tag);
+  assert.equal(originalCreateReplay.is_replay,true);
+  assert.equal(originalCreateReplay.request.delivery_area,'Johar Town, Lahore');
+  assert.equal(Number(originalCreateReplay.request.version_number),Number(created.request.version_number));
+  pass('Original creation snapshot stays stable after draft edits');
 
   const editReplay = await service.updateDraft(
     buyerId,created.request.id,{...payload,delivery_area:'DHA, Lahore'},
