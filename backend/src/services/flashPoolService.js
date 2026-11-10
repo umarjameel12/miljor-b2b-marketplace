@@ -30,9 +30,9 @@ function validMode(raw) {
 }
 function rowSafe(row) {
   if (!row) return null;
-  return { ...row, remaining_seconds: Math.max(0, Math.floor((new Date(
-    String(row.expiry_time).replace(' ', 'T') + (typeof row.expiry_time === 'string' && !/[zZ+-]\d\d:?\d\d$/.test(row.expiry_time) ? 'Z' : '')
-  ).getTime() - Date.now()) / 1000)) };
+  const deadline = row.expiry_at_utc ? Date.parse(row.expiry_at_utc) : NaN;
+  return { ...row, remaining_seconds: Number.isFinite(deadline)
+    ? Math.max(0, Math.floor((deadline - Date.now()) / 1000)) : null };
 }
 class FlashPoolService {
   async _lockVerifiedSupplier(conn, supplierId) {
@@ -117,9 +117,9 @@ class FlashPoolService {
     } catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
   async getSupplierOffer(supplierId,id) {
-    const [rows]=await db.query('SELECT * FROM flash_pools WHERE id = ? AND supplier_id = ?',[id,supplierId]);
+    const [rows]=await db.query("SELECT *, DATE_FORMAT(expiry_time,'%Y-%m-%dT%H:%i:%sZ') AS expiry_at_utc FROM flash_pools WHERE id = ? AND supplier_id = ?",[id,supplierId]);
     if(!rows.length)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
-    return rows[0];
+    return rowSafe(rows[0]);
   }
   async publish(supplierId,id) {
     const conn=await db.getConnection();
@@ -130,7 +130,8 @@ class FlashPoolService {
       const offer=offers[0];
       if(!offer)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
       if(offer.status!=='DRAFT')throw fail('FLASH_NOT_DRAFT','Only a draft Flash Pool may be published.',409);
-      if(new Date(offer.expiry_time).getTime()<=Date.now())throw fail('FLASH_EXPIRED','Flash expiry must still be in the future.',409);
+      const [[deadline]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS future',[offer.expiry_time]);
+      if (!deadline.future) throw fail('FLASH_EXPIRED','Flash expiry must still be in the future.',409);
       const {listing,spec}=await this._lockListing(conn,offer.supplier_listing_id,supplierId);
       if(Number(spec.supplier_sku_id)!==Number(offer.supplier_sku_id))
         throw fail('FLASH_SKU_MISMATCH','Linked SKU changed before publish.',409);
@@ -163,7 +164,8 @@ class FlashPoolService {
     let clause='';
     if(filter.category){clause=' AND p.category = ?';params.push(String(filter.category).slice(0,100));}
     const [rows]=await db.query(
-      `SELECT fp.*,ps.title AS sku_title,ps.pack_size,ps.pack_unit,ps.purchasing_unit,
+      `SELECT fp.*,DATE_FORMAT(fp.expiry_time,'%Y-%m-%dT%H:%i:%sZ') AS expiry_at_utc,
+        ps.title AS sku_title,ps.pack_size,ps.pack_unit,ps.purchasing_unit,
         u.business_name AS supplier_name,p.category,sl.listing_code
        FROM flash_pools fp
        JOIN supplier_listings sl ON sl.id=fp.supplier_listing_id AND sl.supplier_id=fp.supplier_id
@@ -201,7 +203,8 @@ class FlashPoolService {
       if(!buyers.length||buyers[0].role!=='BUYER'||buyers[0].verification_status!=='VERIFIED' ||
         ['SUSPENDED','RESTRICTED'].includes(buyers[0].buyer_trust_status))
         throw fail('BUYER_INELIGIBLE','Verified B2B buyers only.',403);
-      if(offer.status!=='ACTIVE'||new Date(offer.expiry_time).getTime()<=Date.now())
+      const [[openClock]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
+      if(offer.status!=='ACTIVE'||!openClock.is_open)
         throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
       const quantity=dec(payload.quantity);
       if(offer.selling_mode==='WHOLE_LOT') {
