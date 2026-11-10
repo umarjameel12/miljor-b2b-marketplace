@@ -533,7 +533,7 @@ async function runB02Gate() {
         [financeAdmin, refPayment]
       );
       assert.strictEqual(blockedLogs.length, 1, 'Blocked refund attempt must have a truthful audit trail');
-      assert.strictEqual(JSON.parse(blockedLogs[0].new_value).outcome, 'REFUND_PENDING_GATEWAY');
+      assert.strictEqual((typeof blockedLogs[0].new_value === 'string' ? JSON.parse(blockedLogs[0].new_value) : blockedLogs[0].new_value).outcome, 'REFUND_PENDING_GATEWAY');
       cleanup.audit_logs.push(blockedLogs[0].id);
       pass('5.1a: Pending Safepay refund attempt audited as blocked, not completed');
     }
