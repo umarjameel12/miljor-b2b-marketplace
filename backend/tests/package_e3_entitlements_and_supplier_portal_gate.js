@@ -427,6 +427,50 @@ async function runE3Gate() {
       assert.ok(listingEntitlements.body.data.entitlements.active_listings_count >= 2);
       pass('B1: Same-family SKUs can both list while legacy listing cap=1; family usage unchanged');
 
+      // B3: price edit and history must be one transaction; ownership private.
+      const priceChanged = await api(`/api/v1/listings/${ownListingId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: { base_unit_price: '4700.25', price_change_reason: 'B3 commercial pricing audit' }
+      });
+      assert.strictEqual(priceChanged.status, 200, JSON.stringify(priceChanged.body));
+      const ownHistory = await api(`/api/v1/listings/${ownListingId}/price-history`, {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(ownHistory.status, 200);
+      assert.ok(ownHistory.body.data.history.some(h => Number(h.new_price) === 4700.25));
+      const anonymousHistory = await api(`/api/v1/listings/${ownListingId}/price-history`);
+      assert.strictEqual(anonymousHistory.status, 401);
+      pass('B3: Atomic price update records private supplier price history');
+
+      const invalidStock = await api(`/api/v1/listings/${ownListingId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: { available_stock: '-1' }
+      });
+      assert.strictEqual(invalidStock.status, 400);
+      const badStatusPayload = await api(`/api/v1/listings/${ownListingId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: { status: 'PAUSED', base_unit_price: '1.00' }
+      });
+      assert.strictEqual(badStatusPayload.status, 400);
+      pass('B3: Invalid stock and status endpoint field smuggling rejected');
+
+      const pausedOffer = await api(`/api/v1/listings/${ownListingId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: { status: 'PAUSED' }
+      });
+      assert.strictEqual(pausedOffer.status, 200, JSON.stringify(pausedOffer.body));
+      const activatedOffer = await api(`/api/v1/listings/${ownListingId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: { status: 'ACTIVE' }
+      });
+      assert.strictEqual(activatedOffer.status, 200, JSON.stringify(activatedOffer.body));
+      pass('B3: Supplier offer PAUSED to ACTIVE rechecks existing-family entitlements');
+
       const closeTime = new Date(Date.now() + 48 * 3600 * 1000);
       const deliveryTime = new Date(closeTime.getTime() + 24 * 3600 * 1000); // +24h
       // Windows: 18h supp confirmation + 18h buyer commitment = 36h total, which exceeds 24h SLA!
