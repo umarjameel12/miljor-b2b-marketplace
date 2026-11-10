@@ -108,6 +108,7 @@ function buildAwardPreview({requestItems,quoteVersions,selections,now=new Date()
     }
     const entry={request_item_id:itemId,quote_id:quoteId,supplier_id:quote.supplier_id,
       supplier_sku_id:Number(snapshot.supplier_sku_id),
+      supplier_listing_id:id(line.supplier_listing_id,'Supplier listing'),
       product_spec_id:Number(snapshot.product_spec_id),
       quantity:item.normalized_qty,unit:item.normalized_unit,unit_price:unitPrice,subtotal,
       supplier_sku_snapshot:snapshot,buyer_requirements:item.requirements||null};
