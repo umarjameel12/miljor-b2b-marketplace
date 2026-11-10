@@ -19,7 +19,7 @@ async function main(){
  const [[ordersBefore]]=await db.query('SELECT COUNT(*) AS n FROM orders');
  const [[paymentsBefore]]=await db.query('SELECT COUNT(*) AS n FROM payments');
  const [buyers]=await db.query("SELECT id FROM users WHERE role='BUYER' AND is_verified=1 AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED' LIMIT 2");
- const [families]=await db.query("SELECT id,allowed_purchasing_units FROM catalog_product_families WHERE is_active=1 AND approval_status='APPROVED' ORDER BY id LIMIT 1");
+ const [families]=await db.query("SELECT f.id FROM catalog_product_families f JOIN catalog_categories cat ON cat.id=f.category_id AND cat.is_active=1 AND cat.approval_status='APPROVED' WHERE f.is_active=1 AND f.approval_status='APPROVED' AND JSON_CONTAINS(f.allowed_purchasing_units, JSON_QUOTE('bag')) ORDER BY f.id LIMIT 1");
  if(!buyers.length||!families.length)throw Error('BLOCKED: verified buyer/family fixtures missing');
  const tag=crypto.randomUUID();
  const buyer=buyers[0].id;
