@@ -251,7 +251,14 @@ class CatalogService {
     const cleanProcessing = specificationService.normalizeText(processing_method) || null;
     const cleanGrade = specificationService.normalizeText(quality_grade) || null;
     const cleanPackaging = specificationService.normalizeText(packaging_type);
-    const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit || 'bag').toLowerCase() || 'bag';
+    const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit).toLowerCase();
+    if (!cleanPurchasingUnit || cleanPurchasingUnit.length > 30) {
+      const err = new Error('Supplier-defined purchasing unit is required (max 30 characters).');
+      err.status = 400;
+      err.code = 'INVALID_PURCHASING_UNIT';
+      throw err;
+    }
+    const shelfLifeDays = this._normalizeShelfLifeDays(shelf_life_days);
 
     const validation = specificationService.validateSpecificationInput(
       {
@@ -1508,6 +1515,20 @@ class CatalogService {
   // ===========================================================================
   // 9. SUPPLIER-OWNED PHYSICAL SKU LIFECYCLE (Level 4: DRAFT -> PUBLISHED -> ARCHIVED)
   // ===========================================================================
+  // B2: Optional shelf-life must be a real, bounded positive integer.
+  // NULL/empty means "not supplied"; never invent a food safety expiry.
+  _normalizeShelfLifeDays(raw) {
+    if (raw === undefined || raw === null || raw === '') return null;
+    const n = Number(raw);
+    if (typeof raw === 'boolean' || !Number.isSafeInteger(n) || n < 1 || n > 36500) {
+      const err = new Error('Shelf life must be a positive whole number of days up to 36500, or omitted.');
+      err.status = 400;
+      err.code = 'INVALID_SHELF_LIFE';
+      throw err;
+    }
+    return n;
+  }
+
   async createSupplierSku(supplierId, payload) {
     const {
       supplier_product_id,
@@ -1629,7 +1650,7 @@ class CatalogService {
       purchasing_unit: cleanPurchasingUnit,
       pack_specification: specificationService.normalizeText(pack_specification) || `${normalizedPackSize}${normalizedPackUnit} ${cleanPackaging}`,
       storage_requirements: specificationService.normalizeText(storage_requirements) || null,
-      shelf_life_days: shelf_life_days ? Number(shelf_life_days) : null,
+      shelf_life_days: shelfLifeDays,
       sku_attributes: normalizedSkuAttrs,
       sku_hash: skuHash,
       status: 'DRAFT'
@@ -1687,7 +1708,13 @@ class CatalogService {
       const rawPackUnit = payload.pack_unit !== undefined ? payload.pack_unit : existing.pack_unit;
       const cleanPurchasingUnit = specificationService.normalizeText(
         payload.purchasing_unit !== undefined ? payload.purchasing_unit : existing.purchasing_unit
-      ).toLowerCase() || 'bag';
+      ).toLowerCase();
+      if (!cleanPurchasingUnit || cleanPurchasingUnit.length > 30) {
+        const err = new Error('Supplier-defined purchasing unit is required (max 30 characters).');
+        err.status = 400;
+        err.code = 'INVALID_PURCHASING_UNIT';
+        throw err;
+      }
       const rawSkuAttrs = payload.sku_attributes !== undefined ? payload.sku_attributes : existing.sku_attributes;
 
       const validation = specificationService.validateSpecificationInput(
@@ -1753,7 +1780,7 @@ class CatalogService {
             ? specificationService.normalizeText(payload.storage_requirements)
             : existing.storage_requirements,
           shelf_life_days: payload.shelf_life_days !== undefined
-            ? (payload.shelf_life_days ? Number(payload.shelf_life_days) : null)
+            ? this._normalizeShelfLifeDays(payload.shelf_life_days)
             : existing.shelf_life_days,
           sku_attributes: normalizedSkuAttrs,
           sku_hash: skuHash
