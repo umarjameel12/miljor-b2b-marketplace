@@ -27,6 +27,12 @@ const eligibleArea=(raw,area)=>{
 };
 class ProcurementCollectiveBidService {
  constructor(database=db){this.database=database}
+ async verifiedBuyer(conn,buyer){
+  const [rows]=await conn.query(
+    "SELECT id FROM users WHERE id=? AND role='BUYER' AND is_verified=1 AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'",
+    [buyer]);
+  if(!rows.length)throw err('BUYER_NOT_ELIGIBLE','Active verified B2B buyer required.',403);
+ }
  async demand(conn,group){
   const [items]=await conn.query('SELECT id,family_id,unit,requirements FROM procurement_request_items WHERE request_id=? ORDER BY line_number',[group.request_id]);
   const [participants]=await conn.query('SELECT id,buyer_id,status,consent_at,consent_snapshot FROM procurement_collective_participants WHERE group_id=? ORDER BY id',[group.id]);
@@ -41,6 +47,7 @@ class ProcurementCollectiveBidService {
  async openBidding(buyerId,groupId){
   const actor=id(buyerId),conn=await this.database.getConnection();
   try{await conn.beginTransaction();
+   await this.verifiedBuyer(conn,actor);
    const group=await loadGroup(conn,groupId,true);
    if(Number(group.organizer_buyer_id)!==actor)throw err('ORGANIZER_ONLY','Organizer required.',403);
    if(group.status==='QUOTING'){await conn.commit();return {group_id:group.id,status:'QUOTING',is_replay:true}}
@@ -59,6 +66,7 @@ class ProcurementCollectiveBidService {
   const buyer=id(organizerId),gid=id(groupId),supplier=id(supplierId);
   const conn=await this.database.getConnection();
   try{await conn.beginTransaction();
+   await this.verifiedBuyer(conn,buyer);
    const group=await loadGroup(conn,gid,true);
    if(Number(group.organizer_buyer_id)!==buyer)
     throw err('ORGANIZER_ONLY','Only the organizer may invite suppliers.',403);
@@ -131,10 +139,18 @@ class ProcurementCollectiveBidService {
    const preview=buildCollectiveBidPreview({
     requestItems:demand.items,participants:demand.participants,supplierLines:lines,
     minimumBuyers:Number(group.minimum_buyers),deliveryFeePerBuyer:delivery});
+   // A single physical listing may appear in multiple request lines.
+   // Validate the COMBINED listing quantity, never each line in isolation.
+   const listingTotals=new Map();
    for(const line of preview.lines){
-    const listed=lines.find(l=>l.supplier_listing_id===line.supplier_listing_id);
-    if(!exact.exactDecimalGte(listed.available_stock,line.aggregate_quantity,4))
-     throw err('GROUP_STOCK_INSUFFICIENT','Listing stock insufficient for demand.',409);
+    const old=listingTotals.get(line.supplier_listing_id)||'0.0000';
+    listingTotals.set(line.supplier_listing_id,
+      exact.exactDecimalSum([old,line.aggregate_quantity],4));
+   }
+   for(const [listingId,total] of listingTotals){
+    const listed=lines.find(l=>l.supplier_listing_id===listingId);
+    if(!listed||!exact.exactDecimalGte(listed.available_stock,total,4))
+     throw err('GROUP_STOCK_INSUFFICIENT','Combined demand exceeds supplier listing stock.',409);
    }
    if(bid&&bid.status!=='ACTIVE')throw err('BID_WITHDRAWN','Withdrawn bid cannot be revised.',409);
    if(!bid){
@@ -156,7 +172,9 @@ class ProcurementCollectiveBidService {
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw err('BID_CONFLICT','Concurrent supplier bid conflict.',409);throw e}finally{conn.release()}
  }
  async listForBuyer(buyerId,groupId){
-  const buyer=id(buyerId),group=await loadGroup(this.database,groupId);
+  const buyer=id(buyerId);
+  await this.verifiedBuyer(this.database,buyer);
+  const group=await loadGroup(this.database,groupId);
   const [members]=await this.database.query('SELECT id,status FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?',[group.id,buyer]);
   if(!members.length || !['JOINED','LOCKED'].includes(members[0].status))
    throw err('PARTICIPANT_NOT_JOINED','Only participating buyers may review private group bids.',403);
