@@ -471,6 +471,50 @@ async function runGate() {
       pass('7. Publishing SKU links product_specifications bridge row and permanently locks SKU & parent product identity');
     } catch (e) { fail('7. SKU publish & immutability lock', e); }
 
+    // B2: Supplier may archive an unused published SKU. The physical spec
+    // bridge must be archived as well so legacy spec_id listing cannot reopen.
+    try {
+      const rejectShelfLife = await api('/api/v1/catalog/supplier-skus', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: {
+          supplier_product_id: brandedProdId,
+          packaging_type: 'Test Bag',
+          pack_size: 33,
+          pack_unit: 'kg',
+          purchasing_unit: 'bag',
+          shelf_life_days: -2
+        }
+      });
+      assert.strictEqual(rejectShelfLife.status, 400);
+      assert.strictEqual(rejectShelfLife.body.error.code, 'INVALID_SHELF_LIFE');
+      const rejectMissingUnit = await api('/api/v1/catalog/supplier-skus', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: { supplier_product_id: brandedProdId, packaging_type: 'Test Bag', pack_size: 34, pack_unit: 'kg' }
+      });
+      assert.strictEqual(rejectMissingUnit.status, 400);
+      assert.strictEqual(rejectMissingUnit.body.error.code, 'INVALID_PURCHASING_UNIT');
+      pass('B2: Invalid shelf-life and absent purchasing unit fail before SKU creation');
+
+      const archived = await api(`/api/v1/catalog/supplier-skus/${unbrandedSkuId}/archive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` }
+      });
+      assert.strictEqual(archived.status, 200, JSON.stringify(archived.body));
+      const [[archivedSpec]] = await db.query(
+        'SELECT lifecycle_status FROM product_specifications WHERE id = ?',
+        [publishedUnbSpecId]
+      );
+      assert.strictEqual(archivedSpec.lifecycle_status, 'ARCHIVED');
+      const unbProductArchive = await api(`/api/v1/catalog/supplier-products/${unbrandedProdId}/archive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` }
+      });
+      assert.strictEqual(unbProductArchive.status, 200, JSON.stringify(unbProductArchive.body));
+      pass('B2: Unused published SKU/product archives safely and legacy spec bridge stays archived');
+    } catch (e) { fail('B2: Optional SKU validation and safe legacy bridge archival', e); }
+
     // 8. Cross-supplier isolation: Supplier B cannot edit, publish, or archive Supplier A's product or SKU
     try {
       const editByB = await api(`/api/v1/catalog/supplier-skus/${sku50kgId}`, {
