@@ -122,6 +122,11 @@ async function main(){
   assert.equal(buyerQuotes[0].quote_snapshot.lines.length,1);
   pass('buyer sees only latest supplier quote and specification snapshot');
 
+  const history=await quotes.getVersionsForBuyer(buyerId,draft.request.id,created.quote_id);
+  assert.deepEqual(history.versions.map(v=>v.version_number),[2,1]);
+  assert.equal(history.versions[1].quote_snapshot.quoted_total,'750.00');
+  pass('buyer sees immutable v1 and v2 price history');
+
   await rejects(
     ()=>quotes.getForBuyer(2147483000,draft.request.id),'REQUEST_NOT_FOUND'
   );
@@ -149,6 +154,30 @@ async function main(){
     'SELECT COUNT(*) AS total FROM procurement_quote_versions WHERE quote_id=?',[created.quote_id]);
   assert.equal(Number(mutationCheck[0].total),2);
   pass('two immutable quote versions, no orders or payment mutations');
+
+  const withdrawn=await quotes.withdraw(
+    fixture.supplier_id,created.quote_id,'quote-withdraw-'+tag
+  );
+  assert.equal(withdrawn.status,'WITHDRAWN');
+  pass('supplier can withdraw quote without deleting versions');
+
+  const withdrawReplay=await quotes.withdraw(
+    fixture.supplier_id,created.quote_id,'quote-withdraw-'+tag
+  );
+  assert.equal(withdrawReplay.is_replay,true);
+  pass('withdraw retry idempotently replays');
+
+  await rejects(
+    ()=>quotes.withdraw(fixture.supplier_id,created.quote_id,'different-withdraw-'+tag),
+    'QUOTE_ALREADY_WITHDRAWN'
+  );
+  pass('withdrawal cannot be replaced with a different mutation key');
+
+  await rejects(
+    ()=>quotes.submit(fixture.supplier_id,draft.request.id,offer,'quote-third-'+tag),
+    'QUOTE_WITHDRAWN'
+  );
+  pass('withdrawn supplier quote cannot be revised');
 
   console.log('B6 SUPPLIER QUOTE GATE: '+passed+'/'+passed+' PASS');
 }
