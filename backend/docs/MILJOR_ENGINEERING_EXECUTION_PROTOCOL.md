@@ -167,30 +167,24 @@ When any test fails:
 
 ---
 
-## 8. Smart Test Execution System (Risk-Based Testing)
+## 8. Consolidated End-of-Phase Test Execution
 
-Adopt a strictly flat, risk-based three-level execution strategy:
+**Phase-Completion First:** Implement the authorized phase's scoped changes before launching integration or regression runs. Do not run full or overlapping suites repeatedly after individual edits. Small diagnostics are permitted only to identify a blocker or to protect immediate data/transaction safety; they are not a substitute for the final phase gate.
 
-### Level 1 — Focused Tests
-- Run the exact affected feature tests immediately after implementation.
-- Expected diagnostic baseline: ~5 seconds; not a hard timeout.
+**One End-of-Phase Verification Gate:**
+1. Verify the actual connected test database is `miljor_test_db` before any fixture mutation.
+2. After implementation stabilizes, execute one consolidated, relevant test/integration/regression gate covering all changed functionality and affected dependencies, including necessary authorization, negative, idempotency, concurrency, and rollback scenarios.
+3. Run `node tests/master_regression_runner.js` at most once if explicitly required by the approved phase or release gate, and avoid overlapping duplicate suites.
+4. When the final gate fails, inspect the actual error, fix the smallest root cause, rerun only affected failed checks, and re-verify the final gate once after stabilization; never misrepresent unexecuted or failed assertions as PASS.
+5. Do not run browser E2E, frontend builds, load tests, or real external-money operations without a phase-specific reason or authorization.
 
-### Level 2 — Impacted Subsystem Tests
-- Run related subsystem and integration tests only when the code changes directly affect those components.
-- Skip an explicit Level 2 run when the upcoming final master run already provides the same coverage and no intermediate feedback is needed.
-- Expected diagnostic baseline: ~15 seconds; not a hard timeout.
+**Persistent Phase Evidence — Mandatory After Final Verification:**
+- Save a dedicated factual phase acceptance report under `backend/docs/`, with actual commands and exit codes, test counts and statuses, isolated database identity, unchanged protected-data checks, affected files, limitations, unresolved issues, branch, and final commit SHA.
+- Update `backend/docs/MILJOR_PHASE_LOG.md` with PASS/FAIL/BLOCKED and the report path.
+- Include both files in the authorized phase's verified Git commit/push. Never invent test evidence or alter prior reports to conceal defects.
+- Stop after the phase; `CAN START NEXT PHASE: NO`.
 
-### Level 3 — Master Regression
-- Run `node tests/master_regression_runner.js`.
-- Run **at most once** at the explicitly authorized final phase or release gate after code and environment stabilize.
-- For security-critical or financial changes, include the necessary negative, idempotency, and concurrency tests within the relevant focused scope.
-
-**Testing Efficiency Invariants:**
-- **Do not skip essential tests** merely to save time.
-- **Do not run full regression repeatedly** during iterative development.
-- **Do not run multiple overlapping test suites** without technical reason.
-- **Do not start browser E2E, frontend builds, load tests, or external integration checks** unless explicitly required by the active task.
-- Preserve all existing assertions. Never recursively invoke suites. Ensure one suite is registered only once. Never mark an unexecuted suite PASS.
+**Non-negotiable:** Consolidation reduces redundant executions, not safety coverage. Run all essential checks at the phase gate; do not skip critical tests solely for speed.
 
 ---
 
