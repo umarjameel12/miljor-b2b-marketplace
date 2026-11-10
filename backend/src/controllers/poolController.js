@@ -1833,7 +1833,7 @@ class PoolController {
       success: false,
       error: {
         code: 'LEGACY_OPERATION_RETIRED',
-        message: 'Direct pool confirmation via legacy endpoint has been retired. The authoritative supplier confirmation workflow with qualification snapshot binding will be available in Part 4D.3.'
+        message: 'Direct legacy pool confirmation is retired. Use POST /api/v1/pools/:id/qualify and the authorized POST /api/v1/pools/:id/supplier-decision workflow with qualification snapshot binding.'
       }
     });
   }
