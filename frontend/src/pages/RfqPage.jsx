@@ -51,6 +51,7 @@ export const RfqPage = () => {
   const [collectiveBids,setCollectiveBids]=useState([]);
   const [collectiveBidGroupId,setCollectiveBidGroupId]=useState(null);
   const [collectiveApprovalPreview,setCollectiveApprovalPreview]=useState(null);
+  const [replaceCollectiveConsent,setReplaceCollectiveConsent]=useState(false);
   const [collectiveSupplierInbox,setCollectiveSupplierInbox]=useState([]);
   const [collectiveSupplierListings,setCollectiveSupplierListings]=useState([]);
   const [collectiveSellerDrafts,setCollectiveSellerDrafts]=useState({});
@@ -583,6 +584,7 @@ export const RfqPage = () => {
       const data=await procurementApi(`/api/v1/procurement/collectives/${groupId}/bids`);
       setCollectiveBidGroupId(groupId);setCollectiveBids(data.bids||[]);
       setCollectiveApprovalPreview(null);
+      setReplaceCollectiveConsent(false);
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
@@ -604,7 +606,7 @@ export const RfqPage = () => {
         headers:{'X-Idempotency-Key':newRequestKey()},
         body:JSON.stringify({bid_version_id:view.bid_version_id,
           total_preview:view.total_preview,physical_specifications_accepted:true,
-          buyer_total_confirmed:true})
+          buyer_total_confirmed:true,replace_previous_consent:replaceCollectiveConsent})
       });
       toast.success('Your quote consent saved. No money charged or order created.');
       setCollectiveApprovalPreview(null);
@@ -1128,6 +1130,11 @@ export const RfqPage = () => {
                     <p className="text-xs text-amber-700">
                       This action stores your agreement to the quote only. It does not reserve stock, create an order or charge your account.
                     </p>
+                    <label className="flex items-start gap-2 text-xs">
+                      <input type="checkbox" checked={replaceCollectiveConsent}
+                        onChange={e=>setReplaceCollectiveConsent(e.target.checked)}/>
+                      Explicitly replace my earlier approval if the supplier has changed the quotation.
+                    </label>
                     <button type="button" disabled={shoppingBusy}
                       onClick={acceptCollectivePreview}
                       className="rounded-lg px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
