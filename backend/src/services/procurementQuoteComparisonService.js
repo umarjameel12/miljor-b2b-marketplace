@@ -60,7 +60,11 @@ function compareQuoteOptions({ items, quotes, now = new Date().toISOString(), ma
     }
     const unit = typeof item.unit === 'string' ? item.unit.toLowerCase().trim() : '';
     if (!unit) throw fail('INVALID_REQUEST_UNIT', 'A purchasing unit is required.');
-    requested.set(String(item.id), { quantity: quantity(item.quantity), unit });
+    requested.set(String(item.id), {
+      quantity: quantity(item.quantity),unit,
+      requirements:typeof item.requirements==='string'?item.requirements:null,
+      allow_substitutions:item.allow_substitutions===true || item.allow_substitutions===1
+    });
   }
 
   const eligible = [];
@@ -108,7 +112,9 @@ function compareQuoteOptions({ items, quotes, now = new Date().toISOString(), ma
           subtotal: exact.exactMultiplyRound(req.quantity, unitPrice, 2),
           quantity: req.quantity,
           unit: req.unit,
-          supplier_sku_snapshot: line.supplier_sku_snapshot || null
+          supplier_sku_snapshot: line.supplier_sku_snapshot || null,
+          buyer_requirements: req.requirements,
+          buyer_allows_substitutions: req.allow_substitutions
         });
       } catch {
         invalid = true;
@@ -219,6 +225,10 @@ async function compareForBuyer(buyerId,requestId,database=db) {
        v.valid_until,v.delivery_fee,v.delivery_lead_days,v.immutable_snapshot
      FROM procurement_quotes q JOIN procurement_quote_versions v
        ON v.quote_id=q.id AND v.version_number=q.current_version
+     JOIN users u ON u.id=q.supplier_id AND u.role='SUPPLIER'
+       AND u.is_verified=1 AND u.verification_status='VERIFIED'
+     JOIN supplier_profiles sp ON sp.supplier_id=q.supplier_id
+       AND sp.verification_status='VERIFIED'
      WHERE q.request_id=? ORDER BY q.id`,[rid]
   );
   const quotes=rows.map(q=>{
