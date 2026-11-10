@@ -797,6 +797,28 @@ async function runGate() {
 
       pass('16. Supplier A publishes pool: status = ACTIVE, is_terms_locked = 1, published_terms_snapshot recorded');
 
+      const pauseLockedListing = await api(`/api/v1/listings/${listingAId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: { status: 'PAUSED' }
+      });
+      assert.strictEqual(pauseLockedListing.status, 409, JSON.stringify(pauseLockedListing.body));
+      assert.strictEqual(pauseLockedListing.body.error.code, 'ACTIVE_POOL_LISTING_LOCKED');
+      const archiveLockedListing = await api(`/api/v1/listings/${listingAId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: { status: 'ARCHIVED' }
+      });
+      assert.strictEqual(archiveLockedListing.status, 409);
+      const reduceCommittedStock = await api(`/api/v1/listings/${listingAId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: { available_stock: 0 }
+      });
+      assert.strictEqual(reduceCommittedStock.status, 409, JSON.stringify(reduceCommittedStock.body));
+      assert.strictEqual(reduceCommittedStock.body.error.code, 'STOCK_BELOW_ALLOCATIONS');
+      pass('B3: Active pool blocks listing pause/archive and committed-stock reduction');
+
       // B2: Archiving an SKU or product used by an active pool must fail
       // without altering published commercial terms or SKU lifecycle.
       const blockedSkuArchive = await api(`/api/v1/catalog/supplier-skus/${sku25kgId}/archive`, {
