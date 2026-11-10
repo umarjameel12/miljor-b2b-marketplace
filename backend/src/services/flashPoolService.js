@@ -296,12 +296,16 @@ class FlashPoolService {
        JOIN products p ON p.id=fp.product_id
        JOIN users u ON u.id=fp.supplier_id AND u.role='SUPPLIER'
        JOIN supplier_profiles sp ON sp.supplier_id=u.id
+       JOIN catalog_product_families fam ON fam.id=ps.family_id
+       JOIN catalog_categories cat ON cat.id=ps.category_id
        WHERE fp.status='ACTIVE' AND fp.expiry_time>UTC_TIMESTAMP()
          AND fp.remaining_stock>0 AND fp.published_at IS NOT NULL
          AND sl.status='ACTIVE' AND ps.lifecycle_status='PUBLISHED'
          AND ps.is_active=1 AND ps.approval_status='APPROVED'
          AND u.verification_status='VERIFIED' AND u.is_verified=1
-         AND sp.verification_status='VERIFIED'${clause}
+         AND sp.verification_status='VERIFIED'
+         AND fam.is_active=1 AND fam.approval_status='APPROVED'
+         AND cat.is_active=1 AND cat.approval_status='APPROVED'${clause}
        ORDER BY fp.expiry_time ASC`,params);
     return rows.map(rowSafe);
   }
@@ -325,6 +329,36 @@ class FlashPoolService {
           locked_unit_price:prior[0].locked_unit_price,status:prior[0].status,
           checkout_endpoint:`/api/v1/orders/${prior[0].order_id}/checkout`};
       }
+      // B5: Publication checks are not sufficient; eligibility can change
+      // before a buyer attempts checkout. Recheck current supplier, listing,
+      // SKU, product, family and category before accepting any buyer money.
+      const [eligible]=await conn.query(
+        `SELECT sl.status AS listing_status,sl.supplier_id,
+          u.role AS supplier_role,u.verification_status AS supplier_status,
+          u.is_verified,sp.verification_status AS profile_status,
+          ps.lifecycle_status,ps.approval_status,ps.is_active,
+          sk.status AS sku_status,pr.status AS product_status,
+          fam.is_active AS family_active,fam.approval_status AS family_status,
+          cat.is_active AS category_active,cat.approval_status AS category_status
+         FROM supplier_listings sl
+         JOIN users u ON u.id=sl.supplier_id
+         JOIN supplier_profiles sp ON sp.supplier_id=u.id
+         JOIN product_specifications ps ON ps.id=sl.product_spec_id
+         JOIN supplier_skus sk ON sk.id=ps.supplier_sku_id
+         JOIN supplier_products pr ON pr.id=sk.supplier_product_id
+         JOIN catalog_product_families fam ON fam.id=ps.family_id
+         JOIN catalog_categories cat ON cat.id=ps.category_id
+         WHERE sl.id=?`,[offer.supplier_listing_id]);
+      const e=eligible[0];
+      if(!e||Number(e.supplier_id)!==Number(offer.supplier_id)||
+        e.listing_status!=='ACTIVE'||e.supplier_role!=='SUPPLIER'||
+        e.supplier_status!=='VERIFIED'||Number(e.is_verified)!==1||
+        e.profile_status!=='VERIFIED'||e.lifecycle_status!=='PUBLISHED'||
+        e.approval_status!=='APPROVED'||!e.is_active||
+        e.sku_status!=='PUBLISHED'||e.product_status!=='PUBLISHED'||
+        !e.family_active||e.family_status!=='APPROVED'||
+        !e.category_active||e.category_status!=='APPROVED')
+        throw fail('FLASH_ELIGIBILITY_REVOKED','Supplier or physical SKU is no longer eligible for Flash checkout.',409);
       const [buyers]=await conn.query('SELECT role,verification_status,buyer_trust_status FROM users WHERE id=?',[buyerId]);
       if(!buyers.length||buyers[0].role!=='BUYER'||buyers[0].verification_status!=='VERIFIED' ||
         ['SUSPENDED','RESTRICTED'].includes(buyers[0].buyer_trust_status))
