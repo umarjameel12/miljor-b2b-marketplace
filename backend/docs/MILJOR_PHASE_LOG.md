@@ -4,6 +4,17 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
+## B0.2 Follow-up Closure — Implementation Recorded, Final Testing Pending
+
+- **Review basis:** B0.2 committed source at `47a9ed058b1376d1e38ec49ad28045937267cae2`, subsequently aligned agent execution policy on `feature/package-e`.
+- **Direct GitHub repairs:** Legacy payment verification PAID/ledger mutation removed; exact payment attempt provider provenance scoped to buyer/order; blocked refund audit outcomes added; focused B0.2 test assertions strengthened and B0.1 audit fixture cleanup updated.
+- **Evidence file:** `backend/docs/MILJOR_B0_2_FOLLOWUP_CLOSURE_REPORT.md`.
+- **Current follow-up status:** **IMPLEMENTED — PENDING FINAL ANTIGRAVITY INTEGRATION/REGRESSION GATE**. Historic B0.2 `18/18` PASS remains historical evidence from before these edits and must not be reused to assert newly changed code is verified.
+- **Database:** No MySQL connection or local application test execution was performed during GitHub-only corrections; protected databases were not directly accessed. Antigravity must verify actual `miljor_test_db` identity, protected DB preservation, and complete negative/regression checks at phase end.
+- **Next phase:** **B1 NOT STARTED — DO NOT ADVANCE**.
+
+---
+
 ## Approved Engineering Roadmap & Phase Status Summary
 
 | Phase / Part | Description | Status | Gate Evidence | Completion Date |
