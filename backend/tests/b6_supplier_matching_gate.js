@@ -70,6 +70,9 @@ async function main(){
   const inbox=await matching.inbox(fixture.supplier_id);
   const selected=inbox.find(x=>Number(x.invitation_id)===Number(invitation.id));
   check(Boolean(selected),'Supplier receives private inbox invitation');
+  check(Array.isArray(selected.eligible_offers) &&
+    selected.eligible_offers.some(offer=>Number(offer.supplier_listing_id)===Number(fixture.listing_id)),
+    'Supplier sees authorized physical SKU choices for quote preparation');
   check(!Object.hasOwn(selected,'buyer_id') && !Object.hasOwn(selected,'delivery_area') &&
     !Object.hasOwn(selected,'delivery_address'),'Buyer identity and address not leaked');
   const interested=await matching.respond(fixture.supplier_id,invitation.id,'INTERESTED');
