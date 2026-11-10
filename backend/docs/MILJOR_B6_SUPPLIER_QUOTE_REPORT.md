@@ -50,3 +50,14 @@
 8. Record actual assertion totals and commit SHA only after execution. Fail closed if a prerequisite or fixture cannot be verified.
 
 **Verdict:** B6-E SOURCE IMPLEMENTED; full runtime acceptance NOT YET VERIFIED. **CAN START NEXT PHASE: NO** without next explicit instruction (or until final gate policy permits).
+
+
+## Additional lifecycle completion — withdrawal, history and MOQ
+- Updated Migration 039 quote header with `withdrawal_key` and `withdrawn_at`. This remains an unapplied proposed migration for the controlled final test DB gate.
+- Quote service now supports `withdraw(supplierId,quoteId,idempotencyKey)` with parent-request-before-quote row locks, supplier-only ownership, immutable historical versions and durable same-key replay. Different withdrawal keys on already withdrawn quotes fail closed; withdrawn quotes cannot be revised. Future B6-G acceptance must check quote `ACTIVE` under the same transaction before award.
+- Buyer can request immutable quote version history via `GET /api/v1/procurement/requests/:id/quotes/:quoteId/versions`; supplier withdraw via `POST /api/v1/procurement/supplier/quotes/:quoteId/withdraw` with `X-Idempotency-Key`.
+- The original `RfqPage.jsx` now displays buyer quotation history and supplier's own quote list with Withdraw action.
+- Supplier listing `buyer_min_qty` is enforced in both matching and quote submission; D/E fixtures use an eligible listing with minimum <=1 for the fixed quantity test. Supplier quote direct-contact patterns rejected.
+- D/E integration gate scripts extended to cover SKU listings in inbox, request owner privacy, immutable version history, quote withdrawal + replay + conflict, key reuse with changed quote, uninvited supplier, and no orders/payments created. Assertions are authored but still NOT EXECUTED against MySQL/Express.
+- Previously observed 9/9 mocked quote-source checks were executed before the latest withdrawal/MOQ additions; do not imply those checks independently prove the new code. All subsequent final tests must use the **latest remote B6 branch head**.
+- **B6-E status remains SOURCE IMPLEMENTED / FULL ACCEPTANCE DEFERRED**. No production DB writes or B4/B5 branch changes.
