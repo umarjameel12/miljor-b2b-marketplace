@@ -6,6 +6,7 @@
 const procurementService = require('../services/procurementService');
 const procurementRequestService = require('../services/procurementRequestService');
 const procurementMatchingService = require('../services/procurementMatchingService');
+const procurementQuoteService = require('../services/procurementQuoteService');
 
 class ProcurementController {
 
@@ -106,6 +107,28 @@ class ProcurementController {
     try{
       const invitation=await procurementMatchingService.respond(req.user.id,req.params.invitationId,req.body?.decision);
       res.json({success:true,data:{invitation}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-E: versioned supplier quotations; read-only buyer comparisons.
+  async submitSmartQuote(req,res){
+    try{
+      const quote=await procurementQuoteService.submit(
+        req.user.id,req.params.id,req.body,req.headers['x-idempotency-key']
+      );
+      res.status(quote.is_replay?200:201).json({success:true,data:{quote}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listSmartQuotes(req,res){
+    try{
+      const quotes=await procurementQuoteService.getForBuyer(req.user.id,req.params.id);
+      res.json({success:true,data:{quotes}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listMySmartQuotes(req,res){
+    try{
+      const quotes=await procurementQuoteService.getMine(req.user.id);
+      res.json({success:true,data:{quotes}});
     }catch(err){this._smartError(res,err);}
   }
 
