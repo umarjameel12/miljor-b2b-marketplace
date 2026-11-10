@@ -1427,6 +1427,34 @@ class CatalogService {
     }
   }
 
+  // B2: Protect existing buyer/pool commitments when deactivating a SKU/product.
+  // Historical pools may identify the physical object through either an offer
+  // or the product_specifications bridge; check both without rewriting pools.
+  async _assertNoOpenPoolForArchive(supplierId, { productId = null, skuId = null }, connection) {
+    const familyMatch = productId
+      ? '(sl.supplier_product_id = ? OR ps.supplier_product_id = ?)'
+      : '(sl.supplier_sku_id = ? OR ps.supplier_sku_id = ?)';
+    const identity = productId || skuId;
+    const [openPools] = await connection.query(
+      `SELECT p.id, p.status
+       FROM pools p
+       LEFT JOIN supplier_listings sl ON sl.id = p.supplier_listing_id
+       LEFT JOIN product_specifications ps ON ps.id = p.product_spec_id
+       WHERE p.supplier_id = ?
+         AND ${familyMatch}
+         AND p.status NOT IN ('CANCELLED', 'EXPIRED', 'COMPLETED', 'DELIVERED', 'REJECTED')
+       LIMIT 1 FOR UPDATE`,
+      [Number(supplierId), Number(identity), Number(identity)]
+    );
+    if (openPools.length > 0) {
+      const err = new Error('This product/SKU has a non-terminal pool. Resolve the pool through its normal workflow before archiving.');
+      err.status = 409;
+      err.code = 'ACTIVE_POOL_ARCHIVE_BLOCKED';
+      err.details = { pool_id: openPools[0].id, pool_status: openPools[0].status };
+      throw err;
+    }
+  }
+
   async archiveSupplierProduct(supplierId, productId) {
     const connection = await db.getConnection();
     try {
@@ -1444,15 +1472,28 @@ class CatalogService {
         err.code = 'FORBIDDEN';
         throw err;
       }
+      if (existing.status !== 'ARCHIVED') {
+        await this._assertNoOpenPoolForArchive(supplierId, { productId: existing.id }, connection);
+      }
       const updated = await catalogRepo.transitionSupplierProductStatus(existing.id, 'ARCHIVED', connection);
-      // Also archive child SKUs and pause active commercial listings
+      // Also archive child SKUs and prevent legacy spec_id-only listings
+      // from reactivating a now-archived supplier-owned physical product.
       await connection.query(
         `UPDATE supplier_skus SET status = 'ARCHIVED', archived_at = COALESCE(archived_at, NOW()) WHERE supplier_product_id = ?`,
         [existing.id]
       );
       await connection.query(
-        `UPDATE supplier_listings SET status = 'ARCHIVED' WHERE supplier_product_id = ? AND status = 'ACTIVE'`,
-        [existing.id]
+        `UPDATE product_specifications SET lifecycle_status = 'ARCHIVED'
+         WHERE supplier_product_id = ? AND supplier_id = ?
+           AND lifecycle_status = 'PUBLISHED'`,
+        [existing.id, Number(supplierId)]
+      );
+      await connection.query(
+        `UPDATE supplier_listings SET status = 'ARCHIVED'
+         WHERE supplier_id = ? AND status = 'ACTIVE'
+           AND (supplier_product_id = ? OR product_spec_id IN
+             (SELECT id FROM product_specifications WHERE supplier_product_id = ? AND supplier_id = ?))`,
+        [Number(supplierId), existing.id, existing.id, Number(supplierId)]
       );
       await connection.commit();
       return updated;
@@ -1883,6 +1924,9 @@ class CatalogService {
         throw err;
       }
 
+      if (sku.status !== 'ARCHIVED') {
+        await this._assertNoOpenPoolForArchive(supplierId, { skuId: sku.id }, connection);
+      }
       const archivedSku = await catalogRepo.archiveSupplierSku(sku.id, connection);
       if (sku.linked_spec_id) {
         await connection.query(
