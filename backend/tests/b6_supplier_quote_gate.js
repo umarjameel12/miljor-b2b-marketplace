@@ -27,6 +27,9 @@ async function main(){
     assert.equal(tables[0].ENGINE,'InnoDB','Transactions required');
   }
   pass('migrations 037–039 transaction tables exist');
+  const [[beforeOrders]]=await db.query('SELECT COUNT(*) AS n FROM orders');
+  const [[beforePayments]]=await db.query('SELECT COUNT(*) AS n FROM payments');
+  pass('financial tables baseline captured before quote-only operations');
   const [buyers]=await db.query(
     "SELECT id FROM users WHERE role='BUYER' AND is_verified=1 AND verification_status='VERIFIED' LIMIT 1"
   );
@@ -138,13 +141,14 @@ async function main(){
   );
   pass('foreign or unavailable supplier listing rejected');
 
-  const [orderCount]=await db.query(
-    'SELECT COUNT(*) AS total FROM orders WHERE buyer_id=?',[buyerId]);
-  assert.ok(Number(orderCount[0].total)>=0);
+  const [[afterOrders]]=await db.query('SELECT COUNT(*) AS n FROM orders');
+  const [[afterPayments]]=await db.query('SELECT COUNT(*) AS n FROM payments');
+  assert.equal(String(afterOrders.n),String(beforeOrders.n),'Quote creation must not create orders');
+  assert.equal(String(afterPayments.n),String(beforePayments.n),'Quote creation must not initiate payment');
   const [mutationCheck]=await db.query(
     'SELECT COUNT(*) AS total FROM procurement_quote_versions WHERE quote_id=?',[created.quote_id]);
   assert.equal(Number(mutationCheck[0].total),2);
-  pass('only two immutable versions created; quote submission is not an order');
+  pass('two immutable quote versions, no orders or payment mutations');
 
   console.log('B6 SUPPLIER QUOTE GATE: '+passed+'/'+passed+' PASS');
 }
