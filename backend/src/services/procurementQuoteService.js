@@ -135,7 +135,7 @@ class ProcurementQuoteService{
           throw failure('LISTING_NOT_ELIGIBLE','Listing is not eligible for this delivery area and request.',409);
         const [rows]=await conn.query(
           `SELECT sl.id AS listing_id, sl.supplier_id, sl.supplier_sku_id,
-                  sl.available_stock,sl.currency,sl.status,sl.delivery_zones,
+                  sl.available_stock,sl.buyer_min_qty,sl.currency,sl.status,sl.delivery_zones,
                   sk.family_id,sk.purchasing_unit,sk.pack_size,sk.pack_unit,
                   sk.packaging_type,sk.linked_spec_id,sk.sku_code,
                   sp.title,sp.brand,sp.quality_grade,sp.variety,
@@ -167,6 +167,8 @@ class ProcurementQuoteService{
           throw failure('QUOTE_QUANTITY_MISMATCH','Quoted line must cover the entire requested item quantity.',409);
         if(!exact.exactDecimalGte(sku.available_stock,qty,4))
           throw failure('INSUFFICIENT_LISTING_STOCK','Listed stock cannot cover this quote.',409);
+        if(!exact.exactDecimalGte(qty,sku.buyer_min_qty,4))
+          throw failure('BELOW_BUYER_MINIMUM','Requested quantity is below supplier listing minimum.',409);
         // Discovery requirements are free text, not machine-verifiable equivalence.
         // A buyer may specify grade/brand; supplier's exact SKU snapshot is disclosed
         // and acceptance must require explicit buyer selection in phase B6-G.
