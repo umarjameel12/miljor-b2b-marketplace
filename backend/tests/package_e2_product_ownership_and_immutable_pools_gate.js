@@ -852,6 +852,18 @@ async function runGate() {
       assert.strictEqual(Number(pool.published_terms_snapshot.target_qty), 50);
       lockedPromisedDelivery = pool.promised_delivery_at;
 
+      // B4-C/D: Publishing commits a single matching-unit exact allocation.
+      const [publishedAllocations] = await db.query(
+        `SELECT allocated_qty, unit, status FROM supplier_inventory_allocations
+         WHERE allocation_type = 'REGULAR_POOL' AND reference_id = ?`,
+        [draftPoolId]
+      );
+      assert.strictEqual(publishedAllocations.length, 1);
+      assert.strictEqual(publishedAllocations[0].status, 'COMMITTED');
+      assert.strictEqual(publishedAllocations[0].unit, 'bag');
+      assert.strictEqual(Number(publishedAllocations[0].allocated_qty), 80);
+      pass('B4-C/D: Pool publication atomically allocates exact capacity once in listing units');
+
       pass('16. Supplier A publishes pool: status = ACTIVE, is_terms_locked = 1, published_terms_snapshot recorded');
 
       const pauseLockedListing = await api(`/api/v1/listings/${listingAId}/status`, {
