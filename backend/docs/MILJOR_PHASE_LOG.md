@@ -1377,3 +1377,12 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - B4/B5 remain divergent: B5 ahead 39 and behind 38 from accepted B4 at audit time; no shared-stock integration assumed.
 - Updated evidence: `backend/docs/MILJOR_B6_A_FOUNDATION_IMPLEMENTATION_REPORT.md`.
 - **Current P1/B6-A gate: PARTIAL / BLOCKED.** Need local `miljor_test_db` migration/schema/API gate and independently accepted B5 integration before declaring end-to-end PASS. **CAN START NEXT PHASE: NO.**
+
+
+### B5 acceptance handoff + B6 countdown compatibility — 2026-11-10
+- B5 report received; remote B5 head confirmed `ecd7d2ee67d280dab9550e8ffc9497207106cbf6`; remote acceptance report records Migration 036, 302/302 regression assertions, frontend build PASS and protected DB zero writes.
+- B5/B4 graph is still diverged (40 ahead / 38 behind); selected B4 `poolController.js` and `tierPricingService.js` contents independently verified byte-identical between B5 and B6. No merge/force-push performed.
+- B6 added `frontend/src/utils/parseDeadline.js`, CountdownTimer integration, parser tests and npm test script. Exact parser/test source executed in isolated JS runtime: **14/14 PASS**; Vite build/browser timer test NOT RUN.
+- Updated B6 master plan with B5 integration requirements: single inventory allocation ceiling, Safepay claim/release/reconciliation, strict route auth, and sequential combined regression.
+- B6 still B4-ancestry; B5 Flash service, Migration 036 and Flash UI are not yet ported into B6. They must remain separate and be reconciled before B6 stock/payment acceptance.
+- **Verdict:** B5 handoff REMOTE-VERIFIED FROM REPORT; B6-A/P1 PARTIAL/BLOCKED pending local Node/MySQL/API verification and schema audit. No production DB writes. B6-B NOT STARTED. **CAN START NEXT PHASE: NO**.
