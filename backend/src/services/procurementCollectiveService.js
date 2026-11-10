@@ -213,6 +213,21 @@ class ProcurementCollectiveService{
        JOIN procurement_collective_groups g ON g.id=p.group_id
        WHERE p.buyer_id=? ORDER BY p.created_at DESC LIMIT 100`,[buyer]
     );
+    for(const row of rows){
+      const [items]=await this.database.query(
+        `SELECT id,family_id,quantity,unit,requirements
+           FROM procurement_request_items WHERE request_id=? ORDER BY line_number`,
+        [row.request_id]
+      );
+      row.items=items.map(item=>({
+        ...item,
+        requirements:typeof item.requirements==='string'
+          ?item.requirements
+             .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[contact hidden]')
+             .replace(/(?:\\+?92|0)\\s*3\\d{2}[\\s().-]*\\d{3}[\\s().-]*\\d{4}/g,'[contact hidden]')
+          :null
+      }));
+    }
     return rows;
   }
 }
