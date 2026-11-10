@@ -48,18 +48,22 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
-## Phase B4 — Regular Pool Lifecycle Hardening (Isolated Parallel Development)
+## Phase B4 — Regular Pool Lifecycle Hardening: Source Gate Prepared
 
-- **Branch:** `feature/b4-regular-pools` (created from B3 pre-acceptance `fd3d1160`).
-- **B4-A:** Correct `supplier_sku_id` -> immutable published spec -> legacy `products.id` mapping; reject mismatched supplier product/SKU identity; tests added.
-- **B4-B (partial):** Strict positive pool quantity precision/scale validation on DRAFT creation; negative test added.
-- **B4-C through B4-H:** Pending targeted implementation after audit; existing engine reused.
-- **B4-I:** No runtime/MySQL/frontend gate executed by GitHub-only work.
-- **B2 reconciliation:** Accepted `fcbd82dafcb236f9cee980904ebddba5c1ab1999` must be integrated into B4's inherited pre-B2-acceptance source before B4 final gate.
-- **B3 reconciliation:** Antigravity final B3 acceptance currently separate/pending; merge only verified B3 fixes into B4 after evidence. Do not disturb B3 local worktree or run concurrent mutable tests on `miljor_test_db`.
-- **Source location parity:** See `backend/docs/MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md`; original repo folders only, no duplicate business source directories.
-- **Report:** `backend/docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`.
-- **Result:** **PARTIAL IMPLEMENTATION — NO B4 PASS; B5 NOT AUTHORIZED**.
+- **Branch:** `feature/b4-regular-pools` (isolated original-path worktree; source was forked from B3 before acceptance).
+- **Accepted dependency integration:** B2 SHA `fcbd82da` and B3 SHA `44f591d7`, 67/67 and 81/81 respectively; proper two-parent Git merge `9f2e057fc3fd2d3bf7ebc0e614079e7ad8b89ea1` makes B3 an ancestor of B4 without losing B4 source edits.
+- **B4-A:** Supplier SKU/spec/legacy product FK corrected; mismatched physical IDs blocked; historical spec-only listing compatibility preserved.
+- **B4-B:** Exact 4dp quantity validation on draft CREATE and UPDATE; preserve SLA, MOQ, quantity and cap rules.
+- **B4-C:** Exact decimal allocation arithmetic, compatible allocation-unit validation, existing atomic pool/listing locks reused.
+- **B4-D:** Final publish validates matching listing/supplier, physical product and SKU publication; immutable terms + inventory snapshot existing workflow preserved.
+- **B4-E:** Tier decimal and discrete-boundary hardening; existing authoritative progress read model reused; fast tier tests added.
+- **B4-F:** Existing commercial qualification, supplier decision and cancellation/retired legacy confirm API audited/reused; stale route guidance corrected.
+- **B4-G:** Existing buyer reservation/capacity flow reused; supplier-defined physical packaging units now indivisible with safe conversion; fast pack tests added.
+- **B4-H:** Supplier pool form uses string decimal values and explicit purchase increment, active-offer selection and correct product title; buyer read model reused.
+- **B4-I:** New/extended targeted regression files committed. **Actual local MySQL/API/React build gate NOT RUN**, final result not PASS yet.
+- **Source location parity:** `backend/docs/MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md`; local B4 worktree must safely sync B4 GitHub branch and verify exact SHA.
+- **Authoritative report:** `backend/docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`.
+- **Current result:** **B4 SOURCE INTEGRATION READY FOR ANTIGRAVITY TEST — FINAL VERDICT PENDING; B5 NOT AUTHORIZED**.
 
 ---
 
@@ -102,9 +106,9 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B0.1** | Financial Integrity & Payment Consistency: Safepay Verification State Safety, Provider/Method Provenance, Refund Gating, Webhook Exact Matching, Invoice Uniqueness & Decimal Precision, Subscription Read Model & UI Alignment | **COMPLETE AND VERIFIED** | `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B0.2** | Backend Safety Closure & Final Acceptance Gate: Admin Subscription Bypass Hardening, Invoice Internal Authority Hardening, Exact Payment Provider Provenance, Safepay Amount Contract, and Legacy Refund False Completion Prevention | **COMPLETE AND VERIFIED** | `tests/phase_b0_2_safety_closure_gate.js` (22/22 PASS); `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Total 161/161 Assertions PASS; Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **COMPLETE AND VERIFIED** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; 73/73 Assertions PASS across E2/E3/E4-E6 gates; Frontend Vite Build PASS (2,216 modules, 0 errors); miljor_db 100% Pristine; Verified SHA: `986b2737` | 2026-11-10 |
-| **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **IMPLEMENTED — FINAL ANTIGRAVITY GATE PENDING** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; focused E2 negative assertions committed but not yet run; protected DB safety and frontend build pending | — |
+| **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **COMPLETE AND VERIFIED — 67/67 PASS** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; accepted `fcbd82da`, frontend build PASS, miljor_db pristine | 2026-11-10 |
 | **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **COMPLETE AND VERIFIED (B3 upstream SHA 44f591d7, 81/81 acceptance); B4 branch source now manually reconciled** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; modified E2/E3 B3 test assertions 81/81 B3 accepted on 44f591d7; B4 source integration tracked separately | — |
-| **Phase B4** | Regular Pools: supplier physical ID/FK correctness, draft decimal validation, inventory/publish/tiers/progress/reservations/lifecycle (remaining scope pending) | **B4-A/B PARTIAL SOURCE IMPLEMENTATION — TEST PENDING** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; source parity policy; B3/B2 accepted dependency integration not yet done | — |
+| **Phase B4** | Regular Pool lifecycle A–H: physical FK, exact pool quantities, inventory, publishing/terms lock, tier pricing/progress, qualification, buyer reservations, supplier UI | **SOURCE IMPLEMENTATION/AUDIT COMPLETE — FINAL ACCEPTANCE PENDING** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; targeted E2 and pure B4 tests committed; B3 merge ancestor `9f2e057f`; MySQL/API/frontend gate NOT YET EXECUTED | — |
 | **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
 ---
