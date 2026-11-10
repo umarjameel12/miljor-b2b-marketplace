@@ -8,11 +8,51 @@
 // Full flow: CREATED → PENDING → PAID → Ledger entry
 // =============================================================================
 const paymentRepo = require('../repositories/paymentRepo');
-const ledgerRepo = require('../repositories/ledgerRepo');
-const feeService = require('../services/feeService');
 const paymentProviderService = require('../services/paymentProviderService');
 const safepayCheckoutService = require('../services/safepayCheckoutService');
 const db = require('../config/db');
+
+
+// Read-only provenance resolver. Payment method (CARD) is not the provider.
+// Never select an arbitrary attempt belonging to the same order.
+async function resolveRecordedProvider(payment) {
+  let responseProvider = null;
+  if (payment.provider_response) {
+    try {
+      const evidence = typeof payment.provider_response === 'string'
+        ? JSON.parse(payment.provider_response)
+        : payment.provider_response;
+      if (typeof evidence?.provider === 'string') {
+        responseProvider = evidence.provider.trim().toUpperCase();
+      }
+    } catch (_) {
+      return null; // Corrupt evidence must not be silently ignored.
+    }
+  }
+
+  let attemptProvider = null;
+  if (payment.transaction_ref) {
+    const [attempts] = await db.query(
+      'SELECT provider, order_id, buyer_id FROM payment_attempts WHERE provider_tracker_token = ? LIMIT 2',
+      [payment.transaction_ref]
+    );
+    if (attempts.length > 1) return null;
+    if (attempts.length === 1) {
+      const attempt = attempts[0];
+      if ((payment.order_id && Number(attempt.order_id) !== Number(payment.order_id))
+          || Number(attempt.buyer_id) !== Number(payment.buyer_id)) {
+        return null; // Exact tracker must also belong to this payment's buyer/order.
+      }
+      attemptProvider = String(attempt.provider || '').toUpperCase();
+    }
+  }
+
+  if (responseProvider && attemptProvider && responseProvider !== attemptProvider) return null;
+  // Legacy explicit SAFEPAY method is not sufficient to override conflicting evidence.
+  const legacyProvider = !payment.transaction_ref && payment.payment_method === 'SAFEPAY'
+    ? 'SAFEPAY' : null;
+  return responseProvider || attemptProvider || legacyProvider;
+}
 
 class PaymentController {
 
@@ -131,8 +171,7 @@ class PaymentController {
 
   // ---------------------------------------------------------------------------
   // POST /api/v1/payments/verify
-  // Step 2: Server-side payment verification — NEVER trust frontend success
-  // Marks payment PAID and creates ledger entry
+  // Legacy read-only verification compatibility: NEVER updates financial state.
   // ---------------------------------------------------------------------------
   async verifyPayment(req, res) {
     try {
@@ -179,138 +218,35 @@ class PaymentController {
         });
       }
 
-      // Resolve provider provenance uniquely linked to exact payment/attempt/tracker (Fix 3)
-      let provider = null;
-      if (payment.provider_response) {
-        try {
-          const parsedResp = typeof payment.provider_response === 'string'
-            ? JSON.parse(payment.provider_response)
-            : payment.provider_response;
-          if (parsedResp && parsedResp.provider) {
-            provider = String(parsedResp.provider).toUpperCase();
-          }
-        } catch (e) {}
-      }
-
-      // If not established by provider_response, lookup strictly by exact transaction_ref / tracker token
-      if (!provider && payment.transaction_ref) {
-        const [attemptRows] = await db.query(
-          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? LIMIT 1',
-          [payment.transaction_ref]
-        );
-        if (attemptRows[0]?.provider) {
-          provider = String(attemptRows[0].provider).toUpperCase();
-        }
-      }
-
-      // Fallback only if payment_method is explicitly 'SAFEPAY'
-      if (!provider && payment.payment_method === 'SAFEPAY') {
-        provider = 'SAFEPAY';
-      }
-
-      // Missing or ambiguous provenance must fail closed (Fix 3)
+      const provider = await resolveRecordedProvider(payment);
       if (!provider) {
         return res.status(402).json({
           success: false,
-          error: {
-            code: 'PAYMENT_VERIFICATION_FAILED',
-            message: 'Payment verification failed: ambiguous or missing payment provider provenance.'
-          }
+          error: { code: 'PAYMENT_VERIFICATION_FAILED', message: 'Missing or conflicting payment provider evidence.' }
         });
       }
 
-      // Verify with provider (server-side — never trust frontend)
-      const verifyResult = await paymentProviderService.verifyPayment({
-        provider: provider || payment.payment_method,
-        transaction_ref,
-        expected_amount: payment.amount
+      // Legacy endpoint must NEVER write PAID/reservation/ledger state.
+      // Only canonical Safepay signed webhooks or trusted order reconciliation may complete payment.
+      const verification = await paymentProviderService.verifyPayment({
+        provider, transaction_ref, expected_amount: payment.amount
       });
-
-      if (!verifyResult.verified) {
-        // Repair P0-A: Do NOT mark pending Safepay payment as FAILED!
-        // A missing confirmation or unverified client reference must not corrupt genuine pending payments
-        // awaiting asynchronous provider webhook confirmation.
-        return res.status(402).json({
+      if (verification.verified) {
+        return res.status(409).json({
           success: false,
           error: {
-            code: 'PAYMENT_VERIFICATION_FAILED',
-            message: 'Payment could not be verified with the provider. Genuine Safepay payments confirm authoritatively via cryptographic webhooks.'
+            code: 'LEGACY_VERIFICATION_DISABLED',
+            message: 'Complete payment through the authoritative order Safepay reconciliation endpoint.'
           }
         });
       }
-
-      const connection = await db.getConnection();
-      try {
-        await connection.beginTransaction();
-
-        // Mark payment as PAID
-        await connection.query(
-          `UPDATE payments
-           SET status = 'PAID', escrow_status = 'HELD_IN_ESCROW',
-               transaction_ref = ?, provider_response = ?, paid_at = NOW(), updated_at = NOW()
-           WHERE id = ?`,
-          [transaction_ref, JSON.stringify(verifyResult.raw), payment_id]
-        );
-
-        // Mark reservation as PAID
-        if (payment.reservation_id) {
-          await connection.query(
-            "UPDATE reservations SET status = 'PAID', updated_at = NOW() WHERE id = ?",
-            [payment.reservation_id]
-          );
-        }
-
-        // Create ledger entry (supplier net after supplier fee)
-        const [supplierRows] = await connection.query(
-          `SELECT sp.transaction_fee_percent, r.pool_id, p.supplier_id
-           FROM reservations r
-           JOIN pools p ON r.pool_id = p.id
-           LEFT JOIN supplier_profiles sp ON sp.supplier_id = p.supplier_id
-           WHERE r.id = ?`,
-          [payment.reservation_id]
-        );
-
-        const feePercent = supplierRows[0]?.transaction_fee_percent || 2.5;
-        const grossAmount = parseFloat(payment.amount) - parseFloat(payment.buyer_fee || 0);
-
-        const ledgerCode = 'MJ-LDG-' + Math.floor(100000 + Math.random() * 900000);
-        const platformFee = (grossAmount * (feePercent / 100)).toFixed(2);
-        const supplierNet = (grossAmount - parseFloat(platformFee)).toFixed(2);
-
-        await connection.query(
-          `INSERT INTO platform_ledger (ledger_code, payment_id, gross_amount, platform_fee_amount, supplier_net_amount, payout_status)
-           VALUES (?, ?, ?, ?, ?, 'HELD_IN_ESCROW')`,
-          [ledgerCode, payment_id, grossAmount.toFixed(2), platformFee, supplierNet]
-        );
-
-        // Audit
-        await connection.query(
-          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-           VALUES (?, 'BUYER', 'PAYMENT_VERIFIED', 'payments', ?, ?)`,
-          [buyer_id, payment_id, JSON.stringify({ transaction_ref, amount: payment.amount, ledger_code: ledgerCode })]
-        );
-
-        await connection.commit();
-        connection.release();
-
-      } catch (err) {
-        await connection.rollback();
-        connection.release();
-        throw err;
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: 'Payment verified and confirmed. Funds held in escrow.',
-        data: {
-          payment_id,
-          payment_code: payment.payment_code,
-          status: 'PAID',
-          amount: payment.amount,
-          escrow_status: 'HELD_IN_ESCROW'
+      return res.status(402).json({
+        success: false,
+        error: {
+          code: 'PAYMENT_VERIFICATION_FAILED',
+          message: 'Payment is not confirmed. Use the authorized order payment-status or reconciliation endpoint.'
         }
       });
-
     } catch (error) {
       console.error('Payment Verify Error:', error);
       return res.status(500).json({
@@ -387,34 +323,7 @@ class PaymentController {
         });
       }
 
-      // Resolve provider provenance uniquely linked to exact payment/attempt/tracker (Fix 3)
-      let provider = null;
-      if (payment.provider_response) {
-        try {
-          const parsedResp = typeof payment.provider_response === 'string'
-            ? JSON.parse(payment.provider_response)
-            : payment.provider_response;
-          if (parsedResp && parsedResp.provider) {
-            provider = String(parsedResp.provider).toUpperCase();
-          }
-        } catch (e) {}
-      }
-
-      // If not established by provider_response, lookup strictly by exact transaction_ref / tracker token
-      if (!provider && payment.transaction_ref) {
-        const [attemptRows] = await db.query(
-          'SELECT provider FROM payment_attempts WHERE provider_tracker_token = ? LIMIT 1',
-          [payment.transaction_ref]
-        );
-        if (attemptRows[0]?.provider) {
-          provider = String(attemptRows[0].provider).toUpperCase();
-        }
-      }
-
-      // Fallback only if payment_method is explicitly 'SAFEPAY'
-      if (!provider && payment.payment_method === 'SAFEPAY') {
-        provider = 'SAFEPAY';
-      }
+      const provider = await resolveRecordedProvider(payment);
 
       // If still missing, reject refund initiation immediately
       if (!provider) {
@@ -433,6 +342,15 @@ class PaymentController {
       });
 
       if (!refundResult.success) {
+        // Audit the attempted, unexecuted refund; this is NOT an approved refund obligation.
+        // Do not create an actual financial refund record or change payment/ledger state.
+        await db.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
+           VALUES (?, ?, 'PAYMENT_REFUND_ATTEMPT_BLOCKED', 'payments', ?, ?)`,
+          [req.user.id, req.user.role, id, JSON.stringify({
+            reason: reason || 'Admin-initiated refund', provider, outcome: refundResult.status
+          })]
+        );
         const errStatus = refundResult.status === 'UNSUPPORTED_PAYMENT_PROVIDER' ? 400 : 503;
         return res.status(errStatus).json({
           success: false,
@@ -449,7 +367,7 @@ class PaymentController {
         [req.user.id, req.user.role, id, JSON.stringify({ reason, refund_ref: refundResult.refund_ref })]
       );
 
-      return res.status(200).json({
+      return res.status(202).json({
         success: true,
         message: 'Refund requested successfully. Awaiting verified external/manual settlement evidence.',
         data: { payment_id: parseInt(id), status: payment.status, refund_ref: refundResult.refund_ref }
