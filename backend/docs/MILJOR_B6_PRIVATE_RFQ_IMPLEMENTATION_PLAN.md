@@ -211,3 +211,20 @@ Keep all B6-A through B6-Q subphases above as executable checklist items; organi
 - **Regular Pool countdown:** shared UI component and existing `PoolCard` integration committed on B6 branch. Production browser/build/API-time verification pending.
 - **B5:** read-only branch inspection shows divergence from accepted B4. Until the B5 independent acceptance report supplies green regression and reconciled listing lock contracts, B6 shared-stock full gate is BLOCKED.
 - **Only once P1 passes** move to P2; helper preview code created early must not bypass quote eligibility or payment gates. All future P2–P4 work follows project stop-and-report rules.
+
+
+## 11. B5 accepted dependency handoff — verified 2026-11-10
+
+B5 final acceptance report was received and the remote B5 branch head `ecd7d2ee67d280dab9550e8ffc9497207106cbf6` and report were read. B5 report records Migration 036 applied to `miljor_test_db`, 302/302 sequential assertions, Vite build PASS, and protected `miljor_db` unchanged. The GitHub commit status endpoint returned no CI status entries; the test evidence is from the supplied authoritative phase report, not re-executed in this GitHub-only session.
+
+**Important ancestry/source distinction:** B5 is still graph-diverged from B4 (40 ahead / 38 behind at inspection). B5's report says selected B4 fixes were synchronized; direct content comparison verified B5 and B6 `poolController.js` and `tierPricingService.js` are byte-identical. B6 remains on accepted B4 ancestry. Do not merge or force-push branches as part of B6 work without separate authorization.
+
+**Required B5 dependency reconciliation before B6-P2/G/H and final P4/Q acceptance:**
+1. Carry forward the B5 shared countdown UTC MySQL parser (B6 now has an equivalent strict parser and 14/14 isolated JS tests).
+2. Preserve B5 `flashPoolService.js`, Migration 036 and Flash UI/API as separate domain components; do not reimplement Flash state machine inside B6.
+3. Verify B5 `supplier_inventory_allocations` lock/accounting and Regular Pool B4 allocation use one authoritative listing inventory ceiling under concurrent B4/B5/B6 holds.
+4. Integrate Safepay checkout claim/release and post-webhook Flash reconciliation without weakening existing B0–B4 payment invariants or introducing circular imports.
+5. Reconcile routes/controllers using strict BUYER/SUPPLIER role authorization and retain B6's own request/quote API routes.
+6. Execute combined B4 + B5 + B6 inventory/payment regression serially on `miljor_test_db`; confirm `miljor_db` unchanged. Do not call combined release PASS until actual integration evidence exists.
+
+B5 accepted report does not itself authorize branch merge, production migration, or skip B6's independent acceptance gates.
