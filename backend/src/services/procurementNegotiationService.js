@@ -48,12 +48,16 @@ class ProcurementNegotiationService{
         'SELECT id,status FROM procurement_requests WHERE id=? AND buyer_id=? FOR UPDATE',[rid,buyer]);
       if(!owned.length)throw fail('REQUEST_NOT_FOUND','Buyer request not found.',404);
       const [previous]=await conn.query(
-        'SELECT id,request_id,quote_id,requested_version,status,buyer_message,buyer_target_total,created_at,payload_hash FROM procurement_quote_negotiations WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
+        'SELECT id,request_id,quote_id,requested_version,status,buyer_message,buyer_target_total,created_at,payload_hash,response_snapshot FROM procurement_quote_negotiations WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',
         [buyer,idem]);
       if(previous.length){
         if(previous[0].payload_hash!==hash)
           throw fail('IDEMPOTENCY_CONFLICT','Key already used for a different negotiation.',409);
-        const {payload_hash, ...negotiation}=previous[0];
+        const original=previous[0].response_snapshot;
+        const negotiation=original
+          ?(typeof original==='string'?JSON.parse(original):original)
+          :Object.fromEntries(Object.entries(previous[0])
+            .filter(([field])=>!['payload_hash','response_snapshot'].includes(field)));
         await conn.commit();
         return {negotiation,is_replay:true};
       }
@@ -91,6 +95,10 @@ class ProcurementNegotiationService{
         `SELECT id,request_id,quote_id,requested_version,status,buyer_message,
                 buyer_target_total,created_at FROM procurement_quote_negotiations WHERE id=?`,
         [inserted.insertId]);
+      await conn.query(
+        'UPDATE procurement_quote_negotiations SET response_snapshot=? WHERE id=? AND buyer_id=?',
+        [JSON.stringify(rows[0]),inserted.insertId,buyer]
+      );
       await conn.commit();
       return {negotiation:rows[0],is_replay:false};
     }catch(e){
