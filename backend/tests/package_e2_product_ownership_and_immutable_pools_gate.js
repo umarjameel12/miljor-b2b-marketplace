@@ -642,6 +642,27 @@ async function runGate() {
       pass('11. Rule P1: Admin blocked from creating Regular Pool (403 SUPPLIER_CONSENT_REQUIRED)');
     } catch (e) { fail('11. Admin blocked from creating pool', e); }
 
+    // B4-A: Reject a pool that claims a different supplier product than the
+    // linked physical SKU/spec, even when the listing itself is owned.
+    try {
+      const mismatch = await api('/api/v1/pools', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: {
+          supplier_sku_id: sku25kgId,
+          supplier_product_id: unbrandedProdId,
+          supplier_listing_id: listingAId,
+          target_qty: 40, supplier_min_qty: 10, buyer_min_qty: 2,
+          max_capacity: 80,
+          scheduled_close_at: closeTime.toISOString(),
+          promised_delivery_at: new Date(closeTime.getTime() + 48 * 3600 * 1000).toISOString()
+        }
+      });
+      assert.strictEqual(mismatch.status, 400, JSON.stringify(mismatch.body));
+      assert.strictEqual(mismatch.body.error.code, 'POOL_PHYSICAL_IDENTITY_MISMATCH');
+      pass('B4-A: Pool draft rejects mismatched supplier product/SKU relationships');
+    } catch (e) { fail('B4-A: Pool physical identity mismatch rejection', e); }
+
     // 12. Rule P7: Delivery SLA Boundary Rejections (< cutoff, +12h, +23h59m, +72h01m, +96h)
     try {
       const invalidCases = [
