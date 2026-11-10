@@ -1022,10 +1022,43 @@ export const RfqPage = () => {
                             Buyer requested: {line.buyer_requirements}. Check grade and packaging before accepting.
                           </p>
                         )}
+                        <label className="flex items-center gap-2 mt-2 font-medium">
+                          <input type="checkbox"
+                            checked={Boolean(reviewedAwardLines[
+                              `${line.quote_id}:${line.request_item_id}:${buyerQuotes.find(q=>Number(q.id)===Number(line.quote_id))?.current_version}`
+                            ])}
+                            onChange={e=>{
+                              const key=`${line.quote_id}:${line.request_item_id}:${buyerQuotes.find(q=>Number(q.id)===Number(line.quote_id))?.current_version}`;
+                              setReviewedAwardLines(old=>({...old,[key]:e.target.checked}));
+                            }}/>
+                          I reviewed this physical SKU, grade and pack for my order preview
+                        </label>
                       </div>
                     ))}
+                    <button type="button" disabled={quoteBusy}
+                      onClick={()=>previewSmartAward(option)}
+                      className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                      Review Seller-Specific Order Breakdown
+                    </button>
                   </div>
                 ))}
+                {awardPreview && (
+                  <section className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2" aria-label="Order preview only">
+                    <p className="text-sm font-semibold">Order Breakdown — Preview Only</p>
+                    <p className="text-xs text-[var(--text-muted)]">{awardPreview.warning}</p>
+                    {(awardPreview.groups||[]).map(group=>(
+                      <div key={group.supplier_id} className="border-t border-[var(--border-subtle)] pt-2 text-xs">
+                        <p className="font-semibold">Supplier #{group.supplier_id} · Quote #{group.quote_id} v{group.version_number}</p>
+                        <p>{group.lines?.length} products · Items Rs. {group.item_subtotal} + Delivery Rs. {group.delivery_fee}</p>
+                        <p className="font-semibold">Supplier quoted Rs. {group.supplier_quote_total}</p>
+                      </div>
+                    ))}
+                    <p className="text-sm font-semibold">Supplier quote total: Rs. {awardPreview.supplier_quoted_total}</p>
+                    <p className="text-xs text-amber-700">
+                      NOT the final payable amount. Buyer processing fee, tax, inventory lock and secure checkout remain unavailable until the B6-G/H financial gate passes.
+                    </p>
+                  </section>
+                )}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Ask a supplier for a better offer</p>
                   {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
