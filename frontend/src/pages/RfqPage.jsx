@@ -45,6 +45,8 @@ export const RfqPage = () => {
   const [recurringStart,setRecurringStart] = useState('');
   const [recurringEnd,setRecurringEnd] = useState('');
   const [recurringUpcoming,setRecurringUpcoming] = useState(null);
+  const [reviewedAwardLines,setReviewedAwardLines] = useState({});
+  const [awardPreview,setAwardPreview] = useState(null);
   const [familyChoices, setFamilyChoices] = useState([]);
   const [savedRequests, setSavedRequests] = useState([]);
   const [activeRequest, setActiveRequest] = useState(null);
@@ -323,6 +325,32 @@ export const RfqPage = () => {
     finally{setQuoteBusy(false);}
   };
 
+  // B6-G/H: explicit physical SKU consent and server-side read-only preview.
+  const previewSmartAward = async option => {
+    if(!compareRequestId)return;
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const selections=(option.lines||[]).map(line=>{
+        const version=buyerQuotes.find(q=>Number(q.id)===Number(line.quote_id))?.current_version;
+        const snapshot=line.supplier_sku_snapshot||{};
+        const key=`${line.quote_id}:${line.request_item_id}:${version}`;
+        if(!reviewedAwardLines[key])throw Error('Review and accept every selected physical SKU and packaging first.');
+        return {
+          request_item_id:Number(line.request_item_id),quote_id:Number(line.quote_id),
+          version_number:Number(version),supplier_sku_id:Number(snapshot.supplier_sku_id),
+          product_spec_id:Number(snapshot.product_spec_id),
+          physical_specifications_accepted:true
+        };
+      });
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award-preview`,{
+        method:'POST',body:JSON.stringify({selections})
+      });
+      setAwardPreview(data.preview);
+      toast.success('Nonbinding quote review prepared. Checkout is not available at this stage.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
   // B6-F — read-only server-ranked quote combinations, not an acceptance.
   const viewSmartComparison = async requestId => {
     setQuoteBusy(true);
@@ -337,6 +365,8 @@ export const RfqPage = () => {
       setQuoteComparison(compared);
       setBuyerNegotiations(negotiations.negotiations||[]);
       setBuyerQuotes(currentQuotes.quotes||[]);
+      setReviewedAwardLines({});
+      setAwardPreview(null);
     }catch(e){setShoppingError(e.message);}
     finally{setQuoteBusy(false);}
   };
