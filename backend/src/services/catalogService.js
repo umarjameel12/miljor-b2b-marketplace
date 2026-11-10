@@ -251,14 +251,8 @@ class CatalogService {
     const cleanProcessing = specificationService.normalizeText(processing_method) || null;
     const cleanGrade = specificationService.normalizeText(quality_grade) || null;
     const cleanPackaging = specificationService.normalizeText(packaging_type);
-    const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit).toLowerCase();
-    if (!cleanPurchasingUnit || cleanPurchasingUnit.length > 30) {
-      const err = new Error('Supplier-defined purchasing unit is required (max 30 characters).');
-      err.status = 400;
-      err.code = 'INVALID_PURCHASING_UNIT';
-      throw err;
-    }
-    const shelfLifeDays = this._normalizeShelfLifeDays(shelf_life_days);
+    const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit || 'bag').toLowerCase() || 'bag';
+    const shelfLifeDays = payload?.shelf_life_days ? this._normalizeShelfLifeDays(payload.shelf_life_days) : null;
 
     const validation = specificationService.validateSpecificationInput(
       {
@@ -1439,8 +1433,8 @@ class CatalogService {
   // or the product_specifications bridge; check both without rewriting pools.
   async _assertNoOpenPoolForArchive(supplierId, { productId = null, skuId = null }, connection) {
     const familyMatch = productId
-      ? '(sl.supplier_product_id = ? OR ps.supplier_product_id = ?)'
-      : '(sl.supplier_sku_id = ? OR ps.supplier_sku_id = ?)';
+      ? '(sl.supplier_product_id = ? OR ps.supplier_product_id = ? OR p.supplier_product_id = ?)'
+      : '(sl.supplier_sku_id = ? OR ps.supplier_sku_id = ? OR p.supplier_sku_id = ?)';
     const identity = productId || skuId;
     const [openPools] = await connection.query(
       `SELECT p.id, p.status
@@ -1449,9 +1443,9 @@ class CatalogService {
        LEFT JOIN product_specifications ps ON ps.id = p.product_spec_id
        WHERE p.supplier_id = ?
          AND ${familyMatch}
-         AND p.status NOT IN ('CANCELLED', 'EXPIRED', 'COMPLETED', 'DELIVERED', 'REJECTED')
+         AND p.status NOT IN ('CANCELLED', 'EXPIRED', 'COMPLETED', 'DELIVERED', 'FAILED', 'SUPPLIER_FAILED', 'REJECTED')
        LIMIT 1 FOR UPDATE`,
-      [Number(supplierId), Number(identity), Number(identity)]
+      [Number(supplierId), Number(identity), Number(identity), Number(identity)]
     );
     if (openPools.length > 0) {
       const err = new Error('This product/SKU has a non-terminal pool. Resolve the pool through its normal workflow before archiving.');
@@ -1586,7 +1580,16 @@ class CatalogService {
     }
 
     const cleanPackaging = specificationService.normalizeText(packaging_type);
-    const cleanPurchasingUnit = specificationService.normalizeText(purchasing_unit || 'bag').toLowerCase() || 'bag';
+    const cleanPurchasingUnit = purchasing_unit
+      ? specificationService.normalizeText(purchasing_unit).toLowerCase()
+      : '';
+    if (!cleanPurchasingUnit || cleanPurchasingUnit.length > 30) {
+      const err = new Error('Supplier-defined purchasing unit is required (max 30 characters).');
+      err.status = 400;
+      err.code = 'INVALID_PURCHASING_UNIT';
+      throw err;
+    }
+    const shelfLifeDays = payload?.shelf_life_days ? this._normalizeShelfLifeDays(payload.shelf_life_days) : null;
 
     const validation = specificationService.validateSpecificationInput(
       {
