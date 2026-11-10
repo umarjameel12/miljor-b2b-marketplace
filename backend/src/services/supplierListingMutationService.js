@@ -94,6 +94,16 @@ class SupplierListingMutationService {
         changes.status = payload.status;
       }
 
+      // Existing COMMITTED/PENDING inventory allocations cannot be invalidated by stock reduction.
+      if (changes.available_stock !== undefined) {
+        const [held] = await conn.query(
+          `SELECT COALESCE(SUM(allocated_qty), 0) AS qty FROM supplier_inventory_allocations
+           WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')`, [listingId]);
+        if (!exact.exactDecimalGte(changes.available_stock, String(held[0].qty), 4)) {
+          throw invalid('STOCK_BELOW_ALLOCATIONS', 'Stock cannot fall below outstanding allocated quantity', 409);
+        }
+      }
+
       const nextStock = changes.available_stock ?? String(listing.available_stock);
       const nextBuyerMin = changes.buyer_min_qty ?? String(listing.buyer_min_qty);
       const nextStatus = changes.status || listing.status;
@@ -134,23 +144,13 @@ class SupplierListingMutationService {
         await subscriptionEntitlementService.assertCanPublishInFamily(listing.supplier_id, Number(listing.family_id), conn);
       }
 
-      // Existing COMMITTED/PENDING inventory allocations cannot be invalidated by stock reduction.
-      if (changes.available_stock !== undefined) {
-        const [held] = await conn.query(
-          `SELECT COALESCE(SUM(allocated_qty), 0) AS qty FROM supplier_inventory_allocations
-           WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')`, [listingId]);
-        if (!exact.exactDecimalGte(changes.available_stock, String(held[0].qty), 4)) {
-          throw invalid('STOCK_BELOW_ALLOCATIONS', 'Stock cannot fall below outstanding allocated quantity', 409);
-        }
-      }
-
       // Prevent commercial conditions being silently edited out from underneath ongoing pools.
       const contractualFields = ['supplier_min_qty', 'buyer_min_qty', 'delivery_zones', 'delivery_fee_policy', 'fulfilment_lead_time_days'];
       if (contractualFields.some(k => changes[k] !== undefined) ||
           (changes.status !== undefined && changes.status !== 'ACTIVE' && listing.status === 'ACTIVE')) {
         const [pools] = await conn.query(
           `SELECT id FROM pools WHERE supplier_listing_id = ?
-           AND status NOT IN ('CANCELLED','EXPIRED','COMPLETED','DELIVERED','REJECTED')
+           AND status NOT IN ('CANCELLED','EXPIRED','COMPLETED','DELIVERED','FAILED','SUPPLIER_FAILED','REJECTED')
            LIMIT 1`, [listingId]);
         if (pools.length) throw invalid('ACTIVE_POOL_LISTING_LOCKED', 'Resolve related open pools before changing contractual terms or archiving listing', 409);
       }
