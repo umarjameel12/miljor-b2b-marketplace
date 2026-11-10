@@ -377,7 +377,9 @@ async function runB02Gate() {
     // 3.3: A tracker owned by another order must not be accepted as this payment's provenance.
     {
       const otherOrder = await createTestOrder(provBuyer, provSupplier, '2000.00', 'AWAITING_PAYMENT', 'AWAITING_PAYMENT');
-      const mismatchedPayment = await createTestPayment(otherOrder, provBuyer, '2000.00', 'PENDING', 'CARD', null, tracker2);
+      const mismatchTracker = `track_mismatch_${Date.now()}`;
+      await createTestAttempt(provOrder, provBuyer, mismatchTracker, '2000.00', 'PKR', 'SAFEPAY');
+      const mismatchedPayment = await createTestPayment(otherOrder, provBuyer, '2000.00', 'PENDING', 'CARD', null, mismatchTracker);
       const originalVerify = paymentProviderService.verifyPayment;
       let invoked = false;
       let res;
@@ -389,7 +391,7 @@ async function runB02Gate() {
         res = await api('/api/v1/payments/verify', {
           method: 'POST',
           headers: { Authorization: `Bearer ${provBuyerToken}` },
-          body: { payment_id: mismatchedPayment, transaction_ref: tracker2 }
+          body: { payment_id: mismatchedPayment, transaction_ref: mismatchTracker }
         });
       } finally {
         paymentProviderService.verifyPayment = originalVerify;
@@ -403,7 +405,9 @@ async function runB02Gate() {
 
     // 3.4: Even a future adapter returning verified=true must not reactivate legacy financial writes.
     {
-      const payment = await createTestPayment(provOrder, provBuyer, '2000.00', 'PENDING', 'CARD', { provider: 'SAFEPAY' }, tracker2);
+      const verifiedLikeTracker = `track_verified_like_${Date.now()}`;
+      await createTestAttempt(provOrder, provBuyer, verifiedLikeTracker, '2000.00', 'PKR', 'SAFEPAY');
+      const payment = await createTestPayment(provOrder, provBuyer, '2000.00', 'PENDING', 'CARD', { provider: 'SAFEPAY' }, verifiedLikeTracker);
       const originalVerify = paymentProviderService.verifyPayment;
       let res;
       try {
@@ -411,7 +415,7 @@ async function runB02Gate() {
         res = await api('/api/v1/payments/verify', {
           method: 'POST',
           headers: { Authorization: `Bearer ${provBuyerToken}` },
-          body: { payment_id: payment, transaction_ref: tracker2 }
+          body: { payment_id: payment, transaction_ref: verifiedLikeTracker }
         });
       } finally {
         paymentProviderService.verifyPayment = originalVerify;
