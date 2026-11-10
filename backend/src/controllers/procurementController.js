@@ -11,6 +11,7 @@ const procurementQuoteComparisonService = require('../services/procurementQuoteC
 const procurementNegotiationService = require('../services/procurementNegotiationService');
 const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 const procurementCollectiveService = require('../services/procurementCollectiveService');
+const procurementRecurringService = require('../services/procurementRecurringService');
 
 class ProcurementController {
 
@@ -223,6 +224,49 @@ class ProcurementController {
     try{
       const invitations=await procurementCollectiveService.listMyInvites(req.user.id);
       res.json({success:true,data:{invitations}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-L/M: recurring is opt-in; cycles never create paid orders here.
+  async createSmartRecurring(req,res){
+    try{
+      const result=await procurementRecurringService.createDraft(
+        req.user.id,req.params.id,req.body,
+        req.headers['x-idempotency-key']
+      );
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listSmartRecurring(req,res){
+    try{
+      const contracts=await procurementRecurringService.listMine(req.user.id);
+      res.json({success:true,data:{contracts}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async smartRecurringAction(req,res){
+    try{
+      const result=await procurementRecurringService.changeStatus(
+        req.user.id,req.params.contractId,
+        String(req.params.action||'').toUpperCase(),
+        req.body?.version_number,req.body?.explicit_consent===true
+      );
+      res.json({success:true,data:{contract:result}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async smartRecurringUpcoming(req,res){
+    try{
+      const result=await procurementRecurringService.previewUpcoming(
+        req.user.id,req.params.contractId
+      );
+      res.json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async smartRecurringSkip(req,res){
+    try{
+      const result=await procurementRecurringService.skipCycle(
+        req.user.id,req.params.contractId,req.params.cycleId
+      );
+      res.json({success:true,data:{cycle:result}});
     }catch(err){this._smartError(res,err);}
   }
 
