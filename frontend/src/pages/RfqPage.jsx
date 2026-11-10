@@ -47,6 +47,12 @@ export const RfqPage = () => {
   const [quoteBusy,setQuoteBusy] = useState(false);
   const [mySmartQuotes,setMySmartQuotes] = useState([]);
   const [quoteHistory,setQuoteHistory] = useState(null);
+  const [quoteComparison,setQuoteComparison]=useState(null);
+  const [compareRequestId,setCompareRequestId]=useState(null);
+  const [improvementNotes,setImprovementNotes]=useState({});
+  const [improvementTargets,setImprovementTargets]=useState({});
+  const [buyerNegotiations,setBuyerNegotiations]=useState([]);
+  const [supplierNegotiations,setSupplierNegotiations]=useState([]);
 
 
 
@@ -295,6 +301,46 @@ export const RfqPage = () => {
     finally{setQuoteBusy(false);}
   };
 
+  // B6-F — read-only server-ranked quote combinations, not an acceptance.
+  const viewSmartComparison = async requestId => {
+    setQuoteBusy(true);
+    setShoppingError('');
+    try{
+      const [compared,negotiations]=await Promise.all([
+        procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`)
+      ]);
+      setCompareRequestId(requestId);
+      setQuoteComparison(compared);
+      setBuyerNegotiations(negotiations.negotiations||[]);
+    }catch(e){setShoppingError(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const requestBetterSmartOffer = async (quoteId) => {
+    if(!compareRequestId)return;
+    const message=improvementNotes[quoteId]?.trim()||'';
+    if(message.length<5){setShoppingError('Describe the requested improvement (at least 5 characters).');return;}
+    setQuoteBusy(true);
+    setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quoteId}/improve`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({message,target_total:improvementTargets[quoteId]||null})
+      });
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/negotiations`);
+      setBuyerNegotiations(data.negotiations||[]);
+      toast.success('Request for a better quote sent. No order or payment created.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const refreshSupplierNegotiations = async () => {
+    if(!token||user?.role!=='SUPPLIER')return;
+    const data=await procurementApi('/api/v1/procurement/supplier/negotiations');
+    setSupplierNegotiations(data.negotiations||[]);
+  };
+
   const updateQuoteDraft = (invitationId,patch) => {
     setSupplierQuoteDrafts(old=>({
       ...old,[invitationId]:{...(old[invitationId]||{}),...patch}
@@ -336,6 +382,7 @@ export const RfqPage = () => {
   useEffect(()=>{
     if(token && user?.role==='SUPPLIER'){
       refreshMySmartQuotes().catch(error=>toast.error(error.message));
+      refreshSupplierNegotiations().catch(error=>toast.error(error.message));
     }
   },[token,user?.role]);
 
@@ -575,11 +622,90 @@ export const RfqPage = () => {
                         {request.status==='OPEN' &&
                           <button type="button" disabled={quoteBusy} onClick={()=>viewBuyerQuotes(request.id)}
                             className="text-[var(--brand-accent)] underline text-xs">View quotes</button>}
+                        {request.status==='OPEN' &&
+                          <button type="button" disabled={quoteBusy} onClick={()=>viewSmartComparison(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">Compare offers</button>}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+            )}
+            {compareRequestId && quoteComparison && (
+              <section className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3" aria-label="Compare supplier quotations">
+                <div className="flex justify-between items-center gap-3">
+                  <h3 className="text-sm font-semibold">Compare Delivered Quotes</h3>
+                  <button type="button" className="text-xs underline"
+                    onClick={()=>{setCompareRequestId(null);setQuoteComparison(null);}}>Close</button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Supplier-quoted prices include their stated delivery fees, but exclude MilJor processing fees and taxes.
+                  Final stock, quality, shipping conditions and full payable amount are rechecked only during acceptance.
+                </p>
+                {quoteComparison.coverage_status &&
+                  <p role="alert" className="text-xs text-amber-700">Comparison incomplete: {quoteComparison.coverage_status}. Refine quotes before selecting suppliers.</p>}
+                {(!quoteComparison.options||quoteComparison.options.length===0) &&
+                  <p className="text-sm text-[var(--text-muted)]">No complete eligible shopping-list quotation combination is available yet. Suppliers can still send partial quotations.</p>}
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {[
+                    ['Lowest supplier quote',quoteComparison.recommendations?.lowest_supplier_quoted_cost],
+                    ['Fastest declared delivery',quoteComparison.recommendations?.fastest_supplier_estimated_delivery],
+                    ['Best value — fewer suppliers',quoteComparison.recommendations?.best_value_transparent_rule]
+                  ].map(([title,option])=>(
+                    <div key={title} className="rounded-lg border border-[var(--border-subtle)] p-3 space-y-1">
+                      <p className="text-xs font-semibold">{title}</p>
+                      {option ? <>
+                        <p className="text-base font-semibold">Rs. {option.total_delivered_cost}</p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {option.supplier_count} supplier(s), {option.estimated_delivery_days} day(s) estimated
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">Quotes: {option.quote_ids.join(', ')}</p>
+                      </> : <p className="text-xs text-[var(--text-muted)]">No matching full basket</p>}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">{quoteComparison.best_value_rule}</p>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Ask a supplier for a better offer</p>
+                  {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
+                    <div key={quote.id} className="border-t border-[var(--border-subtle)] pt-2 space-y-2">
+                      <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        <input value={improvementNotes[quote.id]||''}
+                          onChange={e=>setImprovementNotes(old=>({...old,[quote.id]:e.target.value}))}
+                          maxLength={1000} placeholder="e.g. Can you improve the delivery fee?"
+                          aria-label={`Requested improvement for quote ${quote.id}`}
+                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                        <input value={improvementTargets[quote.id]||''}
+                          onChange={e=>setImprovementTargets(old=>({...old,[quote.id]:e.target.value}))}
+                          placeholder="Optional target total (Rs.)" inputMode="decimal"
+                          aria-label={`Optional target for quote ${quote.id}`}
+                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      </div>
+                      <button type="button" disabled={quoteBusy ||
+                        buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
+                          Number(n.requested_version)===Number(quote.current_version))}
+                        onClick={()=>requestBetterSmartOffer(quote.id)}
+                        className="text-xs underline disabled:opacity-40">
+                        {buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
+                          Number(n.requested_version)===Number(quote.current_version))
+                          ? 'Improvement already requested for this version' : 'Request Better Offer'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {buyerNegotiations.length>0 && (
+                  <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
+                    <p className="text-xs font-semibold">Negotiation history</p>
+                    {buyerNegotiations.map(n=>(
+                      <p key={n.id} className="text-xs text-[var(--text-muted)]">
+                        Quote #{n.quote_id} · v{n.requested_version} · {n.status} · {n.buyer_message}
+                        {n.responded_version ? ` · Supplier revised to v${n.responded_version}`:''}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
             {selectedQuotesRequest && (
               <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
@@ -658,6 +784,22 @@ export const RfqPage = () => {
               <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
+            {supplierNegotiations.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                <p className="text-sm font-semibold">Requests for Better Offers</p>
+                {supplierNegotiations.map(n=>(
+                  <div key={n.id} className="border-t border-[var(--border-subtle)] pt-2">
+                    <p className="text-xs font-semibold">Quote #{n.quote_id} · Request #{n.request_id} · {n.status}</p>
+                    <p className="text-xs">{n.buyer_message}</p>
+                    {n.buyer_target_total && <p className="text-xs">Buyer suggested total: Rs. {n.buyer_target_total}</p>}
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {n.status==='OPEN'?'To respond, submit a revised quote using the existing invitation quotation form.':
+                        `Responded with quote version ${n.responded_version||'pending'}.`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
             {mySmartQuotes.length>0 && (
               <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
                 <p className="text-sm font-semibold">My submitted quotations</p>
