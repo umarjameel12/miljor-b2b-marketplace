@@ -1014,6 +1014,26 @@ export const RfqPage = () => {
                     </button>
                   </div>
                 </label>
+                <div className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                  <p className="text-xs font-semibold">Supplier bidding</p>
+                  <p className="text-xs text-[var(--text-muted)]">Joining must close and at least two buyers must consent before supplier bids open.</p>
+                  <button type="button" disabled={shoppingBusy}
+                    onClick={()=>openGroupBidding(collectiveGroup.id)}
+                    className="text-xs underline">Open supplier bids after cutoff</button>
+                  <label className="block text-xs font-semibold">Invite supplier by ID
+                    <div className="flex gap-2 mt-1">
+                      <input type="number" min="1" value={collectiveSupplierId}
+                        onChange={e=>setCollectiveSupplierId(e.target.value)}
+                        className="w-full p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      <button type="button" disabled={shoppingBusy||!collectiveSupplierId}
+                        onClick={()=>inviteGroupSupplier(collectiveGroup.id)}
+                        className="px-3 py-2 rounded-lg border border-[var(--border-subtle)]">Invite</button>
+                    </div>
+                  </label>
+                  <button type="button" disabled={shoppingBusy}
+                    onClick={()=>showCollectiveBids(collectiveGroup.id)}
+                    className="text-xs underline">View bids</button>
+                </div>
                 <button type="button" className="text-xs underline" onClick={()=>setCollectiveGroup(null)}>
                   Close Group Setup
                 </button>
@@ -1027,6 +1047,10 @@ export const RfqPage = () => {
                     <p className="text-xs font-semibold">
                       Group #{invite.group_id} · {invite.status} · Join by {String(invite.join_deadline)}
                     </p>
+                    {invite.status==='JOINED'&&invite.group_status==='QUOTING' &&
+                      <button type="button" disabled={shoppingBusy}
+                        onClick={()=>showCollectiveBids(invite.group_id)}
+                        className="text-xs underline">View private bids</button>}
                     {invite.status==='INVITED'&&invite.group_status==='FORMING' && <>
                       {(invite.items||[]).map(item=>(
                         <label key={item.id} className="block text-xs">
