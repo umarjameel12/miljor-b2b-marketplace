@@ -22,7 +22,7 @@ const initial = {
   supplier_listing_id: '', selling_mode: 'MULTI_BUYER',
   total_stock: '', discounted_unit_price: '', original_unit_price: '',
   min_quantity: '', max_quantity_per_buyer: '', delivery_fee: '0',
-  clearance_reason: '', condition_notes: '', duration_value: '',
+  clearance_reason: '', condition_notes: '', best_before_date: '', duration_value: '',
   duration_unit: 'hours'
 };
 const money = n => Number(n || 0).toLocaleString('en-PK', {maximumFractionDigits:2});
@@ -38,6 +38,8 @@ export const FlashPoolsPage = () => {
   const [buyerQuantity,setBuyerQuantity] = useState('');
   const [deliveryAddress,setDeliveryAddress] = useState('');
   const [creating,setCreating] = useState(false);
+  const [editingDraft,setEditingDraft] = useState(null);
+  const [pendingOrder,setPendingOrder] = useState(null);
   const [busy,setBusy] = useState(false);
   const [loading,setLoading] = useState(true);
   const [serverTime,setServerTime] = useState(null);
@@ -71,6 +73,43 @@ export const FlashPoolsPage = () => {
 
   const selectedListing = useMemo(()=>listings.find(x=>String(x.id)===String(form.supplier_listing_id)),[listings,form.supplier_listing_id]);
   const update=(name,value)=>setForm(old=>({...old,[name]:value}));
+  const beginEditDraft = offer => {
+    if(offer.status!=='DRAFT')return;
+    const duration=Number(offer.configured_duration_minutes)||15;
+    const [durationUnit,durationValue]=duration%1440===0?['days',duration/1440]:
+      duration%60===0?['hours',duration/60]:['minutes',duration];
+    setEditingDraft(offer.id);
+    setForm({
+      supplier_listing_id:String(offer.supplier_listing_id),
+      selling_mode:offer.selling_mode||'MULTI_BUYER',
+      total_stock:String(offer.total_stock),
+      discounted_unit_price:String(offer.discounted_unit_price),
+      original_unit_price:offer.original_unit_price==null?'':String(offer.original_unit_price),
+      min_quantity:String(offer.min_quantity||''),
+      max_quantity_per_buyer:String(offer.max_quantity_per_buyer||''),
+      delivery_fee:String(offer.delivery_fee||'0'),
+      clearance_reason:offer.clearance_reason||'',
+      condition_notes:offer.condition_notes||'',
+      best_before_date:offer.best_before_date?String(offer.best_before_date).slice(0,10):'',
+      duration_value:String(durationValue),duration_unit:durationUnit
+    });
+    setCreating(true);
+  };
+  const cancelOffer = async offer => {
+    if(!window.confirm('Cancel this Flash offer? Active buyer checkout/payment obligations cannot be cancelled.'))return;
+    setBusy(true);
+    try{
+      await api(`/api/v1/flash-pools/${offer.id}/cancel`,token,{method:'POST',body:'{}'});
+      toast.success('Flash offer safely cancelled.');await load();
+    }catch(err){toast.error(err.message);}finally{setBusy(false);}
+  };
+  const expireOffer = async offer => {
+    setBusy(true);
+    try{
+      await api(`/api/v1/flash-pools/${offer.id}/expire`,token,{method:'POST',body:'{}'});
+      toast.success('Expired Flash inventory reconciled.');await load();
+    }catch(err){toast.error(err.message);}finally{setBusy(false);}
+  };
   const create = async e => {
     e.preventDefault();
     if(!isSupplier || !token)return toast.error('Verified suppliers only');
@@ -82,8 +121,8 @@ export const FlashPoolsPage = () => {
     if(!selectedListing)return toast.error('Select an active published supplier SKU listing');
     setBusy(true);
     try {
-      await api('/api/v1/flash-pools',token,{
-        method:'POST',
+      await api(editingDraft?`/api/v1/flash-pools/${editingDraft}`:'/api/v1/flash-pools',token,{
+        method:editingDraft?'PUT':'POST',
         body:JSON.stringify({
           supplier_listing_id:Number(form.supplier_listing_id),
           supplier_sku_id:selectedListing.supplier_sku_id,
@@ -96,13 +135,15 @@ export const FlashPoolsPage = () => {
             max_quantity_per_buyer:form.max_quantity_per_buyer || null
           }:{}),
           delivery_fee:form.delivery_fee,
+          duration_minutes:Math.ceil(milliseconds/60000),
           expiry_time:new Date(Date.now()+milliseconds).toISOString(),
+          best_before_date:form.best_before_date||null,
           clearance_reason:form.clearance_reason,
           condition_notes:form.condition_notes
         })
       });
-      toast.success('Flash draft saved. Review and publish it below.');
-      setForm(initial);setCreating(false);await load();
+      toast.success(editingDraft?'Flash draft updated.':'Flash draft saved. Review and publish it below.');
+      setForm(initial);setCreating(false);setEditingDraft(null);await load();
     }catch(err){toast.error(err.message);}finally{setBusy(false);}
   };
   const publish = async offer => {
@@ -157,7 +198,7 @@ export const FlashPoolsPage = () => {
       {isSupplier && <section className="border rounded-2xl p-4 space-y-3 border-[var(--border-subtle)]">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-[var(--text-primary)]">My Flash Offers</h2>
-          <button onClick={()=>setCreating(v=>!v)} className="rounded-xl px-3 py-2 bg-[var(--brand-accent)] text-xs font-semibold text-stone-900 flex items-center gap-1"><Plus size={15}/> New Flash Offer</button>
+          <button onClick={()=>{setCreating(v=>!v);setEditingDraft(null);setForm(initial);}} className="rounded-xl px-3 py-2 bg-[var(--brand-accent)] text-xs font-semibold text-stone-900 flex items-center gap-1"><Plus size={15}/> New Flash Offer</button>
         </div>
         {creating && <form onSubmit={create} className="grid grid-cols-1 md:grid-cols-2 gap-3 border rounded-xl p-4 border-[var(--border-subtle)]">
           <label className="text-xs">Published SKU Listing *
@@ -216,20 +257,34 @@ export const FlashPoolsPage = () => {
             <input required maxLength={255} value={form.clearance_reason} onChange={e=>update('clearance_reason',e.target.value)}
               className="block w-full p-2 border rounded-lg bg-[var(--bg-surface)]"/>
           </label>
+          <label className="text-xs">Best-before date (required for near-expiry clearance)
+            <input type="date" value={form.best_before_date} onChange={e=>update('best_before_date',e.target.value)}
+              className="block w-full p-2 border rounded-lg bg-[var(--bg-surface)]"/>
+          </label>
           <label className="text-xs md:col-span-2">Product condition / best-before details (if applicable)
             <textarea rows={2} maxLength={2000} value={form.condition_notes} onChange={e=>update('condition_notes',e.target.value)}
               className="block w-full p-2 border rounded-lg bg-[var(--bg-surface)]"/>
           </label>
-          <button disabled={busy} className="rounded-xl px-4 py-2 text-sm bg-[var(--brand-accent)] text-stone-900 md:col-span-2">{busy?'Saving draft...':'Save Flash Draft'}</button>
+          <button disabled={busy} className="rounded-xl px-4 py-2 text-sm bg-[var(--brand-accent)] text-stone-900 md:col-span-2">{busy?'Saving draft...':editingDraft?'Save Draft Changes':'Save Flash Draft'}</button>
         </form>}
         <div className="grid gap-2">
           {mine.length===0 && <p className="text-sm text-[var(--text-secondary)]">No supplier Flash offers yet.</p>}
           {mine.map(p=><div key={p.id} className="border rounded-xl p-3 flex items-center justify-between gap-2 border-[var(--border-subtle)]">
             <div><p className="text-sm font-semibold">{p.flash_code} · {p.status}</p>
               <p className="text-xs text-[var(--text-secondary)]">{p.selling_mode==='WHOLE_LOT'?'Whole lot only':'Multiple buyers'} · {p.total_stock} units · PKR {money(p.discounted_unit_price)}</p>
-              <CountdownTimer compact deadline={p.expiry_at_utc || p.expiry_time} label="Ends in"/>
+              {p.status==='DRAFT'?
+                <p className="text-xs text-[var(--text-secondary)]">Timer begins on publishing · {p.configured_duration_minutes} min configured</p>:
+                <CountdownTimer compact deadline={p.expiry_at_utc} label="Ends in"/>}
             </div>
-            {p.status==='DRAFT'&&<button disabled={busy} onClick={()=>publish(p)} className="text-xs font-semibold rounded-lg border px-3 py-2">Publish & Allocate</button>}
+            <div className="flex gap-2 flex-wrap">
+              {p.status==='DRAFT'&&<>
+                <button disabled={busy} onClick={()=>beginEditDraft(p)} className="text-xs rounded-lg border px-3 py-2">Edit</button>
+                <button disabled={busy} onClick={()=>publish(p)} className="text-xs font-semibold rounded-lg border px-3 py-2">Publish</button>
+              </>}
+              {['DRAFT','ACTIVE'].includes(p.status)&&<button disabled={busy} onClick={()=>cancelOffer(p)} className="text-xs rounded-lg border px-3 py-2">Cancel</button>}
+              {['ACTIVE','SOLD_OUT'].includes(p.status)&&Number.isFinite(Date.parse(p.expiry_at_utc))&&Date.parse(p.expiry_at_utc)<=now&&
+                <button disabled={busy} onClick={()=>expireOffer(p)} className="text-xs rounded-lg border px-3 py-2">Reconcile Expiry</button>}
+            </div>
           </div>)}
         </div>
       </section>}
