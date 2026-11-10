@@ -1528,7 +1528,13 @@ class CatalogService {
       throw err;
     }
 
-    const product = await catalogRepo.findSupplierProductById(Number(supplier_product_id));
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      // Serialize SKU creation with product reclassification and archival.
+      const product = await catalogRepo.findSupplierProductById(
+        Number(supplier_product_id), connection, true
+      );
     if (!product) {
       const err = new Error('Parent supplier product not found.');
       err.status = 404;
@@ -1550,7 +1556,7 @@ class CatalogService {
       throw err;
     }
 
-    const family = await catalogRepo.findFamilyById(product.family_id);
+    const family = await catalogRepo.findFamilyById(product.family_id, connection);
     if (!family || !family.is_active || family.approval_status !== 'APPROVED') {
       const err = new Error('Parent product family is inactive.');
       err.status = 400;
@@ -1602,7 +1608,7 @@ class CatalogService {
       skuAttributes: normalizedSkuAttrs
     });
 
-    const dup = await catalogRepo.findSupplierSkuByHash(supplierId, skuHash);
+    const dup = await catalogRepo.findSupplierSkuByHash(supplierId, skuHash, null, connection);
     if (dup) {
       const err = new Error('You already have an identical physical SKU (same packaging and pack size) under this product.');
       err.status = 409;
@@ -1627,9 +1633,16 @@ class CatalogService {
       sku_attributes: normalizedSkuAttrs,
       sku_hash: skuHash,
       status: 'DRAFT'
-    });
+    }, connection);
 
-    return created;
+      await connection.commit();
+      return created;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
   }
 
   async updateSupplierSku(supplierId, skuId, payload) {
