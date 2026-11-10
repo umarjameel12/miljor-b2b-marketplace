@@ -142,8 +142,15 @@ class PoolProgressService {
         p.coverage_policy,
         (p.expires_at <= NOW()) AS is_expired,
         -- Product information
-        pr.title AS product_title, pr.category AS product_category, pr.brand AS product_brand,
-        pr.variety AS product_variety, pr.pack_size AS product_pack_size, pr.unit AS product_unit,
+        -- B4-H: For supplier-owned published SKUs show the supplier's actual
+        -- physical specification, not a generic legacy FK anchor. Historic
+        -- global specs retain their original product display for compatibility.
+        CASE WHEN ps.supplier_sku_id IS NOT NULL THEN ps.title ELSE pr.title END AS product_title,
+        pr.category AS product_category,
+        CASE WHEN ps.supplier_sku_id IS NOT NULL THEN ps.brand ELSE pr.brand END AS product_brand,
+        CASE WHEN ps.supplier_sku_id IS NOT NULL THEN ps.variety ELSE pr.variety END AS product_variety,
+        CASE WHEN ps.supplier_sku_id IS NOT NULL THEN ps.pack_size ELSE pr.pack_size END AS product_pack_size,
+        CASE WHEN ps.supplier_sku_id IS NOT NULL THEN ps.pack_unit ELSE pr.unit END AS product_unit,
         -- Specification information
         ps.id AS spec_id, ps.quality_grade, ps.spec_hash AS canonical_spec_hash,
         ps.packaging_type, ps.pack_unit, ps.purchasing_unit,
