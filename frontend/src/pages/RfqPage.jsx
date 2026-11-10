@@ -52,6 +52,7 @@ export const RfqPage = () => {
   const [collectiveBidGroupId,setCollectiveBidGroupId]=useState(null);
   const [collectiveApprovalPreview,setCollectiveApprovalPreview]=useState(null);
   const [collectiveSupplierInbox,setCollectiveSupplierInbox]=useState([]);
+  const [collectiveSupplierListings,setCollectiveSupplierListings]=useState([]);
   const [collectiveSellerDrafts,setCollectiveSellerDrafts]=useState({});
   const [recurringCycles,setRecurringCycles]=useState([]);
   const [recurringCyclesContract,setRecurringCyclesContract]=useState(null);
@@ -679,6 +680,15 @@ export const RfqPage = () => {
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
+
+  useEffect(()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    refreshCollectiveSellerInbox();
+    procurementApi('/api/v1/listings/me')
+      .then(data=>setCollectiveSupplierListings((data.listings||[])
+        .filter(listing=>listing.status==='ACTIVE')))
+      .catch(error=>toast.error(error.message));
+  },[token,user?.role]);
 
   // Buyer RFQ Form
   const [rfqForm, setRfqForm] = useState({
