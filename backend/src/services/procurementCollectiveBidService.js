@@ -126,11 +126,11 @@ class ProcurementCollectiveBidService {
    if(!verified.length)throw err('SUPPLIER_NOT_VERIFIED','Verified supplier required.',403);
    const demand=await this.demand(conn,group),lines=[];
    for(const l of inputs){
-    const [rows]=await conn.query("SELECT sl.id,sl.available_stock,sl.delivery_zones,sl.supplier_sku_id,sl.product_spec_id,sk.family_id,sk.purchasing_unit,sk.pack_size,sk.pack_unit,sp.title,sp.brand,sp.variety,sp.quality_grade FROM supplier_listings sl JOIN supplier_skus sk ON sk.id=sl.supplier_sku_id AND sk.supplier_id=sl.supplier_id AND sk.status='PUBLISHED' JOIN supplier_products sp ON sp.id=sk.supplier_product_id AND sp.supplier_id=sl.supplier_id AND sp.status='PUBLISHED' JOIN product_specifications ps ON ps.id=sl.product_spec_id AND ps.supplier_sku_id=sk.id AND ps.supplier_id=sl.supplier_id AND ps.is_active=1 AND ps.approval_status='APPROVED' AND ps.lifecycle_status='PUBLISHED' WHERE sl.id=? AND sl.supplier_id=? AND sl.status='ACTIVE' AND sl.currency='PKR'",[l.supplier_listing_id,supplier]);
+    const [rows]=await conn.query("SELECT sl.id,sl.available_stock,sl.buyer_min_qty,sl.delivery_zones,sl.supplier_sku_id,sl.product_spec_id,sk.family_id,sk.purchasing_unit,sk.pack_size,sk.pack_unit,sp.title,sp.brand,sp.variety,sp.quality_grade FROM supplier_listings sl JOIN supplier_skus sk ON sk.id=sl.supplier_sku_id AND sk.supplier_id=sl.supplier_id AND sk.status='PUBLISHED' JOIN supplier_products sp ON sp.id=sk.supplier_product_id AND sp.supplier_id=sl.supplier_id AND sp.status='PUBLISHED' JOIN product_specifications ps ON ps.id=sl.product_spec_id AND ps.supplier_sku_id=sk.id AND ps.supplier_id=sl.supplier_id AND ps.is_active=1 AND ps.approval_status='APPROVED' AND ps.lifecycle_status='PUBLISHED' JOIN catalog_product_families f ON f.id=sk.family_id AND f.is_active=1 AND f.approval_status='APPROVED' JOIN catalog_categories cat ON cat.id=f.category_id AND cat.is_active=1 AND cat.approval_status='APPROVED' WHERE sl.id=? AND sl.supplier_id=? AND sl.status='ACTIVE' AND sl.currency='PKR'",[l.supplier_listing_id,supplier]);
     const record=rows[0];
     if(!record||!eligibleArea(record.delivery_zones,group.delivery_area))
      throw err('LISTING_NOT_ELIGIBLE','Supplier listing does not serve the group.',409);
-    lines.push({...l,available_stock:record.available_stock,physical_snapshot:{
+    lines.push({...l,available_stock:record.available_stock,buyer_min_qty:record.buyer_min_qty,physical_snapshot:{
       supplier_sku_id:record.supplier_sku_id,product_spec_id:record.product_spec_id,
       family_id:record.family_id,purchasing_unit:record.purchasing_unit,
       title:record.title,brand:record.brand,variety:record.variety,
@@ -151,6 +151,8 @@ class ProcurementCollectiveBidService {
     const listed=lines.find(l=>l.supplier_listing_id===listingId);
     if(!listed||!exact.exactDecimalGte(listed.available_stock,total,4))
      throw err('GROUP_STOCK_INSUFFICIENT','Combined demand exceeds supplier listing stock.',409);
+    if(!exact.exactDecimalGte(total,listed.buyer_min_qty,4))
+     throw err('GROUP_BUYER_MINIMUM_NOT_MET','Collective quantity is below listing minimum.',409);
    }
    if(bid&&bid.status!=='ACTIVE')throw err('BID_WITHDRAWN','Withdrawn bid cannot be revised.',409);
    if(!bid){
