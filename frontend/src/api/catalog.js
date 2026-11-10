@@ -148,6 +148,11 @@ export const catalogApi = {
     return res.data;
   },
 
+  getSupplierListingPriceHistory: async (listingId) => {
+    const res = await apiClient.get(`/listings/${listingId}/price-history`);
+    return res.data;
+  },
+
   // ---------------------------------------------------------------------------
   // D. Admin Catalog Governance & Moderation Queue
   // ---------------------------------------------------------------------------
