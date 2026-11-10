@@ -54,8 +54,8 @@ class ProcurementCollectiveService{
   }
   async createGroup(buyerId,requestId,{visibility='PRIVATE_INVITE',minimum_buyers=2}={}){
     const buyer=id(buyerId,'Buyer'),rid=id(requestId,'Request');
-    if(!['PRIVATE_INVITE','CONTROLLED_DISCOVERY'].includes(visibility))
-      throw fail('INVALID_COLLECTIVE_VISIBILITY','Choose PRIVATE_INVITE or CONTROLLED_DISCOVERY.');
+    if(visibility!=='PRIVATE_INVITE')
+      throw fail('COLLECTIVE_DISCOVERY_NOT_READY','Only private invitations are available until controlled discovery is moderated.');
     if(!Number.isInteger(minimum_buyers)||minimum_buyers<2||minimum_buyers>1000)
       throw fail('INVALID_COLLECTIVE_MINIMUM','Minimum must be 2–1000 businesses.');
     const conn=await this.database.getConnection();
@@ -144,13 +144,14 @@ class ProcurementCollectiveService{
       ids.add(item);
       return {request_item_id:item,quantity:line.quantity};
     });
+    const payloadHash=crypto.createHash('sha256').update(JSON.stringify(selected)).digest('hex');
     const conn=await this.database.getConnection();
     try{
       await conn.beginTransaction();
       const group=await this._group(conn,gid,true);
       await this._verified(conn,buyer);
       const [participants]=await conn.query(
-        'SELECT id,status,join_idempotency_key,consent_snapshot FROM procurement_collective_participants WHERE group_id=? AND buyer_id=? FOR UPDATE',
+        'SELECT id,status,join_idempotency_key,join_request_hash,consent_snapshot FROM procurement_collective_participants WHERE group_id=? AND buyer_id=? FOR UPDATE',
         [gid,buyer]
       );
       const participant=participants[0];
@@ -158,6 +159,8 @@ class ProcurementCollectiveService{
       if(participant.status==='JOINED'){
         if(participant.join_idempotency_key!==key)
           throw fail('PARTICIPATION_ALREADY_JOINED','Buyer has already joined this collective.',409);
+        if(participant.join_request_hash!==payloadHash)
+          throw fail('IDEMPOTENCY_CONFLICT','Same join key cannot change quantities.',409);
         const snapshot=typeof participant.consent_snapshot==='string'
           ?JSON.parse(participant.consent_snapshot):participant.consent_snapshot;
         await conn.commit();
@@ -190,9 +193,9 @@ class ProcurementCollectiveService{
       }
       await conn.query(
         `UPDATE procurement_collective_participants
-         SET status='JOINED',join_idempotency_key=?,consent_snapshot=?,consent_at=UTC_TIMESTAMP()
+         SET status='JOINED',join_idempotency_key=?,join_request_hash=?,consent_snapshot=?,consent_at=UTC_TIMESTAMP()
          WHERE id=? AND status='INVITED'`,
-        [key,JSON.stringify(consent),participant.id]
+        [key,payloadHash,JSON.stringify(consent),participant.id]
       );
       await conn.commit();
       return {participant_id:participant.id,consent_snapshot:consent,is_replay:false};
