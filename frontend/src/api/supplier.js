@@ -12,6 +12,12 @@ export const supplierApi = {
     return res.data;
   },
 
+  // Read authoritative active-family entitlement counts, never infer from listing caps.
+  getSubscription: async () => {
+    const res = await apiClient.get('/supplier/subscription');
+    return res.data;
+  },
+
   // 2. Update Supplier Business Profile (Save Draft or Update)
   updateProfile: async (profileData) => {
     const res = await apiClient.put('/supplier/profile', profileData);
