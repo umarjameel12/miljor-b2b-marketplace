@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const money = require('./exactDecimal');
 const entitlement = require('./subscriptionEntitlementService');
+const feeService = require('./feeService');
 
 const fail = (code, message, statusCode = 400) => {
   const e = new Error(message); e.code = code; e.statusCode = statusCode; return e;
@@ -88,6 +89,7 @@ class FlashPoolService {
       throw fail('FLASH_LISTING_REQUIRED','Choose your published commercial SKU listing.');
     const reason=String(payload.clearance_reason||'Ready stock clearance').trim();
     if(reason.length<3 || reason.length>255) throw fail('INVALID_CLEARANCE_REASON','Provide a truthful clearance reason.');
+    const deliveryFee = dec(payload.delivery_fee ?? '0', {positive:false});
     const condition=payload.condition_notes == null?'':String(payload.condition_notes).trim();
     if(condition.length>2000)throw fail('INVALID_CONDITION_NOTES','Condition details exceed the permitted size.');
     const conn=await db.getConnection();
@@ -102,15 +104,15 @@ class FlashPoolService {
           (flash_code,supplier_id,product_id,supplier_sku_id,supplier_listing_id,product_spec_id,
            total_stock,remaining_stock,discounted_unit_price,original_unit_price,min_quantity,
            max_quantity_per_buyer,selling_mode,clearance_reason,condition_notes,expiry_time,
-           configured_duration_minutes,status,snapshot_json)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?)`,
+           configured_duration_minutes,delivery_fee,status,snapshot_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'DRAFT',?)`,
         ['FL-'+crypto.randomBytes(10).toString('hex'),supplierId,spec.product_id,
          spec.supplier_sku_id,listing.id,spec.id,stock,stock,price,original,min,max,mode,
-         reason,condition,padSqlDate(expiry),Math.ceil((expiry.getTime()-Date.now())/60000),
+         reason,condition,padSqlDate(expiry),Math.ceil((expiry.getTime()-Date.now())/60000),deliveryFee,
          JSON.stringify({sku_id:spec.supplier_sku_id,sku_title:spec.title,
            product_id:spec.product_id,pack_size:spec.pack_size,pack_unit:spec.pack_unit,
            purchasing_unit:spec.purchasing_unit,listing_id:listing.id,price_per_pack:price,
-           original_price:original,selling_mode:mode,offer_stock:stock,condition_notes:condition})]
+           original_price:original,selling_mode:mode,offer_stock:stock,condition_notes:condition,delivery_fee:deliveryFee})]
       );
       await conn.commit();
       return this.getSupplierOffer(supplierId,result.insertId);
@@ -207,6 +209,15 @@ class FlashPoolService {
       if(offer.status!=='ACTIVE'||!openClock.is_open)
         throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
       const quantity=dec(payload.quantity);
+      // Physical purchasing packs are indivisible; mass/volume listings can use
+      // their explicitly configured valid fractional increments.
+      const [specs]=await conn.query(
+        'SELECT purchasing_unit,pack_unit FROM product_specifications WHERE id=? AND supplier_sku_id=?',
+        [offer.product_spec_id,offer.supplier_sku_id]);
+      const purchasing = String(specs[0]?.purchasing_unit||'').toLowerCase();
+      const looseUnits = new Set(['kg','g','mg','l','litre','liter','ml']);
+      if (!looseUnits.has(purchasing) && !Number.isInteger(Number(quantity)))
+        throw fail('FRACTIONAL_PHYSICAL_PACK','Whole physical packs cannot be purchased in fractional quantities.',409);
       if(offer.selling_mode==='WHOLE_LOT') {
         if(money.toCanonical(quantity,2)!==money.toCanonical(offer.total_stock,2))
           throw fail('WHOLE_LOT_REQUIRED','This offer must be purchased as a single complete lot.',409);
@@ -218,7 +229,11 @@ class FlashPoolService {
       }
       if(!money.exactDecimalGte(offer.remaining_stock,quantity,2))
         throw fail('FLASH_OUT_OF_STOCK','Not enough stock remains.',409);
-      const amount=money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
+      const subtotal = money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
+      const buyerFeeModel = await feeService.calculateBuyerFee(subtotal);
+      const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
+      const deliveryFee = dec(offer.delivery_fee||'0',{positive:false});
+      const amount = money.exactDecimalSum([subtotal,buyerFee,deliveryFee],2);
       const orderCode='FL'+crypto.randomBytes(9).toString('hex');
       const address=typeof payload.delivery_address==='string'?payload.delivery_address.trim():'';
       if(address.length<8||address.length>1000)throw fail('DELIVERY_ADDRESS_REQUIRED','Provide a valid buyer delivery address.');
@@ -229,7 +244,7 @@ class FlashPoolService {
           delivery_type,delivery_address,payment_status,order_status)
         VALUES (?,?,?,?,?,?,?,?,?,'PKR','DOORSTEP',?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
         [orderCode,buyerId,offer.supplier_id,quantity,offer.discounted_unit_price,
-          amount,'0.00','0.00',amount,address]
+          subtotal,deliveryFee,buyerFee,amount,address]
       );
       const [h]=await conn.query(
         `INSERT INTO flash_purchase_holds
@@ -243,7 +258,8 @@ class FlashPoolService {
       );
       await conn.commit();
       return {id:h.insertId,order_id:order.insertId,order_code:orderCode,
-        quantity,locked_unit_price:offer.discounted_unit_price,total_amount:amount,
+        quantity,locked_unit_price:offer.discounted_unit_price,subtotal_amount:subtotal,
+        buyer_platform_fee:buyerFee,delivery_fee:deliveryFee,total_amount:amount,
         checkout_endpoint:`/api/v1/orders/${order.insertId}/checkout`,hold_expires_in_seconds:900};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
