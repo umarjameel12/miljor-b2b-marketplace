@@ -111,6 +111,12 @@ class FlashPoolService {
       if(!loose.has(String(spec.purchasing_unit||'').toLowerCase()) &&
           [stock,min,max].some(value=>!Number.isInteger(Number(value))))
         throw fail('FRACTIONAL_PHYSICAL_PACK','Supplier-defined purchasing packs must be whole units.',400);
+      // B5: Never fabricate a struck-through market price. The comparison
+      // is the supplier's actual active commercial listing price at draft time.
+      if(original && !money.exactDecimalEquals(original,listing.base_unit_price,2))
+        throw fail('FLASH_COMPARISON_PRICE_UNVERIFIED','Comparison price must equal the current published listing price.',409);
+      if(!money.exactDecimalGte(listing.base_unit_price,price,2))
+        throw fail('FLASH_PRICE_NOT_DISCOUNTED','Flash price cannot exceed the supplier’s normal listing price.',409);
       const listingUnit=String(listing.pricing_unit||'').trim().toLowerCase();
       const skuUnit=String(spec.purchasing_unit||'').trim().toLowerCase();
       if(!listingUnit || !skuUnit || listingUnit!==skuUnit)
@@ -173,6 +179,10 @@ class FlashPoolService {
         if(!safe.within_date)throw fail('INVALID_BEST_BEFORE','Sale cannot extend beyond its stated best-before date.');
       }
       const {listing,spec}=await this._lockListing(conn,offer.supplier_listing_id,supplierId);
+      if(original && !money.exactDecimalEquals(original,listing.base_unit_price,2))
+        throw fail('FLASH_COMPARISON_PRICE_UNVERIFIED','Comparison price must reflect the published supplier listing.',409);
+      if(!money.exactDecimalGte(listing.base_unit_price,price,2))
+        throw fail('FLASH_PRICE_NOT_DISCOUNTED','Flash price cannot exceed the normal listing price.',409);
       const loose=new Set(['kg','g','mg','l','litre','liter','ml']);
       if(!loose.has(String(spec.purchasing_unit||'').toLowerCase()) &&
         [stock,min,max].some(x=>!Number.isInteger(Number(x))))
