@@ -263,5 +263,90 @@ class FlashPoolService {
         checkout_endpoint:`/api/v1/orders/${order.insertId}/checkout`,hold_expires_in_seconds:900};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
+  // Reconcile ONLY confirmed server-side payment status; no browser callback
+  // can mark a hold as PAID. This method is safe to retry after webhooks/crashes.
+  async reconcilePaidOrder(orderId) {
+    const conn=await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [references]=await conn.query(
+        'SELECT flash_pool_id FROM flash_purchase_holds WHERE order_id=?',[orderId]);
+      if(!references.length){await conn.commit();return {flash_order:false};}
+      const flashId=references[0].flash_pool_id;
+      const [pools]=await conn.query('SELECT * FROM flash_pools WHERE id=? FOR UPDATE',[flashId]);
+      if(!pools.length)throw fail('FLASH_NOT_FOUND','Flash purchase pool missing.',409);
+      const [holds]=await conn.query(
+        'SELECT * FROM flash_purchase_holds WHERE order_id=? FOR UPDATE',[orderId]);
+      const hold=holds[0];
+      const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=?',[orderId]);
+      const [payments]=await conn.query(
+        "SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[orderId]);
+      if(!orders.length || orders[0].payment_status!=='PAID' ||
+          orders[0].order_status!=='PAID' || !payments.length)
+        throw fail('PAYMENT_NOT_VERIFIED','Verified Safepay payment evidence is required.',409);
+      if(hold.status!=='PAID'){
+        if(!['HELD','PAYMENT_PENDING'].includes(hold.status))
+          throw fail('FLASH_HOLD_CONFLICT','Paid order has an incompatible hold lifecycle.',409);
+        await conn.query(
+          "UPDATE flash_purchase_holds SET status='PAID' WHERE id=?",[hold.id]);
+        await conn.query(
+          `UPDATE flash_pools SET held_stock=held_stock-?,committed_stock=committed_stock+?,
+          status=CASE WHEN remaining_stock=0 THEN 'SOLD_OUT' ELSE status END,
+          version_number=version_number+1 WHERE id=? AND held_stock>=?`,
+          [hold.quantity,hold.quantity,flashId,hold.quantity]);
+      }
+      await conn.commit();
+      return {flash_order:true,hold_status:'PAID',flash_pool_id:flashId};
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
+  async getHoldForBuyer(buyerId,holdId) {
+    const [rows]=await db.query(
+      `SELECT h.id,h.flash_pool_id,h.quantity,h.locked_unit_price,h.status,
+         DATE_FORMAT(h.expires_at,'%Y-%m-%dT%H:%i:%sZ') AS hold_expires_at,
+         h.order_id,o.order_status,o.payment_status,o.total_amount,o.order_code
+       FROM flash_purchase_holds h JOIN orders o ON o.id=h.order_id
+       WHERE h.id=? AND h.buyer_id=?`,[holdId,buyerId]);
+    if(!rows.length)throw fail('FLASH_HOLD_NOT_FOUND','Purchase hold not found.',404);
+    if(rows[0].payment_status==='PAID') {
+      await this.reconcilePaidOrder(rows[0].order_id);
+      rows[0].status='PAID';
+    }
+    return rows[0];
+  }
+
+  async closeExpiredOffer(supplierId,id) {
+    const conn=await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await this._lockVerifiedSupplier(conn,supplierId);
+      const [rows]=await conn.query(
+        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+      const pool=rows[0];
+      if(!pool)throw fail('FLASH_NOT_FOUND','Flash Pool not found.',404);
+      if(pool.status==='EXPIRED'){await conn.commit();return {id,status:'EXPIRED'};}
+      if(!['ACTIVE','SOLD_OUT'].includes(pool.status))
+        throw fail('FLASH_INVALID_STATUS','Only published offers can expire.',409);
+      const [[clock]]=await conn.query('SELECT (? <= UTC_TIMESTAMP()) AS expired',[pool.expiry_time]);
+      if(!clock.expired)throw fail('FLASH_NOT_EXPIRED','Supplier expiry deadline has not been reached.',409);
+      // Never release holds with unresolved payment or stock committed to paid buyers.
+      const outstanding=money.exactDecimalSum([pool.held_stock,pool.committed_stock],2);
+      if(money.exactDecimalGte(outstanding,'0.01',2)) {
+        await conn.query(
+          `UPDATE supplier_inventory_allocations SET allocated_qty=?,status='COMMITTED'
+           WHERE allocation_type='FLASH_POOL' AND reference_id=? AND status='COMMITTED'`,
+          [outstanding,id]);
+      } else {
+        await conn.query(
+          `UPDATE supplier_inventory_allocations SET allocated_qty=0,status='RELEASED'
+           WHERE allocation_type='FLASH_POOL' AND reference_id=? AND status='COMMITTED'`,[id]);
+      }
+      await conn.query(
+        "UPDATE flash_pools SET status='EXPIRED',version_number=version_number+1 WHERE id=?",[id]);
+      await conn.commit();
+      return {id,status:'EXPIRED',preserved_unsettled_quantity:outstanding};
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
 }
 module.exports=new FlashPoolService();
