@@ -7,7 +7,8 @@ const db = require('../config/db');
 
 class SupplierListingRepository {
   // Create a new supplier listing
-  async create(listingData) {
+  async create(listingData, connection = null) {
+    const executor = connection || db;
     const {
       listing_code,
       supplier_id,
@@ -28,7 +29,7 @@ class SupplierListingRepository {
       notes
     } = listingData;
 
-    const [result] = await db.query(
+    const [result] = await executor.query(
       `INSERT INTO supplier_listings (
         listing_code, supplier_id, product_spec_id, supplier_product_id, supplier_sku_id,
         available_stock, base_unit_price, pricing_unit, price_per_base_unit, currency,
@@ -110,8 +111,9 @@ class SupplierListingRepository {
   }
 
   // Find existing listing by supplier and exact spec
-  async findBySupplierAndSpec(supplierId, specId) {
-    const [rows] = await db.query(
+  async findBySupplierAndSpec(supplierId, specId, connection = null) {
+    const executor = connection || db;
+    const [rows] = await executor.query(
       'SELECT * FROM supplier_listings WHERE supplier_id = ? AND product_spec_id = ?',
       [supplierId, specId]
     );
