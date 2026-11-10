@@ -61,6 +61,10 @@ function normalize(payload){
     throw failure('INVALID_DELIVERY_LEAD','Delivery lead must be 0–90 days.');
   if(payload.supplier_notes != null && (typeof payload.supplier_notes!=='string'||payload.supplier_notes.length>2000))
     throw failure('INVALID_QUOTE_NOTES','Supplier notes must be under 2000 characters.');
+  if(typeof payload.supplier_notes==='string' &&
+     (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(payload.supplier_notes) ||
+      /(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/.test(payload.supplier_notes)))
+    throw failure('DIRECT_CONTACT_NOT_ALLOWED','Use MilJor messages for supplier communication.');
   return {lines,delivery_fee:price(payload.delivery_fee??'0',true),
     delivery_lead_days:days,supplier_notes:payload.supplier_notes?.trim()||null,
     valid_until:toUtc(payload.valid_until)};
