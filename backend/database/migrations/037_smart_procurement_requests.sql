@@ -45,3 +45,22 @@ CREATE TABLE IF NOT EXISTS procurement_request_items (
   UNIQUE KEY uq_procurement_item_line (request_id,line_number),
   KEY idx_procurement_item_family (family_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Durable replay for buyer draft edits/publishing. Records are written inside
+-- the same transaction as the corresponding request-state change.
+CREATE TABLE IF NOT EXISTS procurement_request_mutations (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  request_id BIGINT NOT NULL,
+  buyer_id INT NOT NULL,
+  operation ENUM('UPDATE_DRAFT','PUBLISH') NOT NULL,
+  idempotency_key VARCHAR(120) NOT NULL,
+  request_hash CHAR(64) NOT NULL,
+  response_snapshot JSON NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_procurement_mutation_request FOREIGN KEY (request_id)
+    REFERENCES procurement_requests(id),
+  CONSTRAINT fk_procurement_mutation_buyer FOREIGN KEY (buyer_id)
+    REFERENCES users(id),
+  UNIQUE KEY uq_procurement_mutation_idem (buyer_id,idempotency_key),
+  KEY idx_procurement_mutation_request (request_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
