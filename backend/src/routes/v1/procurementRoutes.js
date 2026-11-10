@@ -64,6 +64,7 @@ router.post('/procurement/collectives/:groupId/supplier-invitations',protect,aut
 router.get('/procurement/supplier/collectives/invitations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.collectiveSupplierInbox(req,res));
 router.post('/procurement/supplier/collectives/:groupId/bids',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitCollectiveBid(req,res));
 router.get('/procurement/collectives/:groupId/bids',protect,authorizeStrict('BUYER'),(req,res)=>controller.listCollectiveBids(req,res));
+router.post('/procurement/collectives/:groupId/qualify',protect,authorizeStrict('BUYER'),(req,res)=>controller.qualifyCollectiveGroup(req,res));
 // B6-K: individual buyer consent only, not an order or checkout.
 router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewCollectiveApproval(req,res));
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
