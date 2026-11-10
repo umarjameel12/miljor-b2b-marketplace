@@ -91,22 +91,27 @@ function compareQuoteOptions({ items, quotes, now = new Date().toISOString(), ma
       }
       // Buyer-facing quote covers the requested volume exactly. Split of a
       // single item across multiple suppliers is a separately gated feature.
-      if (!exact.exactDecimalEquals(req.quantity, quantity(line.quantity), 4)) {
+      try {
+        if (!exact.exactDecimalEquals(req.quantity, quantity(line.quantity), 4)) {
+          invalid = true;
+          break;
+        }
+        const unitPrice = amount(line.unit_price, 'unit_price');
+        if (!exact.exactDecimalGte(unitPrice, '0.01', 2)) {
+          invalid = true;
+          break;
+        }
+        lines.set(id, {
+          request_item_id: line.request_item_id,
+          unit_price: unitPrice,
+          subtotal: exact.exactMultiplyRound(req.quantity, unitPrice, 2),
+          quantity: req.quantity,
+          unit: req.unit
+        });
+      } catch {
         invalid = true;
         break;
       }
-      const unitPrice = amount(line.unit_price, 'unit_price');
-      if (!exact.exactDecimalGte(unitPrice, '0.01', 2)) {
-        invalid = true;
-        break;
-      }
-      lines.set(id, {
-        request_item_id: line.request_item_id,
-        unit_price: unitPrice,
-        subtotal: exact.exactMultiplyRound(req.quantity, unitPrice, 2),
-        quantity: req.quantity,
-        unit: req.unit
-      });
     }
     if (invalid || !lines.size) {
       excluded.push({ quote_id: quoteId, reason: 'INCOMPATIBLE_OR_INVALID_LINES' });
