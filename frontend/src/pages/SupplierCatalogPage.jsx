@@ -152,7 +152,7 @@ export const SupplierCatalogPage = () => {
     packaging_type: '',
     pack_size: '',
     pack_unit: 'kg',
-    purchasing_unit: 'bag',
+    purchasing_unit: '',
     notes: ''
   });
   const [confirmPublishSku, setConfirmPublishSku] = useState(null);
@@ -419,14 +419,13 @@ export const SupplierCatalogPage = () => {
   const openCreateSkuModal = (sp) => {
     const fam = families.find(f => Number(f.id) === Number(sp.family_id));
     const defaultPackUnit = fam?.allowed_pack_units?.[0] || 'kg';
-    const defaultPurchUnit = fam?.allowed_purchasing_units?.[0] || 'bag';
     setEditingSupplierSku(null);
     setSkuForm({
       supplier_product_id: String(sp.id),
       packaging_type: '',
       pack_size: '',
       pack_unit: defaultPackUnit,
-      purchasing_unit: defaultPurchUnit,
+      purchasing_unit: '',
       notes: ''
     });
     setSkuModalOpen(true);
@@ -1735,18 +1734,14 @@ export const SupplierCatalogPage = () => {
                     <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                       Purchasing Unit *
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      required
                       value={skuForm.purchasing_unit}
                       onChange={(e) => setSkuForm({ ...skuForm, purchasing_unit: e.target.value })}
+                      placeholder="e.g., bag, sack, tin, drum, carton"
                       className="w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]"
-                    >
-                      <option value="bag">bag</option>
-                      <option value="sack">sack</option>
-                      <option value="tin">tin</option>
-                      <option value="carton">carton</option>
-                      <option value="jerrycan">jerrycan</option>
-                      <option value="pack">pack</option>
-                    </select>
+                    />
                   </div>
                 </div>
 
