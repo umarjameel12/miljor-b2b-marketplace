@@ -1,3 +1,18 @@
+-- Only specifically invited verified suppliers can view or bid on a private group.
+CREATE TABLE IF NOT EXISTS procurement_collective_supplier_invitations (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  group_id BIGINT NOT NULL,
+  supplier_id INT NOT NULL,
+  status ENUM('INVITED','REVOKED') NOT NULL DEFAULT 'INVITED',
+  invited_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_collective_supplier_invite_group FOREIGN KEY (group_id)
+    REFERENCES procurement_collective_groups(id),
+  CONSTRAINT fk_collective_supplier_invite_supplier FOREIGN KEY (supplier_id)
+    REFERENCES users(id),
+  UNIQUE KEY uq_collective_supplier_invitation UNIQUE (group_id,supplier_id),
+  KEY idx_collective_supplier_inbox (supplier_id,status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- B6-J/K | supplier-owned collective bids and separate buyer approval snapshots.
 -- Apply after reviewed migrations 037–043 ONLY to backed-up miljor_test_db.
 -- No stock reservation, checkout, payment attempt or supplier payout is authorized here.
