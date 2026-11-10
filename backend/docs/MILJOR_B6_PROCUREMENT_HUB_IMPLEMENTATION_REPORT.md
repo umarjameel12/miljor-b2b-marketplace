@@ -32,7 +32,7 @@ All subphases from **B6-A through B6-E** have been audited, auto-repaired where 
 2. **Sequential Schema Migration Execution:**
    - `037_smart_procurement_requests.sql` — Added `procurement_requests`, `procurement_request_items`, and `procurement_request_mutations`.
    - `038_procurement_supplier_invitations.sql` — Added `procurement_supplier_invitations`.
-   - `039_procurement_supplier_quotes.sql` — Added `procurement_supplier_quotes`, `procurement_supplier_quote_items`, and `procurement_quote_revisions`.
+   - `039_procurement_supplier_quotes.sql` — Added authoritative quotation tables: `procurement_quotes`, `procurement_quote_versions`, and `procurement_quote_lines`.
 3. **Protected Database Audit:**
    - `miljor_db` verified 100% pristine throughout all executions:
      ```json

@@ -108,7 +108,8 @@ class ProcurementController {
   }
   async respondSmartInvitation(req,res){
     try{
-      const invitation=await procurementMatchingService.respond(req.user.id,req.params.invitationId,req.body?.decision);
+      const decision = req.body?.decision || req.body?.response;
+      const invitation=await procurementMatchingService.respond(req.user.id,req.params.invitationId,decision);
       res.json({success:true,data:{invitation}});
     }catch(err){this._smartError(res,err);}
   }

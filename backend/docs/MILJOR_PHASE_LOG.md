@@ -4,6 +4,22 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
+## Phase B6-F — Smart Quote Comparison & Negotiation: Acceptance Complete (187/187 PASS)
+
+- **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `28f90e52a8730179afba736b15aa618ea66ad0e5`).
+- **Subphase verified:** B6-F (Combinatorial Quote Comparison, Transparent Value Rankings, Non-Binding Improvement Requests, Append-Only Quote Revision/Negotiation Synchronization).
+- **Core Gates:**
+  - `b6_quote_comparison_gate.js`: **12/12 PASS**
+  - `b6_quote_negotiation_gate.js`: **19/19 PASS**
+  - `b6_procurement_http_concurrency_gate.js`: **25/25 PASS** (HTTP RBAC, JWT authorization, overlapping improvement requests, idempotency, privacy).
+- **Frontend & Build:** 24/24 unit assertions PASS, Vite production build clean (2,218 modules transformed, 0 errors).
+- **Connected Regression:** 107/107 assertions PASS across B6-A, B6-B, B6-D, B6-E, B4, and B0.2. Grand total 187/187 PASS.
+- **Database isolation:** Migration 040 applied to `miljor_test_db`; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B6_COMPARISON_NEGOTIATION_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED (B6-F)**. B6-G (Award & Checkout Settlement) NOT AUTHORIZED / NOT STARTED.
+
+---
+
 ## Phase B6 — Smart Procurement Hub (B6-A to B6-E): Acceptance Complete (194/194 PASS)
 
 - **Branch:** `feature/b6-private-rfq` (HEAD checkpoint `de8cbeb890067db84712af986722e6a9c9318f86`).

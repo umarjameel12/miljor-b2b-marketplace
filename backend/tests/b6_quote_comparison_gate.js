@@ -1,4 +1,6 @@
 'use strict';
+process.env.NODE_ENV = 'test';
+process.env.TEST_DB_NAME = 'miljor_test_db';
 const assert = require('node:assert/strict');
 const { compareQuoteOptions } = require('../src/services/procurementQuoteComparisonService');
 
@@ -68,3 +70,4 @@ test('Too many quote combinations explicitly blocked', () => {
   assert.equal(x.blocked,'TOO_MANY_QUOTES_FOR_EXACT_COMBINATION');
 });
 console.log(`B6 QUOTE COMPARISON PURE TESTS: ${passed}/${passed} PASS (pure JS, no database)`);
+process.exit(0);
