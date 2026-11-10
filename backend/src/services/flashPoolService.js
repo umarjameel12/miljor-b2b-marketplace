@@ -252,6 +252,13 @@ class FlashPoolService {
       }
       if(!money.exactDecimalGte(offer.remaining_stock,quantity,2))
         throw fail('FLASH_OUT_OF_STOCK','Not enough stock remains.',409);
+      const [existingBuyerHolds]=await conn.query(
+        `SELECT COALESCE(SUM(quantity),0) AS already_bought FROM flash_purchase_holds
+         WHERE flash_pool_id=? AND buyer_id=? AND status IN ('HELD','PAYMENT_PENDING','PAID')`,
+        [flashId,buyerId]);
+      const cumulative=money.exactDecimalSum([existingBuyerHolds[0].already_bought,quantity],2);
+      if(!money.exactDecimalGte(offer.max_quantity_per_buyer,cumulative,2))
+        throw fail('BUYER_FLASH_MAX_EXCEEDED','This buyer has reached the supplier-defined total purchase limit.',409);
       const subtotal = money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
       const buyerFeeModel = await feeService.calculateBuyerFee(subtotal);
       const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
@@ -345,12 +352,13 @@ class FlashPoolService {
           "UPDATE flash_purchase_holds SET status='EXPIRED' WHERE id=? AND status='HELD'",[hold.id]);
         await conn.query(
           "UPDATE orders SET order_status='CANCELLED',payment_status='PAYMENT_FAILED' WHERE id=?",[hold.order_id]);
-        await conn.query(
+        const [updated]=await conn.query(
           `UPDATE flash_pools
            SET remaining_stock=remaining_stock+?,held_stock=held_stock-?,
            status=CASE WHEN status='SOLD_OUT' AND expiry_time>UTC_TIMESTAMP() THEN 'ACTIVE' ELSE status END,
            version_number=version_number+1
            WHERE id=? AND held_stock>=?`,[hold.quantity,hold.quantity,flashId,hold.quantity]);
+        if(updated.affectedRows!==1)throw fail('FLASH_STOCK_DRIFT','Expired hold exceeds authoritative held stock.',409);
         released++;
       }
       if(owns)await conn.commit();
@@ -377,18 +385,20 @@ class FlashPoolService {
       const [payments]=await conn.query(
         "SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[orderId]);
       if(!orders.length || orders[0].payment_status!=='PAID' ||
-          orders[0].order_status!=='PAID' || !payments.length)
+          !['PAID','SUPPLIER_CONFIRMED','PROCESSING','OUT_FOR_DELIVERY','DELIVERED','COMPLETED'].includes(orders[0].order_status) ||
+          !payments.length)
         throw fail('PAYMENT_NOT_VERIFIED','Verified Safepay payment evidence is required.',409);
       if(hold.status!=='PAID'){
         if(!['HELD','PAYMENT_PENDING'].includes(hold.status))
           throw fail('FLASH_HOLD_CONFLICT','Paid order has an incompatible hold lifecycle.',409);
         await conn.query(
           "UPDATE flash_purchase_holds SET status='PAID' WHERE id=?",[hold.id]);
-        await conn.query(
+        const [updated]=await conn.query(
           `UPDATE flash_pools SET held_stock=held_stock-?,committed_stock=committed_stock+?,
-          status=CASE WHEN remaining_stock=0 THEN 'SOLD_OUT' ELSE status END,
+          status=CASE WHEN remaining_stock=0 AND status='ACTIVE' THEN 'SOLD_OUT' ELSE status END,
           version_number=version_number+1 WHERE id=? AND held_stock>=?`,
           [hold.quantity,hold.quantity,flashId,hold.quantity]);
+        if(updated.affectedRows!==1)throw fail('FLASH_STOCK_DRIFT','Paid hold exceeds authoritative held stock.',409);
       }
       await conn.commit();
       return {flash_order:true,hold_status:'PAID',flash_pool_id:flashId};
@@ -417,8 +427,11 @@ class FlashPoolService {
       await this._lockVerifiedSupplier(conn,supplierId);
       const [rows]=await conn.query(
         'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
-      const pool=rows[0];
+      let pool=rows[0];
       if(!pool)throw fail('FLASH_NOT_FOUND','Flash Pool not found.',404);
+      await this.reclaimExpiredUninitiatedHolds(id,conn);
+      const [fresh]=await conn.query('SELECT * FROM flash_pools WHERE id=?',[id]);
+      pool=fresh[0];
       if(pool.status==='EXPIRED'){await conn.commit();return {id,status:'EXPIRED'};}
       if(!['ACTIVE','SOLD_OUT'].includes(pool.status))
         throw fail('FLASH_INVALID_STATUS','Only published offers can expire.',409);
