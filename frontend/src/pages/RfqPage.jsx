@@ -811,6 +811,12 @@ export const RfqPage = () => {
                         {request.status==='DRAFT' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
                             className="text-[var(--brand-accent)] underline text-xs">Edit Draft</button>}
+                        {request.status==='DRAFT'&&request.ownership==='COLLECTIVE'&&request.frequency==='ONE_TIME' &&
+                          <button type="button" disabled={shoppingBusy} onClick={()=>createCollectiveFromDraft(request)}
+                            className="text-[var(--brand-accent)] underline text-xs">Set Up Private Group</button>}
+                        {request.status==='DRAFT'&&request.ownership==='SINGLE_BUYER'&&request.frequency!=='ONE_TIME' &&
+                          <button type="button" disabled={shoppingBusy} onClick={()=>createRecurringFromDraft(request)}
+                            className="text-[var(--brand-accent)] underline text-xs">Create Recurring Schedule</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={matchingBusy} onClick={()=>viewSupplierMatches(request.id)}
                             className="text-[var(--brand-accent)] underline text-xs">Find suppliers</button>}
@@ -824,6 +830,104 @@ export const RfqPage = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {collectiveGroup && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <p className="text-sm font-semibold">Private Group #{collectiveGroup.id}</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Organizer must join too. An invitation does not authorize an order or payment.
+                </p>
+                <label className="text-xs font-semibold">Invite verified business by buyer ID
+                  <div className="flex gap-2 mt-1">
+                    <input type="number" min="1" value={inviteBuyerId}
+                      onChange={e=>setInviteBuyerId(e.target.value)}
+                      className="w-full p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                    <button type="button" disabled={shoppingBusy||!inviteBuyerId}
+                      onClick={inviteCollectiveBuyer}
+                      className="px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs">
+                      Invite
+                    </button>
+                  </div>
+                </label>
+                <button type="button" className="text-xs underline" onClick={()=>setCollectiveGroup(null)}>
+                  Close Group Setup
+                </button>
+              </div>
+            )}
+            {myCollectiveInvites.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <h3 className="text-sm font-semibold">My Collective Invitations</h3>
+                {myCollectiveInvites.map(invite=>(
+                  <div key={invite.participant_id} className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
+                    <p className="text-xs font-semibold">
+                      Group #{invite.group_id} · {invite.status} · Join by {String(invite.join_deadline)}
+                    </p>
+                    {invite.status==='INVITED'&&invite.group_status==='FORMING' && <>
+                      {(invite.items||[]).map(item=>(
+                        <label key={item.id} className="block text-xs">
+                          Product family #{item.family_id} · {item.unit}
+                          {item.requirements?' · '+item.requirements:''}
+                          <input inputMode="decimal" placeholder="Your own quantity"
+                            value={joinQuantities[`${invite.group_id}:${item.id}`]||''}
+                            onChange={e=>setJoinQuantities(old=>({
+                              ...old,[`${invite.group_id}:${item.id}`]:e.target.value
+                            }))}
+                            className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                        </label>
+                      ))}
+                      <button type="button" disabled={shoppingBusy} onClick={()=>joinCollective(invite)}
+                        className="rounded-lg px-3 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                        Confirm My Quantities (No Payment)
+                      </button>
+                    </>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {recurringContracts.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <h3 className="text-sm font-semibold">My Recurring Procurement</h3>
+                {recurringContracts.map(contract=>(
+                  <div key={contract.id} className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
+                    <p className="text-xs font-semibold">
+                      {contract.contract_code} · {contract.cadence} · {contract.status} ·
+                      {String(contract.local_run_time).slice(0,5)} PKT
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      New quote and separate buyer payment approval for every cycle. No automatic charge.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {contract.status==='DRAFT' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'ACTIVATE')}
+                          className="text-xs underline">Activate With Consent</button>}
+                      {contract.status==='ACTIVE' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'PAUSE')}
+                          className="text-xs underline">Pause</button>}
+                      {contract.status==='PAUSED' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'RESUME')}
+                          className="text-xs underline">Resume</button>}
+                      {contract.status!=='CANCELLED' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'CANCEL')}
+                          className="text-xs underline">Cancel Future Cycles</button>}
+                      <button type="button" disabled={shoppingBusy}
+                        onClick={()=>previewRecurringCycles(contract.id)}
+                        className="text-xs underline">Preview Schedule</button>
+                    </div>
+                  </div>
+                ))}
+                {recurringUpcoming && (
+                  <div className="rounded-lg bg-[var(--bg-surface)] p-3 text-xs space-y-1">
+                    <p className="font-semibold">Upcoming cycles (not payable orders)</p>
+                    {(recurringUpcoming.upcoming||[]).map(cycle=>(
+                      <p key={cycle.cycle_key}>{cycle.local_date} · {cycle.local_run_time} PKT</p>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {compareRequestId && quoteComparison && (
