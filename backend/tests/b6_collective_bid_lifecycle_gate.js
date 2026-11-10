@@ -98,6 +98,31 @@ async function main(){
   physical_specifications_accepted:true,buyer_total_confirmed:true
  },'b6jk-consent-'+tag);
  pass('Buyer consent idempotency preserved',consentReplay.is_replay===true);
+ const revised=await bids.submitBid(candidate.supplier_id,groupId,{
+  ...offer,lines:[{...offer.lines[0],unit_price:'240.00'}]
+ },'b6jk-revised-'+tag);
+ pass('Supplier bid revision creates a new immutable version',
+  revised.bid.version_number===2 && revised.bid.aggregate_item_subtotal==='1200.00');
+ const updatedPreview=await approvals.preview(buyers[1].id,groupId,first.bid.bid_id);
+ await reject(()=>approvals.consent(buyers[1].id,groupId,first.bid.bid_id,{
+  bid_version_id:updatedPreview.bid_version_id,total_preview:updatedPreview.total_preview,
+  physical_specifications_accepted:true,buyer_total_confirmed:true
+ },'b6jk-silent-replace-'+tag),'EXPLICIT_REAPPROVAL_REQUIRED');
+ pass('New quote cannot silently overwrite the previous buyer consent',true);
+ const updatedConsent=await approvals.consent(buyers[1].id,groupId,first.bid.bid_id,{
+  bid_version_id:updatedPreview.bid_version_id,total_preview:updatedPreview.total_preview,
+  physical_specifications_accepted:true,buyer_total_confirmed:true,
+  replace_previous_consent:true
+ },'b6jk-explicit-replace-'+tag);
+ pass('Buyer may explicitly approve new quoted terms',
+  updatedConsent.approval.status==='CONSENTED_NOT_PAYABLE');
+ const [savedApprovals]=await db.query(
+  'SELECT status FROM procurement_collective_buyer_approvals WHERE group_id=? AND buyer_id=? ORDER BY id',
+  [groupId,buyers[1].id]
+ );
+ pass('Original consent preserved as revoked, only one active consent',
+  savedApprovals.length===2 && savedApprovals[0].status==='REVOKED' &&
+  savedApprovals[1].status==='CONSENTED_NOT_PAYABLE');
  const [[afterOrders]]=await db.query('SELECT COUNT(*) AS n FROM orders');
  const [[afterPayments]]=await db.query('SELECT COUNT(*) AS n FROM payments');
  pass('No phantom order or payment',String(ordersBefore[0].n)===String(afterOrders.n)&&
