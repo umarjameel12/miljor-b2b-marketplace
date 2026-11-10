@@ -2,6 +2,7 @@
 -- Legacy ACTIVE rows are preserved; unverified/unlinked rows are NOT upgraded
 -- into eligible supplier-owned published offers by default.
 ALTER TABLE flash_pools
+  MODIFY COLUMN status ENUM('DRAFT','ACTIVE','SOLD_OUT','EXPIRED','CANCELLED') NOT NULL DEFAULT 'DRAFT',
   ADD COLUMN selling_mode ENUM('MULTI_BUYER','WHOLE_LOT') NOT NULL DEFAULT 'MULTI_BUYER',
   ADD COLUMN supplier_sku_id BIGINT NULL,
   ADD COLUMN supplier_listing_id BIGINT NULL,
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS flash_purchase_holds (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_flash_hold_idem (buyer_id, idempotency_key),
+  UNIQUE KEY uq_flash_hold_order (order_id),
   INDEX idx_flash_hold_lifecycle (flash_pool_id, status, expires_at),
   CONSTRAINT fk_flash_hold_pool FOREIGN KEY (flash_pool_id) REFERENCES flash_pools(id),
   CONSTRAINT fk_flash_hold_buyer FOREIGN KEY (buyer_id) REFERENCES users(id),
