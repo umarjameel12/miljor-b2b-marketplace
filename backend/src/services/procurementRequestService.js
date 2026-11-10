@@ -51,8 +51,12 @@ class ProcurementRequestService {
     if (!unique.length) throw issue('INVALID_REQUEST_ITEMS','At least one item is required.');
     const placeholders = unique.map(() => '?').join(',');
     const [rows] = await conn.query(
-      `SELECT id,allowed_pack_units,allowed_purchasing_units FROM catalog_product_families WHERE id IN (${placeholders})
-         AND is_active=1 AND approval_status='APPROVED'`,
+      `SELECT f.id,f.allowed_pack_units,f.allowed_purchasing_units
+         FROM catalog_product_families f
+         JOIN catalog_categories c ON c.id=f.category_id
+         WHERE f.id IN (${placeholders})
+           AND f.is_active=1 AND f.approval_status='APPROVED'
+           AND c.is_active=1 AND c.approval_status='APPROVED'`,
       unique
     );
     const found = new Map(rows.map(row => [Number(row.id), row]));
