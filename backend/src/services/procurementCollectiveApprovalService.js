@@ -67,7 +67,10 @@ class ProcurementCollectiveApprovalService {
   try{expected=exact.toCanonical(payload.total_preview,2)}
   catch{throw fail('INVALID_TOTAL','Exact buyer preview total required.')}
   const version=id(payload.bid_version_id);
-  const hash=crypto.createHash('sha256').update(JSON.stringify({buyer,gid,bid,version,expected,consent:true})).digest('hex');
+  const replacePrevious=payload.replace_previous_consent===true;
+  const hash=crypto.createHash('sha256').update(JSON.stringify({
+    buyer,gid,bid,version,expected,consent:true,replacePrevious
+  })).digest('hex');
   const conn=await this.database.getConnection();
   try{await conn.beginTransaction();
    const [groups]=await conn.query('SELECT id FROM procurement_collective_groups WHERE id=? FOR UPDATE',[gid]);
@@ -82,11 +85,23 @@ class ProcurementCollectiveApprovalService {
     throw fail('BID_VERSION_CHANGED','Supplier bid changed; refresh before consenting.',409);
    if(!exact.exactDecimalEquals(current.total_preview,expected,2))
     throw fail('BUYER_REAPPROVAL_REQUIRED','Supplier quote or buyer fees changed.',409);
-   const [prior]=await conn.query('SELECT id FROM procurement_collective_buyer_approvals WHERE group_id=? AND participant_id=?',[gid,current.participant_id]);
-   if(prior.length)throw fail('BUYER_ALREADY_APPROVED','Buyer already selected another immutable bid.',409);
+   const [prior]=await conn.query(
+    "SELECT id,bid_version_id,status FROM procurement_collective_buyer_approvals WHERE group_id=? AND participant_id=? AND status='CONSENTED_NOT_PAYABLE' FOR UPDATE",
+    [gid,current.participant_id]);
+   if(prior.length){
+    if(!replacePrevious)
+      throw fail('EXPLICIT_REAPPROVAL_REQUIRED','Buyer must explicitly replace previous consent after a supplier quote change.',409);
+    if(prior.some(row=>Number(row.bid_version_id)===version))
+      throw fail('BUYER_ALREADY_APPROVED','Buyer already approved this immutable quote version.',409);
+    await conn.query(
+      "UPDATE procurement_collective_buyer_approvals SET status='REVOKED' WHERE group_id=? AND participant_id=? AND status='CONSENTED_NOT_PAYABLE'",
+      [gid,current.participant_id]
+    );
+   }
    const snapshot={buyer_id:buyer,group_id:gid,bid_version_id:version,
     physical_specifications_accepted:true,items:current.items,
-    total_preview:expected,creates_payment:false};
+    total_preview:expected,replaces_prior_consent:replacePrevious,
+    creates_payment:false};
    const [saved]=await conn.query("INSERT INTO procurement_collective_buyer_approvals(group_id,participant_id,buyer_id,bid_version_id,item_subtotal,delivery_fee,buyer_fee_preview,total_preview,consent_snapshot,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?)",[gid,current.participant_id,buyer,version,current.item_subtotal,current.supplier_delivery_fee,current.buyer_platform_fee,expected,JSON.stringify(snapshot),idem,hash]);
    const response={approval_id:saved.insertId,group_id:gid,buyer_id:buyer,
     bid_version_id:version,status:'CONSENTED_NOT_PAYABLE',total_preview:expected,
