@@ -51,6 +51,14 @@ router.post('/procurement/collectives/:groupId/invitations',protect,authorizeStr
 router.post('/procurement/collectives/:groupId/join',protect,authorizeStrict('BUYER'),(req,res)=>controller.joinCollectiveGroup(req,res));
 router.get('/procurement/collectives/my-invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.myCollectiveInvites(req,res));
 
+// B6-L/M — buyer-owned recurring template and cycle controls.
+// No automatic checkout/payment or buyer impersonation.
+router.post('/procurement/requests/:id/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.createSmartRecurring(req,res));
+router.get('/procurement/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartRecurring(req,res));
+router.get('/procurement/recurring/:contractId/upcoming',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringUpcoming(req,res));
+router.post('/procurement/recurring/:contractId/:action(activate|pause|resume|cancel)',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringAction(req,res));
+router.post('/procurement/recurring/:contractId/cycles/:cycleId/skip',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringSkip(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
