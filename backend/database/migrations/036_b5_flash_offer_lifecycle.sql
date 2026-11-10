@@ -10,6 +10,7 @@ ALTER TABLE flash_pools
   ADD COLUMN snapshot_json JSON NULL,
   ADD COLUMN configured_duration_minutes INT NULL,
   ADD COLUMN delivery_fee DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  ADD COLUMN best_before_date DATE NULL,
   ADD COLUMN published_at DATETIME NULL,
   ADD COLUMN purchase_increment DECIMAL(12,2) NOT NULL DEFAULT 1.00,
   ADD COLUMN held_stock DECIMAL(12,2) NOT NULL DEFAULT 0.00,
