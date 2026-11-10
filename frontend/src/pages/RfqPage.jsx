@@ -1169,9 +1169,44 @@ export const RfqPage = () => {
                       <button type="button" disabled={shoppingBusy}
                         onClick={()=>previewRecurringCycles(contract.id)}
                         className="text-xs underline">Preview Schedule</button>
+                      {contract.status==='ACTIVE' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>scheduleRecurringCycles(contract.id)}
+                          className="text-xs underline">Schedule Upcoming Cycles</button>}
+                      <button type="button" disabled={shoppingBusy}
+                        onClick={()=>loadActualRecurringCycles(contract.id)}
+                        className="text-xs underline">View Actual Cycles</button>
                     </div>
                   </div>
                 ))}
+                {recurringCyclesContract && (
+                  <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                    <div className="flex justify-between">
+                      <p className="text-xs font-semibold">Contract #{recurringCyclesContract} — Saved Cycles</p>
+                      <button type="button" className="text-xs underline"
+                        onClick={()=>{setRecurringCyclesContract(null);setRecurringCycles([]);}}>Close</button>
+                    </div>
+                    {recurringCycles.length===0 &&
+                      <p className="text-xs text-[var(--text-muted)]">No cycles scheduled yet.</p>}
+                    {recurringCycles.map(cycle=>(
+                      <div key={cycle.id} className="flex flex-wrap justify-between gap-2 border-t border-[var(--border-subtle)] pt-2">
+                        <div>
+                          <p className="text-xs font-semibold">{cycle.cycle_key} · {cycle.status}</p>
+                          <p className="text-xs text-[var(--text-muted)]">Due: {String(cycle.due_at_utc)}</p>
+                          {cycle.generated_request_id &&
+                            <p className="text-xs">Generated buyer draft #{cycle.generated_request_id}</p>}
+                        </div>
+                        {cycle.status==='SCHEDULED' &&
+                          <button type="button" disabled={shoppingBusy}
+                            onClick={()=>prepareRecurringDraft(recurringCyclesContract,cycle.id)}
+                            className="text-xs underline">Prepare Due Shopping Draft</button>}
+                      </div>
+                    ))}
+                    <p className="text-xs text-amber-700">
+                      No charges or orders are created by scheduling. Every draft needs separate buyer publication and payment approval.
+                    </p>
+                  </div>
+                )}
                 {recurringUpcoming && (
                   <div className="rounded-lg bg-[var(--bg-surface)] p-3 text-xs space-y-1">
                     <p className="font-semibold">Upcoming cycles (not payable orders)</p>
