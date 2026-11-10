@@ -108,7 +108,7 @@ async function runE3Gate() {
     adminId = aRes.insertId;
     adminToken = generateToken(adminId, 'ADMIN', 'VERIFIED');
 
-    // Create supplier profile with STARTER plan (max 4 families, max 4 listings)
+    // Create supplier profile with STARTER plan (4-family entitlement; legacy listing column retained).
     await db.query(
       `INSERT INTO supplier_profiles (supplier_id, business_type, verification_status, subscription_plan, subscription_status, max_active_listings)
        VALUES (?, 'WHOLESALER', 'VERIFIED', 'STARTER', 'STARTER_ACTIVE', 4)`,
@@ -401,6 +401,31 @@ async function runE3Gate() {
       assert.strictEqual(ownListingRes.status, 201);
       ownListingId = ownListingRes.body.data.listing.id;
       createdListingIds.push(ownListingId);
+
+      // B1: An already-active Rice family must allow further listings, even
+      // when the legacy max_active_listings field is below the current count.
+      // Family quotas, not per-SKU offer counts, control subscription usage.
+      await db.query('UPDATE supplier_profiles SET max_active_listings = 1 WHERE supplier_id = ?', [supplierId]);
+      const secondRiceListing = await api('/api/v1/listings', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: {
+          supplier_sku_id: createdSkuIds[1],
+          available_stock: 100,
+          base_unit_price: 4800,
+          supplier_min_qty: 10,
+          buyer_min_qty: 2
+        }
+      });
+      assert.strictEqual(secondRiceListing.status, 201,
+        `Second Rice listing should not consume another family slot: ${JSON.stringify(secondRiceListing.body)}`);
+      createdListingIds.push(secondRiceListing.body.data.listing.id);
+      const listingEntitlements = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(listingEntitlements.body.data.entitlements.active_families_count, 5);
+      assert.ok(listingEntitlements.body.data.entitlements.active_listings_count >= 2);
+      pass('B1: Same-family SKUs can both list while legacy listing cap=1; family usage unchanged');
 
       const closeTime = new Date(Date.now() + 48 * 3600 * 1000);
       const deliveryTime = new Date(closeTime.getTime() + 24 * 3600 * 1000); // +24h
