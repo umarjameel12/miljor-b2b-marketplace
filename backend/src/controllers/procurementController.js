@@ -29,7 +29,8 @@ class ProcurementController {
   async getMyFlashPools(req,res) {
     try {
       const [rows]=await require('../config/db').query(
-        'SELECT * FROM flash_pools WHERE supplier_id=? ORDER BY created_at DESC LIMIT 200',[req.user.id]);
+        `SELECT *,DATE_FORMAT(expiry_time,'%Y-%m-%dT%H:%i:%sZ') AS expiry_at_utc
+         FROM flash_pools WHERE supplier_id=? ORDER BY created_at DESC LIMIT 200`,[req.user.id]);
       res.status(200).json({success:true,data:{flash_pools:rows,server_time:new Date().toISOString()}});
     }catch(e){res.status(500).json({success:false,error:{code:'FLASH_LIST_FAILED',message:'Unable to list supplier Flash Pools'}});}
   }
