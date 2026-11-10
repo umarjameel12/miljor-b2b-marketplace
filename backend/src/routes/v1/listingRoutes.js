@@ -21,7 +21,7 @@ router.get(
 );
 
 router.get('/:id', listingController.getListingById);
-router.get('/:id/price-history', listingController.getListingPriceHistory);
+router.get('/:id/price-history', protect, authorize('SUPPLIER', 'SUPER_ADMIN'), listingController.getListingPriceHistory);
 
 // Create new listing: Strictly requires verified supplier status
 router.post(
