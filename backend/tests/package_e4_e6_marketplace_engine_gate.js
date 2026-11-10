@@ -134,14 +134,15 @@ async function runE4E6Gate() {
           expiry_hours: 12
         }
       });
-      assert.strictEqual(createRes.status, 201);
-      assert.strictEqual(createRes.body.data.flash_pool.status, 'ACTIVE');
-      flashPoolId = createRes.body.data.flash_pool.id;
-
+      // B5 replaces unsafe direct ACTIVE creation from a raw legacy product_id.
+      // Flash offers require a supplier-owned published SKU/listing and a
+      // supplier-chosen expiry; the legacy request must fail closed.
+      assert.strictEqual(createRes.status, 400, JSON.stringify(createRes.body));
+      assert.strictEqual(createRes.body.error.code, 'INVALID_FLASH_EXPIRY');
       const listRes = await api('/api/v1/flash-pools');
       assert.strictEqual(listRes.status, 200);
-      assert.ok(listRes.body.data.flash_pools.some(f => f.id === flashPoolId));
-      pass('1. Flash Pools: Verified supplier creates active flash pool; public discovery displays live deal');
+      assert.ok(Array.isArray(listRes.body.data.flash_pools));
+      pass('1. Flash Pools: insecure legacy direct-ACTIVE creation rejected; buyer discovery remains readable');
     } catch (e) { fail('1. Flash Pools', e); }
 
     // -------------------------------------------------------------------------
