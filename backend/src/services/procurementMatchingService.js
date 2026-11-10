@@ -36,11 +36,12 @@ function compatibleLine(item, row) {
   if (Number(item.family_id)!==Number(row.family_id)) return false;
   if (String(item.unit).toLowerCase()!==String(row.purchasing_unit).toLowerCase()) return false;
   try {
-    return decimal.exactDecimalGte(String(row.available_stock),String(item.quantity),4);
+    return decimal.exactDecimalGte(String(row.available_stock),String(item.quantity),4) &&
+      decimal.exactDecimalGte(String(item.quantity),String(row.buyer_min_qty),4);
   } catch {return false;}
 }
 const selectListings = `
-  SELECT sl.id AS listing_id, sl.supplier_id, sl.available_stock, sl.delivery_zones,
+  SELECT sl.id AS listing_id, sl.supplier_id, sl.available_stock, sl.buyer_min_qty, sl.delivery_zones,
          sk.id AS supplier_sku_id, sk.family_id, sk.purchasing_unit,
          sp.title AS product_title, sk.pack_size, sk.pack_unit,
          u.business_name AS supplier_name
