@@ -176,6 +176,19 @@ async function runGate() {
     assert.ok(oilFamily, 'Cooking Oil canonical family must exist');
     pass('1. Canonical categories and families (Rice & Cooking Oil) retrieved');
 
+    // B1: Admin owns the family taxonomy, but cannot create a new supplier
+    // physical SKU through the retired global-variant creation endpoint.
+    try {
+      const rejected = await api('/api/v1/admin/catalog/variants', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body: { family_id: riceFamily.id, variety: 'Admin Imagined Rice', packaging_type: 'Bag', pack_size: 25, pack_unit: 'kg' }
+      });
+      assert.strictEqual(rejected.status, 409);
+      assert.strictEqual(rejected.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
+      pass('B1: Admin physical-variant creation blocked; supplier-owned SKU path remains authoritative');
+    } catch (e) { fail('B1: Admin variant creation block', e); }
+
     // =========================================================================
     // SECTION A: SUPPLIER-OWNED PRODUCTS & PHYSICAL SKUs (BRAND/GRADE OPTIONAL)
     // =========================================================================
