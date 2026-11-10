@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS procurement_collective_participants (
   buyer_id INT NOT NULL,
   status ENUM('INVITED','JOINED','LEFT','LOCKED','EXPIRED') NOT NULL DEFAULT 'INVITED',
   join_idempotency_key VARCHAR(120) NULL,
+  join_request_hash CHAR(64) NULL,
   consent_snapshot JSON NULL,
   consent_at TIMESTAMP NULL DEFAULT NULL,
   left_at TIMESTAMP NULL DEFAULT NULL,
