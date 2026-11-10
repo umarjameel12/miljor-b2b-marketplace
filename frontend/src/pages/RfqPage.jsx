@@ -306,13 +306,15 @@ export const RfqPage = () => {
     setQuoteBusy(true);
     setShoppingError('');
     try{
-      const [compared,negotiations]=await Promise.all([
+      const [compared,negotiations,currentQuotes]=await Promise.all([
         procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`)
+        procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`)
       ]);
       setCompareRequestId(requestId);
       setQuoteComparison(compared);
       setBuyerNegotiations(negotiations.negotiations||[]);
+      setBuyerQuotes(currentQuotes.quotes||[]);
     }catch(e){setShoppingError(e.message);}
     finally{setQuoteBusy(false);}
   };
