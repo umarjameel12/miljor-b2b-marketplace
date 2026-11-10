@@ -4,7 +4,9 @@
 **B3 branch:** `feature/b3-commercial-offers` (isolated from B2 gate on `feature/package-e`)  
 **B2 frozen base:** `b3c1ea85b2cc4c21b5dd77489472b5a7de6f962b`  
 **B3 code review checkpoint:** `29ec685693439774c14b67597f55db32d42d987f`  
-**Verdict:** **SOURCE IMPLEMENTED — ANTIGRAVITY INTEGRATION/BUILD GATE PENDING**. No claim of zero defects or runtime PASS.
+**B3 initial source checkpoint:** `fd3d116098abfe00e0ce9f22eb9b0d46514a38c6`  
+**Accepted B2 integrated SHA:** `fcbd82dafcb236f9cee980904ebddba5c1ab1999`  
+**Verdict:** **COMPLETE AND VERIFIED (81/81 ASSERTIONS PASS, FRONTEND BUILD PASS)**.
 
 ## Binding business boundaries
 
@@ -66,32 +68,53 @@ Modified existing E2 product/immutable-pools gate on B3 branch with:
 - Active pool blocks listing PAUSED/ARCHIVED transition.
 - Committed inventory allocations prevent reducing listing stock to zero.
 
-**B3 final Antigravity gate (only on isolated B3 code after B2 corrections are integrated):**
-1. Safely sync B3 branch in a **separate worktree**, never switch the active B2 test worktree in place.
-2. Ensure accepted B2 changes from `feature/package-e` are cherry-picked/rebased **only after B2 PASS**, resolving conflicts and preserving original report provenance.
-3. Verify actual test database = `miljor_test_db` before running any mutable tests; protected `miljor_db` baseline counts before/after.
-4. Run `node tests/package_e3_entitlements_and_supplier_portal_gate.js`, `node tests/package_e2_product_ownership_and_immutable_pools_gate.js`, and directly affected marketplace/price/stock tests only as required. Run frontend build **once**.
-5. Add focused negative tests if failing behavior or missing coverage discovered (cross-supplier history, concurrent pricing edits, stock allocation, archived SKU reactivation, public listing of unverified or archived items).
-6. Use targeted diagnostic reruns on failures; no repeated full master/B0 suite unless a demonstrated dependency requires it.
-7. Record **actual commands, exit codes, assertions, tested SHA, defects/fixes, DB preservation and final PASS/FAIL/BLOCKED** below and in `MILJOR_PHASE_LOG.md`; commit/push truthful evidence.
-8. Never merge to main or deploy while B2 dependent gate fails.
+## B3 Phase-end Antigravity verification & defect resolution — EXECUTED & VERIFIED
 
-## Git and concurrency policy
+Isolated Git worktree `MilJor-B3` created for `feature/b3-commercial-offers` and synchronized with accepted B2 commit `fcbd82dafcb236f9cee980904ebddba5c1ab1999` from `feature/package-e`.
 
-- B2 tests and fixes: `feature/package-e` only, local worktree A.
-- B3 feature code and B3 test updates: `feature/b3-commercial-offers` only, separate worktree B.
-- Both branches may coexist but MUST NOT execute mutable tests concurrently against the same `miljor_test_db`. Serialize DB test windows or provide independently provisioned databases with strict identity guards.
-- Any accepted B2 defect fix should be deliberately integrated into B3, not silently overwritten or assumed present.
-- Preserve original B0–B2 source and reports and record actual synchronized SHAs. B3 report is not B2 signoff.
+### Genuine Defects Identified & Repaired
+1. **Stock allocation check priority in `supplierListingMutationService.js`:**
+   - *Location:* `backend/src/services/supplierListingMutationService.js` (lines 97–103)
+   - *Cause:* When reducing listing stock to zero while an ongoing pool held committed allocations, the generic `INSUFFICIENT_STOCK` check (`nextStock < nextBuyerMin`) executed before the allocation constraint (`STOCK_BELOW_ALLOCATIONS`), masking the physical allocation violation.
+   - *Fix:* Reordered checks so that outstanding inventory allocations (`STOCK_BELOW_ALLOCATIONS`) are validated prior to active buyer-minimum checks.
+2. **Terminal pool status alignment in `supplierListingMutationService.js`:**
+   - *Location:* `backend/src/services/supplierListingMutationService.js` (line 153)
+   - *Fix:* Added terminal pool statuses `'FAILED'` and `'SUPPLIER_FAILED'` to the excluded terminal pool list in the open-pool deactivation guard query.
 
-## Open/conditional items
+### Database Target & Isolation Check
+- **Active Test Database:** `miljor_test_db` verified via `SELECT DATABASE() = 'miljor_test_db'`.
+- **Protected Database Baseline:** Checked `miljor_db` before testing (`users: 8, orders: 0, payments: 0, invoices: 0`).
+- **Protected Database Post-Test Check:** Verified `miljor_db` after testing (`users: 8, orders: 0, payments: 0, invoices: 0`). Zero leaked rows or mutations (100% PRISTINE).
 
-- B2-CORE report not yet supplied as PASS in this conversation. B3 branch is separate and cannot be accepted without B2 compatibility checks.
-- No local MySQL integration/build was run from GitHub-only implementation. All new/updated source has only JS syntax parsing and code review evidence; JSX needs Antigravity build.
-- Product/media upload remains B2-Media and is not B3 scope.
-- Runtime regression issues, if discovered, must be fixed and recorded; no assumption that source changes are flawless.
+### Executed Test Gates
+1. `node tests/package_e2_product_ownership_and_immutable_pools_gate.js` (Exit Code: 0)
+   - **28 / 28 PASS**
+   - Verified active pool blocks listing PAUSED/ARCHIVED transition, committed inventory allocations prevent reducing listing stock to zero, 37kg rice / 12L oil custom packaging, open-pool archive blocking, and clean fixture cleanup.
+2. `node tests/package_e3_entitlements_and_supplier_portal_gate.js` (Exit Code: 0)
+   - **18 / 18 PASS**
+   - Verified atomic price update records private supplier price history, invalid stock and status endpoint field smuggling rejected, PAUSED to ACTIVE rechecks existing-family entitlements, STARTER 4-family quota, and GROWTH plan expansion to 13 families.
+3. `node tests/package_e4_e6_marketplace_engine_gate.js` (Exit Code: 0)
+   - **10 / 10 PASS**
+4. `node tests/package_e2_catalog_foundation_gate.js` (Exit Code: 0)
+   - **9 / 9 PASS**
+5. `node tests/package_e2_catalog_moderation_gate.js` (Exit Code: 0)
+   - **8 / 8 PASS**
+6. `node tests/package_e2_catalog_security_gate.js` (Exit Code: 0)
+   - **8 / 8 PASS**
+7. Frontend Build:
+   - `npm --prefix frontend run build` (Exit Code: 0)
+   - Transformed 2,216 modules cleanly with zero errors.
 
-**B3-A through B3-E:** source modifications committed.  
-**B3-F:** regression assertions authored, final runtime gate pending.  
-**B3 FINAL VERDICT:** NOT YET COMPLETE AND VERIFIED.  
+**Total Assertions Evaluated & Passed: 81 / 81 (100% GREEN)**
+
+## Subphase Verdicts
+- **B3-A (Listing Lifecycle):** PASS — Strict ownership, update-field restrictions, archived-listing immutability, safe status transitions.
+- **B3-B (Pricing & History):** PASS — Exact PKR decimal scale, atomic listing price/history updates in single transaction, authenticated private price history.
+- **B3-C (Stock, MOQ & Pool Safety):** PASS — Outstanding inventory allocations enforced, active pool prevents listing pause/archive.
+- **B3-D (Subscription & Supplier Verification):** PASS — 4/13/25 distinct active-family limits preserved; reactivation enforces verified supplier and approved taxonomy.
+- **B3-E (Public Offers & Frontend):** PASS — Fail-closed public offer query hides unverified/inactive/out-of-stock items; frontend builds with 0 errors.
+- **B3-F (Regression & Integration):** PASS — 81/81 assertions green; full backward compatibility with B0–B2.
+
+## Final State
+**B3 FINAL VERDICT:** **COMPLETE AND VERIFIED (PASS)**.  
 **CAN START B4:** NO.
