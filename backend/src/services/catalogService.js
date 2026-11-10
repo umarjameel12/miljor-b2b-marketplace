@@ -59,10 +59,12 @@ class CatalogService {
       return existingRows[0];
     }
 
-    // Create a canonical base product linked to this family & category
+    // B1: products is a legacy compatibility FK anchor, NOT an admin-authored
+    // physical supplier product. Its old NOT NULL text columns require values;
+    // use empty text for unknown physical attributes instead of inventing a
+    // brand, grade or canonical 25kg/16L pack that the supplier never chose.
     const primaryUnit = Array.isArray(family.allowed_pack_units) && family.allowed_pack_units.length > 0
-      ? family.allowed_pack_units[0]
-      : 'kg';
+      ? family.allowed_pack_units[0] : 'kg';
 
     const newProductId = await productRepo.create(
       {
@@ -71,11 +73,11 @@ class CatalogService {
         category_id: family.category_id,
         family_id: family.id,
         canonical_slug: family.slug,
-        brand: 'Standard Commercial',
+        brand: '',
         variety: family.name,
-        processing_type: 'Standard',
-        grade: 'Commercial Grade A',
-        pack_size: primaryUnit === 'L' ? 16 : 25,
+        processing_type: '',
+        grade: '',
+        pack_size: '',
         unit: primaryUnit,
         approval_status: 'APPROVED',
         mapping_status: 'MAPPED_CANONICAL'
