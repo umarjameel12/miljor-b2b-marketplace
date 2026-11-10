@@ -136,4 +136,56 @@ function buildAwardPreview({requestItems,quoteVersions,selections,now=new Date()
     warning:'Only a price and SKU preflight. B6-G/H transaction must lock stock, calculate authoritative fees and obtain fresh buyer consent.'
   };
 }
-module.exports={buildAwardPreview};
+// Tenant-scoped API preview adapter. All data comes from authoritative
+// database rows; no buyer-supplied price, supplier or SKU snapshot is trusted.
+async function previewForBuyer(buyerId,requestId,selections,database=require('../config/db')){
+  const buyer=id(buyerId,'Buyer'),request=id(requestId,'Request');
+  const [owned]=await database.query(
+    `SELECT id,status,ownership,frequency,quote_deadline FROM procurement_requests
+      WHERE id=? AND buyer_id=?`,[request,buyer]
+  );
+  if(!owned.length){
+    const e=failure('REQUEST_NOT_FOUND','Buyer request not found.');e.statusCode=404;throw e;
+  }
+  const active=owned[0];
+  if(active.ownership!=='SINGLE_BUYER'||active.frequency!=='ONE_TIME')
+    throw failure('AWARD_MODE_NOT_ENABLED','This award preview covers single-buyer one-time requests only.');
+  if(active.status!=='OPEN')
+    throw failure('REQUEST_NOT_OPEN','Request is not open for selection.');
+  const [[clock]]=await database.query(
+    'SELECT UTC_TIMESTAMP() AS utc_now, (UTC_TIMESTAMP()< ?) AS request_live',[active.quote_deadline]
+  );
+  if(Number(clock?.request_live)!==1)
+    throw failure('REQUEST_EXPIRED','Request quotation deadline has elapsed.');
+  const now=clock.utc_now instanceof Date
+    ?clock.utc_now.toISOString():String(clock.utc_now).replace(' ','T')+'Z';
+  const [items]=await database.query(
+    'SELECT id,family_id,quantity,unit,requirements,allow_substitutions FROM procurement_request_items WHERE request_id=? ORDER BY line_number',
+    [request]
+  );
+  const [quotes]=await database.query(
+    `SELECT q.id AS quote_id,q.supplier_id,q.status,q.current_version,
+      v.valid_until,v.delivery_fee,v.immutable_snapshot
+      FROM procurement_quotes q
+      JOIN procurement_quote_versions v
+        ON v.quote_id=q.id AND v.version_number=q.current_version
+      JOIN users u ON u.id=q.supplier_id AND u.role='SUPPLIER'
+        AND u.is_verified=1 AND u.verification_status='VERIFIED'
+      JOIN supplier_profiles profile ON profile.supplier_id=u.id
+        AND profile.verification_status='VERIFIED'
+      WHERE q.request_id=? ORDER BY q.id`,[request]
+  );
+  const versions=quotes.map(q=>{
+    const raw=q.immutable_snapshot;
+    const snapshot=typeof raw==='string'?JSON.parse(raw):raw;
+    const deadline=q.valid_until instanceof Date
+      ?q.valid_until.toISOString()
+      :String(q.valid_until).replace(' ','T')+'Z';
+    return {quote_id:q.quote_id,supplier_id:q.supplier_id,status:q.status,
+      version_number:q.current_version,valid_until:deadline,
+      delivery_fee:q.delivery_fee,lines:snapshot.lines||[]};
+  });
+  return {request_id:request,...buildAwardPreview({requestItems:items,
+    quoteVersions:versions,selections,now})};
+}
+module.exports={buildAwardPreview,previewForBuyer};
