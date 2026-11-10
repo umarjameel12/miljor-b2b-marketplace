@@ -174,7 +174,18 @@ function request(method, path, body = null, token = null) {
       approvedNewFamilyId = appRes.body.data.approved_family.id;
       createdFamilyIds.push(approvedNewFamilyId);
       if (appRes.body.data.approved_family.default_product_id) {
-        createdProductIds.push(appRes.body.data.approved_family.default_product_id);
+        const baseId = appRes.body.data.approved_family.default_product_id;
+        createdProductIds.push(baseId);
+        // B1: The legacy products FK anchor must not invent a supplier
+        // brand, grade, processing method, or 25/16kg/L packaging.
+        const [[canonicalAnchor]] = await db.query(
+          'SELECT brand, processing_type, grade, pack_size FROM products WHERE id = ?',
+          [baseId]
+        );
+        assert.strictEqual(canonicalAnchor.brand, '');
+        assert.strictEqual(canonicalAnchor.processing_type, '');
+        assert.strictEqual(canonicalAnchor.grade, '');
+        assert.strictEqual(canonicalAnchor.pack_size, '');
       }
     });
 
