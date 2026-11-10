@@ -51,6 +51,14 @@ router.post('/procurement/collectives/:groupId/invitations',protect,authorizeStr
 router.post('/procurement/collectives/:groupId/join',protect,authorizeStrict('BUYER'),(req,res)=>controller.joinCollectiveGroup(req,res));
 router.get('/procurement/collectives/my-invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.myCollectiveInvites(req,res));
 
+// B6-J: verified supplier quotation on qualified collective demand.
+router.post('/procurement/collectives/:groupId/open-bidding',protect,authorizeStrict('BUYER'),(req,res)=>controller.openCollectiveBidding(req,res));
+router.post('/procurement/supplier/collectives/:groupId/bids',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitCollectiveBid(req,res));
+router.get('/procurement/collectives/:groupId/bids',protect,authorizeStrict('BUYER'),(req,res)=>controller.listCollectiveBids(req,res));
+// B6-K: individual buyer consent only, not an order or checkout.
+router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewCollectiveApproval(req,res));
+router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
+
 // B6-L/M — buyer-owned recurring template and cycle controls.
 // No automatic checkout/payment or buyer impersonation.
 router.post('/procurement/requests/:id/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.createSmartRecurring(req,res));
