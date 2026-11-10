@@ -16,7 +16,8 @@ const rice={supplier_sku_id:11,product_spec_id:21,purchasing_unit:'bag',brand:'R
 const oil={supplier_sku_id:12,product_spec_id:22,purchasing_unit:'tin',brand:'Oil Supplier',quality_grade:'2'};
 const flour={supplier_sku_id:13,product_spec_id:23,purchasing_unit:'bag',brand:'Flour Supplier',quality_grade:'Fine'};
 const line=(id,quantity,unit_price,snapshot)=>({
-request_item_id:id,quantity,unit_price,snapshot
+request_item_id:id,quantity,unit_price,
+supplier_listing_id:snapshot.supplier_sku_id+100,snapshot
 });
 const quotes=[
 {quote_id:101,supplier_id:7,version_number:1,status:'ACTIVE',
