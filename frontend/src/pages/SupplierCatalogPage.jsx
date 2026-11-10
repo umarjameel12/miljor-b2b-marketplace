@@ -744,18 +744,20 @@ export const SupplierCatalogPage = () => {
       const payload = {
         product_spec_id: offerModalVariant.linked_spec_id || offerModalVariant.id,
         supplier_sku_id: offerModalVariant.sku_code ? offerModalVariant.id : undefined,
-        base_unit_price: Number(offerForm.base_unit_price),
-        available_stock: Number(offerForm.available_stock),
-        buyer_min_qty: Number(offerForm.buyer_min_qty),
-        supplier_min_qty: Number(offerForm.supplier_min_qty),
+        // Preserve exact typed decimal strings for the B3 MySQL money contract.
+        base_unit_price: offerForm.base_unit_price.trim(),
+        available_stock: offerForm.available_stock.trim(),
+        buyer_min_qty: offerForm.buyer_min_qty.trim(),
+        supplier_min_qty: offerForm.supplier_min_qty.trim(),
         delivery_fee_policy: offerForm.delivery_fee_policy,
         fulfilment_lead_time_days: Number(offerForm.fulfilment_lead_time_days),
         notes: offerForm.notes
       };
 
       if (editingListing) {
+        const { product_spec_id, supplier_sku_id, ...commercialChanges } = payload;
         await catalogApi.updateSupplierListing(editingListing.id, {
-          ...payload,
+          ...commercialChanges,
           price_change_reason: 'Updated via Supplier Catalog Portal'
         });
         toast.success('Commercial offer updated successfully!');
@@ -1422,7 +1424,7 @@ export const SupplierCatalogPage = () => {
                         + Create Regular Pool
                       </Button>
                     )}
-                    <Button
+                    {listing.status !== 'ARCHIVED' && <Button
                       size="sm"
                       variant="outline"
                       onClick={() => openCreateOfferModal({
@@ -1435,10 +1437,12 @@ export const SupplierCatalogPage = () => {
                       })}
                     >
                       Edit Price / Stock
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleToggleListingStatus(listing)}>
-                      {listing.status === 'ACTIVE' ? 'Pause' : 'Activate'}
-                    </Button>
+                    </Button>}
+                    {listing.status !== 'ARCHIVED' && (
+                      <Button size="sm" variant="outline" onClick={() => handleToggleListingStatus(listing)}>
+                        {listing.status === 'ACTIVE' ? 'Pause' : 'Activate'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
