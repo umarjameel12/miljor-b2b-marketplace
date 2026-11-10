@@ -9,6 +9,7 @@ const procurementMatchingService = require('../services/procurementMatchingServi
 const procurementQuoteService = require('../services/procurementQuoteService');
 const procurementQuoteComparisonService = require('../services/procurementQuoteComparisonService');
 const procurementNegotiationService = require('../services/procurementNegotiationService');
+const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 
 class ProcurementController {
 
@@ -177,6 +178,16 @@ class ProcurementController {
     try{
       const negotiations=await procurementNegotiationService.forSupplier(req.user.id);
       res.json({success:true,data:{negotiations}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // B6-G/H preview only. NO award/order/payment/stock mutation.
+  async previewSmartAward(req,res){
+    try{
+      const preview=await procurementAwardPolicy.previewForBuyer(
+        req.user.id,req.params.id,req.body?.selections
+      );
+      res.json({success:true,data:{preview}});
     }catch(err){this._smartError(res,err);}
   }
 
