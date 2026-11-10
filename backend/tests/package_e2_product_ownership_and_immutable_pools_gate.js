@@ -772,6 +772,16 @@ async function runGate() {
       });
       assert.strictEqual(up24.status, 200, `Exact +24h failed: ${JSON.stringify(up24.body)}`);
 
+      // B4-B: An UPDATE must not silently round a draft target quantity.
+      const scaleRejected = await api(`/api/v1/pools/${draftPoolId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${supAToken}` },
+        body: { target_qty: '40.00001' }
+      });
+      assert.strictEqual(scaleRejected.status, 400, JSON.stringify(scaleRejected.body));
+      assert.strictEqual(scaleRejected.body.error.code, 'INVALID_POOL_DECIMAL');
+      pass('B4-B: DRAFT pool update rejects unsupported precision');
+
       // Test exact +72h boundary on draft update
       const exact72h = new Date(closeTime.getTime() + 72 * 3600 * 1000).toISOString();
       const up72 = await api(`/api/v1/pools/${draftPoolId}`, {
