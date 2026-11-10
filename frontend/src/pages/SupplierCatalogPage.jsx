@@ -224,6 +224,7 @@ export const SupplierCatalogPage = () => {
     supplier_min_qty: '20',
     buyer_min_qty: '2',
     max_capacity: '100',
+    purchase_increment: '1',
     delivery_type: 'DOORSTEP',
     scheduled_close_at: '',
     promised_delivery_at: '',
@@ -816,6 +817,7 @@ export const SupplierCatalogPage = () => {
       supplier_min_qty: String(listing?.supplier_min_qty || '20'),
       buyer_min_qty: String(listing?.buyer_min_qty || '2'),
       max_capacity: '100',
+      purchase_increment: '1',
       delivery_type: 'DOORSTEP',
       scheduled_close_at: toDatetimeLocalString(defaultClose),
       promised_delivery_at: toDatetimeLocalString(defaultPromised),
@@ -839,6 +841,7 @@ export const SupplierCatalogPage = () => {
       supplier_min_qty: String(pool.supplier_min_qty || '20'),
       buyer_min_qty: String(pool.buyer_min_qty || '2'),
       max_capacity: String(pool.max_capacity || pool.target_qty || '100'),
+      purchase_increment: String(pool.purchase_increment || '1'),
       delivery_type: pool.delivery_type || 'DOORSTEP',
       scheduled_close_at: toDatetimeLocalString(pool.scheduled_close_at || pool.expires_at),
       promised_delivery_at: toDatetimeLocalString(pool.promised_delivery_at),
@@ -880,15 +883,32 @@ export const SupplierCatalogPage = () => {
       const targetQty = Number(poolForm.target_qty);
       const suppMin = Number(poolForm.supplier_min_qty);
       const maxCap = Number(poolForm.max_capacity);
+      const increment = Number(poolForm.purchase_increment);
       const unit = selectedListing?.pricing_unit || 'bag';
+      const decimalValues = [poolForm.target_qty, poolForm.supplier_min_qty, poolForm.buyer_min_qty,
+        poolForm.max_capacity, poolForm.purchase_increment, poolForm.tier1_price,
+        ...(poolForm.tier2_price ? [poolForm.tier2_price] : [])];
+      if (!selectedListing || selectedListing.status !== 'ACTIVE' ||
+          decimalValues.some(v => !/^\\d+(?:\\.\\d{1,4})?$/.test(String(v).trim())) ||
+          !Number.isFinite(targetQty) || !Number.isFinite(suppMin) ||
+          !Number.isFinite(maxCap) || !Number.isFinite(increment) ||
+          targetQty < suppMin || maxCap < targetQty || increment <= 0) {
+        toast.error('Choose an active offer and enter valid quantities, prices and purchase increments (maximum four decimals).');
+        return;
+      }
 
       const tiers = [];
       if (poolForm.tier1_price) {
         if (poolForm.tier2_price && Number(poolForm.tier2_price) < Number(poolForm.tier1_price) && targetQty > suppMin) {
-          tiers.push({ min_qty: suppMin, max_qty: targetQty - 1, price_per_unit: Number(poolForm.tier1_price), pricing_unit: unit });
-          tiers.push({ min_qty: targetQty, max_qty: maxCap, price_per_unit: Number(poolForm.tier2_price), pricing_unit: unit });
+          const firstTierMax = ((Math.round(targetQty * 10000) - Math.round(increment * 10000)) / 10000).toFixed(4);
+          if (Number(firstTierMax) < suppMin) {
+            toast.error('First pricing tier must cover the supplier minimum before the discount threshold.');
+            return;
+          }
+          tiers.push({ min_qty: poolForm.supplier_min_qty, max_qty: firstTierMax, price_per_unit: poolForm.tier1_price, pricing_unit: unit });
+          tiers.push({ min_qty: poolForm.target_qty, max_qty: poolForm.max_capacity, price_per_unit: poolForm.tier2_price, pricing_unit: unit });
         } else {
-          tiers.push({ min_qty: suppMin, max_qty: maxCap, price_per_unit: Number(poolForm.tier1_price), pricing_unit: unit });
+          tiers.push({ min_qty: poolForm.supplier_min_qty, max_qty: poolForm.max_capacity, price_per_unit: poolForm.tier1_price, pricing_unit: unit });
         }
       }
 
@@ -897,10 +917,11 @@ export const SupplierCatalogPage = () => {
         product_spec_id: selectedListing?.product_spec_id,
         supplier_sku_id: selectedListing?.supplier_sku_id || undefined,
         supplier_listing_id: Number(poolForm.supplier_listing_id),
-        target_qty: targetQty,
-        supplier_min_qty: suppMin,
-        buyer_min_qty: Number(poolForm.buyer_min_qty),
-        max_capacity: maxCap,
+        target_qty: poolForm.target_qty,
+        supplier_min_qty: poolForm.supplier_min_qty,
+        buyer_min_qty: poolForm.buyer_min_qty,
+        max_capacity: poolForm.max_capacity,
+        purchase_increment: poolForm.purchase_increment,
         pool_unit: unit,
         delivery_type: poolForm.delivery_type,
         scheduled_close_at: new Date(poolForm.scheduled_close_at).toISOString(),
@@ -2088,6 +2109,15 @@ export const SupplierCatalogPage = () => {
                     />
                   </div>
                 </div>
+
+                <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                  Purchase Increment (in listing units) *
+                  <input type="number" min="0.0001" step="0.0001" required
+                    value={poolForm.purchase_increment}
+                    onChange={(e) => setPoolForm({ ...poolForm, purchase_increment: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs"
+                  />
+                </label>
 
                 {/* Schedule & Mandatory 24-72h Delivery SLA */}
                 <div className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-3">
