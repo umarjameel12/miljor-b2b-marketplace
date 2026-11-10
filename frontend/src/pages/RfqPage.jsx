@@ -596,6 +596,20 @@ export const RfqPage = () => {
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
+  const qualifyCollectiveGroup=async(groupId,bidVersionId)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(
+        `/api/v1/procurement/collectives/${groupId}/qualify`,{
+          method:'POST',body:JSON.stringify({bid_version_id:bidVersionId})
+        });
+      toast.success('Collective qualified with independent buyer approvals. No payments created.');
+      await refreshProcurementModes();
+      setCollectiveApprovalPreview(null);
+      return result.qualification;
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
   const acceptCollectivePreview=async()=>{
     const view=collectiveApprovalPreview;
     if(!view)return;
@@ -1108,6 +1122,12 @@ export const RfqPage = () => {
                       className="text-xs underline disabled:opacity-50">
                       Review my exact supplier terms
                     </button>
+                    {Number(collectiveGroup?.id)===Number(collectiveBidGroupId) &&
+                      <button type="button" disabled={shoppingBusy||bid.status!=='ACTIVE'}
+                        onClick={()=>qualifyCollectiveGroup(collectiveBidGroupId,bid.bid_version_id)}
+                        className="ml-3 text-xs underline disabled:opacity-50">
+                        Qualify group after all buyers approve
+                      </button>}
                   </div>
                 ))}
                 {collectiveApprovalPreview && (
