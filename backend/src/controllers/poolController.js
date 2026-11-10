@@ -1554,18 +1554,29 @@ class PoolController {
 
       // Check current active allocations
       const [allocRows] = await connection.query(
-        `SELECT COALESCE(SUM(allocated_qty), 0) AS total_allocated
+        `SELECT unit, SUM(allocated_qty) AS total_allocated
          FROM supplier_inventory_allocations
-         WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')`,
+         WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')
+         GROUP BY unit`,
         [pool.supplier_listing_id]
       );
-      // B4-C: compare DECIMAL quantities exactly; binary floats can permit
+      // B4-C: allocation balances are only additive within one compatible
+      // physical quantity unit. Never add kg + bags or L + tins.
+      if (allocRows.some(row => unitConversionService.normalizeUnit(row.unit) !== listingUnit)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'ALLOCATION_UNIT_MISMATCH', message: 'Existing inventory allocations use incompatible units; reconcile inventory before publishing.' }
+        });
+      }
+      // Compare DECIMAL quantities exactly; binary floats can permit
       // a final fractional over-allocation at the capacity boundary.
       const exactDecimal = require('../services/exactDecimal');
       let requiredStockExact, allocationSumExact, listingStockExact;
       try {
         requiredStockExact = exactDecimal.toCanonical(requiredStockInListingUnits, 4);
-        allocationSumExact = exactDecimal.toCanonical(allocRows[0].total_allocated, 4);
+        allocationSumExact = exactDecimal.exactDecimalSum(allocRows.map(row => row.total_allocated), 4);
         listingStockExact = exactDecimal.toCanonical(listing.available_stock, 4);
       } catch (_) {
         await connection.rollback();
