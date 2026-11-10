@@ -36,7 +36,8 @@ class ProcurementController {
     try {
       this._smartKey(req);
       const request = await procurementRequestService.updateDraft(
-        req.user.id, req.params.id, req.body, req.body?.version_number
+        req.user.id, req.params.id, req.body, req.body?.version_number,
+        req.headers['x-idempotency-key']
       );
       res.json({ success: true, data: { request } });
     } catch (err) { this._smartError(res, err); }
@@ -46,7 +47,8 @@ class ProcurementController {
     try {
       this._smartKey(req);
       const result = await procurementRequestService.publish(
-        req.user.id, req.params.id, req.body?.version_number
+        req.user.id, req.params.id, req.body?.version_number,
+        req.headers['x-idempotency-key']
       );
       res.json({ success: true, data: result });
     } catch (err) { this._smartError(res, err); }
