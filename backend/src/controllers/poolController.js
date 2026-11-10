@@ -365,8 +365,22 @@ class PoolController {
         });
       }
 
-      const resolvedSupplierProductId = supplier_product_id || listing.supplier_product_id || spec.supplier_product_id || null;
-      const resolvedSupplierSkuId = supplier_sku_id || listing.supplier_sku_id || spec.supplier_sku_id || null;
+      // B4-A: Every supplied identifier must match the immutable physical SKU
+      // mapped by the specification and the supplier's commercial listing.
+      // Never let client-provided IDs override authoritative linked records.
+      if ((supplier_product_id && Number(supplier_product_id) !== Number(spec.supplier_product_id)) ||
+          (supplier_sku_id && Number(supplier_sku_id) !== Number(spec.supplier_sku_id)) ||
+          (listing.supplier_product_id && spec.supplier_product_id &&
+            Number(listing.supplier_product_id) !== Number(spec.supplier_product_id)) ||
+          (listing.supplier_sku_id && spec.supplier_sku_id &&
+            Number(listing.supplier_sku_id) !== Number(spec.supplier_sku_id))) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_PHYSICAL_IDENTITY_MISMATCH', message: 'Pool product/SKU identity must match the listing and its published physical specification.' }
+        });
+      }
+      const resolvedSupplierProductId = spec.supplier_product_id || listing.supplier_product_id || null;
+      const resolvedSupplierSkuId = spec.supplier_sku_id || listing.supplier_sku_id || null;
 
       // 4. Commercial Quantity Validations
       const parsedTarget = Number(target_qty);
