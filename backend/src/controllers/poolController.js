@@ -903,6 +903,29 @@ class PoolController {
         ? Number(purchase_increment)
         : Number(existingPool.purchase_increment);
 
+      // B4-B: Draft updates obey the same exact MySQL DECIMAL(12,4)
+      // contract as draft creation; never silently round incoming values.
+      try {
+        const exactDecimal = require('../services/exactDecimal');
+        const inputs = [target_qty, supplier_min_qty, buyer_min_qty, max_capacity, purchase_increment]
+          .filter(value => value !== undefined && value !== null);
+        for (const input of inputs) {
+          const value = exactDecimal.toCanonical(input, 4);
+          if (value.split('.')[0].replace('-', '').length > 8 ||
+              !exactDecimal.exactDecimalGte(value, '0.0001', 4)) {
+            throw new Error('quantity out of range');
+          }
+        }
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Updated pool quantities must be positive valid decimals with at most four fractional digits.' }
+        });
+      }
+
       // Validate quantities
       if (isNaN(parsedTarget) || parsedTarget <= 0 ||
           isNaN(parsedSuppMin) || parsedSuppMin <= 0 ||
