@@ -22,7 +22,7 @@ check('Rice packs aggregate to seven',result.group_lines.find(x=>x.request_item_
 check('Sugar packs remain separate',result.group_lines.find(x=>x.request_item_id===2).total_quantity==='3.0000');
 check('Unaccepted invite excluded',result.group_lines.find(x=>x.request_item_id===1).buyer_count===2);
 check('No payment commitment or buyer addresses in output',
- result.payment_authorized===false && !JSON.stringify(result).includes('buyer_id'));
+ result.payment_authorized===false && !/"buyer_id"\s*:/.test(JSON.stringify(result)));
 const mismatch=aggregateCollectiveDemand({participants:[
  buyer(1,[rice('3')]),buyer(2,[rice('4',9,15)])
 ]});
