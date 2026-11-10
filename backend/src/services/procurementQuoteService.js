@@ -278,6 +278,11 @@ class ProcurementQuoteService{
            WHERE id=? AND supplier_id=? AND status='ACTIVE'`,
         [idem,qid,supplier]
       );
+      await conn.query(
+        `UPDATE procurement_quote_negotiations SET status='CLOSED'
+           WHERE quote_id=? AND supplier_id=? AND status='OPEN'`,
+        [qid,supplier]
+      );
       await conn.commit();
       return {quote_id:qid,status:'WITHDRAWN',is_replay:false};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
