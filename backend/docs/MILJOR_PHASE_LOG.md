@@ -1435,3 +1435,6 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **Observed mocked source execution:** B6-E quotation lifecycle **9/9 PASS** (revisions, exact money, idempotency, supplier/tenant privacy). No real Node/MySQL/HTTP/Vite tests executed; no protected database writes. Final integration deferred per user.
 - **Dedicated report:** `backend/docs/MILJOR_B6_SUPPLIER_QUOTE_REPORT.md`.
 - **Verdict:** B6-E SOURCE IMPLEMENTED / INTEGRATION NOT VERIFIED. **CAN START NEXT PHASE: NO** until explicit subsequent instruction.
+
+- **B6-E lifecycle completion:** supplier quote withdrawal with idempotent same-key retry, historical version preservation, owner-scoped buyer quote-history endpoint, supplier quote listing/withdrawal UI; minimum buyer quantity enforced in matching and submission. Migration 039 includes `withdrawal_key` and `withdrawn_at`.
+- **Focused tests extended:** `b6_supplier_matching_gate.js` and `b6_supplier_quote_gate.js` now include inbox eligible SKU choices, quote history/withdrawal, key conflicts, privacy, MOQ-compatible fixtures and no phantom orders/payments. Tests require reviewed 037–039 migrations on `miljor_test_db`; **NOT RUN**. Last 9/9 source mock check predates latest changes. Final integration verification DEFERRED; B4/B5 untouched.
