@@ -210,14 +210,19 @@ class FlashPoolService {
     try {
       await conn.beginTransaction();
       const [offers]=await conn.query('SELECT * FROM flash_pools WHERE id=? FOR UPDATE',[flashId]);
-      const offer=offers[0];
-      if(!offer)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
+      if(!offers[0])throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
+      await this.reclaimExpiredUninitiatedHolds(flashId,conn);
+      const [refreshed]=await conn.query('SELECT * FROM flash_pools WHERE id=?',[flashId]);
+      const offer=refreshed[0];
       const [prior]=await conn.query('SELECT * FROM flash_purchase_holds WHERE buyer_id=? AND idempotency_key=?',[buyerId,key]);
       if(prior.length) {
         if(Number(prior[0].flash_pool_id)!==Number(flashId) ||
           money.toCanonical(prior[0].quantity,2)!==money.toCanonical(payload.quantity,2))
           throw fail('IDEMPOTENCY_CONFLICT','This key belongs to a different purchase.',409);
-        await conn.commit();return prior[0];
+        await conn.commit();
+        return {id:prior[0].id,order_id:prior[0].order_id,quantity:prior[0].quantity,
+          locked_unit_price:prior[0].locked_unit_price,status:prior[0].status,
+          checkout_endpoint:`/api/v1/orders/${prior[0].order_id}/checkout`};
       }
       const [buyers]=await conn.query('SELECT role,verification_status,buyer_trust_status FROM users WHERE id=?',[buyerId]);
       if(!buyers.length||buyers[0].role!=='BUYER'||buyers[0].verification_status!=='VERIFIED' ||
