@@ -411,18 +411,17 @@ class CatalogController {
     }
   }
 
-  // POST /api/v1/admin/catalog/variants
+  // POST /api/v1/admin/catalog/variants — retired for new supplier products (B1).
+  // Historical E2 variant records/requests remain readable and reconcilable;
+  // new SKUs belong to their suppliers, not to the central catalog.
   async adminCreateVariant(req, res) {
-    try {
-      const created = await catalogService.createAdminVariant(req.user.id, req.user.role, req.body || {});
-      return res.status(201).json({
-        success: true,
-        message: 'Approved physical variant created successfully.',
-        data: { variant: created }
-      });
-    } catch (err) {
-      return this._handleError(res, err, 'adminCreateVariant');
-    }
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'SUPPLIER_OWNED_VARIANTS',
+        message: 'MilJor administers categories and families only. Suppliers create their own physical products and SKUs under approved families.'
+      }
+    });
   }
 
   // GET /api/v1/admin/catalog/requests
