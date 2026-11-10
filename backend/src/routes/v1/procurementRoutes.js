@@ -35,6 +35,12 @@ router.get('/procurement/requests/:id/quotes',protect,authorizeStrict('BUYER'),(
 router.get('/procurement/requests/:id/quotes/:quoteId/versions',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartQuoteHistory(req,res));
 router.post('/procurement/supplier/quotes/:quoteId/withdraw',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.withdrawSmartQuote(req,res));
 
+// B6-F — Buyer comparison and non-binding improvement requests.
+router.get('/procurement/requests/:id/compare',protect,authorizeStrict('BUYER'),(req,res)=>controller.compareSmartQuotes(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>controller.requestSmartBetterOffer(req,res));
+router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
+router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
