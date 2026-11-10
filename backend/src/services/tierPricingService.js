@@ -172,9 +172,11 @@ class TierPricingService {
         // Allowed next min_qty: either prevMax (continuous) or prevMax + increment / 1 (discrete/stepped)
         const expectedContiguousMinA = prevMax;
         const expectedContiguousMinB = prevMax + increment;
+        const expectedContiguousMinC = isDiscrete ? prevMax + 1 : null;
 
         const matchesA = Math.abs(minQty - expectedContiguousMinA) < 0.0001;
         const matchesB = Math.abs(minQty - expectedContiguousMinB) < 0.0001;
+        const matchesC = expectedContiguousMinC !== null && Math.abs(minQty - expectedContiguousMinC) < 0.0001;
 
         if (minQty < prevMax || (isDiscrete && minQty === prevMax)) {
           return {
@@ -186,7 +188,7 @@ class TierPricingService {
           };
         }
 
-        if (!matchesA && !matchesB && minQty > prevMax) {
+        if (!matchesA && !matchesB && !matchesC && minQty > prevMax) {
           return {
             valid: false,
             error: {

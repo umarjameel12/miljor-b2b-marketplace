@@ -50,4 +50,12 @@ assert.strictEqual(increasingPrice.valid, false);
 assert.strictEqual(increasingPrice.error.code, 'NON_MONOTONIC_PRICING');
 pass('Higher-volume tier cannot be more expensive');
 
+// B4-E: Discrete-pack stepping (prevMax + 1) with non-unit purchase increment (e.g. 5)
+const steppedDiscreteWithIncrement = tierPricingService.validateTiers([
+  { min_qty: '10', max_qty: '49', price_per_unit: '5200.00', pricing_unit: 'bag' },
+  { min_qty: '50', max_qty: '100', price_per_unit: '4900.00', pricing_unit: 'bag' }
+], { supplier_min_qty: '10', target_qty: '50', max_capacity: '100', pool_unit: 'bag', purchase_increment: '5' });
+assert.strictEqual(steppedDiscreteWithIncrement.valid, true, JSON.stringify(steppedDiscreteWithIncrement.error));
+pass('Discrete-pack 1-unit step (49 -> 50) valid when purchase increment is 5');
+
 console.log('B4 tier decimal contract: ' + count + '/' + count + ' PASS (source assertions; run locally to verify)');

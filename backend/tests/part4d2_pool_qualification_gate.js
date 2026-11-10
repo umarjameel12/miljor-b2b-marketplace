@@ -205,6 +205,7 @@ async function runPart4D2PoolQualificationGate() {
         expires_at: expiresAt,
         supplier_confirmation_deadline: suppDeadline,
         buyer_commitment_deadline: buyerDeadline,
+        promised_delivery_at: overrides.promised_delivery_at || new Date(new Date(expiresAt).getTime() + 48 * 3600 * 1000).toISOString(),
         price_per_unit: 480.00,
         price_tiers: tiers
       });

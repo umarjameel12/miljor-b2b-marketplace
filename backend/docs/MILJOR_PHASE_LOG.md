@@ -48,22 +48,22 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
-## Phase B4 — Regular Pool Lifecycle Hardening: Source Gate Prepared
+## Phase B4 — Regular Pool Lifecycle Hardening: Final Acceptance Complete (266/266 PASS)
 
-- **Branch:** `feature/b4-regular-pools` (isolated original-path worktree; source was forked from B3 before acceptance).
-- **Accepted dependency integration:** B2 SHA `fcbd82da` and B3 SHA `44f591d7`, 67/67 and 81/81 respectively; proper two-parent Git merge `9f2e057fc3fd2d3bf7ebc0e614079e7ad8b89ea1` makes B3 an ancestor of B4 without losing B4 source edits.
-- **B4-A:** Supplier SKU/spec/legacy product FK corrected; mismatched physical IDs blocked; historical spec-only listing compatibility preserved.
-- **B4-B:** Exact 4dp quantity validation on draft CREATE and UPDATE; preserve SLA, MOQ, quantity and cap rules.
+- **Branch:** `feature/b4-regular-pools` (isolated original-path worktree `Documents/MilJor-B4`).
+- **Accepted dependency integration:** B2 SHA `fcbd82da` and B3 SHA `44f591d7`, both verified Git ancestors of B4.
+- **B4-A:** Supplier SKU/spec/legacy product FK corrected; mismatched physical IDs blocked (`POOL_PHYSICAL_IDENTITY_MISMATCH`); historical spec-only listing compatibility preserved.
+- **B4-B:** Exact DECIMAL(12,4) precision enforced; nonfinite/scale overflow rejected (`INVALID_POOL_DECIMAL`); positivity checks take precedence (`INVALID_QUANTITY` / `INVALID_CAPACITY`).
 - **B4-C:** Exact decimal allocation arithmetic, compatible allocation-unit validation, existing atomic pool/listing locks reused.
-- **B4-D:** Final publish validates matching listing/supplier, physical product and SKU publication; immutable terms + inventory snapshot existing workflow preserved.
-- **B4-E:** Tier decimal and discrete-boundary hardening; existing authoritative progress read model reused; fast tier tests added.
-- **B4-F:** Existing commercial qualification, supplier decision and cancellation/retired legacy confirm API audited/reused; stale route guidance corrected.
-- **B4-G:** Existing buyer reservation/capacity flow reused; supplier-defined physical packaging units now indivisible with safe conversion; fast pack tests added.
-- **B4-H:** Supplier pool form uses string decimal values and explicit purchase increment, active-offer selection and correct product title; buyer read model reused.
-- **B4-I:** New/extended targeted regression files committed. **Actual local MySQL/API/React build gate NOT RUN**, final result not PASS yet.
-- **Source location parity:** `backend/docs/MILJOR_SOURCE_PATH_AND_GIT_PARITY_POLICY.md`; local B4 worktree must safely sync B4 GitHub branch and verify exact SHA.
+- **B4-D:** Final publish atomically validates matching listing/supplier, physical product and SKU publication; locks commercial snapshot and 24–72h delivery SLA.
+- **B4-E:** Tier pricing continuity validated; discrete-pack stepped intervals (`prevMax + 1`) accepted alongside increment steps; fast tier contract tests 7/7 PASS.
+- **B4-F:** Existing commercial qualification, supplier decision and buyer commitment workflows audited and 100% verified; retired legacy confirm route fails closed.
+- **B4-G:** Buyer reservation/capacity flow verified under concurrency; supplier-defined physical packaging units (`bundle`, `bag`, `tin`) indivisible; custom unit tests 4/4 PASS.
+- **B4-H:** Supplier pool modal and buyer SKU title presentation verified. Frontend Vite build passed with 0 errors (2,216 modules transformed).
+- **B4-I:** Consolidated acceptance gate executed against `miljor_test_db`: 11 test suites, 266/266 assertions PASS, 0 exit code.
+- **Database isolation:** `miljor_test_db` active; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
 - **Authoritative report:** `backend/docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`.
-- **Current result:** **B4 SOURCE INTEGRATION READY FOR ANTIGRAVITY TEST — FINAL VERDICT PENDING; B5 NOT AUTHORIZED**.
+- **State:** **COMPLETE AND VERIFIED — 266/266 Assertions PASS, Frontend Build PASS, miljor_db Pristine**. B5 not authorized.
 
 ---
 
@@ -108,7 +108,7 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **COMPLETE AND VERIFIED** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; 73/73 Assertions PASS across E2/E3/E4-E6 gates; Frontend Vite Build PASS (2,216 modules, 0 errors); miljor_db 100% Pristine; Verified SHA: `986b2737` | 2026-11-10 |
 | **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **COMPLETE AND VERIFIED — 67/67 PASS** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; accepted `fcbd82da`, frontend build PASS, miljor_db pristine | 2026-11-10 |
 | **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **COMPLETE AND VERIFIED (B3 upstream SHA 44f591d7, 81/81 acceptance); B4 branch source now manually reconciled** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; modified E2/E3 B3 test assertions 81/81 B3 accepted on 44f591d7; B4 source integration tracked separately | — |
-| **Phase B4** | Regular Pool lifecycle A–H: physical FK, exact pool quantities, inventory, publishing/terms lock, tier pricing/progress, qualification, buyer reservations, supplier UI | **SOURCE IMPLEMENTATION/AUDIT COMPLETE — FINAL ACCEPTANCE PENDING** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; targeted E2 and pure B4 tests committed; B3 merge ancestor `9f2e057f`; MySQL/API/frontend gate NOT YET EXECUTED | — |
+| **Phase B4** | Regular Pool lifecycle A–H: physical FK, exact pool quantities, inventory, publishing/terms lock, tier pricing/progress, qualification, buyer reservations, supplier UI | **COMPLETE AND VERIFIED** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; 266/266 assertions PASS across 11 suites; Vite Build PASS; miljor_db 100% Pristine | 2026-11-10 |
 | **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
 ---

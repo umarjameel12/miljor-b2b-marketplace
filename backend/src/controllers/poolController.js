@@ -390,27 +390,6 @@ class PoolController {
       const resolvedSupplierProductId = spec.supplier_product_id || listing.supplier_product_id || null;
       const resolvedSupplierSkuId = spec.supplier_sku_id || listing.supplier_sku_id || null;
 
-      // B4-B: Reject Infinity, exponential/invalid decimals, precision
-      // overflow and fractional scale that MySQL would silently round.
-      const exactDecimal = require('../services/exactDecimal');
-      const poolQuantities = [target_qty, supplier_min_qty, buyer_min_qty];
-      if (max_capacity !== undefined && max_capacity !== null) poolQuantities.push(max_capacity);
-      if (purchase_increment !== undefined && purchase_increment !== null) poolQuantities.push(purchase_increment);
-      try {
-        for (const input of poolQuantities) {
-          const normalized = exactDecimal.toCanonical(input, 4);
-          const integerPart = normalized.split('.')[0].replace('-', '');
-          if (integerPart.length > 8 || !exactDecimal.exactDecimalGte(normalized, '0.0001', 4)) {
-            throw new Error('Out of range');
-          }
-        }
-      } catch (_) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_POOL_DECIMAL', message: 'Pool quantities must be valid positive decimals with up to 4 fractional digits and within database precision.' }
-        });
-      }
-
       // 4. Commercial Quantity Validations
       const parsedTarget = Number(target_qty);
       const parsedSuppMin = Number(supplier_min_qty);
@@ -431,6 +410,27 @@ class PoolController {
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_INCREMENT', message: 'purchase_increment must be a positive number' }
+        });
+      }
+
+      // B4-B: Reject Infinity, exponential/invalid decimals, precision
+      // overflow and fractional scale that MySQL would silently round.
+      const exactDecimal = require('../services/exactDecimal');
+      const poolQuantities = [target_qty, supplier_min_qty, buyer_min_qty];
+      if (max_capacity !== undefined && max_capacity !== null) poolQuantities.push(max_capacity);
+      if (purchase_increment !== undefined && purchase_increment !== null) poolQuantities.push(purchase_increment);
+      try {
+        for (const input of poolQuantities) {
+          const normalized = exactDecimal.toCanonical(input, 4);
+          const integerPart = normalized.split('.')[0].replace('-', '');
+          if (integerPart.length > 8 || !exactDecimal.exactDecimalGte(normalized, '0.0001', 4)) {
+            throw new Error('Out of range');
+          }
+        }
+      } catch (_) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Pool quantities must be valid positive decimals with up to 4 fractional digits and within database precision.' }
         });
       }
 
@@ -911,29 +911,6 @@ class PoolController {
         ? Number(purchase_increment)
         : Number(existingPool.purchase_increment);
 
-      // B4-B: Draft updates obey the same exact MySQL DECIMAL(12,4)
-      // contract as draft creation; never silently round incoming values.
-      try {
-        const exactDecimal = require('../services/exactDecimal');
-        const inputs = [target_qty, supplier_min_qty, buyer_min_qty, max_capacity, purchase_increment]
-          .filter(value => value !== undefined && value !== null);
-        for (const input of inputs) {
-          const value = exactDecimal.toCanonical(input, 4);
-          if (value.split('.')[0].replace('-', '').length > 8 ||
-              !exactDecimal.exactDecimalGte(value, '0.0001', 4)) {
-            throw new Error('quantity out of range');
-          }
-        }
-      } catch (_) {
-        await connection.rollback();
-        connection.release();
-        connection = null;
-        return res.status(400).json({
-          success: false,
-          error: { code: 'INVALID_POOL_DECIMAL', message: 'Updated pool quantities must be positive valid decimals with at most four fractional digits.' }
-        });
-      }
-
       // Validate quantities
       if (isNaN(parsedTarget) || parsedTarget <= 0 ||
           isNaN(parsedSuppMin) || parsedSuppMin <= 0 ||
@@ -982,6 +959,29 @@ class PoolController {
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_QUANTITY', message: 'supplier_min_qty cannot exceed target_qty' }
+        });
+      }
+
+      // B4-B: Draft updates obey the same exact MySQL DECIMAL(12,4)
+      // contract as draft creation; never silently round incoming values.
+      try {
+        const exactDecimal = require('../services/exactDecimal');
+        const inputs = [target_qty, supplier_min_qty, buyer_min_qty, max_capacity, purchase_increment]
+          .filter(value => value !== undefined && value !== null);
+        for (const input of inputs) {
+          const value = exactDecimal.toCanonical(input, 4);
+          if (value.split('.')[0].replace('-', '').length > 8 ||
+              !exactDecimal.exactDecimalGte(value, '0.0001', 4)) {
+            throw new Error('quantity out of range');
+          }
+        }
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Updated pool quantities must be positive valid decimals with at most four fractional digits.' }
         });
       }
 
