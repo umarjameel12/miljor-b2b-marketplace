@@ -666,9 +666,74 @@ export const RfqPage = () => {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent)]">Smart Procurement Hub</p>
               <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Get Best Quotes — Your Shopping List</h2>
-              <p className="text-sm text-[var(--text-muted)] mt-1">Add everything your business needs in one request. Start with one-time purchasing; collective and recurring modes will be available after their approval gates.</p>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Choose solo or group purchasing, one product or a complete shopping list, and one-time or recurring procurement. Payments require a later explicit buyer confirmation.</p>
             </div>
             {shoppingError && <p role="alert" className="text-sm text-red-600">{shoppingError}</p>}
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">How would you like to buy?
+                <select value={buyerMode}
+                  onChange={e=>{setBuyerMode(e.target.value);if(e.target.value==='COLLECTIVE')setPurchaseCadence('ONE_TIME');}}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                  <option value="SINGLE_BUYER">Buy Alone — My Business</option>
+                  <option value="COLLECTIVE">Buy Together — Verified Businesses</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold">How often?
+                <select value={purchaseCadence} onChange={e=>setPurchaseCadence(e.target.value)}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                  <option value="ONE_TIME">One-Time Purchase</option>
+                  <option value="WEEKLY" disabled={buyerMode==='COLLECTIVE'}>Weekly Recurring</option>
+                  <option value="MONTHLY" disabled={buyerMode==='COLLECTIVE'}>Monthly Recurring</option>
+                </select>
+              </label>
+            </div>
+            {buyerMode==='COLLECTIVE' && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="text-xs font-semibold">Group join cutoff (Pakistan local time)
+                  <input type="datetime-local" value={joinDeadline}
+                    onChange={e=>setJoinDeadline(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">Minimum participating businesses
+                  <input type="number" min="2" max="1000" value={minimumBuyers}
+                    onChange={e=>setMinimumBuyers(Number(e.target.value))}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">
+                  Private invitations and individual quantity consent are available in this stage.
+                  Collective supplier bids, group checkout and collective recurring follow their financial gates.
+                </p>
+              </div>
+            )}
+            {buyerMode==='SINGLE_BUYER' && purchaseCadence!=='ONE_TIME' && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="text-xs font-semibold">
+                  {purchaseCadence==='WEEKLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
+                  <input type="number" min={purchaseCadence==='WEEKLY'?0:1}
+                    max={purchaseCadence==='WEEKLY'?6:31} value={recurringCadenceDay}
+                    onChange={e=>setRecurringCadenceDay(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">Local time (Pakistan)
+                  <input type="time" value={recurringTime}
+                    onChange={e=>setRecurringTime(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">Start date
+                  <input type="date" value={recurringStart}
+                    onChange={e=>setRecurringStart(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">End date (optional)
+                  <input type="date" value={recurringEnd}
+                    onChange={e=>setRecurringEnd(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">
+                  Every cycle requires fresh pricing and explicit payment approval. No automatic charges.
+                </p>
+              </div>
+            )}
             <div className="space-y-3">
               {shoppingList.map((item, index) => (
                 <div key={index} className="rounded-xl border border-[var(--border-subtle)] p-3 grid grid-cols-1 sm:grid-cols-12 gap-3">
@@ -725,7 +790,7 @@ export const RfqPage = () => {
                 className="rounded-xl px-4 py-2 border border-[var(--border-subtle)] text-sm font-semibold disabled:opacity-50">
                 {shoppingBusy?'Saving...':'Save Draft'}
               </button>
-              <button type="button" disabled={shoppingBusy||!quoteDeadline}
+              <button type="button" disabled={shoppingBusy||!quoteDeadline||buyerMode!=='SINGLE_BUYER'||purchaseCadence!=='ONE_TIME'}
                 onClick={()=>submitShoppingList(true)}
                 className="rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-sm font-semibold disabled:opacity-50">
                 Publish Shopping List
@@ -734,7 +799,7 @@ export const RfqPage = () => {
                 onClick={()=>{setActiveRequest(null);setShoppingList([emptyItem()]);setDeliveryArea('');setQuoteDeadline('');setShoppingError('');}}
                 className="text-sm px-3 py-2 underline">Start New</button>}
             </div>
-            <p className="text-xs text-[var(--text-muted)]">No payment or stock reservation happens when you publish. Suppliers can now submit quotations. Buyer acceptance and payment will activate after the secure ordering stage.</p>
+            <p className="text-xs text-[var(--text-muted)]">No payment or inventory reservation happens when you publish or create a schedule/group. Solo one-time requests can receive supplier quotes now. Group bids and recurring payment remain gated until their completion tests.</p>
             {savedRequests.length>0 && (
               <div className="border-t border-[var(--border-subtle)] pt-3">
                 <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
