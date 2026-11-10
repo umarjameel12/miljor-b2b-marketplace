@@ -1438,3 +1438,18 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 - **B6-E lifecycle completion:** supplier quote withdrawal with idempotent same-key retry, historical version preservation, owner-scoped buyer quote-history endpoint, supplier quote listing/withdrawal UI; minimum buyer quantity enforced in matching and submission. Migration 039 includes `withdrawal_key` and `withdrawn_at`.
 - **Focused tests extended:** `b6_supplier_matching_gate.js` and `b6_supplier_quote_gate.js` now include inbox eligible SKU choices, quote history/withdrawal, key conflicts, privacy, MOQ-compatible fixtures and no phantom orders/payments. Tests require reviewed 037–039 migrations on `miljor_test_db`; **NOT RUN**. Last 9/9 source mock check predates latest changes. Final integration verification DEFERRED; B4/B5 untouched.
+
+
+---
+
+## B6-F — Smart Quote Comparison & Negotiation (2026-11-10)
+
+- **Authorized scope:** Strictly approved B6-F plan (full vs split quote comparison, transparent rankings, buyer better-offer request, immutable supplier counterquote). No B6-G/H inventory, order or payment execution.
+- **Original project paths:** `040_procurement_quote_negotiations.sql`, `procurementQuoteComparisonService.js`, `procurementNegotiationService.js`, existing `procurementQuoteService.js`/controller/routes/`RfqPage.jsx`, and `tests/b6_quote_negotiation_gate.js`.
+- **Buyer-visible:** lowest supplier-quoted basket cost, fastest declared delivery, transparent best value (supplier consolidation), item grade/brand/pack/requirements, explicit item/shipping amounts and pending platform fee disclaimer; non-binding Request Better Offer, history.
+- **Supplier-visible:** own negotiation requests and response status; new immutable quote revision atomically marks request RESPONDED; quote withdrawal closes pending negotiation. Buyer contact/address never exposed in negotiation inbox.
+- **Precision/privacy/security:** exact BigInt decimals, current quote version, supplier verification and quote/role ownership checks, deadline validation, durable idempotency with original JSON response snapshot; bounded 8-quote combination engine, explicit limitation not fake optimum.
+- **Observed code checks:** 12/12 existing pure comparison assertions PASS in JS sandbox; targeted server comparison mock returned accurate Rs.600.00 and SKU details; JS syntax parses. **No real MySQL migration, Node HTTP integration, Vite build or full B0–B5 regression executed.**
+- **Phase report:** `backend/docs/MILJOR_B6_COMPARISON_NEGOTIATION_REPORT.md`.
+- **QA parallel safety:** Prior A–E QA should remain pinned to its earlier checkout worktree; latest B6-F code requires reviewed Migration 040. Do not blindly reset/rebase or run two mutable suites on `miljor_test_db`.
+- **Verdict: B6-F SOURCE IMPLEMENTED / FINAL ACCEPTANCE BLOCKED** pending actual test DB migration, authorized API/browser checks and affected regression. **CAN START NEXT PHASE: NO.**
