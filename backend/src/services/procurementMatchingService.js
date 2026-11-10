@@ -27,9 +27,10 @@ function matchingArea(zones, area) {
   const normalized = area.toLowerCase().replace(/[,]+/g,' ').replace(/\s+/g,' ').trim();
   // Area matching is conservative. A supplier must explicitly cover the area,
   // or indicate all Lahore. No fuzzy proximity or invented route distances.
-  return zones.some(z => z === 'all lahore' || z === 'lahore wide' ||
-    normalized === z || normalized.startsWith(z+',') ||
-    normalized.startsWith(z+' '));
+  return zones.some(z =>
+    ((z === 'all lahore' || z === 'lahore wide') && /\\blahore\\b/.test(normalized)) ||
+    normalized === z || normalized.startsWith(z+' ')
+  );
 }
 function compatibleLine(item, row) {
   if (Number(item.family_id)!==Number(row.family_id)) return false;
