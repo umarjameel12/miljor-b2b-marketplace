@@ -281,6 +281,78 @@ class FlashPoolService {
         checkout_endpoint:`/api/v1/orders/${order.insertId}/checkout`,hold_expires_in_seconds:900};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
+  // B5: Mark checkout as in-progress BEFORE contacting Safepay. Expiry
+  // cleanup may release only still-HELD orders, never this payment-in-flight
+  // state. The Flash pool is the transaction's first locked row.
+  async claimCheckout(orderId,buyerId) {
+    const conn=await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [links]=await conn.query('SELECT flash_pool_id FROM flash_purchase_holds WHERE order_id=?',[orderId]);
+      if(!links.length){await conn.commit();return {flash_order:false};}
+      const flashId=links[0].flash_pool_id;
+      await conn.query('SELECT id FROM flash_pools WHERE id=? FOR UPDATE',[flashId]);
+      const [holds]=await conn.query(
+        'SELECT * FROM flash_purchase_holds WHERE order_id=? AND buyer_id=? FOR UPDATE',[orderId,buyerId]);
+      if(!holds.length)throw fail('FLASH_HOLD_FORBIDDEN','Buyer does not own this Flash order.',403);
+      const hold=holds[0];
+      const [orders]=await conn.query('SELECT order_status,payment_status FROM orders WHERE id=?',[orderId]);
+      if(!orders.length || !['AWAITING_PAYMENT','PAID'].includes(orders[0].order_status))
+        throw fail('FLASH_ORDER_CLOSED','Order is not eligible for Flash checkout.',409);
+      if(hold.status==='PAID'){await conn.commit();return {flash_order:true,paid:true};}
+      if(!['HELD','PAYMENT_PENDING'].includes(hold.status))
+        throw fail('FLASH_HOLD_CLOSED','Flash hold is no longer eligible for checkout.',409);
+      if(hold.status==='HELD'){
+        const [[clock]]=await conn.query('SELECT (? > UTC_TIMESTAMP()) AS valid_hold',[hold.expires_at]);
+        if(!clock.valid_hold)throw fail('FLASH_HOLD_EXPIRED','Flash checkout hold expired.',409);
+        await conn.query(
+          "UPDATE flash_purchase_holds SET status='PAYMENT_PENDING' WHERE id=?",[hold.id]);
+      }
+      await conn.commit();
+      return {flash_order:true,hold_id:hold.id};
+    }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+  }
+
+  // Called before each new buyer allocation (and may be called by an external
+  // maintenance scheduler). Only untouched/uninitiated HELD orders can expire.
+  // An initiated Safepay checkout remains locked until provider reconciliation.
+  async reclaimExpiredUninitiatedHolds(flashId,clientConnection=null) {
+    const conn=clientConnection || await db.getConnection();
+    const owns=!clientConnection;
+    try {
+      if(owns)await conn.beginTransaction();
+      // Caller may already hold the Flash parent row. Lock order is always
+      // flash_pools -> holds -> orders.
+      await conn.query('SELECT id FROM flash_pools WHERE id=? FOR UPDATE',[flashId]);
+      const [expired]=await conn.query(
+        `SELECT h.id,h.quantity,h.order_id
+         FROM flash_purchase_holds h
+         WHERE h.flash_pool_id=? AND h.status='HELD' AND h.expires_at<=UTC_TIMESTAMP()
+         ORDER BY h.id ASC FOR UPDATE`,[flashId]);
+      let released=0;
+      for(const hold of expired){
+        const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=? FOR UPDATE',[hold.order_id]);
+        if(!orders.length || orders[0].payment_status!=='AWAITING_PAYMENT' ||
+          orders[0].order_status!=='AWAITING_PAYMENT')continue;
+        const [attempts]=await conn.query('SELECT id FROM payment_attempts WHERE order_id=? LIMIT 1',[hold.order_id]);
+        if(attempts.length)continue;
+        await conn.query(
+          "UPDATE flash_purchase_holds SET status='EXPIRED' WHERE id=? AND status='HELD'",[hold.id]);
+        await conn.query(
+          "UPDATE orders SET order_status='CANCELLED',payment_status='PAYMENT_FAILED' WHERE id=?",[hold.order_id]);
+        await conn.query(
+          `UPDATE flash_pools
+           SET remaining_stock=remaining_stock+?,held_stock=held_stock-?,
+           status=CASE WHEN status='SOLD_OUT' AND expiry_time>UTC_TIMESTAMP() THEN 'ACTIVE' ELSE status END,
+           version_number=version_number+1
+           WHERE id=? AND held_stock>=?`,[hold.quantity,hold.quantity,flashId,hold.quantity]);
+        released++;
+      }
+      if(owns)await conn.commit();
+      return {released};
+    }catch(e){if(owns)await conn.rollback();throw e;}finally{if(owns)conn.release();}
+  }
+
   // Reconcile ONLY confirmed server-side payment status; no browser callback
   // can mark a hold as PAID. This method is safe to retry after webhooks/crashes.
   async reconcilePaidOrder(orderId) {
