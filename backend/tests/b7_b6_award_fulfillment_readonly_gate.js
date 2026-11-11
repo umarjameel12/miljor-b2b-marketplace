@@ -70,6 +70,14 @@ async function main(){
   pass('Unrelated buyer cannot access paid order or SKU detail',
    attacker.status===403||attacker.status===404);
  }else console.log('SKIP: no separate unrelated buyer test identity configured');
+ const outsiderSupplierId=Number(process.env.B7_TEST_UNRELATED_SUPPLIER_ID);
+ if(Number.isSafeInteger(outsiderSupplierId)&&outsiderSupplierId>0&&
+    outsiderSupplierId!==order.supplier_id){
+  const badSupplier=await ticket(root+'supplier/orders/'+oid,
+    token(outsiderSupplierId,'SUPPLIER'));
+  pass('Unrelated supplier cannot see awarded buyer SKU/order',
+    badSupplier.status===403||badSupplier.status===404);
+ }else console.log('SKIP: no separate unrelated supplier test identity configured');
  console.log('B7 READONLY B6 AWARD -> FULFILLMENT: '+passed+' assertions PASS; no mutations.');
 }
 main().catch(e=>{console.error('B7 HTTP GATE FAILED/BLOCKED:',e);process.exitCode=1})
