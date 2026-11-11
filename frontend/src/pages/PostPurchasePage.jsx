@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useState} from 'react';
+import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {AppShell} from '../components/layout/AppShell';
 import {useAuth} from '../context/AuthContext';
 import apiClient from '../api/client';
@@ -13,6 +13,12 @@ const nextStatus={AWAITING_SUPPLIER_ACKNOWLEDGEMENT:'PREPARING',
 export function PostPurchasePage(){
  const {user,isAuthenticated}=useAuth();
  const role=user?.role;
+ const actionKeys=useRef(new Map());
+ const stableKey=(action,payload)=>{
+  const signature=action+':'+JSON.stringify(payload);
+  if(!actionKeys.current.has(signature))actionKeys.current.set(signature,newKey());
+  return {signature,key:actionKeys.current.get(signature)};
+ };
  const buyer=role==='BUYER',supplier=role==='SUPPLIER';
  const [orders,setOrders]=useState([]),[selected,setSelected]=useState(null);
  const [timeline,setTimeline]=useState([]),[lines,setLines]=useState([]);
@@ -53,12 +59,14 @@ export function PostPurchasePage(){
   if(!selected||busy)return;
   setBusy(true);setError('');setNotice('');
   try{
-   const headers={'X-Idempotency-Key':newKey()};
+   const token=stableKey(action+':'+selected.id,payload);
+   const headers={'X-Idempotency-Key':token.key};
    let endpoint='/fulfillment/'+route+'/orders/'+selected.id;
    if(action==='advance')endpoint+='/transition';
    else if(action==='confirm')endpoint+='/confirm-receipt';
    else if(action==='dispute')endpoint='/disputes';
    const res=await apiClient.post(endpoint,payload,{headers});
+   actionKeys.current.delete(token.signature);
    setNotice(res.data?.message||'Request accepted. Refreshing authoritative status.');
    await refresh();await details(selected.id,{preserveNotice:true});
   }catch(e){setError(msg(e))}
@@ -85,9 +93,11 @@ export function PostPurchasePage(){
    const endpoint=step==='respond'?'/disputes/'+id+'/supplier-response':
     step==='dispatch'?'/disputes/'+id+'/remediation/declare-delivered':
     '/disputes/'+id+'/remediation/confirm-receipt';
+   const token=stableKey(step+':'+id,payload);
    const res=await apiClient.post(endpoint,payload,{
-    headers:{'X-Idempotency-Key':newKey()}
+    headers:{'X-Idempotency-Key':token.key}
    });
+   actionKeys.current.delete(token.signature);
    setNotice(res.data?.message||'Dispute action recorded.');
    await refresh();
    if(selected)await details(selected.id,{preserveNotice:true});
