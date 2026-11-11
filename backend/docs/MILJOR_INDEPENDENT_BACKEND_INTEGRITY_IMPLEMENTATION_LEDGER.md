@@ -50,3 +50,13 @@ Status: IMPLEMENTED, NOT TESTED; final acceptance deferred as requested.
 - No buyer, supplier, pool, order or historical RFQ records modified.
 - The old 410 endpoints must remain read-only/retired until clients switch to B6 and historical data has a supported archival read path.
 - Remaining phase work: reconciliation of payment rails, fees/subscriptions, catalog language and canonical families; do not treat this batch as full-project closure.
+
+## Batch 3 — Financial and supplier entitlement safety
+Status: IMPLEMENTED, NOT TESTED, NOT VERIFIED.
+- `src/services/feeService.js`: reject absent/ambiguous supplier profiles with 422 SUPPLIER_PROFILE_REQUIRED before computing a supplier fee or net payout; preserve exact decimal formulas and configured percentages.
+- `src/services/subscriptionEntitlementService.js`: reject unknown supplier subscription plans with 409 UNKNOWN_SUBSCRIPTION_PLAN; previously silently treated any unknown plan as STARTER.
+- Normalize and deduplicate mysql2 family IDs from string/number representations before quota membership and counters; same family consumes one slot regardless of supplier SKU count.
+- `tests/financial_entitlement_integrity_gate.js`: prepared final isolated unit checks without DB mutation. Not executed.
+- Existing subscription paid-plan Safepay gate preserved. Do not enable unpaid GROWTH/BUSINESS plans and do not silently change tariffs.
+- Final gate must also verify legacy/current fee parity, missing supplier rejection, concurrent family publishing, downgrade preservation, cross-supplier isolation, paid upgrade rejection and financial transaction snapshots on `miljor_test_db`.
+- Business contract pending explicit reconciliation: plan family limits (4/13/25), no effective maximum SKU per family, buyer processing fee rules and historical onboarding discounts. Do not apply invented pricing rates to real orders.
