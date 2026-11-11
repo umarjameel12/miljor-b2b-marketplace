@@ -13,6 +13,18 @@ const SAFE_DISPUTE_FIELDS=new Set([
 ]);
 const SAFE_TIMELINE_FIELDS=new Set(['id','event_code','from_status','to_status','action','actor_role','created_at']);
 const pick=(input,allow)=>Object.fromEntries(Object.entries(input||{}).filter(([k])=>allow.has(k)));
-function supplierDisputeRow(row){return pick(row,SAFE_DISPUTE_FIELDS)}
+function redactContact(value){
+ if(typeof value!=='string')return value;
+ return value
+  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[contact redacted]')
+  .replace(/\\b(?:\\+?92[-\\s]?)?0?3\\d{2}[-\\s]?\\d{7}\\b/g,'[contact redacted]')
+  .replace(/https?:\\/\\/\\S+/gi,'[external link redacted]');
+}
+function supplierDisputeRow(row){
+ const result=pick(row,SAFE_DISPUTE_FIELDS);
+ for(const k of ['description','remediation_details','supplier_response','resolution_reason','closure_reason'])
+  if(Object.hasOwn(result,k))result[k]=redactContact(result[k]);
+ return result;
+}
 function supplierDisputeTimeline(rows){return (rows||[]).map(r=>pick(r,SAFE_TIMELINE_FIELDS))}
 module.exports={supplierDisputeRow,supplierDisputeTimeline};
