@@ -86,6 +86,16 @@ function startScheduler() {
             unqualified:result.unqualified,retried:result.retried,failed:result.failed
           });
         }
+        // Closed under-minimum cycles are atomically failed and buyers
+        // notified. A fully joined cycle remains with J's bidding engine.
+        const closure=await require('./procurementCollectiveRecurringService')
+          .closeExpiredUnderMinimum({limit:20});
+        if(closure.unqualified||closure.ready_for_bidding){
+          console.log('[Scheduler] Collective join cutoffs:',{
+            checked:closure.checked,unqualified:closure.unqualified,
+            ready_for_bidding:closure.ready_for_bidding
+          });
+        }
       }catch(error){
         console.error('[Scheduler] Collective recurring cycle failure:',error.code||error.message);
       }finally{collectiveRunning=false;}
