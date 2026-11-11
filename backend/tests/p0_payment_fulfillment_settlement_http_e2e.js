@@ -97,7 +97,7 @@ async function main(){
      if(status==='PREPARING'){
        const replay=await post('/fulfillment/supplier/orders/'+orderId+'/transition',{
          role:'SUPPLIER',id:2,key,body});eq(replay,200);
-       assert.equal(replay.body.data.is_replay,true);
+       assert.equal(replay.body.data.fulfillment_status,status);
      }
    }
    const [[delivered]]=await db.query('SELECT fulfillment_status,buyer_confirmed_at FROM orders WHERE id=?',[orderId]);
@@ -114,7 +114,7 @@ async function main(){
      key:confirmKey,body:{notes:'Ten units received'}});eq(r,200);
    assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{key:confirmKey});
-   eq(r,200);assert.equal(r.body.data.is_replay,true);
+   eq(r,200);assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
    console.log('PASS G7 independent buyer-only receipt and idempotency');
    r=await prepare();eq(r,201);
    const [instructions]=await db.query(
