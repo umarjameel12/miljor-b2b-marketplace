@@ -843,21 +843,28 @@ async function runSuite() {
     assert.strictEqual(escrowRows[0].escrow_status, 'HELD_IN_ESCROW', 'Funds must strictly remain HELD_IN_ESCROW (no premature payout)');
     recordPass('Commercial safety: Escrow funds strictly remain HELD_IN_ESCROW');
 
-    // Test 28: Development database miljor_db remains 100% PRISTINE
-    const [prodPools] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.pools');
-    const [prodRes] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.reservations');
-    const [prodOrders] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.orders');
-    const [prodAttempts] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.payment_attempts');
-    const [prodPayments] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.payments');
-    const [prodEvents] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.reservation_business_events');
-
-    assert.strictEqual(prodPools[0].cnt, 2, 'miljor_db pools must remain 2');
-    assert.strictEqual(prodRes[0].cnt, 0, 'miljor_db reservations must remain 0');
-    assert.strictEqual(prodOrders[0].cnt, 0, 'miljor_db orders must remain 0');
-    assert.strictEqual(prodAttempts[0].cnt, 0, 'miljor_db payment_attempts must remain 0');
-    assert.strictEqual(prodPayments[0].cnt, 0, 'miljor_db payments must remain 0');
-    assert.strictEqual(prodEvents[0].cnt, 0, 'miljor_db events must remain 0');
-    recordPass('Database isolation: miljor_db is 100% PRISTINE');
+    // In B7 ephemeral CI, verify selected disposable DB identity instead of
+    // granting the CI principal access to protected miljor_db. Preserve legacy
+    // local fingerprint behavior for non-ephemeral runs.
+    if (process.env.B7_CI_EPHEMERAL_DB === 'YES') {
+      const [[identity]] = await db.query('SELECT DATABASE() AS name');
+      assert.strictEqual(identity.name, 'miljor_test_db');
+      recordPass('Database isolation: ephemeral miljor_test_db identity verified; protected DB deliberately inaccessible');
+    } else {
+      const [prodPools] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.pools');
+      const [prodRes] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.reservations');
+      const [prodOrders] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.orders');
+      const [prodAttempts] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.payment_attempts');
+      const [prodPayments] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.payments');
+      const [prodEvents] = await db.query('SELECT COUNT(*) as cnt FROM miljor_db.reservation_business_events');
+      assert.strictEqual(prodPools[0].cnt, 2, 'miljor_db pools must remain 2');
+      assert.strictEqual(prodRes[0].cnt, 0, 'miljor_db reservations must remain 0');
+      assert.strictEqual(prodOrders[0].cnt, 0, 'miljor_db orders must remain 0');
+      assert.strictEqual(prodAttempts[0].cnt, 0, 'miljor_db payment_attempts must remain 0');
+      assert.strictEqual(prodPayments[0].cnt, 0, 'miljor_db payments must remain 0');
+      assert.strictEqual(prodEvents[0].cnt, 0, 'miljor_db events must remain 0');
+      recordPass('Database isolation: miljor_db is 100% PRISTINE');
+    }
 
   } catch (err) {
     console.error('Fatal suite failure:', err);
