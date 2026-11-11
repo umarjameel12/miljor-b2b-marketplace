@@ -1523,3 +1523,18 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **B6-M worker follow-up:** Existing `schedulerService.js` now optionally runs `procurementRecurringService.runDueBatch` every five minutes under two explicit enable/approval flags; durable bounded retries and buyer-review draft-only semantics. `b6_recurring_worker_gate.js`: **8/8 isolated JS mock PASS**, separate from earlier **58/58 pure-policy PASS**, combined 66/66 source-level checks; not MySQL or frontend PASS.
 - **B6-K group readiness:** organizer-only atomic `qualifyGroup` checks all buyer consents on the same current supplier bid/version, minimum independent buyers, expiry and shared stock; freezes group only, no stock allocation or payment.
 - **B6 G–M acceptance stays BLOCKED:** K financial settlement/refund requirements and full G/H cross-pool Safepay/MySQL tests pending. Report `backend/docs/MILJOR_B6_PHASE1_INTEGRATION_REPORT.md` updated.
+
+
+---
+
+## B6 Combined Phase 2 (N–Q) — isolated implementation checkpoint
+
+- **Branch:** `feature/b6-phase2-nq`, created from accepted B6 G–M baseline `0504d65c7567486483594be23c39d16ebe0cb60e`. Parent `feature/b6-private-rfq`, main, B4 and B5 were not changed here. Parallel G–M Antigravity audit and test reports require explicit reconciliation before integration.
+- **Source plan:** `backend/docs/MILJOR_B6_COMBINED_PHASE2_IMPLEMENTATION_PLAN.md`; scope retained N recurring collective, O grouped delivery, P conditional pre-order, Q UI/notifications/gates.
+- **N:** migration 046; verified member-owned active recurring contracts, private cohort invitation/opt-in, exact schedule/product-unit compatibility and precise decimal demand; due worker with bounded durable retries, uniquely linked private collective cycle proposals, each buyer's frozen quantity visible to that buyer only, explicit join/quote approval. Automatic under-minimum join-cutoff close with cancelled **unpaid** drafts; active normal recurring drafts excluded to avoid duplicate cycle while in collective mode. Legacy Request-a-Pool read-only preview only.
+- **O:** migration 047; buyer's paid-order original fee preview and exact confirmation, strict buyer destination match, verified Lahore cluster/supplier settings, no unbound express/pickup switching; supplier-owned grouped runs use only PAID pre-dispatch orders, unchanged delivery fees and fulfillment-derived milestones.
+- **P:** production batches deliberately **DEFERRED** with a non-bypassable policy guard; no stock/deposit/advance-order transaction.
+- **Q:** migration 048, role-scoped transactional notification outbox with allowlisted non-PII fields, quote revision/join/recurring due/delivery events; integrated buyer/supplier controls within the original `RfqPage.jsx`, reuse CountdownTimer.
+- **Executed focused source-level tests:** N schedule/product policy 14/14; O grouping policy 16/16; N due worker 8/8; P/Q privacy and deferral 12/12; N private cycle join 11/11; N cutoff closure 9/9; O paid delivery acceptance 11/11. **81/81 PASS in isolated JavaScript mock adapters**, not MySQL/Express/browser evidence.
+- **Report:** `backend/docs/MILJOR_B6_PHASE2_IMPLEMENTATION_REPORT.md` details code changes, source tests and real integration blockers.
+- **Gate:** `SOURCE IMPLEMENTED, FULL INTEGRATION NOT VERIFIED/BLOCKED`. Do not apply migrations to `miljor_db`, turn on live payment, merge into main, or declare B6 PASS. Next: reconcile latest G–M fixes, serial `miljor_test_db` migrations/HTTP/financial+concurrency tests, actual Vite build, B4/B5 regressions and protected DB no-write audit.
