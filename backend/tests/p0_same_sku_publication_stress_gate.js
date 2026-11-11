@@ -93,6 +93,36 @@ async function main(){
       assert.equal(new Set(keys).size,keys.length,'Duplicate allocation reference');
       return {quantity:scaled/100,count:rows.length};
     }
+    // PR #8 selective reconciliation: verify buyer discovery eligibility
+    // against REAL disposable MySQL, not merely source string assertions.
+    // This probe is separate from the concurrency waves and fully released.
+    const discoveryProbe=await prepare('REGULAR',1,0,'DISCOVERY');
+    const probePublished=await req(discoveryProbe.endpoint,{method:'POST',auth,
+      key:'P0-DISCOVERY-PUBLISH-'+stamp});
+    must(probePublished,200,'publish discovery probe');
+    const poolRepo=require('../src/repositories/poolRepo');
+    const visible=async()=> (await poolRepo.findAllActive({}))
+      .some(x=>Number(x.id)===Number(discoveryProbe.id));
+    assert.equal(await visible(),true,'Verified approved physical SKU must be discoverable');
+    try {
+      await db.query('UPDATE users SET is_verified=0 WHERE id=?',[supplierId]);
+      assert.equal(await visible(),false,'Suspended/unverified supplier must disappear from buyer discovery');
+    } finally {
+      await db.query('UPDATE users SET is_verified=1 WHERE id=?',[supplierId]);
+    }
+    assert.equal(await visible(),true,'Restored eligible supplier should be discoverable');
+    try {
+      await db.query('UPDATE product_specifications SET is_active=0 WHERE id=?',[spec.spec_id]);
+      assert.equal(await visible(),false,'Deactivated physical SKU must disappear from buyer discovery');
+    } finally {
+      await db.query('UPDATE product_specifications SET is_active=1 WHERE id=?',[spec.spec_id]);
+    }
+    assert.equal(await visible(),true,'Restored approved SKU should be discoverable');
+    const probeCancelled=await req(discoveryProbe.cancel,{method:discoveryProbe.cancelMethod,
+      auth,key:'P0-DISCOVERY-CANCEL-'+stamp,body:{reason:'Disposable discovery gate cleanup'}});
+    must(probeCancelled,200,'cancel discovery probe');
+    assert.equal((await allocated()).quantity,0,'Discovery probe stock allocation fully released');
+    console.log('PASS P0 REAL MYSQL DISCOVERY RECONCILIATION: supplier verification and SKU lifecycle fail closed');
     // Diagnostic only, runs against disposable test DB; no production settings.
     // Make lock problems fail quickly rather than masking a 50-client pile-up.
     await db.query('SET GLOBAL innodb_lock_wait_timeout = 8');
