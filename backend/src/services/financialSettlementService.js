@@ -431,7 +431,7 @@ class FinancialSettlementService {
    * Releases an active financial hold (Admin only).
    */
   async releaseFinancialHold({ holdId, notes = null, actor }) {
-    if (!isAdminRole(actor.role)) {
+    if (!actor || !actor.id || !isAdminRole(actor.role)) {
       const err = new Error('Financial holds can only be released by administrators');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
@@ -442,8 +442,35 @@ class FinancialSettlementService {
     await connection.beginTransaction();
 
     try {
+      // Lock the parent payable BEFORE the financial hold. This shares the
+      // lock order used by payout preparation/approval and prevents hold-release
+      // racing with a newly prepared disbursement.
+      const [holdLinks] = await connection.query(
+        'SELECT supplier_payable_id FROM financial_holds WHERE id = ?',
+        [holdId]
+      );
+      if (holdLinks.length !== 1) {
+        const err = new Error('Financial hold record not found');
+        err.code = 'HOLD_NOT_FOUND';
+        err.statusCode = 404;
+        throw err;
+      }
+      const [payables] = await connection.query(
+        `SELECT sp.*, o.fulfillment_status
+         FROM supplier_payables sp
+         JOIN orders o ON sp.order_id = o.id
+         WHERE sp.id = ? FOR UPDATE`,
+        [holdLinks[0].supplier_payable_id]
+      );
+      if (payables.length !== 1) {
+        const err = new Error('Associated supplier payable not found');
+        err.code = 'PAYABLE_NOT_FOUND';
+        err.statusCode = 404;
+        throw err;
+      }
+      const payable = payables[0];
       const [holds] = await connection.query(
-        `SELECT * FROM financial_holds WHERE id = ? FOR UPDATE`,
+        'SELECT * FROM financial_holds WHERE id = ? FOR UPDATE',
         [holdId]
       );
 
@@ -463,23 +490,44 @@ class FinancialSettlementService {
         throw err;
       }
 
-      // Lock supplier payable
-      const [payables] = await connection.query(
-        `SELECT sp.*, o.fulfillment_status
-         FROM supplier_payables sp
-         JOIN orders o ON sp.order_id = o.id
-         WHERE sp.id = ? FOR UPDATE`,
-        [hold.supplier_payable_id]
-      );
 
-      if (payables.length === 0) {
-        const err = new Error('Associated supplier payable not found');
-        err.code = 'PAYABLE_NOT_FOUND';
-        err.statusCode = 404;
+      // Refund-specific holds are reserved against a buyer claim. An admin
+      // cannot release them through the generic hold endpoint and thereby
+      // make disputed buyer money eligible for supplier payout.
+      if (String(hold.hold_code || '').startsWith('HOLD-RFND-')) {
+        const err = new Error('Refund-specific hold requires an audited refund resolution, not generic release');
+        err.code = 'REFUND_HOLD_RELEASE_FORBIDDEN';
+        err.statusCode = 409;
         throw err;
       }
-
-      const payable = payables[0];
+      if (Number(hold.supplier_payable_id) !== Number(payable.id)) {
+        const err = new Error('Financial hold/payable linkage changed during locking');
+        err.code = 'HOLD_PAYABLE_LINK_MISMATCH';
+        err.statusCode = 409;
+        throw err;
+      }
+      const [disbursements] = await connection.query(
+        'SELECT id FROM supplier_disbursement_instructions WHERE supplier_payable_id = ? LIMIT 1 FOR UPDATE',
+        [payable.id]
+      );
+      if (disbursements.length > 0) {
+        const err = new Error('Cannot release a hold while a supplier payout instruction exists');
+        err.code = 'HOLD_DISBURSEMENT_CONFLICT';
+        err.statusCode = 409;
+        throw err;
+      }
+      const currentHeldBefore = exactDecimal.toCanonical(payable.held_amount, 2);
+      const entitlementBefore = exactSub(payable.net_payable_amount,
+        payable.refund_deduction_amount, 2);
+      const availableBefore = exactSub(entitlementBefore, currentHeldBefore, 2);
+      if (!exactDecimal.exactDecimalGte(currentHeldBefore, hold.hold_amount, 2) ||
+          !exactDecimal.exactDecimalGte(availableBefore, '0.00', 2) ||
+          !exactDecimal.exactDecimalEquals(availableBefore, payable.available_amount, 2)) {
+        const err = new Error('Payable balances cannot safely release this hold');
+        err.code = 'HOLD_RELEASE_ACCOUNTING_MISMATCH';
+        err.statusCode = 409;
+        throw err;
+      }
 
       // Update Hold
       await connection.query(
@@ -503,7 +551,7 @@ class FinancialSettlementService {
 
       // Check new status
       let newPayableStatus = payable.status;
-      if (Number(newHeld) === 0) {
+      if (exactDecimal.exactDecimalEquals(newHeld, '0.00', 2)) {
         if (payable.fulfillment_status === 'BUYER_CONFIRMED' || payable.fulfillment_status === 'COMPLETED') {
           newPayableStatus = 'ELIGIBLE_FOR_DISBURSEMENT';
         } else {
@@ -1147,7 +1195,7 @@ class FinancialSettlementService {
         err.statusCode = 409;
         throw err;
       }
-      if (!['ACCRUED', 'PARTIALLY_HELD', 'ON_HOLD'].includes(payable.status)) {
+      if (!['ACCRUED', 'ELIGIBLE_FOR_DISBURSEMENT'].includes(payable.status)) {
         const err = new Error('Supplier payable status does not permit a new disbursement');
         err.code = 'PAYABLE_DISBURSEMENT_STATE_CONFLICT';
         err.statusCode = 409;
@@ -1299,6 +1347,16 @@ class FinancialSettlementService {
 
       const disb = disbursements[0];
 
+      // Separation of duties: preparing and approving a payout cannot be
+      // performed by the same administrator.
+      if (disb.prepared_by !== null && disb.prepared_by !== undefined &&
+          Number(disb.prepared_by) === Number(actor.id)) {
+        const err = new Error('A second authorized administrator must approve a supplier payout');
+        err.code = 'DISBURSEMENT_DUAL_CONTROL_REQUIRED';
+        err.statusCode = 403;
+        throw err;
+      }
+
       if (disb.status !== 'PREPARED') {
         const err = new Error(`Cannot approve disbursement in status '${disb.status}'. Expected PREPARED.`);
         err.code = 'DISBURSEMENT_NOT_PREPARED';
@@ -1398,124 +1456,24 @@ class FinancialSettlementService {
    * Reconciles a Safepay provider settlement batch (e.g. from settlement CSV or API).
    */
   async reconcileProviderSettlementBatch({
-    batchReference,
-    grossAmount,
-    providerFee = 0.00,
-    netAmount,
-    settlementDate,
-    matchedTrackerTokens = [],
-    rawMetadata = null,
-    actor
+    batchReference, grossAmount, providerFee, netAmount, settlementDate,
+    matchedTrackerTokens = [], rawMetadata = null, actor
   }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Provider settlement reconciliation is restricted to administrators');
+    if (!actor || !actor.id || !isAdminRole(actor.role)) {
+      const err = new Error('Provider settlement reconciliation requires an authorized administrator');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
     }
-
-    if (!batchReference || String(batchReference).trim().length < 3) {
-      const err = new Error('Valid batch reference (e.g. sb_...) is required');
-      err.code = 'INVALID_BATCH_REFERENCE';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const grossStr = exactDecimal.toCanonical(grossAmount, 2);
-    const feeStr = exactDecimal.toCanonical(providerFee || 0.00, 2);
-    const netStr = exactDecimal.toCanonical(netAmount, 2);
-
-    // Verify arithmetic: gross - providerFee = net
-    const expectedNet = exactSub(grossStr, feeStr, 2);
-    let status = 'RECONCILED';
-    if (Number(expectedNet) !== Number(netStr)) {
-      status = 'MISMATCH_DETECTED';
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      // Check existing batch
-      const [existing] = await connection.query(
-        `SELECT * FROM provider_settlement_batches WHERE batch_reference = ? FOR UPDATE`,
-        [batchReference]
-      );
-
-      if (existing.length > 0) {
-        await connection.commit();
-        return {
-          success: true,
-          message: 'Settlement batch already recorded',
-          data: { batch: existing[0] }
-        };
-      }
-
-      // Check matched payments if tokens provided
-      let matchedCount = 0;
-      if (matchedTrackerTokens.length > 0) {
-        const [matchedPayments] = await connection.query(
-          `SELECT COUNT(*) AS c FROM payments WHERE transaction_ref IN (?)`,
-          [matchedTrackerTokens]
-        );
-        matchedCount = matchedPayments[0].c;
-      }
-
-      const [batchInsert] = await connection.query(
-        `INSERT INTO provider_settlement_batches (
-          batch_reference, provider, gross_amount, provider_fee_amount,
-          net_settled_amount, currency, status, settlement_date,
-          raw_metadata, reconciled_at, created_at
-        ) VALUES (?, 'SAFEPAY', ?, ?, ?, 'PKR', ?, ?, ?, NOW(), NOW())`,
-        [
-          batchReference.trim(),
-          grossStr,
-          feeStr,
-          netStr,
-          status,
-          settlementDate || new Date(),
-          rawMetadata ? JSON.stringify(rawMetadata) : null
-        ]
-      );
-
-      const batchId = batchInsert.insertId;
-
-      // Audit
-      await this._logAuditEvent(connection, {
-        orderId: null,
-        paymentId: null,
-        entityType: 'SETTLEMENT',
-        entityId: batchId,
-        eventType: status === 'RECONCILED' ? 'SETTLEMENT_RECONCILED' : 'SETTLEMENT_MISMATCH_DETECTED',
-        actorRole: actor.role,
-        actorId: actor.id,
-        fromStatus: null,
-        toStatus: status,
-        amountDelta: netStr,
-        notes: `Reconciled settlement batch ${batchReference}: Gross ${grossStr}, Fee ${feeStr}, Net ${netStr}. Matched payments: ${matchedCount}`
-      });
-
-      await connection.commit();
-
-      const [createdBatch] = await connection.query('SELECT * FROM provider_settlement_batches WHERE id = ?', [batchId]);
-
-      return {
-        success: true,
-        message: status === 'RECONCILED' 
-          ? 'Settlement batch successfully reconciled' 
-          : 'Settlement batch recorded with arithmetic mismatch flag',
-        data: {
-          batch: createdBatch[0],
-          matched_payments_count: matchedCount
-        }
-      };
-
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    // A spreadsheet, admin-entered gross/net total, or matching token count
+    // is NOT independently verified proof of funds received by MilJor.
+    // Do not persist RECONCILED until an authenticated Safepay provider
+    // settlement endpoint or cryptographically trusted settlement artifact
+    // and custody agreement have been integrated and reconciled.
+    const err = new Error('Authenticated Safepay settlement evidence is required; admin-entered totals cannot mark a batch reconciled');
+    err.code = 'PROVIDER_SETTLEMENT_EVIDENCE_REQUIRED';
+    err.statusCode = 409;
+    throw err;
   }
 
   // ===========================================================================
