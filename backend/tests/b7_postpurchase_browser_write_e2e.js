@@ -212,12 +212,16 @@ async function main(){
    console.log('B7_REMEDY_BUYER_DATABASE',JSON.stringify(stateRows));
    await remedyBuyer.page.getByRole('button',{name:'Confirm remediation goods received'})
      .click({timeout:12000});
+   await remedyBuyer.page.getByText('Processing order action…',{exact:true})
+     .waitFor({state:'hidden',timeout:20000});
    await remedyBuyer.page.getByRole('button',{name:'Confirm complete receipt'})
      .waitFor({timeout:15000});
    const [[notAutoConfirmed]]=await db.query(
      'SELECT fulfillment_status FROM orders WHERE id=?',[shortage.id]);
    assert.equal(notAutoConfirmed.fulfillment_status,'SUPPLIER_DELIVERED');
    await remedyBuyer.page.getByRole('button',{name:'Confirm complete receipt'}).click();
+   await remedyBuyer.page.getByText('Processing order action…',{exact:true})
+     .waitFor({state:'hidden',timeout:20000});
   }finally{await remedyBuyer.context.close()}
   const [final]=await db.query(
    'SELECT order_code,fulfillment_status FROM orders WHERE id IN (?,?)',
