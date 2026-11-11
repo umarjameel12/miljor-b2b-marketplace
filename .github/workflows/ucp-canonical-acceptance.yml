@@ -8,6 +8,7 @@ on:
       - fix/p0-morning-demo-canonical-gates
   pull_request:
     branches:
+      - fix/p0-provider-browser-stock-finance-acceptance
       - feature/ucp-canonical-reconciliation-release
       - fix/ucp-final-reconciliation-thischat
   workflow_dispatch:
