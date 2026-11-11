@@ -238,6 +238,7 @@ export function SupplierPoolsPage(){
   const save=async(e)=>{
     e.preventDefault();
     if(busy)return;
+    let mutationAttempted=false;
     try{
       if(creationUncertain)
         throw Error('A previous draft request has an uncertain result. Review the refreshed Pool Management list before starting a new creation.');
@@ -261,6 +262,7 @@ export function SupplierPoolsPage(){
           throw Error('Enable standard supplier delivery before publishing doorstep or grouped pools.');
         if(form.delivery_type!=='SUPPLIER_PICKUP'&&!form.delivery_cluster_ids.length)
           throw Error('Choose an authorized Lahore delivery cluster.');
+        mutationAttempted=true;
         const result=await unifiedPoolsApi.saveRegularDraft(payload,edit?.id,regularDraftIntent.current?.idempotencyKey);
         const poolId=edit?.id||result?.data?.pool?.id;
         if(!poolId)throw Error('Draft may exist but no ID was returned. Refresh Pool Management before retrying.');
@@ -268,15 +270,16 @@ export function SupplierPoolsPage(){
           form.delivery_type==='SUPPLIER_PICKUP'?[]:form.delivery_cluster_ids);
         }catch(_){
           setEdit(previous=>previous||{id:poolId,type:'REGULAR',status:'DRAFT'});
-          throw Error('Draft #'+poolId+' saved, but cluster assignment failed. Retry updates this existing draft.');
+          throw Object.assign(new Error('Draft #'+poolId+' saved, but cluster assignment failed. Retry updates this existing draft.'),{knownPartial:true});
         }
       }else{
+        mutationAttempted=true;
         await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
       }
       toast.success(mode+' draft saved. Review and publish it from Pool Management.');
       close();await load();
     }catch(e){
-      if(!e.response&&busy) setCreationUncertain(true);
+      if(mutationAttempted&&!e.response&&!e.knownPartial) setCreationUncertain(true);
       if(e.response?.status===400||e.response?.status===422)regularDraftIntent.current=null;
       toast.error(e.response?.data?.error?.message||e.message||'Unable to save pool draft.');
     }
