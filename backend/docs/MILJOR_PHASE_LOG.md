@@ -1,3 +1,14 @@
+## P0 F1–F5 Financial One-Flow Hardening — 2026-11-11
+- Isolated branch: `fix/p0-financial-f1-f5-closure-isolated` from `fix/p0-safepay-refund-evidence-isolated`.
+- F1: signed-refund/payout replay protection, committed deterministic concurrent refund fake-transaction gate (3/3 simulated PASS). Actual MySQL concurrency NOT EXECUTED.
+- F2: unverified merchant settlement-batch arithmetic rejected before DB; refund approval requires a unique funded payable, and blocks if a supplier payout instruction already exists. Real provider refund-unit/settlement verification still BLOCKED.
+- F3: finance-only payout/admin roles, explicit matched completed Safepay capture before payout preparation and approval, two-person approval, fail-closed missing preparer, refund-specific holds non-releasable by generic admin hold endpoint. External payout remains DISABLED.
+- F4: order accrual uses immutable `orders.supplier_commission_percent`, never mutable supplier profile; missing snapshot blocks accrual pending separate migration reconciliation. New read-only `financialConservationService` and GET `/admin/orders/:id/integrity` with exact amount checks.
+- F5: 55/55 isolated V8/mock-backed test scenarios PASS across signed refund (20), concurrent refund (3), disbursements (14), and F1–F5 accounting/security (18). Genuine source functions + exactDecimal executed, no native Node, actual MySQL or Safepay interaction.
+- No production DB, migration or external money movement; no other chat B4/B5/B6/Unified Pool/timer/RFQ/delivery files changed.
+- Overall phase result: **SOURCE IMPLEMENTED, OFFLINE GATES PASS, NATIVE MYSQL/PROVIDER E2E BLOCKED**. **CAN MERGE/DEPLOY: NO**.
+- Detailed ledger: `backend/docs/MILJOR_FINANCIAL_F1_F5_ONE_FLOW_IMPLEMENTATION_LEDGER.md`.
+
 ## P0 Signed Refund Atomicity Hardening — 2026-11-11
 - Same financial branch only: `fix/p0-safepay-refund-evidence-isolated`. B4/B5/B6/pool/delivery/migrations untouched.
 - Signed refund event replay now compares immutable monetary identity across TEXT/JSON storage and allows changes only to delivery metadata.
