@@ -9,7 +9,7 @@
     "test": "node tests/master_regression_runner.js",
     "test:b6:nq:source": "node tests/b6_nq_complete_source_gate.js",
     "test:b6:nq:integration": "node tests/b6_nq_guarded_integration_gate.js",
-    "test:b7:source": "node tests/b7_postpurchase_business_contract_gate.js",
+    "test:b7:source": "node tests/b7_postpurchase_business_contract_gate.js && node tests/b7_direct_order_event_bridge_gate.js",
     "test:b7:readonly-http": "node tests/b7_b6_award_fulfillment_readonly_gate.js",
     "test:b7:isolated": "node tests/b7_postpurchase_isolated_acceptance_gate.js",
     "test:b7:browser:write": "node tests/b7_postpurchase_browser_write_e2e.js"
