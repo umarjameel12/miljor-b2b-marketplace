@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../../controllers/paymentController');
-const { protect, authorize, authorizeAdmin, authorizeFinance } = require('../../middlewares/authGuard');
+const { protect, authorizeStrict, authorizeFinance } = require('../../middlewares/authGuard');
 const idempotencyGuard = require('../../middlewares/idempotencyGuard');
 
 // ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ router.use(protect);
 // Initiate payment (BUG-07 FIX: idempotency guard applied)
 router.post(
   '/initiate',
-  authorize('BUYER'),
+  authorizeStrict('BUYER'),
   idempotencyGuard,
   (req, res) => paymentController.initiatePayment(req, res)
 );
@@ -36,7 +36,7 @@ router.post(
 // Server-side verify payment (BUG-07 FIX: idempotency guard applied)
 router.post(
   '/verify',
-  authorize('BUYER'),
+  authorizeStrict('BUYER'),
   idempotencyGuard,
   (req, res) => paymentController.verifyPayment(req, res)
 );
@@ -44,7 +44,7 @@ router.post(
 // View buyer's own payment history
 router.get(
   '/my',
-  authorize('BUYER'),
+  authorizeStrict('BUYER'),
   (req, res) => paymentController.getMyPayments(req, res)
 );
 
