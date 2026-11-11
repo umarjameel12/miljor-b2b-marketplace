@@ -512,7 +512,7 @@ export const AdminCatalogPage = () => {
                           </span>
                         </div>
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                          {fam.name} {fam.urdu_name ? `(${fam.urdu_name})` : ''}
+                          {fam.name}
                         </h3>
                         <p className="text-xs text-[var(--text-secondary)]">{fam.description}</p>
                         <div className="text-[11px] text-[var(--text-muted)]">
@@ -567,7 +567,7 @@ export const AdminCatalogPage = () => {
                           </span>
                         </div>
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                          {cat.name} {cat.urdu_name ? `(${cat.urdu_name})` : ''}
+                          {cat.name}
                         </h3>
                         <p className="text-xs text-[var(--text-secondary)]">{cat.description}</p>
                         <div className="text-[11px] text-[var(--text-muted)]">
@@ -652,15 +652,6 @@ export const AdminCatalogPage = () => {
                     required
                     value={newCategoryForm.name}
                     onChange={(e) => setNewCategoryForm({ ...newCategoryForm, name: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold mb-1">Urdu Name</label>
-                  <input
-                    type="text"
-                    value={newCategoryForm.urdu_name}
-                    onChange={(e) => setNewCategoryForm({ ...newCategoryForm, urdu_name: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs"
                   />
                 </div>

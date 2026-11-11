@@ -1129,7 +1129,6 @@ export const SupplierCatalogPage = () => {
                       >
                         <div>
                           <div className="font-semibold">{cat.name}</div>
-                          {cat.urdu_name && <div className="text-[11px] text-[var(--text-muted)]">{cat.urdu_name}</div>}
                         </div>
                         <span className="px-2 py-0.5 rounded-full text-[10px] bg-[var(--bg-card)] border border-[var(--border-subtle)]">
                           {cat.active_family_count} families

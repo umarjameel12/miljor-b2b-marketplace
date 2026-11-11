@@ -9,7 +9,10 @@ const db = require('../config/db');
 class ReviewService {
 
   async submitReview({ orderId, reviewerId, reviewerRole, rating, qualityRating, deliveryRating, communicationRating, reviewText }) {
-    if (!orderId || !rating || rating < 1 || rating > 5) {
+    const validRating = value => Number.isInteger(value) && value >= 1 && value <= 5;
+    if (!Number.isSafeInteger(Number(orderId)) || Number(orderId) < 1 ||
+        !validRating(rating) ||
+        [qualityRating,deliveryRating,communicationRating].some(value => value != null && !validRating(value))) {
       const err = new Error('order_id and valid rating (1-5) are required');
       err.code = 'VALIDATION_ERROR';
       err.statusCode = 400;
@@ -18,7 +21,7 @@ class ReviewService {
 
     // Check order existence and status
     const [orderRows] = await db.query(
-      'SELECT id, buyer_id, supplier_id, order_status, fulfillment_status FROM orders WHERE id = ?',
+      'SELECT id, buyer_id, supplier_id, order_status, fulfillment_status, payment_status FROM orders WHERE id = ?',
       [orderId]
     );
 
@@ -30,6 +33,14 @@ class ReviewService {
     }
 
     const o = orderRows[0];
+
+    // Reviews represent real verified purchases, never unpaid or pending orders.
+    if (o.payment_status !== 'PAID') {
+      const err = new Error('Only paid delivered/completed orders are reviewable');
+      err.code = 'ORDER_NOT_PAID';
+      err.statusCode = 422;
+      throw err;
+    }
 
     // Must be COMPLETED or DELIVERED to review
     if (o.order_status !== 'COMPLETED' && o.order_status !== 'DELIVERED') {
@@ -84,7 +95,9 @@ class ReviewService {
       throw err;
     }
 
-    const [res] = await db.query(
+    let res;
+    try {
+      [res] = await db.query(
       `INSERT INTO order_reviews (
         order_id, reviewer_id, reviewer_role, target_id, rating,
         quality_rating, delivery_rating, communication_rating, review_text,
@@ -92,10 +105,19 @@ class ReviewService {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'PUBLISHED')`,
       [
         orderId, reviewerId, reviewerRole, targetId, rating,
-        qualityRating || rating, deliveryRating || rating, communicationRating || rating,
+        qualityRating ?? rating, deliveryRating ?? rating, communicationRating ?? rating,
         reviewText || null
       ]
-    );
+      );
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        const conflict = new Error('You have already reviewed this order');
+        conflict.code = 'DUPLICATE_REVIEW';
+        conflict.statusCode = 409;
+        throw conflict;
+      }
+      throw err;
+    }
 
     const [created] = await db.query('SELECT * FROM order_reviews WHERE id = ?', [res.insertId]);
     return created[0];
@@ -125,9 +147,9 @@ class ReviewService {
       reviews,
       summary: {
         total_reviews: stats[0].total_reviews || 0,
-        avg_rating: stats[0].avg_rating ? Number(Number(stats[0].avg_rating).toFixed(1)) : 5.0,
-        avg_quality: stats[0].avg_quality ? Number(Number(stats[0].avg_quality).toFixed(1)) : 5.0,
-        avg_delivery: stats[0].avg_delivery ? Number(Number(stats[0].avg_delivery).toFixed(1)) : 5.0
+        avg_rating: stats[0].avg_rating == null ? null : Number(Number(stats[0].avg_rating).toFixed(1)),
+        avg_quality: stats[0].avg_quality == null ? null : Number(Number(stats[0].avg_quality).toFixed(1)),
+        avg_delivery: stats[0].avg_delivery == null ? null : Number(Number(stats[0].avg_delivery).toFixed(1))
       }
     };
   }

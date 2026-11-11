@@ -92,17 +92,20 @@ router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,
 
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
-router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
+router.post('/demand-requests', protect, authorizeStrict('BUYER', 'SUPPLIER'), (req, res) => controller.createDemandRequest(req, res));
 
-// RFQs & Quotes
-router.post('/rfqs', protect, authorize('BUYER', 'ADMIN'), (req, res) => controller.createRfq(req, res));
-router.post('/rfqs/:id/quotes', protect, authorize('SUPPLIER', 'ADMIN'), (req, res) => controller.submitRfqQuote(req, res));
-router.post('/rfqs/:id/quotes/:quoteId/accept', protect, authorize('BUYER', 'ADMIN'), (req, res) => controller.acceptRfqQuote(req, res));
-
-// Recurring Contracts
-router.post('/recurring', protect, authorize('BUYER', 'ADMIN'), (req, res) => controller.createRecurringContract(req, res));
-
-// Supplier Matching
-router.get('/match-suppliers', (req, res) => controller.matchSuppliers(req, res));
+// Legacy unverified RFQ/Recurring/Matching write paths are deprecated.
+// Historical database rows remain intact; new business flows use B6 smart procurement.
+// Returning 410 is intentional: old clients must migrate rather than silently bypass verification.
+const legacyDisabled = (req, res) => res.status(410).json({
+  success: false,
+  error: { code: 'LEGACY_PROCUREMENT_ENDPOINT_RETIRED',
+    message: 'Use the verified B6 procurement requests, invitations, quotes and recurring endpoints.' }
+});
+router.post('/rfqs', protect, legacyDisabled);
+router.post('/rfqs/:id/quotes', protect, legacyDisabled);
+router.post('/rfqs/:id/quotes/:quoteId/accept', protect, legacyDisabled);
+router.post('/recurring', protect, legacyDisabled);
+router.get('/match-suppliers', legacyDisabled);
 
 module.exports = router;

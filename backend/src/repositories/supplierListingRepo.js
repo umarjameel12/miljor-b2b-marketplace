@@ -162,10 +162,15 @@ class SupplierListingRepository {
       // B3: Buyer discovery must never expose stale or unverified supplier offers.
       sql += ` AND sl.status = 'ACTIVE'
         AND sl.available_stock > 0 AND sl.available_stock >= sl.buyer_min_qty
-        AND u.role = 'SUPPLIER' AND u.verification_status = 'VERIFIED'
+        AND u.role = 'SUPPLIER' AND u.is_verified = 1 AND u.verification_status = 'VERIFIED'
         AND sp.verification_status = 'VERIFIED'
         AND ps.is_active = 1 AND ps.approval_status = 'APPROVED'
-        AND ps.lifecycle_status IN ('PUBLISHED', 'LEGACY_GLOBAL')
+        AND ps.lifecycle_status = 'PUBLISHED'
+        AND ps.supplier_id = sl.supplier_id AND ps.supplier_sku_id = sl.supplier_sku_id
+        AND EXISTS (SELECT 1 FROM supplier_skus sku JOIN supplier_products prod
+          ON prod.id=sku.supplier_product_id AND prod.status='PUBLISHED'
+          WHERE sku.id=sl.supplier_sku_id AND sku.status='PUBLISHED'
+            AND sku.supplier_id=sl.supplier_id AND prod.supplier_id=sl.supplier_id)
         AND c.is_active = 1 AND c.approval_status = 'APPROVED'
         AND f.is_active = 1 AND f.approval_status = 'APPROVED'
         AND NOT EXISTS (

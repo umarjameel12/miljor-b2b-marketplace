@@ -20,29 +20,72 @@ class MessagingService {
     return hasPhone || hasEmail || hasKeyword;
   }
 
-  async getOrCreateConversation({ buyerId, supplierId, orderId = null, poolId = null }) {
-    let query = 'SELECT * FROM in_app_conversations WHERE buyer_id = ? AND supplier_id = ?';
-    const params = [buyerId, supplierId];
-
-    if (orderId) {
-      query += ' AND order_id = ?';
-      params.push(orderId);
-    } else if (poolId) {
-      query += ' AND pool_id = ?';
-      params.push(poolId);
+  async getOrCreateConversation({ buyerId, supplierId, orderId = null, poolId = null, callerId, callerRole }) {
+    const fail = (code, message, statusCode = 403) => {
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = statusCode;
+      throw error;
+    };
+    const id = (value) => {
+      const number = Number(value);
+      if (!Number.isSafeInteger(number) || number < 1) fail('INVALID_PARTICIPANT', 'Valid participant identity required.', 400);
+      return number;
+    };
+    const buyer = id(buyerId);
+    const supplier = id(supplierId);
+    const caller = id(callerId);
+    if (buyer === supplier || !['BUYER', 'SUPPLIER'].includes(callerRole) ||
+        (callerRole === 'BUYER' && caller !== buyer) ||
+        (callerRole === 'SUPPLIER' && caller !== supplier)) {
+      fail('CONVERSATION_FORBIDDEN', 'You cannot create a conversation for other participants.');
     }
-
-    const [rows] = await db.query(query, params);
-    if (rows.length > 0) return rows[0];
-
-    const code = `CONV-${Date.now().toString().slice(-6)}`;
-    const [res] = await db.query(
-      `INSERT INTO in_app_conversations (conversation_code, order_id, pool_id, buyer_id, supplier_id)
-       VALUES (?, ?, ?, ?, ?)`,
-      [code, orderId, poolId, buyerId, supplierId]
+    if (orderId && poolId) fail('INVALID_CONVERSATION_CONTEXT', 'Choose either order or pool context.', 400);
+    if (!orderId && !poolId) fail('CONVERSATION_CONTEXT_REQUIRED', 'An actual order or pool context is required.', 400);
+    const [participants] = await db.query(
+      "SELECT id,role,verification_status FROM users WHERE id IN (?,?)", [buyer, supplier]
     );
-
-    const [created] = await db.query('SELECT * FROM in_app_conversations WHERE id = ?', [res.insertId]);
+    if (!participants.some(row => Number(row.id) === buyer && row.role === 'BUYER' && row.verification_status === 'VERIFIED') ||
+        !participants.some(row => Number(row.id) === supplier && row.role === 'SUPPLIER' && row.verification_status === 'VERIFIED')) {
+      fail('INVALID_CONVERSATION_PARTICIPANTS', 'Verified buyer and supplier are required.');
+    }
+    let contextId;
+    let column;
+    if (orderId) {
+      contextId = id(orderId);
+      column = 'order_id';
+      const [orders] = await db.query(
+        'SELECT id FROM orders WHERE id=? AND buyer_id=? AND supplier_id=?',
+        [contextId, buyer, supplier]
+      );
+      if (!orders.length) fail('ORDER_CONTEXT_FORBIDDEN', 'Order does not belong to these participants.');
+    } else {
+      contextId = id(poolId);
+      column = 'pool_id';
+      const [pools] = await db.query('SELECT id FROM pools WHERE id=? AND supplier_id=?', [contextId, supplier]);
+      if (!pools.length) fail('POOL_CONTEXT_FORBIDDEN', 'Pool does not belong to this supplier.');
+      // Pre-purchase buyer questions are allowed for an active supplier pool.
+      // Buyer need not reserve/pay just to ask about an offered commodity.
+      const [visible] = await db.query(
+        "SELECT id FROM pools WHERE id=? AND supplier_id=? AND status='ACTIVE'",
+        [contextId, supplier]
+      );
+      if (!visible.length) fail('POOL_CONTEXT_FORBIDDEN', 'Buyer may only initiate pre-purchase chats for active supplier pools.');
+    }
+    const [existing] = await db.query(
+      `SELECT * FROM in_app_conversations WHERE buyer_id=? AND supplier_id=? AND ${column}=? ORDER BY id LIMIT 1`,
+      [buyer,supplier,contextId]
+    );
+    if (existing.length) return existing[0];
+    // UUID avoids timestamp-based collisions under concurrent conversation creation.
+    const { randomUUID } = require('crypto');
+    const code = 'CONV-' + randomUUID().replace(/-/g, '');
+    const [inserted] = await db.query(
+      `INSERT INTO in_app_conversations (conversation_code,order_id,pool_id,buyer_id,supplier_id)
+       VALUES (?,?,?,?,?)`,
+      [code, orderId ? contextId : null, poolId ? contextId : null, buyer, supplier]
+    );
+    const [created] = await db.query('SELECT * FROM in_app_conversations WHERE id=?', [inserted.insertId]);
     return created[0];
   }
 
@@ -71,6 +114,12 @@ class MessagingService {
     }
 
     const hasWarning = this.checkAntiBypass(text);
+    if (hasWarning) {
+      const err = new Error('Direct contact details are not allowed. Keep communications inside MilJor.');
+      err.code = 'DIRECT_CONTACT_NOT_ALLOWED';
+      err.statusCode = 422;
+      throw err;
+    }
 
     const [res] = await db.query(
       `INSERT INTO in_app_messages (conversation_id, sender_id, message_text, has_contact_warning)

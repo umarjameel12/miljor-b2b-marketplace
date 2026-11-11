@@ -176,6 +176,43 @@ class InvoiceService {
       const taxAmount = Number(taxAmountStr);
       const totalAmount = Number(totalAmountStr);
 
+      // B6 smart procurement invoices contain actual immutable accepted order lines.
+      // Historical single-product orders retain their legacy one-line representation.
+      const [awardLines] = await conn.query(
+        `SELECT al.request_item_id, al.supplier_sku_id, al.quantity,
+                al.purchasing_unit, al.unit_price, al.subtotal, al.immutable_sku_snapshot
+         FROM procurement_award_lines al
+         JOIN procurement_award_orders ao ON ao.id = al.award_order_id
+         WHERE ao.order_id = ? ORDER BY al.id`, [numericOrderId]
+      );
+      if (awardLines.length && !exactDecimal.exactDecimalEquals(
+        exactDecimal.exactDecimalSum(awardLines.map(line => line.subtotal), 2), subtotalStr, 2
+      )) {
+        const error = new Error('Procurement invoice line total does not match order subtotal');
+        error.code = 'INVOICE_AMOUNT_MISMATCH';
+        error.statusCode = 409;
+        throw error;
+      }
+      const invoiceItems = awardLines.length ? awardLines.map(line => {
+        const sku = typeof line.immutable_sku_snapshot === 'string'
+          ? JSON.parse(line.immutable_sku_snapshot) : line.immutable_sku_snapshot;
+        return {
+          request_item_id: line.request_item_id,
+          supplier_sku_id: line.supplier_sku_id,
+          sku_snapshot: sku,
+          description: sku?.product_title || sku?.title || `Supplier SKU ${line.supplier_sku_id}`,
+          quantity: String(line.quantity),
+          purchasing_unit: line.purchasing_unit,
+          unit_price: exactDecimal.toCanonicalString(line.unit_price,2),
+          line_total: exactDecimal.toCanonicalString(line.subtotal,2)
+        };
+      }) : [{
+        description: `Order ${o.order_code} Wholesale Commodity`,
+        quantity: Number(o.total_qty),
+        unit_price: Number(o.unit_price),
+        line_total: subtotal
+      }];
+
       const snapshot = {
         invoice_number: invoiceNumber,
         order_id: o.id,
@@ -194,14 +231,8 @@ class InvoiceService {
           ntn: o.supplier_ntn,
           warehouse_address: o.supplier_address
         },
-        items: [
-          {
-            description: `Order ${o.order_code} Wholesale Commodity`,
-            quantity: Number(o.total_qty),
-            unit_price: Number(o.unit_price),
-            line_total: subtotal
-          }
-        ],
+        items: invoiceItems,
+
         pricing: {
           subtotal,
           delivery_fee: deliveryFee,

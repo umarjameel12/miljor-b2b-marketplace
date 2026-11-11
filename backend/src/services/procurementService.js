@@ -83,63 +83,87 @@ class ProcurementService {
   // 2. DEMAND POOL REQUESTS ("Request a Pool")
   // ---------------------------------------------------------------------------
 
-  async createDemandRequest(buyerId, payload) {
+  async createDemandRequest(requesterId, payload = {}) {
+    const exact = require('./exactDecimal');
+    const unitService = require('./unitConversionService');
+    const { randomUUID } = require('crypto');
     const {
-      category_id,
-      family_id,
-      commodity_name,
-      desired_specs,
-      target_quantity,
-      target_unit,
-      target_price_per_unit,
-      cluster_id,
-      needed_by_date,
-      notes
+      category_id, family_id, desired_specs, target_quantity, target_unit,
+      target_price_per_unit, cluster_id, needed_by_date, notes
     } = payload;
-
-    if (!category_id || !family_id || !commodity_name || !target_quantity || !target_unit) {
-      const err = new Error('category_id, family_id, commodity_name, target_quantity, and target_unit are required');
-      err.code = 'VALIDATION_ERROR';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const requestCode = `REQ-${Date.now().toString().slice(-6)}`;
-
-    const [res] = await db.query(
-      `INSERT INTO demand_pool_requests (
-        request_code, buyer_id, category_id, family_id, commodity_name,
-        desired_specs, target_quantity, target_unit, target_price_per_unit,
-        cluster_id, needed_by_date, notes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
-      [
-        requestCode, buyerId, category_id, family_id, commodity_name,
-        desired_specs || null, target_quantity, target_unit, target_price_per_unit || null,
-        cluster_id || null, needed_by_date || null, notes || null
-      ]
+    const invalid = (code,message,statusCode=400) => {
+      const e=new Error(message);e.code=code;e.statusCode=statusCode;throw e;
+    };
+    const validId = value => Number.isSafeInteger(Number(value)) && Number(value)>0;
+    if (!validId(requesterId)||!validId(category_id)||!validId(family_id))
+      invalid('INVALID_REQUEST_IDENTITY','Requester, category and family are required');
+    let qty,price=null;
+    try {
+      qty=exact.toCanonical(target_quantity,2);
+      if(!exact.exactDecimalGte(qty,'0.01',2))throw new Error('nonpositive');
+      if(target_price_per_unit!=null && target_price_per_unit!==''){
+        price=exact.toCanonical(target_price_per_unit,2);
+        if(!exact.exactDecimalGte(price,'0.01',2))throw new Error('nonpositive price');
+      }
+    } catch {invalid('INVALID_DEMAND_QUANTITY_PRICE','Positive quantity and optional positive price are required');}
+    const [users]=await db.query(
+      `SELECT u.role,u.verification_status,u.is_verified,sp.verification_status AS supplier_verification
+       FROM users u LEFT JOIN supplier_profiles sp ON sp.supplier_id=u.id WHERE u.id=?`,[Number(requesterId)]
     );
-
-    const [created] = await db.query('SELECT * FROM demand_pool_requests WHERE id = ?', [res.insertId]);
+    const user=users[0];
+    if(!user||!['BUYER','SUPPLIER'].includes(user.role)||
+       user.verification_status!=='VERIFIED'||Number(user.is_verified)!==1||
+       (user.role==='SUPPLIER' && user.supplier_verification!=='VERIFIED'))
+      invalid('REQUESTER_NOT_VERIFIED','Verified B2B buyer or supplier required',403);
+    const [families]=await db.query(
+      `SELECT f.id,f.name,f.allowed_pack_units,f.allowed_purchasing_units
+       FROM catalog_product_families f JOIN catalog_categories c ON c.id=f.category_id
+       WHERE f.id=? AND c.id=? AND f.is_active=1 AND c.is_active=1
+         AND f.approval_status='APPROVED' AND c.approval_status='APPROVED'`,
+      [Number(family_id),Number(category_id)]
+    );
+    if(!families.length)invalid('INVALID_PRODUCT_FAMILY','Active approved family/category required',422);
+    const parseList=value=>{
+      if(Array.isArray(value))return value;
+      try{return JSON.parse(value||'[]')}catch{return []}
+    };
+    const allowed=[...parseList(families[0].allowed_pack_units),
+      ...parseList(families[0].allowed_purchasing_units)].map(u=>unitService.normalizeUnit(u));
+    const unit=unitService.normalizeUnit(target_unit);
+    if(!unit||!allowed.includes(unit))
+      invalid('INCOMPATIBLE_FAMILY_UNIT','Quantity unit must belong to selected family',422);
+    if(cluster_id!=null&&!validId(cluster_id))invalid('INVALID_CLUSTER','Invalid cluster ID');
+    if(needed_by_date!=null && !/^\d{4}-\d{2}-\d{2}$/.test(needed_by_date))
+      invalid('INVALID_DATE','Needed-by date must be YYYY-MM-DD');
+    const requestCode='REQ-'+randomUUID().replace(/-/g,'').slice(0,25);
+    const [res]=await db.query(
+      `INSERT INTO demand_pool_requests (
+        request_code,buyer_id,requester_role,category_id,family_id,commodity_name,
+        desired_specs,target_quantity,target_unit,target_price_per_unit,
+        cluster_id,needed_by_date,notes,status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'OPEN')`,
+      [requestCode,Number(requesterId),user.role,Number(category_id),Number(family_id),
+       families[0].name,desired_specs||null,qty,unit,price,cluster_id||null,needed_by_date||null,notes||null]
+    );
+    const [created]=await db.query('SELECT * FROM demand_pool_requests WHERE id=?',[res.insertId]);
     return created[0];
   }
 
   async getDemandRequests(filter = {}) {
+    // Public demand board: never expose buyer identity, contact, notes or user-supplied specs.
+    // Verified private RFQs have their own buyer-scoped B6 APIs.
     let query = `
-      SELECT dpr.*, c.name as category_name, f.name as family_name,
-             u.business_name as buyer_business_name, lc.name as cluster_name
+      SELECT dpr.request_code, dpr.category_id, dpr.family_id, f.name AS commodity_name,
+             dpr.target_quantity, dpr.target_unit, dpr.cluster_id,
+             dpr.needed_by_date, dpr.status, dpr.created_at,
+             c.name AS category_name, f.name AS family_name, lc.name AS cluster_name
       FROM demand_pool_requests dpr
       JOIN catalog_categories c ON dpr.category_id = c.id
       JOIN catalog_product_families f ON dpr.family_id = f.id
-      JOIN users u ON dpr.buyer_id = u.id
       LEFT JOIN geographic_clusters lc ON dpr.cluster_id = lc.id
-      WHERE 1=1
+      WHERE dpr.status = 'OPEN'
     `;
     const params = [];
-
-    if (filter.status) {
-      query += ' AND dpr.status = ?';
-      params.push(filter.status);
-    }
     if (filter.family_id) {
       query += ' AND dpr.family_id = ?';
       params.push(filter.family_id);
@@ -148,8 +172,7 @@ class ProcurementService {
       query += ' AND dpr.cluster_id = ?';
       params.push(filter.cluster_id);
     }
-
-    query += ' ORDER BY dpr.created_at DESC';
+    query += ' ORDER BY dpr.created_at DESC LIMIT 100';
     const [rows] = await db.query(query, params);
     return rows;
   }
