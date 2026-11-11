@@ -17,7 +17,7 @@ function buildAwardInvoiceLines(order,rows){
   const quantity=exact.toCanonical(line.quantity,4);
   const unitPrice=exact.toCanonical(line.unit_price,2);
   const subtotal=exact.toCanonical(line.subtotal,2);
-  if(!exact.exactDecimalGt(quantity,'0',4))
+  if(!exact.exactDecimalGte(quantity,'0.0001',4))
    throw problem('AWARD_INVOICE_QUANTITY','Award quantity must be positive.');
   if(!exact.exactDecimalGte(unitPrice,'0',2))
    throw problem('AWARD_INVOICE_PRICE','Award unit price must be nonnegative.');
