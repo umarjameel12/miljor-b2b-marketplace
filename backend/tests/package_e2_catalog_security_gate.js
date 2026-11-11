@@ -178,7 +178,7 @@ function request(method, path, body = null, token = null) {
       assert.strictEqual(editRes.status, 403);
     });
 
-    await runTest('Cross-commodity integrity: Submitting Rice attributes or Gur variety under Refined Sugar family (id=12) is rejected with 400 COMMODITY_FAMILY_MISMATCH', async () => {
+    await runTest('Retired NEW_VARIANT catalog requests reject mismatched Rice/Gur identity without creating global physical variants', async () => {
       const riceUnderSugar = await request(
         'POST',
         '/api/v1/catalog/requests',
@@ -196,8 +196,8 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(riceUnderSugar.status, 400);
-      assert.strictEqual(riceUnderSugar.body.error.code, 'COMMODITY_FAMILY_MISMATCH');
+      assert.strictEqual(riceUnderSugar.status, 409);
+      assert.strictEqual(riceUnderSugar.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
 
       const gurUnderSugar = await request(
         'POST',
@@ -216,11 +216,11 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(gurUnderSugar.status, 400);
-      assert.strictEqual(gurUnderSugar.body.error.code, 'COMMODITY_FAMILY_MISMATCH');
+      assert.strictEqual(gurUnderSugar.status, 409);
+      assert.strictEqual(gurUnderSugar.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
     });
 
-    await runTest('Dimensional & unit integrity: Dry commodities reject Litre (L) and Cooking Oil rejects Kilogram (kg) with 400 INCOMPATIBLE_FAMILY_UNIT', async () => {
+    await runTest('Retired NEW_VARIANT catalog requests reject invalid physical units before creating a global SKU', async () => {
       const riceInLitres = await request(
         'POST',
         '/api/v1/catalog/requests',
@@ -238,8 +238,8 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(riceInLitres.status, 400);
-      assert.strictEqual(riceInLitres.body.error.code, 'INCOMPATIBLE_FAMILY_UNIT');
+      assert.strictEqual(riceInLitres.status, 409);
+      assert.strictEqual(riceInLitres.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
 
       const oilInKg = await request(
         'POST',
@@ -258,11 +258,11 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(oilInKg.status, 400);
-      assert.strictEqual(oilInKg.body.error.code, 'INCOMPATIBLE_FAMILY_UNIT');
+      assert.strictEqual(oilInKg.status, 409);
+      assert.strictEqual(oilInKg.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
     });
 
-    await runTest('Hierarchy & pack_size validation: Mismatched category_id + family_id or malformed pack_size ("25kg", -5) are rejected with 400', async () => {
+    await runTest('Retired NEW_VARIANT catalog requests reject hierarchy and malformed pack data without a global SKU', async () => {
       const mismatchRes = await request(
         'POST',
         '/api/v1/catalog/requests',
@@ -280,8 +280,8 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(mismatchRes.status, 400);
-      assert.strictEqual(mismatchRes.body.error.code, 'CATEGORY_FAMILY_MISMATCH');
+      assert.strictEqual(mismatchRes.status, 409);
+      assert.strictEqual(mismatchRes.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
 
       const badSizeRes = await request(
         'POST',
@@ -300,9 +300,17 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(badSizeRes.status, 400);
+      assert.strictEqual(badSizeRes.status, 409);
+      assert.strictEqual(badSizeRes.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
     });
 
+    // Legacy global variant requests must never insert even a DRAFT new variant.
+    const [[{ legacyVariantRequests }]]=await db.query(
+      "SELECT COUNT(*) AS legacyVariantRequests FROM catalog_requests WHERE supplier_id=? AND request_type='NEW_VARIANT'",
+      [supplierAId]
+    );
+    assert.strictEqual(Number(legacyVariantRequests),0,
+      'Retired NEW_VARIANT writes must not create catalog request records');
     console.log('\n================================================================================');
     console.log(`PACKAGE E2 SECURITY GATE VERDICT: ALL ${passed}/${total} TESTS PASSED (100% GREEN)`);
     console.log('================================================================================\n');
