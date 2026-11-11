@@ -439,13 +439,24 @@ class ProcurementController {
     }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_EXPIRY_FAILED',message:e.statusCode?e.message:'Unable to expire Flash Pool'}});}
   }
 
-  // Demand Requests ("Request a Pool")
+  // Demand Requests ("Request a Pool").
+  // Return controlled client errors only; never leak SQL or internal errors.
   async createDemandRequest(req, res) {
     try {
       const request = await procurementService.createDemandRequest(req.user.id, req.body);
+      // The creator may see their own request; public discovery uses a strict
+      // non-identifying projection in procurementService.getDemandRequests.
       res.status(201).json({ success: true, data: { demand_request: request } });
     } catch (err) {
-      res.status(err.statusCode || 500).json({ success: false, error: { code: err.code || 'SERVER_ERROR', message: err.message } });
+      const status = Number.isInteger(err.statusCode) && err.statusCode >= 400 &&
+        err.statusCode < 500 ? err.statusCode : 500;
+      res.status(status).json({
+        success: false,
+        error: {
+          code: status === 500 ? 'SERVER_ERROR' : err.code || 'INVALID_DEMAND_REQUEST',
+          message: status === 500 ? 'Unable to create demand request.' : err.message
+        }
+      });
     }
   }
 
@@ -454,7 +465,9 @@ class ProcurementController {
       const requests = await procurementService.getDemandRequests(req.query);
       res.status(200).json({ success: true, count: requests.length, data: { demand_requests: requests } });
     } catch (err) {
-      res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
+      res.status(500).json({ success: false, error: {
+        code: 'SERVER_ERROR', message: 'Unable to load demand requests.'
+      } });
     }
   }
 
