@@ -806,50 +806,11 @@ export const SupplierCatalogPage = () => {
   // ---------------------------------------------------------------------------
   // Regular Pool Draft Creation, Editing & Publishing (Level 6 — Rules P1–P12)
   // ---------------------------------------------------------------------------
-  const openCreatePoolModal = (listing) => {
-    const defaultClose = new Date(Date.now() + 3 * 24 * 3600 * 1000); // +3 days
-    const defaultPromised = new Date(defaultClose.getTime() + 48 * 3600 * 1000); // +48h after close (within 24-72h SLA)
-    const basePrice = Number(listing?.base_unit_price || 5000);
-    setEditingDraftPool(null);
-    setPoolForm({
-      supplier_listing_id: listing ? String(listing.id) : (myListings[0] ? String(myListings[0].id) : ''),
-      target_qty: '50',
-      supplier_min_qty: String(listing?.supplier_min_qty || '20'),
-      buyer_min_qty: String(listing?.buyer_min_qty || '2'),
-      max_capacity: '100',
-      purchase_increment: '1',
-      delivery_type: 'DOORSTEP',
-      scheduled_close_at: toDatetimeLocalString(defaultClose),
-      promised_delivery_at: toDatetimeLocalString(defaultPromised),
-      tier1_price: String(basePrice),
-      tier2_price: String(Math.max(1, Math.round(basePrice * 0.96)))
-    });
-    setPoolModalOpen(true);
-  };
-
-  const openEditDraftPoolModal = (pool) => {
-    if (pool.status !== 'DRAFT' || pool.is_terms_locked) {
-      setViewingLockedPool(pool);
-      return;
-    }
-    setEditingDraftPool(pool);
-    const t1 = pool.price_tiers?.[0]?.price_per_unit || pool.current_price_per_unit || '';
-    const t2 = pool.price_tiers?.[1]?.price_per_unit || pool.next_tier_price || '';
-    setPoolForm({
-      supplier_listing_id: String(pool.supplier_listing_id || ''),
-      target_qty: String(pool.target_qty || '50'),
-      supplier_min_qty: String(pool.supplier_min_qty || '20'),
-      buyer_min_qty: String(pool.buyer_min_qty || '2'),
-      max_capacity: String(pool.max_capacity || pool.target_qty || '100'),
-      purchase_increment: String(pool.purchase_increment || '1'),
-      delivery_type: pool.delivery_type || 'DOORSTEP',
-      scheduled_close_at: toDatetimeLocalString(pool.scheduled_close_at || pool.expires_at),
-      promised_delivery_at: toDatetimeLocalString(pool.promised_delivery_at),
-      tier1_price: String(t1),
-      tier2_price: String(t2)
-    });
-    setPoolModalOpen(true);
-  };
+  // Unified supplier Pool Management is the sole new creation/editing UI.
+  const openCreatePoolModal = (listing) =>
+    navigate(`/supplier/pools?create=1&type=regular${listing?.id?`&listing=${listing.id}`:''}`);
+  const openEditDraftPoolModal = (pool) =>
+    navigate(`/supplier/pools?edit=REGULAR:${pool.id}`);
 
   // Real-time 24–72 hour Delivery SLA calculation for UI validation
   const poolSlaStatus = useMemo(() => {
@@ -1493,7 +1454,7 @@ export const SupplierCatalogPage = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-[var(--text-primary)]">
-                  My Regular Pools (Immutable Published Terms & 1–3 Day Delivery SLA)
+                  My Regular Pools · Managed in Pool Management
                 </h2>
                 <p className="text-xs text-[var(--text-secondary)]">
                   Pools are editable only in <strong>DRAFT</strong> status. Once published, all commercial terms and the 24–72 hour promised delivery timestamp are permanently locked.
