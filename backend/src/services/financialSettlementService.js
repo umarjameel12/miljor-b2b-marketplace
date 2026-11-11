@@ -202,7 +202,9 @@ class FinancialSettlementService {
       const policyNotes = null;
 
       // Exact rate: 2.50 percent -> 0.0250, with no Number conversion.
-      const commissionRateDecimal = '0.' + BigInt(percent.replace('.', '')).toString().padStart(4, '0');
+      const commissionBasisPoints = BigInt(percent.replace('.', ''));
+      const commissionRateDecimal = (commissionBasisPoints / 10000n).toString() + '.' +
+        (commissionBasisPoints % 10000n).toString().padStart(4, '0');
       const commissionAmount = exactDecimal.exactMultiplyRound(grossAmount.toString(), commissionRateDecimal, 2);
 
       // net_payable_amount = gross + deliveryFee - commission
