@@ -24,6 +24,7 @@ export function ProcurementAdvancedControls({ user, token }) {
   const [delivery,setDelivery]=useState({order_id:'',address_id:'',delivery_day:'',
     delivery_window:'09:00-12:00',mode:'STANDARD_CLUSTERED'});
   const [deliveryConsent,setDeliveryConsent]=useState(false);
+  const [deliveryPreview,setDeliveryPreview]=useState(null);
   const [supplierOrderIds,setSupplierOrderIds]=useState('');
   const [preorder,setPreorder]=useState(null);
   const api=useCallback(async (path,opts={})=>{
@@ -87,14 +88,21 @@ export function ProcurementAdvancedControls({ user, token }) {
       {organizer_cycle_id:Number(selectedCycles[cohort.id])}),
     'Collective cycle invitations created. Each buyer must join and approve separately.'
   );
+  const previewDelivery=()=>action(async()=>{
+    const info=await api('/api/v1/procurement/orders/'+delivery.order_id+'/delivery-preview');
+    setDeliveryPreview(info.preview);
+  },'Exact order delivery fee loaded for review.');
   const acceptDelivery=()=>action(async()=>{
-    if(!deliveryConsent)throw Error('Approve the unchanged order delivery fee.');
+    if(!deliveryConsent||!deliveryPreview||
+      Number(deliveryPreview.order_id)!==Number(delivery.order_id))
+      throw Error('Review and approve the exact current order delivery fee.');
     await post('/api/v1/procurement/orders/'+delivery.order_id+'/delivery-choice',{
       address_id:Number(delivery.address_id),
       delivery_day:delivery.delivery_day,delivery_window:delivery.delivery_window,
       mode:delivery.mode,handling_class:'AMBIENT',
+      accepted_delivery_fee:deliveryPreview.locked_delivery_fee,
       confirm_existing_order_delivery_fee:true},true);
-    setDeliveryConsent(false);
+    setDeliveryConsent(false);setDeliveryPreview(null);
   },'Paid-order delivery choice saved. No extra charge.');
   const planRun=()=>action(async()=>{
     const ids=supplierOrderIds.split(',').map(x=>x.trim()).filter(Boolean);
@@ -246,12 +254,20 @@ export function ProcurementAdvancedControls({ user, token }) {
             <option value="16:00-20:00">4 PM – 8 PM</option>
           </select>
         </label>
+        <button type="button" className={button} disabled={busy||!delivery.order_id}
+          onClick={previewDelivery}>Review paid-order delivery fee</button>
+        {deliveryPreview&&Number(deliveryPreview.order_id)===Number(delivery.order_id)&&
+          <p className="text-sm font-semibold">
+            Locked delivery fee: Rs. {deliveryPreview.locked_delivery_fee} ·
+            {deliveryPreview.delivery_type}. No extra charge.
+          </p>}
         <label className="flex gap-2 text-xs">
           <input type="checkbox" checked={deliveryConsent}
             onChange={e=>setDeliveryConsent(e.target.checked)}/>
           I approve my existing paid-order delivery fee without an extra charge.
         </label>
-        <button type="button" className={button} disabled={busy||!deliveryConsent||
+        <button type="button" className={button} disabled={busy||!deliveryConsent||!deliveryPreview||
+          Number(deliveryPreview.order_id)!==Number(delivery.order_id)||
           !delivery.order_id||!delivery.address_id||!delivery.delivery_day}
           onClick={acceptDelivery}>Confirm delivery choice</button>
       </article>
