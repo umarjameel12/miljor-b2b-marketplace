@@ -67,6 +67,8 @@ export const PoolsPage = () => {
   const [selectedFulfillmentMode, setSelectedFulfillmentMode] = useState('ALL');
   const [includeAllPickup, setIncludeAllPickup] = useState(true);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search')||'');
+  const [debouncedSearch,setDebouncedSearch]=useState(searchParams.get('search')||'');
+  useEffect(()=>{const timer=setTimeout(()=>setDebouncedSearch(searchQuery),300);return()=>clearTimeout(timer)},[searchQuery]);
   const [viewMode, setViewMode] = useState('pools'); // 'pools' or 'catalog'
 
   // Update default cluster if user logs in or profile changes
@@ -106,7 +108,7 @@ export const PoolsPage = () => {
           cluster_id:clusterParam,
           fulfillment_mode:modeParam,
           include_all_pickup:includeAllPickup,
-          search:searchQuery.trim()||undefined,
+          search:debouncedSearch.trim()||undefined,
           limit:100
         }),
         catalogApi.getFamilies(),
@@ -124,7 +126,7 @@ export const PoolsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode, poolType, searchQuery]);
+  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode, poolType, debouncedSearch]);
 
   useEffect(() => {
     fetchData();
@@ -140,7 +142,7 @@ export const PoolsPage = () => {
         category_id:selectedCategory==='All Commodities'?undefined:Number(selectedCategory),
         cluster_id:selectedClusterId?Number(selectedClusterId):undefined,
         fulfillment_mode:selectedFulfillmentMode==='ALL'?undefined:selectedFulfillmentMode,
-        include_all_pickup:includeAllPickup,search:searchQuery.trim()||undefined,
+        include_all_pickup:includeAllPickup,search:debouncedSearch.trim()||undefined,
         limit:100,cursor:nextCursor
       });
       if(!result.success)throw Error(result.error?.message||'Could not load more pools');
