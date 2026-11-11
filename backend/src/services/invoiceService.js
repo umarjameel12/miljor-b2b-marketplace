@@ -170,6 +170,19 @@ class InvoiceService {
       const taxAmountStr = '0.00';
       const totalAmountStr = exactDecimal.toCanonicalString(o.total_amount, 2);
 
+      // Invoice must reproduce the exact order-time locked total.
+      // Do not issue a document whose grand total differs from its immutable
+      // subtotal + supplier delivery + buyer platform fee components.
+      const computedTotalStr = exactDecimal.exactDecimalSum(
+        [subtotalStr, deliveryFeeStr, platformFeeStr, taxAmountStr], 2
+      );
+      if (!exactDecimal.exactDecimalEquals(computedTotalStr, totalAmountStr, 2)) {
+        const err = new Error('Invoice grand total does not reconcile with immutable order charges');
+        err.code = 'INVOICE_TOTAL_MISMATCH';
+        err.statusCode = 409;
+        throw err;
+      }
+
       const subtotal = Number(subtotalStr);
       const deliveryFee = Number(deliveryFeeStr);
       const platformFee = Number(platformFeeStr);
@@ -185,6 +198,20 @@ class InvoiceService {
          JOIN procurement_award_orders ao ON ao.id = al.award_order_id
          WHERE ao.order_id = ? ORDER BY al.id`, [numericOrderId]
       );
+      // Each supplier-awarded line must itself match quantity x accepted
+      // unit price. Matching only aggregate subtotal allows compensating
+      // mispriced lines to produce a deceptively balanced invoice.
+      for (const line of awardLines) {
+        const calculated = exactDecimal.exactMultiplyRound(
+          String(line.quantity), String(line.unit_price), 2
+        );
+        if (!exactDecimal.exactDecimalEquals(calculated, line.subtotal, 2)) {
+          const err = new Error('Invoice award line quantity, unit price and subtotal disagree');
+          err.code = 'INVOICE_LINE_AMOUNT_MISMATCH';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
       if (awardLines.length && !exactDecimal.exactDecimalEquals(
         exactDecimal.exactDecimalSum(awardLines.map(line => line.subtotal), 2), subtotalStr, 2
       )) {
