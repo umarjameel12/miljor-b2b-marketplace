@@ -93,7 +93,7 @@ gate(reservations.includes("'/reservations/my'")&&reservations.includes("X-Idemp
   'Regular buyer reservations remain visible and cancellation idempotent');
 gate(ordersPage.includes('BuyerRegularReservationsPanel')&&ordersPage.includes('FlashBuyerOrdersPanel'),
   'Both types remain independently visible in orders');
-gate(flashLegacy.includes('Navigate to="/pools?type=FLASH"'),
+gate(flashLegacy.includes('Navigate to="/pools"'),
   'Old Flash discovery link redirects without duplicate source of truth');
 gate(!pools.includes('urdu_name')&&!supplierPage.includes('urdu_name')&&
   !buyerCard.includes('16 staple'),'No Urdu or old 16-staple catalog in new pool UI');
