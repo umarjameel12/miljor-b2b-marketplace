@@ -1,7 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
 const http=require('node:http');
-const {spawnSync}=require('node:child_process');
 const path=require('node:path');
 function startServer(handler){
  return new Promise(resolve=>{
@@ -10,7 +9,7 @@ function startServer(handler){
  });
 }
 async function main(){
- const api=await startServer((req,res)=>{res.statusCode=(req.url==='/health/ready'&&process.env.DEMO_TEST_FAIL_READY==='1')?503:200;res.end('{"ok":true}')});
+ const api=await startServer((req,res)=>{res.statusCode=req.url==='/health/ready'&&req.headers['x-demo-fail']==='yes'?503:200;res.end('{"ok":true}')});
  const ui=await startServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><body>MilJor</body></html>')});
  const env={...process.env,DB_NAME:'miljor_test_db',DEMO_BACKEND_URL:'http://127.0.0.1:'+api.port,DEMO_FRONTEND_URL:'http://127.0.0.1:'+ui.port};
  try {
@@ -23,7 +22,7 @@ async function main(){
   });
   const ok=await run({});
   assert.equal(ok.code,0,ok.out);
-  assert.match(ok.out,/PASS 12\/12/);
+  assert.match(ok.out,/PASS 13\/13/);
   const protectedDb=await run({DB_NAME:'miljor_db'});
   assert.notEqual(protectedDb.code,0);
   assert.match(protectedDb.out,/Requested demo database: Set DB_NAME explicitly/);
