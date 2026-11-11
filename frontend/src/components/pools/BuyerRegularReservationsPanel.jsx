@@ -61,7 +61,7 @@ export function BuyerRegularReservationsPanel(){
         <p className="text-xs text-[var(--text-muted)]">Final supplier-approved wholesale price is not locked yet.</p>}
       <div className="flex gap-2 items-center flex-wrap">
         <button type="button" onClick={()=>setActiveOffer(current=>current===r.id?null:r.id)}
-          className="text-xs px-3 py-2 border rounded-lg border-emerald-600 text-emerald-600">
+          className="text-xs px-3 py-2 border rounded-lg border-[var(--brand-accent)] text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/10 font-semibold transition cursor-pointer">
           {activeOffer===r.id?'Hide final offer':'Review final offer / commitment'}
         </button>
         {r.permissions?.can_cancel&&<button type="button" disabled={busy===r.id}

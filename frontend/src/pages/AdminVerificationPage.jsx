@@ -206,10 +206,9 @@ export const AdminVerificationPage = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[var(--border-subtle)]">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[var(--brand-accent)]/15 text-[var(--brand-accent)]">
                 Administration
               </span>
-              <span className="text-xs text-[var(--text-muted)]">• Package E1.1 Gate B</span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
               Supplier Verification Queue

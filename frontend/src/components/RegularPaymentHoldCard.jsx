@@ -66,7 +66,7 @@ export function RegularPaymentHoldCard({order}) {
             <CountdownTimer deadline={hold.expires_at} serverTime={hold.server_time} label="Pay within" onExpire={fetchStatus}/>
           </div>
           <button type="button" disabled={!canCheckout||busy} onClick={checkout}
-            className="px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 bg-emerald-700 text-white flex gap-2 items-center">
+            className="px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 bg-[var(--brand-accent)] text-[#072a21] flex gap-2 items-center shadow-xs hover:opacity-95 transition cursor-pointer">
             {busy?'Connecting…':'Pay securely'}<ExternalLink size={13}/>
           </button>
         </div>}

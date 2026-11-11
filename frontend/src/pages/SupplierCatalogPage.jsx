@@ -948,8 +948,8 @@ export const SupplierCatalogPage = () => {
                   Business Profile
                 </Link>
                 <span className="text-[var(--border-subtle)]">•</span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Package E2 • 6-Level Product & Immutable Pool Architecture
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--brand-accent)]">
+                  6-Level Product & Immutable Pool Architecture
                 </span>
                 <SupplierVerificationBadge
                   status={profile?.verification_status}
