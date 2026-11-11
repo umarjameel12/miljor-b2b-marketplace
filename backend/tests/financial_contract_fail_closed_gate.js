@@ -28,7 +28,8 @@ const paidOrder={
 async function testMissingCommission() {
   await withConnection(async(sql)=>{
     if(sql.includes('FROM orders o')&&sql.includes('supplier_profiles'))return [[{
-      ...paidOrder,transaction_fee_percent:null
+      ...paidOrder,locked_supplier_commission_percent:null,
+      current_supplier_commission_percent:'2.50'
     }]];
     if(sql.includes('FROM payments'))return [[{id:9,status:'PAID'}]];
     if(sql.includes('FROM supplier_payables'))return [[]];
