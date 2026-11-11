@@ -58,6 +58,8 @@ jobs:
           node tests/p0_unified_pool_ui_source_gate.js
           node tests/b7_postpurchase_readonly_contract_gate.js
           node tests/p0_finance_readonly_integrity_gate.js
+      - name: All order origins and ownership source contract
+        run: cd backend && node tests/p0_all_order_origins_source_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
@@ -169,6 +171,10 @@ jobs:
         timeout-minutes: 8
         run: cd backend && node tests/part4b3_pool_publishing_gate.js
 
+      - name: Real Express order ownership and payment boundary against disposable MySQL
+        if: ${{ always() }}
+        timeout-minutes: 5
+        run: cd backend && node tests/p0_order_ownership_http_gate.js
       - name: B4 and B5 same-SKU simultaneous publication 2/10/50/100 clients
         if: ${{ always() }}
         timeout-minutes: 12
