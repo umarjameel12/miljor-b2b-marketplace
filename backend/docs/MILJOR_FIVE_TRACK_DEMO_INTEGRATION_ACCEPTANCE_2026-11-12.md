@@ -62,3 +62,29 @@ This change branch: fix/demo-partial-delivery-quantity-20261112
 
 ## Git/local handoff
 Treat PR #23 as demo candidate, this branch as a focused child PR (no blind merging). Do not overwrite another agent's work. On user's machine, make a clean worktree and secure DB backup outside repository, then fetch chosen accepted branch after tests. No live DB or local files were accessed by this assistant.
+
+## 2026-11-12 — Combined candidate evidence update
+
+**GitHub composite PR:** #28 `integration/demo-five-track-verified-safety-20261112`, based on latest accepted main and reconciled PR #27 ownership work. Subsequent code changes after the evidence SHA require their own exact-head verification.
+
+### Completed real CI on pre-invoice candidate `f495b84107f3bbe527c61a73f516c425f7357d86`
+- **Canonical run 43101360850 — PASS**: MySQL 8.0 migration installation, journal historical upgrade through 054, repeat migration idempotence, synthetic HMAC Safepay HTTP/escrow/replay, B6 release suite, B4/B5 source/inventory and real 2/10/50/100 same-SKU publication, Express order-origin role isolation, Vite production build, Chromium separated buyer/supplier auth/offline flow.
+- **E3 run 43101360907 — PASS**: full real disposable MySQL 8 family and SKU supplier entitlement acceptance.
+- **Preflight run 43101360819 — PASS**: smoke preflight (not real laptop deployment).
+- **Pure safety run 43101360846 — PASS**: 13 quantity, 4 fulfillment, 9 B6 source, 11 dispute/refund tests.
+
+### Subsequent improvements; exact-head rerun mandatory
+- Single-line 100 ordered, 80 received, 20 short is recorded in event/outbox, buyer response, dispute and client-vs-server money boundary. Distinct roles and idempotent retries remain guarded.
+- DisputeService now checks short quantity exact relation and rejects B6 aggregate claims until proper per-line receipt/amount ledger exists.
+- Buyer partial refund requires an owned linked dispute, cannot exceed disputed amount, rejects duplicate obligations, preserves same-key idempotent replay. Actual external refunds still DISABLED.
+- InvoiceService validates each B6 line subtotal = exact qty x price, AND exact sum of subtotal + delivery + buyer fee + tax = order total; valid two-line scenario and two rollback cases executed against in-memory SQL (3/3).
+- ProcurementAwardService.reconcilePaidOrder + FulfillmentService.listSupplierFulfillmentOrders executed using mock SQL: partial PAID, supplier-1 paid-only queue, supplier-2 pending-hidden, second supplier paid order queue and award completion (4/4).
+- Commit `5d5f59975711e2005ac2716a51c98954d1f147e0` initiated exact-head four GitHub workflows; do not say PASS until each actual job concludes SUCCESS.
+
+### **Remaining BLOCKED external and new development**
+1. Real browser **complete** buyer quote/order checkout -> supplier dispatch -> 100/80/20 buyer case -> admin authorized resolution -> exact settlement not yet executed in one end-to-end Chromium journey. Auth/offline CI is narrower.
+2. B6 **multi-line** per-item partial receipt/dispute/refund schema and business logic absent: current policy *fails closed* rather than fabricate an amount. Product release incomplete by design.
+3. Genuine provider-originated **Safepay** signed callback with sandbox/PSP readback and actual refund/payout reconciliation needs external provider credentials/authorization. Synthetic HMAC PASS does not prove it.
+4. Exact **local** user laptop Git and MySQL backup unperformed by GitHub/assistant. Preserve `miljor_db` and `.env` separately. Do not merge into main on narrower CI alone.
+
+**Gate conclusion:** Tracks T1 and T2 source/build/auth acceptances have strong real CI evidence; T3/T4/T5 source and mock service safety improved. Release T3/T4/T5 actual integrated provider/line-level browser acceptance remains BLOCKED. Never claim all five FULL PASS prematurely.
