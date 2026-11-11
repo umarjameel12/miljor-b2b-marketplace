@@ -449,7 +449,7 @@ class FulfillmentService {
       // Reservation outbox has a pool FK. For B6/Flash poolless orders,
       // the order_fulfillment_events row above remains the durable audit;
       // never forge pool_id=0 or attach an unrelated pool.
-      if (order.pool_id) await connection.query(
+      if (order.pool_id && order.reservation_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
@@ -643,7 +643,7 @@ class FulfillmentService {
       // Reservation outbox has a pool FK. For B6/Flash poolless orders,
       // the order_fulfillment_events row above remains the durable audit;
       // never forge pool_id=0 or attach an unrelated pool.
-      if (order.pool_id) await connection.query(
+      if (order.pool_id && order.reservation_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
@@ -993,7 +993,7 @@ class FulfillmentService {
       // Reservation outbox has a pool FK. For B6/Flash poolless orders,
       // the order_fulfillment_events row above remains the durable audit;
       // never forge pool_id=0 or attach an unrelated pool.
-      if (order.pool_id) await connection.query(
+      if (order.pool_id && order.reservation_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
@@ -1228,7 +1228,7 @@ class FulfillmentService {
       // Reservation outbox has a pool FK. For B6/Flash poolless orders,
       // the order_fulfillment_events row above remains the durable audit;
       // never forge pool_id=0 or attach an unrelated pool.
-      if (order.pool_id) await connection.query(
+      if (order.pool_id && order.reservation_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
