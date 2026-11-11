@@ -1,3 +1,11 @@
+## Independent Backend Integrity — Batch 4 (2026-11-11)
+- Branch: `fix/independent-backend-integrity`. Payment BUYER-only strict RBAC; include pending refund claims in captured amount ceiling; refund-specific financial hold selection and exact decimal constraints; redact financial handler 5xx internals.
+- Added isolated final gate: `backend/tests/phase4_refund_integrity_gate.js`.
+- Safepay remains sole active payment provider; external payout/refunds stay DISABLED. No DB migration or transfer run.
+- Status: IMPLEMENTED (bounded changes), NOT TESTED, NOT VERIFIED; outstanding platform-funded refund policy and payment rail discrepancy are BLOCKED.
+- See `backend/docs/MILJOR_INDEPENDENT_BACKEND_INTEGRITY_IMPLEMENTATION_LEDGER.md`.
+- CAN START NEXT PHASE: NO until final verification and branch reconciliation.
+
 ## Independent Backend Integrity — Batch 3 (2026-11-11)
 - Branch: `fix/independent-backend-integrity`.
 - Fee safety: reject missing supplier profile prior to supplier fee/payout calculation.
