@@ -194,7 +194,9 @@ const authorizeStrict = (...roles) => {
 // Convenience role guards
 const authorizeAdmin = authorize(...ALL_ADMIN_ROLES);
 const authorizeFinance = authorize(ROLES.FINANCE_ADMIN);
-const authorizeVerification = authorize(ROLES.VERIFICATION_ADMIN);
+// Platform owner ADMIN is permitted to moderate suppliers, but neither BUYER nor
+// SUPPLIER can self-assign approval privileges. SUPER_ADMIN remains allowed by authorize().
+const authorizeVerification = authorize(ROLES.VERIFICATION_ADMIN, ROLES.ADMIN);
 const authorizeOperations = authorize(ROLES.OPERATIONS_ADMIN);
 const authorizeSupport = authorize(ROLES.SUPPORT_ADMIN, ROLES.OPERATIONS_ADMIN);
 

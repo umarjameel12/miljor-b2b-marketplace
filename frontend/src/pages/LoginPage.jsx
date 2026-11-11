@@ -44,9 +44,12 @@ export const LoginPage = () => {
 
     setLoading(true);
     try {
-      await login({ identifier: identifier.trim(), password, rememberMe });
+      const result = await login({ identifier: identifier.trim(), password, rememberMe });
       toast.success('Signed in successfully.');
-      navigate(from, { replace: true });
+      const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
+      // Explicit protected return path wins; otherwise admins reach their console.
+      const destination = from === '/pools' && adminRoles.includes(result.user?.role) ? '/admin' : from;
+      navigate(destination, { replace: true });
     } catch (err) {
       const errData = err.response?.data?.error;
       const code = errData?.code;

@@ -193,7 +193,10 @@ export const AppShell = ({ children }) => {
   const ActiveThemeIcon = theme === THEME_MODES.DARK ? Moon : theme === THEME_MODES.LIGHT ? Sun : Monitor;
 
   // Primary Navigation items matching the reference and functional routes
+  const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
+  const isAdmin = isAuthenticated && adminRoles.includes(user?.role);
   const navItems = [
+    ...(isAdmin ? [{ label: 'Admin Console', path: '/admin', icon: ShieldCheck, active: location.pathname.startsWith('/admin') }] : []),
     { label: 'Home', path: '/', icon: Home, active: location.pathname === '/' },
     { label: 'Explore Pools', path: '/pools', icon: Layers, active: location.pathname === '/pools' },
     { label: 'Orders', path: '/orders', icon: ClipboardList, active: location.pathname === '/orders' },
@@ -204,6 +207,7 @@ export const AppShell = ({ children }) => {
 
   // Mobile bottom bar items matching reference phone mockup
   const mobileBottomItems = [
+    ...(isAdmin ? [{label:'Admin',path:'/admin',icon:ShieldCheck,active:location.pathname.startsWith('/admin')}] : []),
     { label: 'Home', path: '/', icon: Home, active: location.pathname === '/' },
     { label: 'Pools', path: '/pools', icon: Layers, active: location.pathname === '/pools' },
     { label: 'Orders', path: '/orders', icon: ClipboardList, active: location.pathname === '/orders' },

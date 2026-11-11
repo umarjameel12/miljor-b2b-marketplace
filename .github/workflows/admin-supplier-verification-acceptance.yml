@@ -1,0 +1,40 @@
+name: MilJor Admin Portal and Supplier Approval Acceptance
+on:
+  push:
+    branches:
+      - feature/admin-portal-supplier-approval-20261112
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin-role-and-ui:
+    name: Authorized admin approval and frontend production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Admin verification role, audit and decision contracts
+        env:
+          JWT_SECRET: isolated_admin_test_jwt_secret_32_characters
+          NODE_ENV: test
+        run: node backend/tests/demo_admin_supplier_approval_gate.js
+      - name: Validate offline first-admin bootstrap syntax without executing it
+        run: node --check backend/scripts/bootstrap_first_admin.js
+      - name: Build frontend with admin dashboard, navigation and verification queue
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Confirm no backend bootstrap has executed
+        run: |
+          echo "Admin bootstrap is manual local CLI only. This CI never connects to or changes miljor_db."

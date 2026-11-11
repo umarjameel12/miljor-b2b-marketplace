@@ -108,10 +108,10 @@ export const AdminVerificationPage = () => {
     }));
   };
 
-  const handleOpenReject = (supplier) => {
+  const handleOpenReject = (supplier, mode = 'reject') => {
     setSelectedSupplier(supplier);
     setRejectionReason('');
-    setModalMode('reject');
+    setModalMode(mode);
   };
 
   const handleCloseModal = () => {
@@ -163,13 +163,11 @@ export const AdminVerificationPage = () => {
     try {
       setSubmitting(true);
       await adminApi.verifySupplier(selectedSupplier.supplier_id, {
-        verification_status: 'REJECTED',
+        verification_status: modalMode === 'request-info' ? 'MORE_INFORMATION_REQUIRED' : 'REJECTED',
         rejection_reason: rejectionReason.trim()
       });
 
-      toast.warning(
-        `Supplier application rejected. Rejection reason logged and delivered.`
-      );
+      toast.info(modalMode === 'request-info' ? 'More information requested. Supplier can see the guidance.' : 'Application rejected and reason recorded.');
       handleCloseModal();
       fetchPendingSuppliers();
     } catch (err) {
@@ -395,12 +393,23 @@ export const AdminVerificationPage = () => {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => handleOpenReject(s, 'request-info')}
+                        disabled={isSelf}
+                        className="gap-2"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Request Info
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
                         className="gap-2 border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                       >
                         <XCircle className="w-4 h-4" />
-                        Reject / Request Info
+                        Reject
                       </Button>
                     </div>
                   </div>
@@ -517,14 +526,14 @@ export const AdminVerificationPage = () => {
       )}
 
       {/* Reject Modal */}
-      {modalMode === 'reject' && selectedSupplier && (
+      {(modalMode === 'reject' || modalMode === 'request-info') && selectedSupplier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in-50 zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2">
                 <XCircle className="w-5 h-5 text-red-600" />
                 <h3 className="font-bold text-base text-[var(--text-primary)]">
-                  Reject Application / Request Changes
+                  {modalMode === 'request-info' ? 'Request Additional Information' : 'Reject Supplier Application'}
                 </h3>
               </div>
               <button
@@ -567,7 +576,7 @@ export const AdminVerificationPage = () => {
                   disabled={submitting}
                   className="bg-red-600 hover:bg-red-700 text-white font-semibold"
                 >
-                  {submitting ? 'Rejecting...' : 'Reject Application'}
+                  {submitting ? 'Submitting...' : (modalMode === 'request-info' ? 'Request Information' : 'Reject Application')}
                 </Button>
               </div>
             </form>
