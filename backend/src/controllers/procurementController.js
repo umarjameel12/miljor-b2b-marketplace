@@ -390,7 +390,18 @@ class ProcurementController {
     try {
       const flash=await require('../services/flashPoolService').publish(req.user.id,Number(req.params.id));
       res.status(200).json({success:true,data:{flash_pool:flash}});
-    }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_PUBLISH_FAILED',message:e.statusCode?e.message:'Unable to publish Flash Pool'}});}
+    }catch(e){
+      // A busy physical-SKU lock is a retryable conflict, never a successful
+      // publication or an unclassified 500. A caller must recheck pool state
+      // and retry using the same intention; no stock is allocated on rollback.
+      const busy=['ER_LOCK_WAIT_TIMEOUT','ER_LOCK_DEADLOCK'].includes(e.code);
+      if (busy) res.set('Retry-After','2');
+      const status=busy?409:(e.statusCode||500);
+      res.status(status).json({success:false,error:{
+        code:busy?'POOL_PUBLICATION_RETRYABLE_CONFLICT':(e.code||'FLASH_PUBLISH_FAILED'),
+        message:busy?'Inventory is busy; check pool status before retrying.':(e.statusCode?e.message:'Unable to publish Flash Pool')
+      }});
+    }
   }
   async getFlashPools(req,res) {
     try {
