@@ -79,6 +79,22 @@ class SupplierListingController {
         });
       }
 
+      // B1: LEGACY_GLOBAL specs remain immutable history, never a source for new offers.
+      if (spec.lifecycle_status !== 'PUBLISHED' || !spec.supplier_sku_id ||
+          !spec.supplier_product_id || Number(spec.supplier_id) !== Number(supplierId)) {
+        return res.status(409).json({success:false,error:{
+          code:'SUPPLIER_OWNED_SKU_REQUIRED',
+          message:'New offers require your own published physical SKU; legacy global specifications cannot be reused.'
+        }});
+      }
+      const actualSku = await catalogRepo.findSupplierSkuById(Number(spec.supplier_sku_id));
+      if (!actualSku || Number(actualSku.supplier_id) !== Number(supplierId) ||
+          actualSku.status !== 'PUBLISHED' || Number(actualSku.supplier_product_id) !== Number(spec.supplier_product_id)) {
+        return res.status(409).json({success:false,error:{
+          code:'INVALID_SUPPLIER_SKU_BRIDGE',message:'Specification must reference a published supplier-owned SKU.'
+        }});
+      }
+
       // If the specification belongs to a specific supplier's SKU, enforce ownership and PUBLISHED lifecycle
       if (spec.supplier_id && Number(spec.supplier_id) !== Number(supplierId)) {
         return res.status(403).json({
