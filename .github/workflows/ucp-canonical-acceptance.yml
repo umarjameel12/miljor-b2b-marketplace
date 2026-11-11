@@ -152,3 +152,77 @@ jobs:
         if: ${{ always() }}
         timeout-minutes: 12
         run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
+
+  real-chromium-buyer-supplier:
+    name: Real Chromium buyer/supplier auth, retry and offline journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      SAFEPAY_ENV: sandbox
+      TRANSACTIONAL_EMAIL_MODE: mock
+      P0_BROWSER_BASE_URL: http://127.0.0.1:3000
+      P0_BROWSER_TEST_PASSWORD: P0DisposableBrowserPass_2026_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install backend and frontend
+        run: |
+          npm --prefix backend ci --no-audit --no-fund
+          npm --prefix frontend ci --no-audit --no-fund
+      - name: Migrate disposable MySQL only
+        run: |
+          cd backend
+          node database/financeCompatibilityGate.js
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node tests/p0_finance_054_installed_gate.js
+      - name: Seed isolated buyer and supplier
+        run: cd backend && node tests/p0_browser_fixture_seed.js
+      - name: Install Chromium automation only inside CI
+        run: |
+          npm --prefix backend install --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          cd backend && npx playwright install --with-deps chromium
+      - name: Launch real Express and Vite
+        run: |
+          (cd backend && nohup node server.js > /tmp/miljor-api.log 2>&1 &)
+          (cd frontend && nohup npm run dev -- --host 127.0.0.1 > /tmp/miljor-vite.log 2>&1 &)
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:5000/health/live > /dev/null 2>&1 &&
+               curl -fsS http://127.0.0.1:3000/ > /dev/null 2>&1; then exit 0; fi
+            sleep 2
+          done
+          tail -n 50 /tmp/miljor-api.log || true
+          tail -n 50 /tmp/miljor-vite.log || true
+          exit 1
+      - name: Real Chromium separate buyer/supplier acceptance
+        timeout-minutes: 10
+        run: cd backend && node tests/p0_real_browser_journey.js
