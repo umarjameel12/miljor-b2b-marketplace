@@ -1,5 +1,52 @@
 # MilJor B7 — Self-Executed Automated Tests & Security Acceptance Evidence
 
+## B7 REAL DATABASE & AUTHENTICATED BROWSER ACCEPTANCE — LATEST VERIFIED
+
+**Verified GitHub Actions run:** https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43088991788
+
+**Exact tested implementation SHA:** `68298873e93072ea53819f3855e50e195b5508cd`. Branch is isolated B7 only, based on accepted B6. This section supersedes older statements below that MySQL/real-browser gates had not executed: those statements describe an earlier test checkpoint `9d3f872`.
+
+### Actual latest execution matrix
+
+| Layer | Real outcome | Evidence / scope |
+|---|---|---|
+| B7 Node source and mock transaction gates | **48/48 PASS** | Actual GitHub CI Node execution |
+| Existing frontend token + deadline parser | **24/24 PASS** | 10 design + 14 deadline |
+| Real Chromium React UI with mocked HTTP | **9/9 PASS** | Separate browser-mock job |
+| **MySQL 8 schema bootstrap in fresh disposable CI service** | **48/48 original B6 branch migrations applied** | Read-only checked actual `schema_migrations` identities 046–048 |
+| **Real Express HTTP and real MySQL operations** | **31/31 PASS** | Two FK-correct B6 award supplier orders with synthetic `MOCK_GATEWAY` paid-state fixtures |
+| **Real Chromium browser writing to actual Express + MySQL** | **COMPLETE SCENARIO PASS** | Supplier two-order stage progression, buyer full receipt, B6 shortage 100→80, supplier remediation dispatch, separate buyer remediation receipt and separate final full-order confirmation; DB row/escrow assertions |
+| Frontend build | **PASS** | Vite production build, 2,220 modules transformed |
+| Legacy Part 4E.4/4E.5 serial gate | **BLOCKED/FAIL (not PASS)** | Part 4E.4 passes 35 checks before attempting prohibited `SELECT ... FROM miljor_db.pools`; CI least-privilege test user correctly denies protected DB read. Part 4E.5 not executed in this job |
+| Provider-certified Safepay test | **NOT EXECUTED** | No real Safepay credentials or provider-certified paid order. `MOCK_GATEWAY` is synthetic fixture only |
+| Global integration/migrations 046–052 | **BLOCKED externally** | Original B6 branch schema works in isolation; other workstreams have conflicting names/versions |
+| Security dependency audit | **OPEN** | Backend npm install reports 8 advisories (1 high, 7 moderate), frontend 0 |
+
+### Business acceptance verified by real MySQL/HTTP
+
+The real SQL/HTTP gate executed 31 explicit assertions: both supplier-specific B6 orders visible to correct supplier and buyer; unrelated suppliers/buyers and anonymous access denied; supplier independently progresses four fulfillment milestones for each order; immutable SKU-backed buyer invoice; buyer confirms first delivered order; buyer creates a 100-unit / 80-received short-delivery dispute (20-unit claim, PKR 1,600 at locked PKR 80/unit); other order remains EXCEPTION, not buyer-confirmed; supplier proposes missing-quantity remedy, records remedial dispatch; buyer acknowledges *remediation goods alone* without buyer-confirming complete order; buyer then separately confirms original full order; payment amount/status/escrow records are unchanged; private transactional B6 outbox entries exist.
+
+The write-browser gate also exercised these operations in real headless Chromium against real Express routes and the disposable MySQL service, and asserted original paid-state payment rows unchanged. It printed **`B7 BROWSER WRITE E2E PASS`** in the GitHub job logs. Browser suite is not counted as a fixed number of assertions because its internal assert calls are not individually numbered.
+
+The real runtime revealed and prompted B7-specific repairs:
+- Fulfillment API supplied `order_id` not `id`, causing UI to call `/orders/undefined`. UI normalizes both.
+- Supplier milestone buttons and buyer claim UI needed authoritative in-flight state handling; order switching now disabled during mutations.
+- Supplier remediation dispatch had to finish and commit before buyer confirmation. Test asserts `remediation_status='IN_PROGRESS'` from real SQL before switching roles, rather than terminating a browser with pending requests.
+- The SPA authentication test uses client-side routing to preserve existing in-memory JWT. Hard-refresh / session-cookie restoration remains an Auth workstream issue to investigate separately; initial refresh calls return 401 before login in clean contexts and are not evidence of a completed hard-reload session test.
+
+### Read this before using a green GitHub workflow badge
+
+The workflow has three jobs: `source-and-build`, `browser-mock`, `mysql-ephemeral-integration`. All three jobs on run `43088991788` concluded SUCCESS. However, the pre-existing legacy Part4E4/Part4E5 serial suite is run with `continue-on-error` because it tries to query the prohibited `miljor_db`. This legacy result **remains a separate BLOCKED gate**, even though the **dedicated new real B7 MySQL+HTTP gate and full-browser test PASSED**. No protected DB permission was granted to force its pass. `miljor_db` and `miljor_sandbox_db` were not present in the ephemeral CI service; CI cannot assert their state in another environment.
+
+### Final disposition
+
+**B7 IMPLEMENTATION + ISOLATED REAL DATABASE/BROWSER BUSINESS ACCEPTANCE: VERIFIED** for the specifically tested 31 real HTTP assertions and full browser flow. **Overall platform integration/production acceptance: BLOCKED** by global migration reconciliation, provider-certified financial workflows, legacy gate's cross-database fingerprint logic, backend dependency advisory triage and any untested production/session compatibility.
+
+**CAN MERGE INTO MAIN: NO. CAN DEPLOY: NO. START ANOTHER PHASE: NO.** Only later cross-workstream approved integration staging is permissible after those blockers are formally reconciled.
+
+---
+
+
 Date: 2026-11-11
 Branch: `feature/b7-fulfillment-gap-audit-20261111`
 Accepted B6 base: `6ef03de061c75854c9e042a99a05404c4bd64929`
