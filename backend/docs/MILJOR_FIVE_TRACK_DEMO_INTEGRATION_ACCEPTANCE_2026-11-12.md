@@ -26,6 +26,7 @@ This change branch: fix/demo-partial-delivery-quantity-20261112
 - Exact fetched GitHub `deliveryQuantityPolicy.js` executed in JS runtime with the committed 13 policy assertions: **13/13 PASS**, including 100/80/20, fractional amounts, 0 received, over-report, equality, invalid decimals, scientific notation, empty input, huge precision and immutability.
 - Static JavaScript parser: **4/4 PASS** on changed policy/service/finance/test files.
 - Cross-file source safeguards: **6/6 PASS** for exact-shortage evidence, B6 missing-line guards, metadata precedence, order row lock and manual refund restriction.
+- Executed **4/4 mocked transaction service scenarios** against the actual fetched FulfillmentService: exact 100/80/20 EXCEPTION evidence and one committed event; over-receipt rollback with zero updates; B6 aggregate receipt fail-closed rollback; other-buyer 403 rollback. This is service-level logic verification using an in-memory SQL adapter, **not real MySQL**.
 - **Not run:** MySQL, HTTP, actual Vite build, hosted Chromium, provider-issued Safepay callback. Never interpret static/pure PASS as full stack PASS.
 
 ## Next detailed acceptance implementation steps (uncompleted)
