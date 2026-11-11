@@ -34,12 +34,43 @@ const options=x=>{
 };
 class ProcurementDeliveryGroupingService {
  constructor(database=db){this.database=database;}
+ async previewBuyerDelivery(buyerId,orderId){
+  const buyer=id(buyerId),oid=id(orderId);
+  const [rows]=await this.database.query(
+    "SELECT id,supplier_id,payment_status,fulfillment_status,delivery_type,delivery_fee FROM orders WHERE id=? AND buyer_id=?",
+    [oid,buyer]);
+  const order=rows[0];
+  if(!order)throw fail('ORDER_NOT_FOUND','Buyer-owned order not found.',404);
+  if(order.payment_status!=='PAID'||!['AWAITING_SUPPLIER_ACKNOWLEDGEMENT',
+      'PREPARING','READY_FOR_DISPATCH'].includes(order.fulfillment_status))
+   throw fail('ORDER_NOT_ELIGIBLE','Only paid pre-dispatch orders support delivery scheduling.',409);
+  const [settings]=await this.database.query(
+    'SELECT standard_delivery_enabled,pickup_enabled,express_enabled,version FROM supplier_delivery_configurations WHERE supplier_id=?',
+    [order.supplier_id]);
+  const cfg=settings[0];
+  if(!cfg)throw fail('SUPPLIER_DELIVERY_NOT_CONFIGURED','Supplier delivery terms unavailable.',409);
+  return {order_id:oid,supplier_id:order.supplier_id,
+   payment_status:order.payment_status,
+   locked_delivery_fee:money(order.delivery_fee),
+   currency:'PKR',delivery_type:order.delivery_type,
+   available_mode_indicators:{
+    standard_configured:Boolean(cfg.standard_delivery_enabled),
+    express_configured:Boolean(cfg.express_enabled),
+    pickup_configured:Boolean(cfg.pickup_enabled)
+   },
+   requires_buyer_delivery_fee_confirmation:true,
+   buyer_pays_additional_amount:false,
+   warning:'Mode must match the paid order and supplier-approved delivery quote. No fee changes allowed.'};
+ }
  async acceptBuyerDelivery(buyerId,orderId,payload,idempotency){
   const buyer=id(buyerId),oid=id(orderId),idem=key(idempotency);
   const addressId=id(payload?.address_id),o=options(payload);
+  let acceptedFee;
+  try{acceptedFee=money(payload?.accepted_delivery_fee);}
+  catch{throw fail('ACCEPTED_DELIVERY_FEE_REQUIRED','Buyer must confirm the exact paid-order delivery fee.');}
   if(payload?.confirm_existing_order_delivery_fee!==true)
    throw fail('DELIVERY_CONSENT_REQUIRED','Buyer must explicitly approve existing locked order delivery fee.');
-  const requestHash=hash({buyer,oid,addressId,...o});
+  const requestHash=hash({buyer,oid,addressId,acceptedFee,...o});
   const conn=await this.database.getConnection();
   try{
    await conn.beginTransaction();
@@ -89,6 +120,8 @@ class ProcurementDeliveryGroupingService {
     if(!quotes.length)throw fail('EXPRESS_REAPPROVAL_REQUIRED','Express needs an accepted exact-fee delivery quote.',409);
    }
    const fee=money(order.delivery_fee);
+   if(!exact.exactDecimalEquals(fee,acceptedFee,2))
+    throw fail('DELIVERY_FEE_REAPPROVAL_REQUIRED','Buyer-confirmed fee differs from the paid order.',409);
    await conn.query(
     'INSERT INTO procurement_order_delivery_choices(order_id,buyer_id,supplier_id,delivery_address_id,cluster_id,delivery_day,delivery_window,mode,handling_class,locked_delivery_fee,address_version,supplier_config_version,acceptance_key,acceptance_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [oid,buyer,order.supplier_id,addressId,address.cluster_id,o.day,o.window,o.mode,
