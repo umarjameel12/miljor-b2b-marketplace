@@ -31,6 +31,7 @@
 const crypto = require('crypto');
 const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
+const {shortageForAwardLine}=require('./b7LineDeliveryPolicy');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
 
@@ -271,68 +272,123 @@ class DisputeService {
         };
       }
 
-      // Quantity validations and Line-Item integrity
-      const orderTotalQty = Number(order.total_qty);
+      // B6 Smart Procurement groups distinct physical SKUs into one supplier
+      // order, using order.total_qty=1 as a basket marker. Claims must refer
+      // to the immutable procurement_award_line, never the basket marker.
+      const isSmartBasket = order.notes === 'SMART_PROCUREMENT_BASKET';
+      let orderTotalQty = Number(order.total_qty);
       let parsedDisputedQty = null;
       let parsedReportedQty = null;
-
-      if (disputedQuantity !== null && disputedQuantity !== undefined) {
-        const dQty = Number(disputedQuantity);
-        if (isNaN(dQty) || dQty <= 0) {
-          const err = new Error('Disputed quantity must be a positive number');
-          err.code = 'INVALID_DISPUTED_QUANTITY';
-          err.statusCode = 400;
-          throw err;
+      let unitPriceStr = String(order.unit_price);
+      let authoritativeEvidence = cleanMetadata;
+      let claimedLineId = null;
+      let lineClaim = null;
+      if (isSmartBasket) {
+        if (category !== 'SHORT_QUANTITY' && category !== 'MISSING_ITEMS') {
+          const err = new Error('B6 claims for other issue types require a dedicated SKU-level evidence workflow.');
+          err.code = 'B6_LINE_CLAIM_POLICY_REQUIRED'; err.statusCode = 409; throw err;
         }
-        if (dQty > orderTotalQty) {
-          const err = new Error(`Disputed quantity (${dQty}) exceeds total ordered quantity (${orderTotalQty})`);
-          err.code = 'QUANTITY_EXCEEDS_ORDER';
-          err.statusCode = 422;
-          throw err;
+        const evidence = evidenceMetadata || {};
+        const lineId = Number(evidence.award_line_id);
+        if (!Number.isSafeInteger(lineId) || lineId <= 0 ||
+            evidence.received_quantity === undefined || evidence.received_quantity === null) {
+          const err = new Error('B6 shortage claims require award_line_id and received_quantity.');
+          err.code = 'B6_AWARD_LINE_EVIDENCE_REQUIRED'; err.statusCode = 422; throw err;
         }
-        parsedDisputedQty = dQty;
-      } else {
-        // Default to total order quantity if not specified
-        parsedDisputedQty = orderTotalQty;
-      }
-
-      if (reportedQuantity !== null && reportedQuantity !== undefined) {
-        const rQty = Number(reportedQuantity);
-        if (isNaN(rQty) || rQty < 0) {
-          const err = new Error('Reported quantity must be non-negative');
-          err.code = 'INVALID_REPORTED_QUANTITY';
-          err.statusCode = 400;
-          throw err;
-        }
-        parsedReportedQty = rQty;
-      }
-
-      // Check sum of existing active disputed quantities on this order
-      const [activeDisputes] = await connection.query(
-        `SELECT id, dispute_code, disputed_quantity, dispute_category, status 
-         FROM order_disputes 
-         WHERE order_id = ? AND status IN (${ACTIVE_DISPUTE_STATUSES.map(() => '?').join(',')})`,
-        [orderId, ...ACTIVE_DISPUTE_STATUSES]
-      );
-
-      let totalActiveClaimedQty = 0;
-      for (const d of activeDisputes) {
-        totalActiveClaimedQty += Number(d.disputed_quantity || 0);
-      }
-
-      const projectedTotalClaimed = totalActiveClaimedQty + parsedDisputedQty;
-      if (projectedTotalClaimed > orderTotalQty) {
-        const err = new Error(
-          `Total active disputed quantity (${projectedTotalClaimed}) would exceed total order quantity (${orderTotalQty}). Currently disputed: ${totalActiveClaimedQty}`
+        const [lines] = await connection.query(
+          `SELECT l.id,l.quantity,l.purchasing_unit,l.unit_price,l.supplier_sku_id
+             FROM procurement_award_orders ao
+             JOIN procurement_award_lines l ON l.award_order_id=ao.id
+             WHERE ao.order_id=? AND l.id=? FOR UPDATE`,
+          [order.id,lineId]
         );
-        err.code = 'DISPUTED_QUANTITY_EXCEEDS_ORDER_LIMIT';
-        err.statusCode = 422;
-        throw err;
+        if (lines.length!==1) {
+          const err = new Error('Award line does not belong to this buyer order.');
+          err.code = 'AWARD_LINE_NOT_FOUND'; err.statusCode = 404; throw err;
+        }
+        const line=lines[0];
+        lineClaim=shortageForAwardLine({
+          ordered_quantity:line.quantity,
+          received_quantity:evidence.received_quantity,
+          locked_unit_price:line.unit_price
+        });
+        claimedLineId=lineId;
+        if (disputedQuantity!=null &&
+            !exactDecimal.exactDecimalEquals(disputedQuantity,lineClaim.disputed_quantity,4)) {
+          const err = new Error('Disputed quantity must equal the awarded SKU shortfall.');
+          err.code = 'B6_LINE_SHORTAGE_MISMATCH'; err.statusCode = 422; throw err;
+        }
+        if (reportedQuantity!=null &&
+            !exactDecimal.exactDecimalEquals(reportedQuantity,lineClaim.received_quantity,4)) {
+          const err = new Error('Reported quantity conflicts with the immutable award-line evidence.');
+          err.code = 'B6_LINE_RECEIPT_MISMATCH'; err.statusCode = 422; throw err;
+        }
+        orderTotalQty=Number(lineClaim.expected_quantity);
+        parsedReportedQty=Number(lineClaim.received_quantity);
+        parsedDisputedQty=Number(lineClaim.disputed_quantity);
+        unitPriceStr=lineClaim.unit_price;
+        authoritativeEvidence={
+          award_line_id:lineId,supplier_sku_id:Number(line.supplier_sku_id),
+          purchasing_unit:String(line.purchasing_unit),
+          expected_quantity:lineClaim.expected_quantity,
+          received_quantity:lineClaim.received_quantity,
+          disputed_quantity:lineClaim.disputed_quantity,
+          locked_unit_price:lineClaim.unit_price,
+          source:'IMMUTABLE_B6_AWARD_LINE'
+        };
+      } else {
+        if (disputedQuantity !== null && disputedQuantity !== undefined) {
+          const dQty = Number(disputedQuantity);
+          if (!Number.isFinite(dQty) || dQty <= 0 || dQty > orderTotalQty) {
+            const err = new Error('Disputed quantity must be positive and no more than ordered quantity.');
+            err.code = 'INVALID_DISPUTED_QUANTITY';err.statusCode=422;throw err;
+          }
+          parsedDisputedQty=dQty;
+        } else {
+          parsedDisputedQty=orderTotalQty;
+        }
+        if (reportedQuantity !== null && reportedQuantity !== undefined) {
+          const rQty = Number(reportedQuantity);
+          if (!Number.isFinite(rQty) || rQty < 0) {
+            const err = new Error('Reported quantity must be non-negative.');
+            err.code = 'INVALID_REPORTED_QUANTITY';err.statusCode=400;throw err;
+          }
+          parsedReportedQty=rQty;
+        }
       }
 
-      // Exact financial claim calculation (locked unit price * disputed quantity)
-      const unitPriceStr = String(order.unit_price);
-      const calculatedClaimStr = exactDecimal.exactMultiplyRound(String(parsedDisputedQty), unitPriceStr, 2);
+      // Claims compete only with other claims on the same immutable SKU line.
+      // Legacy single-product orders retain order-wide quantity limits.
+      const [activeDisputes] = await connection.query(
+        `SELECT id,disputed_quantity,evidence_metadata FROM order_disputes
+         WHERE order_id=? AND status IN (${ACTIVE_DISPUTE_STATUSES.map(()=>'?').join(',')})`,
+        [orderId,...ACTIVE_DISPUTE_STATUSES]
+      );
+      const relevantClaims=activeDisputes.filter(d=>{
+        if (!isSmartBasket) return true;
+        let evidence={};
+        try {evidence=typeof d.evidence_metadata==='string' ?
+          JSON.parse(d.evidence_metadata) : d.evidence_metadata||{}}
+        catch {return true} // fail closed if older evidence is unreadable
+        // Legacy basket-wide disputes cannot be safely treated as unrelated.
+        return evidence.award_line_id==null ||
+          Number(evidence.award_line_id)===claimedLineId;
+      });
+      const activeQty=exactDecimal.exactDecimalSum(
+        relevantClaims.map(d=>String(d.disputed_quantity||'0')),4
+      );
+      const projectedQty=exactDecimal.exactDecimalSum(
+        [activeQty,String(parsedDisputedQty)],4
+      );
+      if (!exactDecimal.exactDecimalGte(
+        String(orderTotalQty),projectedQty,4
+      )) {
+        const err = new Error('Active claims would exceed the immutable physical SKU quantity.');
+        err.code = 'DISPUTED_QUANTITY_EXCEEDS_ORDER_LIMIT';
+        err.statusCode=422;throw err;
+      }
+      const calculatedClaimStr=isSmartBasket ? lineClaim.claimed_amount :
+        exactDecimal.exactMultiplyRound(String(parsedDisputedQty),unitPriceStr,2);
 
       // Generate deterministic dispute code
       const disputeCode = `DSP-ORD-${orderId}-${Date.now().toString().slice(-6)}`;
@@ -372,7 +428,7 @@ class DisputeService {
           parsedDisputedQty,
           calculatedClaimStr,
           order.currency || 'PKR',
-          cleanMetadata ? JSON.stringify(cleanMetadata) : null,
+          authoritativeEvidence ? JSON.stringify(authoritativeEvidence) : null,
           evidenceImageUrl || null,
           trimmedKey
         ]
