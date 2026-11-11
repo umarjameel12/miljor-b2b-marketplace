@@ -42,6 +42,25 @@ function parseSignedPayload(rawBody,signature){
   return {payload,data,eventId:payload.token,tracker:data.tracker,
     amount:safeMoneyFromMinorUnits(data.refund_amount)};
 }
+// Safepay may change delivery_attempts and retry metadata between deliveries.
+// Compare only the immutable monetary identity of the signed event. MySQL JSON
+// columns may be returned as objects, whereas TEXT columns return strings.
+function immutableRefundEvidence(value){
+  let p=value;
+  if(typeof p==='string'){
+    try{p=JSON.parse(p);}catch(_){return null;}
+  }
+  if(!p||typeof p!=='object'||!p.data||typeof p.data!=='object')return null;
+  const d=p.data;
+  if(typeof p.token!=='string'||typeof d.tracker!=='string'||
+     typeof d.currency!=='string'||typeof d.state!=='string')return null;
+  if(typeof d.refund_amount!=='number'&&typeof d.refund_amount!=='string')return null;
+  return JSON.stringify([
+    p.token,p.type,d.tracker,d.currency,d.state,
+    String(d.refund_amount),
+    d.metadata?.order_id===undefined ? null : d.metadata.order_id
+  ]);
+}
 class SafepayRefundWebhookService {
   async receive({rawBody,signature,timestamp=null}){
     const evidence=parseSignedPayload(rawBody,signature); // before DB
@@ -79,9 +98,11 @@ class SafepayRefundWebhookService {
            previous[0].processed_status==='PROCESSED' &&
            Number(previous[0].order_id)===Number(order.id) &&
            previous[0].provider_tracker_token===tracker &&
-           // An event ID with different signed monetary evidence is a conflict,
-           // never a harmless replay, even when order/tracker are identical.
-           previous[0].raw_payload === JSON.stringify(payload)){
+           // Delivery-attempt metadata may differ on retry. Immutable signed
+           // monetary evidence cannot differ, regardless of JSON/TEXT storage.
+           immutableRefundEvidence(previous[0].raw_payload)!==null &&
+           immutableRefundEvidence(previous[0].raw_payload)===
+             immutableRefundEvidence(payload)){
           await conn.commit();
           return {success:true,duplicate:true,status:'PROCESSED'};
         }
