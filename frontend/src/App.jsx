@@ -18,6 +18,7 @@ import { SupplierProfilePage } from './pages/SupplierProfilePage';
 import { SupplierOnboardingPage } from './pages/SupplierOnboardingPage';
 import { SupplierCatalogPage } from './pages/SupplierCatalogPage';
 import { AdminVerificationPage } from './pages/AdminVerificationPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { AdminCatalogPage } from './pages/AdminCatalogPage';
 import { SupplierDashboardPage } from './pages/SupplierDashboardPage';
 import { SupplierPoolsPage } from './pages/SupplierPoolsPage';
@@ -69,6 +70,8 @@ function AppContent() {
           <Route path="/supplier/profile" element={<SupplierProfilePage />} />
           <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />
           <Route path="/supplier/catalog" element={<SupplierCatalogPage />} />
+          <Route path="/admin" element={<AdminDashboardPage />} />
+          <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/verifications" element={<AdminVerificationPage />} />
           <Route path="/admin/suppliers/verification" element={<AdminVerificationPage />} />
           <Route path="/admin/catalog" element={<AdminCatalogPage />} />
