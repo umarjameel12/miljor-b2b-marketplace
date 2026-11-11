@@ -42,9 +42,13 @@ async function runMigrations(targetDb) {
   }
   // Read and check the entire migration set before touching the database.
   const manifest = migrationManifest();
-  // Never connect to or modify a database while migration version 046/047
-  // means different SQL across concurrent B6 and catalog branches.
+  // The integrated manifest now has unique 046-052 mapping. This is NOT
+  // a license to run against miljor_db or a shared sandbox environment.
   assertNoUnresolvedBranchCollisions(manifest);
+  if (selectedDb !== 'miljor_test_db' ||
+      process.env.MILJOR_RECONCILED_MIGRATION_TEST_APPROVED !== 'true') {
+    throw new Error('RECONCILED_MIGRATION_TEST_GATE: only explicitly approved miljor_test_db rehearsal is permitted');
+  }
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
