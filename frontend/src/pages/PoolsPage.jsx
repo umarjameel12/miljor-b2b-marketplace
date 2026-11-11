@@ -231,7 +231,7 @@ export const PoolsPage = () => {
               >
                 <Package className="w-3.5 h-3.5" />
                 <span>Product Families</span>
-                {products.length > 0 && (
+                {families.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
                     {families.length}
                   </span>
