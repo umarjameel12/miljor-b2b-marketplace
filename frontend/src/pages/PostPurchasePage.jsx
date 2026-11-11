@@ -20,13 +20,19 @@ export function PostPurchasePage(){
  const [error,setError]=useState(''),[notice,setNotice]=useState('');
  const [received,setReceived]=useState({}),[description,setDescription]=useState('');
  const [invoice,setInvoice]=useState(null),[deliveryRef,setDeliveryRef]=useState('');
+ const [disputes,setDisputes]=useState([]),[supplierReply,setSupplierReply]=useState('');
+ const [remedyNotes,setRemedyNotes]=useState('');
  const route=buyer?'buyer':'supplier';
  const refresh=useCallback(async()=>{
   if(!buyer&&!supplier)return;
   setLoading(true);setError('');
   try{
-   const res=await apiClient.get('/fulfillment/'+route+'/orders');
+   const [res,disputesRes]=await Promise.all([
+    apiClient.get('/fulfillment/'+route+'/orders'),
+    apiClient.get(buyer?'/disputes/my':'/disputes/supplier/list')
+   ]);
    setOrders(res.data?.data?.orders||[]);
+   setDisputes(disputesRes.data?.data?.disputes||[]);
   }catch(e){setError(msg(e))}
   finally{setLoading(false)}
  },[buyer,supplier,route]);
@@ -68,6 +74,23 @@ export function PostPurchasePage(){
    order_id:selected.id,category:'SHORT_QUANTITY',description,
    evidence_metadata:{award_line_id:line.award_line_id,received_quantity:String(v)}
   });
+ };
+ const actOnDispute=async(dispute,step,payload)=>{
+  if(busy)return;
+  setBusy(true);setError('');setNotice('');
+  try{
+   const id=dispute.id;
+   const endpoint=step==='respond'?'/disputes/'+id+'/supplier-response':
+    step==='dispatch'?'/disputes/'+id+'/remediation/declare-delivered':
+    '/disputes/'+id+'/remediation/confirm-receipt';
+   const res=await apiClient.post(endpoint,payload,{
+    headers:{'X-Idempotency-Key':newKey()}
+   });
+   setNotice(res.data?.message||'Dispute action recorded.');
+   await refresh();
+   if(selected)await details(selected.id);
+  }catch(e){setError(msg(e))}
+  finally{setBusy(false)}
  };
  const loadInvoice=async()=>{
   if(!selected)return;
@@ -157,6 +180,45 @@ export function PostPurchasePage(){
        <FileText size={16}/>View authorized invoice</button>
       {invoice&&<pre className="overflow-auto p-3 text-xs rounded-lg bg-[var(--bg-elevated)]">
        {JSON.stringify(invoice.invoice_snapshot_json||invoice,null,2)}</pre>}
+      <div className="space-y-3">
+       <h3 className="font-semibold text-sm">Delivery disputes and remediation</h3>
+       {!disputes.filter(d=>Number(d.order_id)===Number(selected.id)).length&&
+        <p className="text-xs text-[var(--text-muted)]">No disputes recorded for this order.</p>}
+       {disputes.filter(d=>Number(d.order_id)===Number(selected.id)).map(d=>
+        <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2" key={d.id}>
+         <div className="text-xs font-semibold">{d.dispute_code} · {paidStatus(d.status)}</div>
+         <p className="text-xs">Reason: {paidStatus(d.dispute_category)} · Claimed PKR {d.claimed_amount}</p>
+         {supplier&&['OPEN','AWAITING_SUPPLIER_RESPONSE','SUPPLIER_RESPONSE'].includes(d.status)&&
+          <div className="space-y-2">
+           <label className="block text-xs">Supplier response (minimum 5 characters)
+            <textarea value={supplierReply} onChange={e=>setSupplierReply(e.target.value)}
+             className="block mt-1 w-full rounded-lg border bg-transparent p-2" rows={2}/>
+           </label>
+           <button disabled={busy||supplierReply.trim().length<5}
+            className="border rounded-lg px-3 py-2 text-xs"
+            onClick={()=>actOnDispute(d,'respond',{
+             response:supplierReply,remediation_proposal:'DELIVER_MISSING_QUANTITY',
+             remediation_details:'Supplier proposes delivering the documented missing SKU quantity.'
+            })}>Propose missing-quantity remediation</button>
+          </div>}
+         {supplier&&d.remediation_status==='PROPOSED'&&
+          <div className="space-y-2">
+           <label className="block text-xs">Remediation delivery reference / notes
+            <input value={remedyNotes} onChange={e=>setRemedyNotes(e.target.value)}
+             className="block mt-1 rounded-lg border p-2 bg-transparent w-full"/>
+           </label>
+           <button disabled={busy} className="border rounded-lg px-3 py-2 text-xs"
+            onClick={()=>actOnDispute(d,'dispatch',{
+             tracking_reference:remedyNotes||undefined,notes:'Replacement/missing quantity dispatched'
+            })}>Declare remediation dispatched</button>
+          </div>}
+         {buyer&&d.remediation_status==='IN_PROGRESS'&&
+          <button disabled={busy} className="border rounded-lg px-3 py-2 text-xs"
+           onClick={()=>actOnDispute(d,'confirm',{
+            notes:'I received the documented missing goods.'
+           })}>Confirm remediation goods received</button>}
+        </div>)}
+      </div>
       <h3 className="font-semibold text-sm">Tracking history</h3>
       {timeline.length===0?<p className="text-xs text-[var(--text-muted)]">No recorded milestones yet.</p>:
        <ol className="space-y-2">{timeline.map(ev=><li key={ev.id} className="text-xs p-2 border-l-2 border-emerald-600">
