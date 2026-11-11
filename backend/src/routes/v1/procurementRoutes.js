@@ -100,6 +100,7 @@ router.post('/procurement/recurring-cohorts/:cohortId/cycles/prepare',protect,au
 router.get('/procurement/recurring-cohorts/:cohortId/cycles/:cycleId',protect,authorizeStrict('BUYER'),(req,res)=>controller.recurringCohortCycle(req,res));
 
 // B6-O — buyer's paid order delivery authorization; supplier route planning only.
+router.get('/procurement/orders/:orderId/delivery-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewDeliveryChoice(req,res));
 router.post('/procurement/orders/:orderId/delivery-choice',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptDeliveryChoice(req,res));
 router.get('/procurement/orders/:orderId/delivery',protect,authorizeStrict('BUYER'),(req,res)=>controller.buyerProcurementDelivery(req,res));
 router.post('/procurement/supplier/delivery-runs',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.createSupplierDeliveryRun(req,res));
