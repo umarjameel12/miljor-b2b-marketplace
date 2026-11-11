@@ -71,7 +71,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
       <span className="text-xs text-[var(--text-muted)]">{pool.flash_code}</span>
     </div>
     <h3 className="font-semibold text-sm text-[var(--text-primary)]">{pool.sku_title||'Published supplier SKU'}</h3>
-    <p className="text-xs text-[var(--text-muted)]">By {pool.supplier_name||'Verified supplier'} · {pool.pack_size||''} {pool.pack_unit||''}</p>
+    <p className="text-xs text-[var(--text-muted)]">By {pool.supplier_name||'Supplier name unavailable'} · {pool.pack_size||''} {pool.pack_unit||''}</p>
     <div className="flex gap-2 flex-wrap items-baseline">
       <strong className="text-xl">Rs. {price.toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}/{unit}</strong>
       {discount!==null&&<span className="text-xs text-[var(--text-muted)] line-through">Rs. {original.toLocaleString('en-PK')}/{unit}</span>}
