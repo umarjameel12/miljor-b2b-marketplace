@@ -53,6 +53,21 @@ async function runMigrations(targetDb) {
     const files = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql') && !file.includes('rollback'))
       .sort();
+    // PRE-FLIGHT BEFORE ANY DDL: parallel B6/UCP branches can reuse numeric
+    // prefixes (e.g. 046/047/048). Never silently skip a conflicting applied
+    // migration or partially apply earlier migrations before discovering it.
+    const versionMap=new Map();
+    for(const file of files){
+      const version=file.split('_')[0];
+      if(!/^\\d+$/.test(version))
+        throw new Error('INVALID_MIGRATION_VERSION: '+file);
+      const entries=versionMap.get(version)||[];
+      entries.push(file);versionMap.set(version,entries);
+    }
+    for(const [version,entries] of versionMap){
+      if(entries.length!==1)
+        throw new Error('DUPLICATE_MIGRATION_VERSION: '+version+' ('+entries.join(', ')+')');
+    }
     let appliedCount=0;
     for (const file of files) {
       const version=file.split('_')[0];
