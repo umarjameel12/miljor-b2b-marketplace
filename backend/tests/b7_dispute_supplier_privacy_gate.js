@@ -47,4 +47,15 @@ test('Future DB fields do not automatically leak to supplier',()=>{
  assert.equal(Object.hasOwn(r,'identity_document'),false);
  assert.equal(Object.hasOwn(r,'jwt'),false);
 });
+test('Supplier narrative redacts emails and Pakistani phone numbers',()=>{
+ const r=supplierDisputeRow({...row,
+  description:'Missing 20 kg, contact me on 03001234567 or sales@example.com',
+  remediation_details:'Visit https://bad.example/contact',
+  supplier_response:'Please call +92 300 1234567'
+ });
+ assert.equal(r.description.includes('sales@example.com'),false);
+ assert.equal(r.description.includes('03001234567'),false);
+ assert.equal(r.remediation_details.includes('https://'),false);
+ assert.equal(r.supplier_response.includes('1234567'),false);
+});
 console.log('B7 SUPPLIER DISPUTE PII SOURCE: '+n+'/'+n+' PASS');
