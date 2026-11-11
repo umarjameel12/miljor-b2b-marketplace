@@ -60,6 +60,11 @@ async function main(){
   const logIn=async(role)=>{
    const context=await browser.newContext();
    const page=await context.newPage();
+   page.on('pageerror',e=>console.error('B7_BROWSER_PAGE_ERROR',role,e.message));
+   page.on('response',res=>{
+    if(res.url().includes('/api/v1/')&&res.status()>=400)
+     console.error('B7_BROWSER_HTTP_ERROR',role,res.status(),new URL(res.url()).pathname);
+   });
    await page.goto(site+'/login');
    await page.locator('input[type=email]').fill(process.env['B7_'+role+'_EMAIL']);
    await page.locator('input[type=password]').fill(process.env['B7_'+role+'_PASSWORD']);
@@ -73,7 +78,15 @@ async function main(){
    const row=page.locator('button').filter({hasText:code}).first();
    await row.waitFor({timeout:15000});
    await row.click();
-   await page.getByText('Tracking history',{exact:true}).waitFor();
+   try{
+    await page.getByText('Tracking history',{exact:true}).waitFor({timeout:12000});
+   }catch(e){
+    console.error('B7_BROWSER_ORDER_DETAILS_MISSING',code,
+     'URL',page.url(),
+     'ALERTS',await page.locator('[role=alert]').allTextContents(),
+     'CONTENT',String(await page.locator('body').innerText()).slice(-1800));
+    throw e;
+   }
   };
   const supplier=await logIn('SUPPLIER');
   try{
