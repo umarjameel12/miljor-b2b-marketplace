@@ -66,6 +66,23 @@ async function main(){
         VALUES (?,'LEVEL_3_QUALITY','VERIFIED','BUSINESS',25)`,[supplierId]
      );
    }
+   // Pre-6D historical pool IDs 1/2 are expected by the old B4 regression
+   // conservation snapshot. They are NOT modern public supplier-owned offers.
+   // Keep their original IDs for migration-upgrade compatibility assertions.
+   await db.query(
+     `INSERT INTO pools
+     (id,pool_code,supplier_id,product_id,current_qty,target_qty,supplier_min_qty,
+      buyer_min_qty,current_price_per_unit,next_tier_price,platform_fee_percent,
+      quality_spec_grade,status,expires_at)
+     VALUES
+     (1,'MJ-POOL-0001',2,1,0,500,100,25,5200,4900,2.5,'Legacy rice reference','ACTIVE',DATE_ADD(UTC_TIMESTAMP(),INTERVAL 7 DAY)),
+     (2,'MJ-POOL-0002',3,2,0,1000,200,50,1150,1050,2.5,'Legacy flour reference','ACTIVE',DATE_ADD(UTC_TIMESTAMP(),INTERVAL 5 DAY))`
+   );
+   await db.query(
+     `INSERT INTO pool_price_tiers(pool_id,min_qty,max_qty,price_per_unit) VALUES
+     (1,1,150,5200),(1,151,300,4900),(1,301,99999,4600),
+     (2,1,500,1150),(2,501,99999,1050)`
+   );
    console.log('TEST_BASELINE_PRE_004_READY:',createStatements.length,'legacy tables,',users.length,'synthetic users +',products.length,'legacy products');
  }finally{await db.end();}
 }
