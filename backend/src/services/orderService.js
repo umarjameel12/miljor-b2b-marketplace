@@ -394,15 +394,33 @@ class OrderService {
         ? deliveryAddress.trim() 
         : (reservation.delivery_address || buyerUser.address || 'Address provided at checkout');
 
+      // Commission is contractual at order creation, not a mutable settlement-time lookup.
+      // Parent pool lock already serializes this commitment. Freeze the supplier's
+      // accepted, validated profile rate inside the same database transaction.
+      const [commissionProfiles] = await connection.query(
+        'SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+        [pool.supplier_id]
+      );
+      const commissionValue = commissionProfiles[0]?.transaction_fee_percent;
+      if (commissionValue === null || commissionValue === undefined ||
+          !/^(?:\\d{1,3})(?:\\.\\d{1,2})?$/.test(String(commissionValue)) ||
+          Number(commissionValue) < 0 || Number(commissionValue) > 100) {
+        const err = new Error('Supplier contractual commission is missing or invalid; order cannot be finalized');
+        err.code = 'SUPPLIER_COMMISSION_NOT_CONFIGURED';
+        err.statusCode = 409;
+        throw err;
+      }
+      const supplierCommissionSnapshot = exactDecimal.toCanonical(commissionValue, 2);
+
       // 15. Insert Authoritative Order Row
       const [orderResult] = await connection.query(
         `INSERT INTO orders (
           order_code, buyer_id, reservation_id, supplier_id, pool_id,
           snapshot_id, buyer_decision_id, total_qty, unit_price,
           subtotal_amount, delivery_fee, buyer_platform_fee, total_amount,
-          currency, delivery_type, delivery_address, cluster_zone,
+          supplier_commission_percent, currency, delivery_type, delivery_address, cluster_zone,
           payment_status, order_status, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PKR', ?, ?, ?, 'AWAITING_PAYMENT', 'AWAITING_PAYMENT', ?, NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PKR', ?, ?, ?, 'AWAITING_PAYMENT', 'AWAITING_PAYMENT', ?, NOW(), NOW())`,
         [
           orderCode,
           actor.id,
@@ -417,6 +435,7 @@ class OrderService {
           deliveryFeeStr,
           buyerPlatformFeeStr,
           totalAmountStr,
+          supplierCommissionSnapshot,
           deliveryType,
           resolvedDeliveryAddress,
           reservation.cluster_zone || null,
