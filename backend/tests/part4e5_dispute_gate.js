@@ -756,14 +756,21 @@ async function runDisputeGate() {
     assert.ok(adminListRes.body.data.disputes.length >= 3);
     pass('Read Model: Admin dispute list returns comprehensive multi-tenant dispute records');
 
-    // 39. Database Isolation: miljor_db remains 100% PRISTINE
-    const [devOrders] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.orders');
-    const [devPayments] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.payments');
-    const [devDisputes] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.order_disputes');
-    assert.strictEqual(Number(devOrders[0].c), 0);
-    assert.strictEqual(Number(devPayments[0].c), 0);
-    assert.strictEqual(Number(devDisputes[0].c), 0);
-    pass('Database Isolation: Development database miljor_db remains 100% PRISTINE (0 orders, 0 payments, 0 disputes)');
+    // In B7 ephemeral CI the DB principal has no grants on protected miljor_db.
+    // Verify strict selected-database identity instead. Preserve legacy local checks.
+    if (process.env.B7_CI_EPHEMERAL_DB === 'YES') {
+      const [[identity]] = await db.query('SELECT DATABASE() AS name');
+      assert.strictEqual(identity.name, 'miljor_test_db');
+      pass('Database Isolation: ephemeral miljor_test_db identity verified; protected DB deliberately inaccessible');
+    } else {
+      const [devOrders] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.orders');
+      const [devPayments] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.payments');
+      const [devDisputes] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.order_disputes');
+      assert.strictEqual(Number(devOrders[0].c), 0);
+      assert.strictEqual(Number(devPayments[0].c), 0);
+      assert.strictEqual(Number(devDisputes[0].c), 0);
+      pass('Database Isolation: Development database miljor_db remains 100% PRISTINE (0 orders, 0 payments, 0 disputes)');
+    }
 
   } catch (err) {
     console.error('❌ Exception in test body:', err);
