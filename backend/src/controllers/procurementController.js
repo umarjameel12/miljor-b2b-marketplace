@@ -410,7 +410,12 @@ class ProcurementController {
     try {
       const result=await require('../services/flashPoolService').requestHold(
         req.user.id,Number(req.params.id),req.body||{},req.headers['x-idempotency-key']);
-      res.status(201).json({success:true,data:{hold:result}});
+      // UCP read-only clock metadata; database hold expiry remains authoritative.
+      // Do not synthesize a new hold or change financial state for the countdown.
+      const [[clock]]=await require('../config/db').query(
+        "SELECT DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS server_time"
+      );
+      res.status(201).json({success:true,data:{hold:result,server_time:clock.server_time}});
     }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_HOLD_FAILED',message:e.statusCode?e.message:'Unable to reserve Flash Pool'}});}
   }
 
