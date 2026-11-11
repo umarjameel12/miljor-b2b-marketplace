@@ -17,6 +17,7 @@
 
 const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
+const {buildAwardInvoiceLines}=require('./b7AwardInvoiceProjection');
 
 class InvoiceService {
 
@@ -176,6 +177,27 @@ class InvoiceService {
       const taxAmount = Number(taxAmountStr);
       const totalAmount = Number(totalAmountStr);
 
+      // Smart-procurement orders use a basket placeholder total_qty=1, not
+      // a physical SKU quantity. The immutable award lines are authoritative.
+      let invoiceItems;
+      if (o.notes === 'SMART_PROCUREMENT_BASKET') {
+        const [awardLines] = await conn.query(
+          `SELECT l.id,l.request_item_id,l.supplier_sku_id,l.quantity,
+                  l.purchasing_unit,l.unit_price,l.subtotal,l.immutable_sku_snapshot
+           FROM procurement_award_orders ao
+           JOIN procurement_award_lines l ON l.award_order_id = ao.id
+           WHERE ao.order_id = ? ORDER BY l.id`,
+          [numericOrderId]
+        );
+        invoiceItems=buildAwardInvoiceLines(o,awardLines);
+      } else {
+        invoiceItems=[{
+          description:`Order ${o.order_code} Wholesale Commodity`,
+          quantity: Number(o.total_qty),
+          unit_price: Number(o.unit_price),
+          line_total: subtotal
+        }];
+      }
       const snapshot = {
         invoice_number: invoiceNumber,
         order_id: o.id,
@@ -194,14 +216,7 @@ class InvoiceService {
           ntn: o.supplier_ntn,
           warehouse_address: o.supplier_address
         },
-        items: [
-          {
-            description: `Order ${o.order_code} Wholesale Commodity`,
-            quantity: Number(o.total_qty),
-            unit_price: Number(o.unit_price),
-            line_total: subtotal
-          }
-        ],
+        items: invoiceItems,
         pricing: {
           subtotal,
           delivery_fee: deliveryFee,
