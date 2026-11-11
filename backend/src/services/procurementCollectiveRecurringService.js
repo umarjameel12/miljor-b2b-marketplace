@@ -373,6 +373,76 @@ class ProcurementCollectiveRecurringService{
   }
   return summary;
  }
+ async closeExpiredUnderMinimum({limit=20}={}){
+  if(!Number.isInteger(limit)||limit<1||limit>100)
+   throw fail('INVALID_WORKER_LIMIT','Closure batch must be 1–100.');
+  const [due]=await this.database.query(
+   "SELECT cy.id AS cycle_id,cy.group_id,g.request_id FROM procurement_recurring_collective_cycles cy JOIN procurement_collective_groups g ON g.id=cy.group_id WHERE cy.status='INVITING' AND g.status='FORMING' AND g.join_deadline<=UTC_TIMESTAMP() ORDER BY g.join_deadline,cy.id LIMIT ?",
+   [limit]);
+  const result={checked:due.length,unqualified:0,ready_for_bidding:0,replayed:0,
+   orders_created:0,payments_created:0};
+  for(const item of due){
+   const conn=await this.database.getConnection();
+   try{
+    await conn.beginTransaction();
+    // Match the same group-first lock order used by collective joins.
+    const [groups]=await conn.query(
+     'SELECT id,organizer_buyer_id,request_id,minimum_buyers,status,join_deadline FROM procurement_collective_groups WHERE id=? FOR UPDATE',
+     [item.group_id]);
+    const g=groups[0];
+    if(!g||g.status!=='FORMING'){
+     await conn.commit();result.replayed++;continue;
+    }
+    const [[cutoff]]=await conn.query(
+     'SELECT (? <= UTC_TIMESTAMP()) AS closed',[g.join_deadline]);
+    if(Number(cutoff?.closed)!==1){
+     await conn.commit();result.replayed++;continue;
+    }
+    const [cycles]=await conn.query(
+     "SELECT id,cohort_id,cycle_key,status,qualification_snapshot FROM procurement_recurring_collective_cycles WHERE id=? AND group_id=? FOR UPDATE",
+     [item.cycle_id,g.id]);
+    const cycle=cycles[0];
+    if(!cycle||cycle.status!=='INVITING'){
+     await conn.commit();result.replayed++;continue;
+    }
+    const [countRows]=await conn.query(
+     "SELECT COUNT(DISTINCT buyer_id) AS n FROM procurement_collective_participants WHERE group_id=? AND status='JOINED' AND consent_at IS NOT NULL",
+     [g.id]);
+    const joined=Number(countRows[0]?.n||0);
+    if(joined>=Number(g.minimum_buyers)){
+     await conn.commit();result.ready_for_bidding++;continue;
+    }
+    const original=snapshot(cycle.qualification_snapshot);
+    const closure={...original,final_joined_buyer_count:joined,
+      minimum_required:Number(g.minimum_buyers),
+      reason:'BELOW_MINIMUM_AT_JOIN_CUTOFF',
+      payments_created:false,orders_created:false,stock_reserved:false};
+    await conn.query(
+     "UPDATE procurement_collective_groups SET status='FAILED' WHERE id=? AND status='FORMING'",
+     [g.id]);
+    await conn.query(
+     "UPDATE procurement_recurring_collective_cycles SET status='UNQUALIFIED',failure_code='COHORT_BELOW_MINIMUM',qualification_snapshot=? WHERE id=? AND status='INVITING'",
+     [JSON.stringify(closure),cycle.id]);
+    await conn.query(
+     "UPDATE procurement_requests SET status='CANCELLED' WHERE id=? AND status='DRAFT'",
+     [g.request_id]);
+    const [participants]=await conn.query(
+     "SELECT buyer_id FROM procurement_collective_participants WHERE group_id=? ORDER BY buyer_id",
+     [g.id]);
+    for(const p of participants){
+     await notifications.enqueue(conn,{recipient_id:p.buyer_id,recipient_role:'BUYER',
+      event_key:'cohort:join-shortfall:'+cycle.cohort_id+':'+cycle.cycle_key+':'+p.buyer_id,
+      event_type:'COHORT_CYCLE_UNQUALIFIED',
+      payload:{cohort_id:cycle.cohort_id,cycle_id:cycle.id,
+       group_id:g.id,status_code:'BELOW_MINIMUM'}});
+    }
+    await conn.commit();
+    result.unqualified++;
+   }catch(e){await conn.rollback();throw e}
+   finally{conn.release()}
+  }
+  return result;
+ }
  async cycleForBuyer(buyerId,cohortId,cycleId){
   const buyer=id(buyerId),gid=id(cohortId),cid=id(cycleId);
   const [member]=await this.database.query(
