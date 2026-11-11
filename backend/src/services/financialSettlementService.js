@@ -612,8 +612,11 @@ class FinancialSettlementService {
               (previous[0].dispute_id == null ? null : Number(previous[0].dispute_id)) !==
                 (disputeId == null ? null : Number(disputeId)) ||
               previous[0].refund_type !== refundType ||
-              (previous[0].disputed_quantity == null ? null : String(previous[0].disputed_quantity)) !==
-                (disputedQuantity == null ? null : String(disputedQuantity))) {
+              ((previous[0].disputed_quantity == null || disputedQuantity == null)
+                ? previous[0].disputed_quantity != disputedQuantity
+                : !exactDecimal.exactDecimalEquals(
+                    String(previous[0].disputed_quantity), String(disputedQuantity), 2
+                  ))) {
             const err = new Error('Idempotency key was already used for a different refund request');
             err.code = 'REFUND_IDEMPOTENCY_CONFLICT';
             err.statusCode = 409;
