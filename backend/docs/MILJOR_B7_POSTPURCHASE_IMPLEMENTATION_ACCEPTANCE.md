@@ -79,6 +79,16 @@ Requires `B7_ALLOW_ISOLATED_POSTPURCHASE_TESTS=YES`, `NODE_ENV=test`, `TEST_DB_N
 ### Gate U — actual browser
 Set `B7_BROWSER_READONLY_ACCEPTANCE=YES`, `B7_BACKEND_TEST_DB_CONFIRMED=YES`, `B7_BROWSER_URL=http://localhost:5173`, dedicated buyer/supplier test credentials, and install Playwright in isolated environment. Run `cd frontend && npm run test:b7:browser:readonly`. This is read-only smoke, NOT full cross-role write E2E.
 
+### Gate W — full buyer/supplier WRITE browser E2E on disposable fixtures
+Script: `backend/tests/b7_postpurchase_browser_write_e2e.js`.
+Command: `cd backend && npm run test:b7:browser:write`.
+
+Requires explicit `B7_BROWSER_WRITE_ACCEPTANCE=YES`, `B7_BACKEND_TEST_DB_CONFIRMED=YES`, `NODE_ENV=test`, `TEST_DB_NAME=miljor_test_db`, `B7_BROWSER_URL=http://localhost:5173`, test DB credentials, dedicated B7 buyer/supplier accounts, local Playwright+Chromium, and TWO distinct real paid B6 order fixtures (`B7_BROWSER_COMPLETE_ORDER_CODE` and `B7_BROWSER_SHORTAGE_ORDER_CODE`). Both must begin `AWAITING_SUPPLIER_ACKNOWLEDGEMENT` and belong to those test identities; shortage order must have exactly one immutable 100.0000-unit award line.
+
+The runner intentionally **mutates only the disposable test database**: supplier stages two orders, buyer confirms one + verifies an issued invoice matches the immutable lines, buyer claims a 20-unit short delivery on the second, supplier proposes/delivers the remedy, buyer confirms remedy and finally **separately confirms full original receipt**. It checks exact persisted quantities and unchanged payment escrow rows.
+
+If fixtures/Playwright/browser are missing or financial/migration identity is unresolved, mark BLOCKED; NEVER manufacture paid status to satisfy the test. Use isolated personal/test customer identities only; protect screenshots and browser data.
+
 ### Gate X — final scenario E2E
 With a globally reconciled disposable test DB and authorized payment sandbox:
 1. Two B6-awarded suppliers: one supplier cannot see/mutate other's fulfillment or invoice.
