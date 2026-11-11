@@ -134,7 +134,7 @@ class SupplierListingMutationService {
            WHERE ps.id = ?`, [listing.product_spec_id]);
         const item = spec[0];
         if (!item || Number(item.is_active) !== 1 || item.approval_status !== 'APPROVED' ||
-            !['PUBLISHED', 'LEGACY_GLOBAL'].includes(item.lifecycle_status) ||
+            item.lifecycle_status !== 'PUBLISHED' || !item.sku_status || !item.product_status ||
             !item.family_active || item.family_approval !== 'APPROVED' ||
             !item.category_active || item.category_approval !== 'APPROVED' ||
             (item.sku_status && item.sku_status !== 'PUBLISHED') ||
