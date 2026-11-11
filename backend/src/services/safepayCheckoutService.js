@@ -638,8 +638,9 @@ class SafepayCheckoutService {
 
     const order = orders[0];
 
-    // Tenancy check: Buyer can only inspect their own orders; Admin can inspect any
-    if (actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+    // Payment and checkout tracker URLs are private to the buyer or finance/admin roles.
+    if (!actor || !(actor.role === 'BUYER' && Number(order.buyer_id) === Number(actor.id)) &&
+        !['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(actor.role)) {
       const err = new Error('You do not have permission to view payment status for this order');
       err.code = 'FORBIDDEN';
       err.statusCode = 403;
@@ -670,7 +671,7 @@ class SafepayCheckoutService {
     }
 
     const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
-      .readForOrder(order.id,actor.id);
+      .readForOrder(order.id,order.buyer_id);
 
     return {
       order_id: order.id,
@@ -732,8 +733,10 @@ class SafepayCheckoutService {
 
     const order = orders[0];
 
-    // Tenant check if actor provided
-    if (actor && actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+    // An authenticated caller cannot reconcile somebody else's payment.
+    // Internal trusted provider hooks may call with actor=null.
+    if (actor && !(actor.role === 'BUYER' && Number(order.buyer_id) === Number(actor.id)) &&
+        !['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(actor.role)) {
       const err = new Error('You do not have permission to reconcile this order');
       err.code = 'FORBIDDEN';
       err.statusCode = 403;
