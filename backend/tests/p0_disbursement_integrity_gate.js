@@ -47,7 +47,7 @@ const args = {
   actor:{id:1,role:'FINANCE_ADMIN'},idempotencyKey:'finance-test-123'
 };
 const prepared = {
-  id:99,supplier_payable_id:11,idempotency_key:args.idempotencyKey,
+  id:99,prepared_by:2,supplier_payable_id:11,idempotency_key:args.idempotencyKey,
   beneficiary_title:args.beneficiaryTitle,beneficiary_iban:args.beneficiaryIban,
   beneficiary_bank_code:null,amount:'100.00',status:'PREPARED',
   external_execution_status:'DISABLED',supplier_user_verified:1,
@@ -73,6 +73,7 @@ async function withFake(respond,exercise) {
   finally {connect=null;}
 }
 const approvalResponder=(overrides={},holds=[])=>async sql=>{
+  if(sql.includes('FROM payment_attempts pa'))return [[{id:71}]];
   if(sql.includes('SELECT supplier_payable_id FROM'))return [[{supplier_payable_id:11}]];
   if(sql.includes('FROM supplier_payables'))return [[{...payable,status:'DISBURSEMENT_PREPARED'}]];
   if(sql.includes('FROM supplier_disbursement_instructions d'))return [[{...prepared,...overrides}]];
@@ -107,6 +108,7 @@ async function basicCases(){
   });
   pass('new key for same payable is rejected and rolled back');
   await withFake(async sql=>{
+    if(sql.includes('FROM payment_attempts pa'))return [[{id:71}]];
     if(sql.includes('FROM supplier_payables'))return [[payable]];
     if(sql.includes('FROM supplier_disbursement_instructions'))return [[]];
     if(sql.includes('FROM refund_obligations'))return [[{id:61}]];
@@ -116,6 +118,7 @@ async function basicCases(){
   });
   pass('pending refund stops payout');
   await withFake(async sql=>{
+    if(sql.includes('FROM payment_attempts pa'))return [[{id:71}]];
     if(sql.includes('FROM supplier_payables'))return [[{...payable,available_amount:'120.00'}]];
     if(sql.includes('FROM supplier_disbursement_instructions'))return [[]];
     if(sql.includes('FROM refund_obligations'))return [[]];
@@ -185,6 +188,7 @@ async function concurrentCases(){
         if(sql.includes('FROM supplier_disbursement_instructions')&&
            sql.includes('WHERE idempotency_key'))
           return [dbState.instructions.filter(x=>x.idempotency_key===params[0])];
+        if(sql.includes('FROM payment_attempts pa'))return [[{id:71}]];
         if(sql.includes('FROM refund_obligations'))return [[]];
         if(sql.includes('INSERT INTO supplier_disbursement_instructions')){
           dbState.insertAttempts++;
