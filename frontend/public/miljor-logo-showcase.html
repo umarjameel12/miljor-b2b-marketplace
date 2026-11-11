@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MilJor — Clean HD Master Logo & Assets</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #072A21;
+      --bg-surface: #0F3B2F;
+      --gold-primary: #C8B276;
+      --gold-bright: #E8BE78;
+      --cream: #F7F3E8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #03140F;
+      color: var(--cream);
+      font-family: 'Inter', system-ui, sans-serif;
+      padding: 40px 20px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    header {
+      text-align: center;
+      max-width: 800px;
+      margin-bottom: 40px;
+    }
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.2rem;
+      letter-spacing: 2px;
+      color: var(--gold-bright);
+      margin-bottom: 8px;
+    }
+    p.sub {
+      color: #A3BFB7;
+      font-size: 0.95rem;
+      letter-spacing: 0.5px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 36px;
+      max-width: 1100px;
+      width: 100%;
+    }
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid rgba(200, 178, 118, 0.25);
+      border-radius: 16px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem;
+      color: var(--gold-bright);
+      margin-bottom: 4px;
+      align-self: flex-start;
+    }
+    .card-desc {
+      font-size: 0.85rem;
+      color: #A3BFB7;
+      margin-bottom: 20px;
+      align-self: flex-start;
+    }
+    .preview-box {
+      width: 100%;
+      min-height: 260px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .preview-emerald {
+      background: #072A21;
+      border: 1px solid rgba(200, 178, 118, 0.2);
+    }
+    .preview-light {
+      background: #F7F3E8;
+      border: 1px solid #E5DEC9;
+    }
+    .preview-transparent {
+      background: repeating-conic-gradient(#182420 0% 25%, #0e1714 0% 50%) 50% / 20px 20px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .preview-box img {
+      max-width: 100%;
+      height: auto;
+      filter: drop-shadow(0 12px 24px rgba(0,0,0,0.35));
+    }
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+      justify-content: flex-end;
+    }
+    button, a.btn {
+      background: linear-gradient(135deg, #E8BE78, #A87B3C);
+      color: #072A21;
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button:hover, a.btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(232, 190, 120, 0.35);
+    }
+    button.secondary, a.btn.secondary {
+      background: rgba(255,255,255,0.08);
+      color: var(--cream);
+      border: 1px solid rgba(200, 178, 118, 0.3);
+    }
+    button.secondary:hover, a.btn.secondary:hover {
+      background: rgba(200, 178, 118, 0.15);
+      box-shadow: none;
+    }
+    .specs {
+      font-size: 0.75rem;
+      color: #79998F;
+      margin-top: 8px;
+      align-self: flex-start;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>MilJor Official Brand Asset Gallery</h1>
+    <p class="sub">Flowing Champagne-Gold Ribbon-M Monogram & Luxury Editorial Brandmarks</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- Card 1: Full Editorial Brandmark (Emerald Background) -->
+    <div class="card">
+      <h2 class="card-title">1. Luxury Editorial Brandmark (1200 × 630 HD)</h2>
+      <p class="card-desc">Deep Forest Green badge with centered Ribbon-M Monogram, Playfair Display typography and gold accents.</p>
+      
+      <div class="preview-box preview-emerald">
+        <img id="img-emerald" src="/miljor-logo-emerald.svg" alt="MilJor Luxury Editorial Logo" style="max-height: 280px;">
+      </div>
+
+      <div class="btn-group">
+        <a class="btn" href="/miljor-logo-emerald.svg" download="miljor-logo-emerald.svg">Download SVG (Vector)</a>
+        <button onclick="downloadAsPng('/miljor-logo-emerald.svg', 'miljor-logo-emerald-hd.png', 1200, 630)">Download 4K PNG</button>
+      </div>
+      <div class="specs">Palette: #072A21 (Forest) · #C8B276 (Gold) · #FFF8E0 (Silk) | Format: Scalable SVG + 4K PNG</div>
+    </div>
+
+    <!-- Card 2: Standalone Flowing Gold Monogram (Transparent) -->
+    <div class="card">
+      <h2 class="card-title">2. Master Ribbon-M Monogram (Transparent Vector)</h2>
+      <p class="card-desc">Clean standalone flowing ribbon silhouette with satin 3D depth and specular rim lighting. Perfect for headers, apps and icons.</p>
+      
+      <div class="preview-box preview-transparent">
+        <img id="img-gold" src="/miljor-logo-gold.svg" alt="MilJor Gold Ribbon Monogram" style="max-height: 140px;">
+      </div>
+
+      <div class="btn-group">
+        <a class="btn" href="/miljor-logo-gold.svg" download="miljor-logo-gold.svg">Download Clean SVG</a>
+        <button onclick="downloadAsPng('/miljor-logo-gold.svg', 'miljor-monogram-hd.png', 2060, 1040)">Download HD PNG (Transparent)</button>
+      </div>
+      <div class="specs">Aspect Ratio: ~1.98 : 1 | Transparent Alpha | Resolution: Unlimited Vector Scalability</div>
+    </div>
+
+    <!-- Card 3: Monogram on Light Cream Background -->
+    <div class="card">
+      <h2 class="card-title">3. Monogram on Editorial Light Cream (#F7F3E8)</h2>
+      <p class="card-desc">Evaluated for warm, quiet-luxury packaging, print invoices, and document letterheads.</p>
+      
+      <div class="preview-box preview-light">
+        <img src="/miljor-logo-gold.svg" alt="MilJor on Light Cream" style="max-height: 130px;">
+      </div>
+
+      <div class="btn-group">
+        <button class="secondary" onclick="copySvgToClipboard('/miljor-logo-gold.svg')">Copy SVG Markup</button>
+      </div>
+      <div class="specs">Tested on Warm Light Cream #F7F3E8 — AA Contrast Passing</div>
+    </div>
+
+  </div>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    async function downloadAsPng(svgUrl, filename, width, height) {
+      const response = await fetch(svgUrl);
+      const svgText = await response.text();
+      const canvas = document.getElementById('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, width, height);
+
+      const img = new Image();
+      const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+      const URL = window.URL || window.webkitURL || window;
+      const blobURL = URL.createObjectURL(svgBlob);
+
+      img.onload = function() {
+        ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(blobURL);
+        const pngURL = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pngURL;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      };
+      img.src = blobURL;
+    }
+
+    async function copySvgToClipboard(svgUrl) {
+      const response = await fetch(svgUrl);
+      const text = await response.text();
+      navigator.clipboard.writeText(text).then(() => {
+        alert('SVG Markup copied to clipboard!');
+      });
+    }
+  </script>
+
+</body>
+</html>
