@@ -134,12 +134,29 @@ class SubscriptionEntitlementService {
       throw new Error('assertCanPublishInFamily requires an active transactional database connection');
     }
 
-    // Lock supplier profile to serialize concurrent publish attempts
+    // Existing family uses no new entitlement slot. A SHARED supplier-profile
+    // lock protects verification/plan changes while permitting concurrent
+    // published-SKU pools to proceed. New family additions MUST still take
+    // the EXCLUSIVE supplier-profile lock and re-evaluate the slot count.
+    const observed = await this.getSupplierEntitlements(supplierId, connection);
+    if (observed.active_family_ids.includes(Number(targetFamilyId))) {
+      await connection.query(
+        'SELECT supplier_id FROM supplier_profiles WHERE supplier_id = ? FOR SHARE',
+        [supplierId]
+      );
+      const current = await this.getSupplierEntitlements(supplierId, connection);
+      if (!current.active_family_ids.includes(Number(targetFamilyId))) {
+        const err = new Error('Supplier family publication changed concurrently; retry');
+        err.code = 'ENTITLEMENT_REVALIDATION_REQUIRED';
+        err.statusCode = 409;
+        throw err;
+      }
+      return { allowed:true,reason:'EXISTING_ACTIVE_FAMILY',entitlements:current };
+    }
     await connection.query(
-      `SELECT supplier_id, subscription_plan, subscription_status FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE`,
+      'SELECT supplier_id FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
       [supplierId]
     );
-
     const entitlements = await this.getSupplierEntitlements(supplierId, connection);
 
     // If target family is already among the supplier's active families, it consumes NO extra slot
