@@ -32,9 +32,11 @@ async function main(){
   });
   try{
     const [o]=await db.query(
-      'INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,order_status) VALUES(?,5,2,10.0000,100.00,1000.00,120.00,25.00,1145.00,2.50,?,?,?, ?,?)',
+      'INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,order_status) VALUES(?,5,2,100.0000,10.00,1000.00,120.00,25.00,1145.00,2.50,?,?,?, ?,?)',
       ['SFP-'+crypto.randomBytes(4).toString('hex'),'PKR','DOORSTEP','Synthetic Lahore address','AWAITING_PAYMENT','AWAITING_PAYMENT']
     );
+    // Exact test-only 100kg / PKR10 fixture for downstream 80-received/20-short integration.
+    // It is never a genuine provider-originated payment or a production order.
     const order=o.insertId,tracker='track_p0_'+id();
     await db.query(
       'INSERT INTO payment_attempts(attempt_code,order_id,buyer_id,provider,environment,provider_tracker_token,amount,currency,status,idempotency_key) VALUES(?,?,5,?,?,?,?,?,?,?)',

@@ -299,9 +299,9 @@ export function SupplierPoolsPage(){
   if(!isAuthenticated||user?.role!=='SUPPLIER')return <AppShell><div className="max-w-xl mx-auto p-8 space-y-3"><h1 className="text-xl font-bold">Supplier access required</h1><p className="text-sm text-[var(--text-muted)]">Only signed-in suppliers manage commercial pools.</p><Link to="/login" className="underline">Sign in</Link></div></AppShell>;
   return <AppShell><div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3">
-      <div><p className="text-xs font-semibold text-emerald-600 uppercase">Supplier Portal · B4 + B5 only</p>
+      <div><p className="text-xs font-semibold text-emerald-600 uppercase">Supplier Portal · Unified Pools</p>
         <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">Pool Management</h1>
-        <p className="text-sm text-[var(--text-muted)]">One workspace, two independent supplier-owned pool engines. Buyer RFQs, collective and recurring procurement stay separate.</p>
+        <p className="text-sm text-[var(--text-muted)]">One supplier pool workspace. Configure pricing, stock, delivery and commitment terms for each offer. RFQs and recurring procurement remain separate contracts.</p>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={load} className="rounded-xl border px-3 py-2 flex items-center gap-2 text-sm"><RefreshCw size={15}/>Refresh</button>
@@ -315,10 +315,10 @@ export function SupplierPoolsPage(){
     {operationsError&&<p role="status" className="text-xs text-amber-600">{operationsError}</p>}
     {!loading&&<SupplierPoolOperationsPanel {...operations}/>}
     {creating?<section className="max-w-3xl rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5 space-y-4">
-      <div className="flex items-center gap-2"><Layers size={18}/><h2 className="font-semibold text-lg">{edit?'Edit':'Create'} {mode==='REGULAR'?'Regular':'Flash'} Pool Draft</h2></div>
+      <div className="flex items-center gap-2"><Layers size={18}/><h2 className="font-semibold text-lg">{edit?'Edit':'Create'} Pool Draft</h2></div>
       {!edit&&<div className="grid grid-cols-2 gap-2">
         {['REGULAR','FLASH'].map(t=><button key={t} type="button" onClick={()=>setMode(t)} className={`rounded-xl border p-3 text-left text-sm ${mode===t?'border-emerald-600 bg-emerald-500/10':'border-[var(--border-subtle)]'}`}>
-          <b>{t==='REGULAR'?'Regular Pool':'Flash Pool'}</b><p className="text-xs mt-1 text-[var(--text-muted)]">{t==='REGULAR'?'Demand aggregation & price tiers':'Ready-stock discount & immediate checkout'}</p>
+          <b>{t==='REGULAR'?'Group pricing terms':'Ready-stock terms'}</b><p className="text-xs mt-1 text-[var(--text-muted)]">{t==='REGULAR'?'Demand aggregation & price tiers':'Ready-stock discount & immediate checkout'}</p>
         </button>)}
       </div>}
       {!listings.length?<div className="rounded-xl border p-4 text-sm space-y-2"><AlertTriangle size={18} className="text-amber-600"/><p>No eligible published supplier listings. Create and publish your physical SKU and commercial offer first.</p><Link to="/supplier/catalog" className="underline text-emerald-600">Open Supplier Catalog</Link></div>:
@@ -413,7 +413,7 @@ export function SupplierPoolsPage(){
       {loading?<p className="text-sm text-[var(--text-muted)]">Loading supplier pools…</p>:rows.length===0?
         <div className="p-8 text-center rounded-xl border border-[var(--border-subtle)]"><Package className="mx-auto mb-2 text-[var(--text-muted)]"/><p className="font-semibold">No matching pools</p><p className="text-xs text-[var(--text-muted)]">Create a pool from a published supplier listing.</p></div>:
       <div className="grid sm:grid-cols-2 gap-3">{rows.map(pool=><article key={pool.type+'-'+pool.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 space-y-3">
-        <div className="flex justify-between items-center gap-2"><span className="text-xs font-bold">{pool.type==='FLASH'?'Flash Pool':'Regular Pool'}</span><span className="text-xs text-[var(--text-muted)]">{pool.status}</span></div>
+        <div className="flex justify-between items-center gap-2"><span className="text-xs font-bold">Pool</span><span className="text-xs text-[var(--text-muted)]">{pool.status}</span></div>
         <div className="font-semibold">{pool.product_title||pool.code||'Supplier SKU'}</div>
         <p className="text-xs text-[var(--text-muted)]">{pool.code} · {pool.type==='REGULAR'?
           `${pool.quantity_current||0} / ${pool.quantity_target||0} ${pool.unit||''} committed`:

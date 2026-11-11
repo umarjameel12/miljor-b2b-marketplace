@@ -63,12 +63,12 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
     {section==='INSIGHTS'&&<div className="space-y-3">
       <p className="text-xs text-[var(--text-muted)]">Counts reflect real B4/B5 records. Revenue, savings and net payout remain unavailable until verified settlement baselines exist.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[['Regular',insights?.by_type?.REGULAR?.total],['Flash',insights?.by_type?.FLASH?.total],
+        {[['Group pricing',insights?.by_type?.REGULAR?.total],['Ready stock',insights?.by_type?.FLASH?.total],
           ['Paid orders',insights?.orders?.paid],['Awaiting payment',insights?.orders?.awaiting_payment]].map(([key,n])=>
           <div key={key} className="rounded-xl border p-3 border-[var(--border-subtle)]"><div className="text-xl font-bold tabular-nums">{n??'—'}</div><div className="text-xs text-[var(--text-muted)]">{key}</div></div>)}
       </div>
       {['REGULAR','FLASH'].map(type=><div key={type} className="rounded-xl border border-[var(--border-subtle)] p-3">
-        <h3 className="font-semibold text-sm">{type==='REGULAR'?'Regular Pools':'Flash Pools'}</h3>
+        <h3 className="font-semibold text-sm">{type==='REGULAR'?'Group-pricing terms':'Ready-stock terms'}</h3>
         <div className="grid grid-cols-3 gap-2 text-xs mt-2">
           <div>Draft <b className="block">{insights?.by_type?.[type]?.draft??'—'}</b></div>
           <div>Active <b className="block">{insights?.by_type?.[type]?.active??'—'}</b></div>

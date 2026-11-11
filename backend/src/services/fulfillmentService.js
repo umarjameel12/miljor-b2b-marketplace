@@ -446,15 +446,18 @@ class FulfillmentService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Reservation outbox has a pool FK. For B6/Flash poolless orders,
+      // the order_fulfillment_events row above remains the durable audit;
+      // never forge pool_id=0 or attach an unrelated pool.
+      if (order.pool_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
         ) VALUES (?, ?, ?, ?, 'SUPPLIER', ?, ?, ?, NOW())`,
         [
           outboxEventId,
-          order.pool_id || 0,
-          order.reservation_id || 0,
+          order.pool_id,
+          order.reservation_id || null,
           actor.id,
           `ORDER_${toStatus}`,
           JSON.stringify({
@@ -637,15 +640,18 @@ class FulfillmentService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Reservation outbox has a pool FK. For B6/Flash poolless orders,
+      // the order_fulfillment_events row above remains the durable audit;
+      // never forge pool_id=0 or attach an unrelated pool.
+      if (order.pool_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
         ) VALUES (?, ?, ?, ?, 'SUPPLIER', 'ORDER_FULFILLMENT_EXCEPTION', ?, ?, NOW())`,
         [
           outboxEventId,
-          order.pool_id || 0,
-          order.reservation_id || 0,
+          order.pool_id,
+          order.reservation_id || null,
           actor.id,
           JSON.stringify({
             order_id: order.id,
@@ -984,15 +990,18 @@ class FulfillmentService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Reservation outbox has a pool FK. For B6/Flash poolless orders,
+      // the order_fulfillment_events row above remains the durable audit;
+      // never forge pool_id=0 or attach an unrelated pool.
+      if (order.pool_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
         ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_BUYER_RECEIPT_CONFIRMED', ?, ?, NOW())`,
         [
           outboxEventId,
-          order.pool_id || 0,
-          order.reservation_id || 0,
+          order.pool_id,
+          order.reservation_id || null,
           actor.id,
           JSON.stringify({
             order_id: order.id,
@@ -1117,16 +1126,35 @@ class FulfillmentService {
         throw err;
       }
 
-      // Quantity validation if quantity mismatch
+      // Quantity shortage is meaningful only for an unambiguous single-item
+      // order. B6 multi-line contracts need per-line receipt and refund
+      // allocation: never infer loss from a mixed-unit aggregate total_qty.
       let parsedReportedQty = null;
+      let shortageEvidence = null;
       if (reason === 'QUANTITY_MISMATCH') {
-        if (reportedQuantity === null || reportedQuantity === undefined || isNaN(Number(reportedQuantity)) || Number(reportedQuantity) < 0) {
-          const err = new Error('Valid non-negative reported_quantity is required for QUANTITY_MISMATCH');
+        const [awardItems] = await connection.query(
+          `SELECT COUNT(*) AS line_count
+           FROM procurement_award_lines al
+           JOIN procurement_award_orders ao ON ao.id = al.award_order_id
+           WHERE ao.order_id = ?`,
+          [orderId]
+        );
+        if (Number(awardItems[0]?.line_count || 0) > 0) {
+          const err = new Error('Procurement award deliveries require line-specific discrepancy evidence; aggregate shortage cannot be calculated safely');
+          err.code = 'LINE_ITEM_RECEIPT_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
+        if (reportedQuantity === null || reportedQuantity === undefined) {
+          const err = new Error('Received quantity is required for QUANTITY_MISMATCH');
           err.code = 'INVALID_REPORTED_QUANTITY';
           err.statusCode = 400;
           throw err;
         }
-        parsedReportedQty = Number(reportedQuantity);
+        shortageEvidence = require('./deliveryQuantityPolicy').calculateShortage(
+          order.total_qty, reportedQuantity
+        );
+        parsedReportedQty = shortageEvidence.received_quantity;
       }
 
       // Idempotency replay check
@@ -1177,9 +1205,10 @@ class FulfillmentService {
           description.trim(),
           JSON.stringify({
             reason,
+            ...(metadata || {}),
             reported_quantity: parsedReportedQty,
-            expected_quantity: Number(order.total_qty),
-            ...(metadata || {})
+            expected_quantity: shortageEvidence?.ordered_quantity || String(order.total_qty),
+            ...(shortageEvidence ? {short_quantity: shortageEvidence.short_quantity} : {})
           }),
           trimmedKey
         ]
@@ -1196,15 +1225,18 @@ class FulfillmentService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Reservation outbox has a pool FK. For B6/Flash poolless orders,
+      // the order_fulfillment_events row above remains the durable audit;
+      // never forge pool_id=0 or attach an unrelated pool.
+      if (order.pool_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
         ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_FULFILLMENT_EXCEPTION', ?, ?, NOW())`,
         [
           outboxEventId,
-          order.pool_id || 0,
-          order.reservation_id || 0,
+          order.pool_id,
+          order.reservation_id || null,
           actor.id,
           JSON.stringify({
             order_id: order.id,
@@ -1214,7 +1246,8 @@ class FulfillmentService {
             reason,
             description: description.trim(),
             reported_quantity: parsedReportedQty,
-            expected_quantity: Number(order.total_qty)
+            expected_quantity: shortageEvidence?.ordered_quantity || String(order.total_qty),
+            ...(shortageEvidence ? {short_quantity: shortageEvidence.short_quantity} : {})
           }),
           trimmedKey
         ]
@@ -1229,6 +1262,7 @@ class FulfillmentService {
         previous_status: currentStatus,
         fulfillment_status: 'EXCEPTION',
         exception_reason: reason,
+        ...(shortageEvidence ? {receipt_summary: shortageEvidence} : {}),
         message: 'Delivery discrepancy recorded safely. Order placed in exception state without modifying financial balances.'
       };
 
