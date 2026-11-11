@@ -23,7 +23,7 @@ Supplier manages **B4 Regular Pools** and **B5 Flash Pools** from **one Pool Man
 1. **UCP-3:** Confirm UX and draft validation across every commodity quantity unit, listing price and fulfillment area; finalize cluster picker and broader delivery settings if needed.
 2. **UCP-4:** Buyer `Explore Pools` all/Regular/Flash discovery, separate countdowns and actual supplier prices; no RFQ/Collective Groups on this board.
 3. **UCP-5:** Shared inventory visibility, supplier operational summaries and notifications (not payment-state modifications).
-4. **Final tests (deferred per owner):** Apply migrations 033–048 to `miljor_test_db`, isolated branch reconciliation, 8 categories/25 families, actual supplier-owned SKU publication and Regular/Flash creation/update/publish/cancel, negative auth, duplicate submit, concurrency and stock overselling, Safepay holds, expiry/payment timers, browser build and E2E, and B6 procurement isolation. Check protected DB fingerprints. **Never run mutation tests against `miljor_db` or `miljor_sandbox_db`.**
+4. **Final tests (deferred per owner):** Apply migrations through 053 to `miljor_test_db`, isolated branch reconciliation, 8 categories/25 families, actual supplier-owned SKU publication and Regular/Flash creation/update/publish/cancel, negative auth, duplicate submit, concurrency and stock overselling, Safepay holds, expiry/payment timers, browser build and E2E, and B6 procurement isolation. Check protected DB fingerprints. **Never run mutation tests against `miljor_db` or `miljor_sandbox_db`.**
 5. P0 financial safeguards require independent verification; no existing pending Safepay/escrow/paid order may be auto cancelled during Pool UI transitions.
 
 ## Notes on test status
