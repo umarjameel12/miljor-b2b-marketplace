@@ -97,4 +97,9 @@ const prepared={id:99,supplier_payable_id:11,idempotency_key:args.idempotencyKey
   });
   assert.equal(money.exactDecimalEquals('100.00','100.00',2),true);
   console.log('PASS: 7 isolated disbursement hardening scenarios; no DB writes');
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})()
+  .catch(e=>{console.error(e);process.exitCode=1;})
+  .finally(async()=>{
+    try { await db.end(); }
+    catch (err) { console.error('Failed to close test DB pool:',err.message);process.exitCode=1; }
+  });
