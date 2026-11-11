@@ -114,7 +114,13 @@ async function runMigrations(targetDb) {
 if (require.main === module) {
   runMigrations()
     .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+    .catch(error => {
+      // No environment variables, SQL statements, credential strings or payment data.
+      console.error('MIGRATION_EXECUTION_BLOCKED:',
+        error?.code || 'ERROR',
+        String(error?.message || error).split('\\n')[0].slice(0,500));
+      process.exitCode = 1;
+    });
 }
 
 module.exports = { runMigrations };
