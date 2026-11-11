@@ -6,6 +6,7 @@ on:
       - fix/ucp-final-reconciliation-thischat
       - fix/p0-provider-browser-stock-finance-acceptance
       - fix/p0-morning-demo-canonical-gates
+      - fix/p0-reconcile-ucp-discovery
   pull_request:
     branches:
       - fix/p0-provider-browser-stock-finance-acceptance
