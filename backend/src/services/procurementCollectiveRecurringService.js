@@ -144,6 +144,48 @@ class ProcurementCollectiveRecurringService{
    await conn.commit();return {cohort_id:gid,status:'ACTIVE',is_replay:false};
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
+ async leaveCohort(buyerId,cohortId){
+  const buyer=id(buyerId),gid=id(cohortId),conn=await this.database.getConnection();
+  try{await conn.beginTransaction();
+   const cohort=await this._cohort(conn,gid,true);
+   if(cohort.status==='CANCELLED')
+    throw fail('COHORT_CANCELLED','Cohort is no longer active.',409);
+   const [members]=await conn.query(
+    'SELECT id,status FROM procurement_recurring_collective_members WHERE cohort_id=? AND buyer_id=? FOR UPDATE',[gid,buyer]);
+   const member=members[0];
+   if(!member)throw fail('COHORT_NOT_FOUND','Your cohort membership not found.',404);
+   if(member.status==='LEFT'){await conn.commit();return {cohort_id:gid,status:'LEFT',is_replay:true};}
+   if(member.status!=='CONSENTED'&&member.status!=='INVITED')
+    throw fail('MEMBERSHIP_STATE_CONFLICT','Membership cannot be left.',409);
+   await conn.query("UPDATE procurement_recurring_collective_members SET status='LEFT' WHERE id=?",[member.id]);
+   await conn.commit();return {cohort_id:gid,status:'LEFT',
+    affects_future_cycles_only:true,existing_cycle_consent_requires_separate_action:true,is_replay:false};
+  }catch(e){await conn.rollback();throw e}finally{conn.release()}
+ }
+ async changeCohortStatus(organizerId,cohortId,action){
+  const buyer=id(organizerId),gid=id(cohortId);
+  if(!['PAUSE','RESUME','CANCEL'].includes(action))
+   throw fail('INVALID_COHORT_ACTION','Unknown cohort action.');
+  const targets={PAUSE:'PAUSED',RESUME:'ACTIVE',CANCEL:'CANCELLED'};
+  const allowed={PAUSE:['ACTIVE'],RESUME:['PAUSED'],CANCEL:['FORMING','ACTIVE','PAUSED']};
+  const conn=await this.database.getConnection();
+  try{await conn.beginTransaction();
+   const cohort=await this._cohort(conn,gid,true);
+   if(Number(cohort.organizer_buyer_id)!==buyer)
+    throw fail('ORGANIZER_ONLY','Only organizer controls cohort status.',403);
+   const target=targets[action];
+   if(cohort.status===target){
+    await conn.commit();return {cohort_id:gid,status:target,is_replay:true};
+   }
+   if(!allowed[action].includes(cohort.status))
+    throw fail('COHORT_STATUS_CONFLICT','Illegal cohort status transition.',409);
+   await conn.query(
+    'UPDATE procurement_recurring_collectives SET status=?,consent_version=consent_version+1 WHERE id=? AND status=?',
+    [target,gid,cohort.status]);
+   await conn.commit();return {cohort_id:gid,status:target,
+    existing_cycle_orders_untouched:true,is_replay:false};
+  }catch(e){await conn.rollback();throw e}finally{conn.release()}
+ }
  async listMine(buyerId){
   const buyer=id(buyerId);
   const [rows]=await this.database.query(
