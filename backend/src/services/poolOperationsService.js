@@ -98,9 +98,23 @@ class PoolOperationsService {
        FROM orders o
        LEFT JOIN flash_purchase_holds fh ON fh.order_id=o.id
        WHERE o.supplier_id=? AND (o.pool_id IS NOT NULL OR fh.id IS NOT NULL)`,[id]);
+    const [perTypeRows]=await db.query(
+      `SELECT CASE WHEN fh.id IS NOT NULL THEN 'FLASH' ELSE 'REGULAR' END AS pool_type,
+          COUNT(DISTINCT o.id) AS orders_total,
+          COUNT(DISTINCT CASE WHEN o.payment_status='PAID' THEN o.id END) AS orders_paid,
+          COUNT(DISTINCT CASE WHEN o.payment_status='AWAITING_PAYMENT' THEN o.id END) AS orders_unpaid
+        FROM orders o LEFT JOIN flash_purchase_holds fh ON fh.order_id=o.id
+        WHERE o.supplier_id=? AND (o.pool_id IS NOT NULL OR fh.id IS NOT NULL)
+        GROUP BY CASE WHEN fh.id IS NOT NULL THEN 'FLASH' ELSE 'REGULAR' END`,[id]);
+    const byTypeOrders={REGULAR:{total:0,paid:0,unpaid:0},FLASH:{total:0,paid:0,unpaid:0}};
+    for(const row of perTypeRows){
+      if(byTypeOrders[row.pool_type])byTypeOrders[row.pool_type]={
+        total:Number(row.orders_total),paid:Number(row.orders_paid),unpaid:Number(row.orders_unpaid)
+      };
+    }
     return {
       scope:'B4_REGULAR_AND_B5_FLASH_ONLY',server_time,
-      counts,by_type:types,
+      counts,by_type:types,by_type_orders:byTypeOrders,
       orders:{total:Number(orderCounts[0].order_count||0),
         paid:Number(orderCounts[0].paid_order_count||0),
         awaiting_payment:Number(orderCounts[0].awaiting_payment_count||0)},
