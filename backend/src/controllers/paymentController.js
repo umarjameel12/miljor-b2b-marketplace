@@ -10,6 +10,7 @@
 const paymentRepo = require('../repositories/paymentRepo');
 const paymentProviderService = require('../services/paymentProviderService');
 const safepayCheckoutService = require('../services/safepayCheckoutService');
+const safepayRefundWebhookService = require('../services/safepayRefundWebhookService');
 const db = require('../config/db');
 
 
@@ -396,13 +397,20 @@ class PaymentController {
       const eventId = req.headers['x-sfpy-event-id'] || req.headers['x-safepay-event-id'];
       const eventType = req.headers['x-sfpy-event-type'] || req.headers['x-safepay-event-type'];
 
-      const result = await safepayCheckoutService.processWebhookEvent({
-        rawBody,
-        signature,
-        timestamp,
-        eventId,
-        eventType
-      });
+      // Financial refund evidence is processed separately from payment capture.
+      // Never allow a signed refund to be mistaken for payment.succeeded.
+      // The receiver re-verifies the raw-body signature and signed payload;
+      // untrusted headers never determine whether money was refunded.
+      let signedEventType = null;
+      try {
+        signedEventType = JSON.parse(Buffer.isBuffer(rawBody)
+          ? rawBody.toString('utf8') : String(rawBody)).type;
+      } catch (_) { /* capture handler rejects malformed JSON */ }
+      const result = signedEventType === 'payment.refunded'
+        ? await safepayRefundWebhookService.receive({rawBody,signature,timestamp})
+        : await safepayCheckoutService.processWebhookEvent({
+            rawBody,signature,timestamp,eventId,eventType
+          });
 
       return res.status(200).json({
         success: true,
