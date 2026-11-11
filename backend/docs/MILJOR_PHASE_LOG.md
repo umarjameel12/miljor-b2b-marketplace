@@ -1,3 +1,11 @@
+## Independent Backend Integrity — Migration Collision Stop Gate (2026-11-11)
+- Status: SAFETY GUARD IMPLEMENTED, NOT TESTED, RECONCILIATION BLOCKED.
+- Concurrent branches assign different SQL migrations to versions 046 and 047; read-only schema history needed before choosing unique sequence.
+- Deployment preflight now refuses to connect to a database while these known version collisions remain.
+- No merge, renumber, migration application, DB mutation or external payments.
+- See `backend/docs/MILJOR_B6_CATALOG_MIGRATION_COLLISION_GATE.md`.
+- CAN START NEXT PHASE: NO.
+
 ## Independent Backend Integrity — Batch 5 Supplier Offer Gate (2026-11-11)
 - New commercial offers require supplier-owned published physical SKUs and a matching linked specification; legacy global-spec-only writes rejected.
 - Historical listings/orders preserved. Regression verification deferred.
