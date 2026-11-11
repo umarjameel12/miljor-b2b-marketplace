@@ -10,15 +10,22 @@ class SupplierPoolOperationsService {
   if(!id(supplierId)||!id(listingId))throw fail('INVALID_LISTING','Valid supplier listing ID required',400);
   const [listings]=await db.query(
    `SELECT sl.id,sl.supplier_id,sl.status,sl.supplier_sku_id,sl.product_spec_id,
-     sl.available_stock,sl.pricing_unit,ps.purchasing_unit,ps.lifecycle_status
+     sl.available_stock,sl.pricing_unit,ps.purchasing_unit,ps.lifecycle_status,
+     ps.supplier_id AS spec_supplier_id,ps.supplier_sku_id AS spec_sku_id,
+     ps.approval_status,ps.is_active,sku.status AS sku_status
     FROM supplier_listings sl
     JOIN product_specifications ps ON ps.id=sl.product_spec_id
+    JOIN supplier_skus sku ON sku.id=ps.supplier_sku_id
     WHERE sl.id=? AND sl.supplier_id=?`,[Number(listingId),Number(supplierId)]
   );
   if(!listings.length)throw fail('LISTING_NOT_FOUND','Supplier listing not found',404);
   const listing=listings[0];
-  if(!listing.supplier_sku_id||listing.lifecycle_status!=='PUBLISHED'||listing.status!=='ACTIVE')
-    throw fail('LISTING_NOT_ELIGIBLE','Only active published supplier SKU listings can be allocated');
+  if(!listing.supplier_sku_id||listing.lifecycle_status!=='PUBLISHED'||
+     listing.status!=='ACTIVE'||listing.approval_status!=='APPROVED'||
+     Number(listing.is_active)!==1||listing.sku_status!=='PUBLISHED'||
+     Number(listing.supplier_id)!==Number(listing.spec_supplier_id)||
+     Number(listing.supplier_sku_id)!==Number(listing.spec_sku_id))
+    throw fail('LISTING_NOT_ELIGIBLE','Only an active approved published supplier-owned physical SKU listing can be allocated');
   const [allocs]=await db.query(
     `SELECT unit,status,SUM(allocated_qty) AS quantity FROM supplier_inventory_allocations
      WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED')
