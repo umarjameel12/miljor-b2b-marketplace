@@ -12,13 +12,13 @@
 4. **Payment initiated**: payment-attempt/provider reconciliation remains authoritative; countdown reaching zero must NEVER silently cancel a pending Safepay payment, refund funds or free committed stock.
 5. **No checkout started and deadline passed**: new Safepay checkout sessions are blocked by `REGULAR_PAYMENT_HOLD_EXPIRED`; the hold can be marked `EXPIRED` when checkout is next attempted. Reauthorization must go through a future explicitly audited resolution flow, not a self-service timer reset.
 6. **Safepay verified PAID**: webhook or trusted provider reconciliation sets the regular hold `PAID` inside the same verified payment transaction. The escrow/payment, reservation and pool commitment engines are NOT replaced.
-7. **Historical B4 orders** created before migration 048 have no retroactively invented 15-minute hold. They remain eligible for existing historical payment/reconciliation paths and are labeled appropriately in UI.
+7. **Historical B4 orders** created before migration 053 have no retroactively invented 15-minute hold. They remain eligible for existing historical payment/reconciliation paths and are labeled appropriately in UI.
 8. **B5 Flash** maintains its preexisting distinct 15-minute purchase hold; **B6 buyer-created RFQ, collective and recurring** remain entirely separate.
 9. Real-time display has no authority to expire an order, release a buyer allocation or confirm payments.
 
 ## Files
 
-- `backend/database/migrations/048_regular_pool_payment_hold_deadlines.sql`
+- `backend/database/migrations/053_regular_pool_payment_hold_deadlines.sql`
 - `backend/src/services/regularPoolPaymentHoldService.js`
 - `backend/src/services/orderService.js` (transactional hold creation)
 - `backend/src/services/safepayCheckoutService.js` (gated checkout + provider-paid transition + status)
@@ -49,9 +49,9 @@ This is an example schema, not a reported live payment.
 
 ## Final acceptance — NOT RUN
 
-After the user's remaining requested features are completed, run the final test suite **only on `miljor_test_db`** with migrations through 048:
+After the user's remaining requested features are completed, run the final test suite **only on `miljor_test_db`** with migrations through 053:
 
-- No regular order creation unless migration 048 exists; order and hold must commit/rollback atomically.
+- No regular order creation unless migration 053 exists; order and hold must commit/rollback atomically.
 - Verify server-clock countdown with UTC/Asia-Karachi and refresh/reload.
 - Check original pool expiry vs payment-hold expiry independence; no payment hold before order conversion.
 - Buyer cannot checkout before commitment conversion or after expiry.
