@@ -104,8 +104,14 @@ jobs:
         run: cd backend && node database/bootstrapDisposableMigrationTest.js
       - name: Verify existing disposable migration history read-only BEFORE applying
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
-      - name: Apply migrations to disposable miljor_test_db ONLY
+      - name: Install through 053 with guarded test-only stop boundary
+        run: cd backend && MILJOR_TEST_STOP_BEFORE_VERSION=054 node database/runMigrations.js
+      - name: Capture actual pre054 historical order fingerprint
+        run: cd backend && node tests/p0_finance_historical_upgrade_gate.js seed
+      - name: Apply canonical migration 054 to existing historical order
         run: cd backend && node database/runMigrations.js
+      - name: Verify historical order fingerprint and NULL contractual rate survived migration
+        run: cd backend && node tests/p0_finance_historical_upgrade_gate.js verify
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
         run: |
           cd backend
