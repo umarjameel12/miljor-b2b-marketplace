@@ -1,0 +1,112 @@
+name: MilJor UCP Canonical Reconciliation Acceptance
+on:
+  push:
+    branches:
+      - feature/ucp-canonical-reconciliation-release
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-frontend:
+    name: Source gates and production frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_ENV: test
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci --no-audit --no-fund
+      - name: Canonical migration manifest and integrity assertions (no DB)
+        run: |
+          cd backend
+          npm run migration:preflight
+          node tests/canonical_migration_manifest_gate.js
+      - name: Build actual frontend Vite bundle
+        run: npm --prefix frontend run build
+      - name: Existing UCP and B4/B5/B6 source checks
+        run: |
+          cd backend
+          npm run test:ucp
+
+  disposable-mysql-migrations:
+    name: Disposable MySQL 8.0 migration installation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      SAFEPAY_ENV: sandbox
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Validate canonical SQL names and source blobs without DB mutation
+        run: cd backend && node tests/canonical_migration_manifest_gate.js
+      - name: Apply migrations to disposable miljor_test_db ONLY
+        run: cd backend && node database/runMigrations.js
+      - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
+        run: |
+          cd backend
+          node - <<'JS'
+          const mysql=require('mysql2/promise');
+          (async()=>{
+            const db=await mysql.createConnection({
+              host:'127.0.0.1',user:'root',password:process.env.DB_PASSWORD,database:'miljor_test_db'
+            });
+            try{
+              const [rows]=await db.query('SELECT version,name FROM schema_migrations WHERE version IN (?,?,?,?,?,?) ORDER BY version',
+                ['046','047','048','051','052','053']);
+              const expected=['046_recurring_collective_cycles.sql','047_procurement_delivery_runs.sql',
+                '048_procurement_notification_outbox.sql','051_expand_canonical_product_families.sql',
+                '052_demand_requester_role.sql','053_regular_pool_payment_hold_deadlines.sql'];
+              if(rows.length!==6||rows.some((r,i)=>r.name!==expected[i]))
+                throw Error('Canonical migration mismatch '+JSON.stringify(rows));
+              console.log('PASS canonical migration history',rows.length,'versions on disposable DB');
+            }finally{await db.end()}
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Confirm second migration run is idempotent (same isolated DB)
+        run: cd backend && node database/runMigrations.js
