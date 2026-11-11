@@ -1,3 +1,13 @@
+## P0 Isolated Supplier Commission Snapshot — 2026-11-11
+- Branch: `fix/p0-order-commission-snapshot-isolated`, from existing independent financial fixes.
+- SOURCE STAGED only: verified profile fee rate captured under transaction lock in regular order creation; settlement reads order-owned snapshot, not mutable profile.
+- NON-EXECUTABLE migration proposal stored outside migration runner; no numbered migration created, no SQL executed.
+- Cross-chat code preserved: B6 procurement/Flash pools/timers, migration 046-048, frontend and other active branches untouched.
+- Deferred contract test: `backend/tests/p0_order_commission_snapshot_source_gate.js`; NOT RUN.
+- Critical deployment blocker: orders schema is missing snapshot column; branch must not be deployed or integrated until test DB migration reconciliation and all order creators have compatible snapshots.
+- Result: PARTIAL / BLOCKED, not production-ready. CAN START NEXT PHASE: NO.
+- Details: `backend/docs/MILJOR_P0_ORDER_COMMISSION_SNAPSHOT_ISOLATED_REPORT.md`.
+
 ## P0 Financial Contract Follow-Up — 2026-11-11
 - Changes: reject missing supplier commission fee snapshots and profile fees; exact BigInt commission; strict refund assessment roles; permit eligible partial-refund assessments; refuse unverified external refund confirmations.
 - Branch: `fix/independent-backend-integrity` only. No pool/timer, B6 branch, migration or DB changes.
