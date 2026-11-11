@@ -37,10 +37,7 @@ class FinancialConservationService {
       await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
       await conn.beginTransaction();begun=true;
       const [orders]=await conn.query(
-        `SELECT id,order_code,buyer_id,supplier_id,total_amount,
-                subtotal_amount,delivery_fee,buyer_platform_fee,
-                payment_status,fulfillment_status
-         FROM orders WHERE id=?`,[n]);
+        'SELECT * FROM orders WHERE id=?',[n]);
       if(orders.length!==1)
         throw error('ORDER_NOT_FOUND','Financial audit order not found',404);
       const order=orders[0];
@@ -73,6 +70,9 @@ class FinancialConservationService {
           order.buyer_platform_fee||'0.00');
         flag('BUYER_ORDER_COMPONENTS',exact.exactDecimalEquals(expected,order.total_amount,2),
           expected,money(order.total_amount));
+        if (['PAID','PARTIALLY_REFUNDED','REFUNDED'].includes(order.payment_status))
+          flag('PAID_ORDER_HAS_CAPTURED_PAYMENT',payments.length===1,
+            '1 confirmed payment',String(payments.length));
         flag('SINGLE_CAPTURED_PAYMENT',payments.length<=1,
           '0 or 1 payment record',String(payments.length));
         const payment=payments[0];
@@ -96,6 +96,18 @@ class FinancialConservationService {
         flag('SINGLE_SUPPLIER_PAYABLE',payables.length<=1,'0 or 1',String(payables.length));
         if(payables.length===1){
           const p=payables[0];
+          // The payable rate must match immutable order-time commercial terms.
+          // A missing column is a migration/reconciliation blocker, never an
+          // excuse to substitute a mutable supplier profile percentage.
+          flag('IMMUTABLE_SUPPLIER_COMMISSION',
+            order.supplier_commission_percent!==null &&
+            order.supplier_commission_percent!==undefined &&
+            exact.exactDecimalEquals(order.supplier_commission_percent,p.commission_rate_percent,2),
+            order.supplier_commission_percent===null ||
+              order.supplier_commission_percent===undefined
+              ? 'order-time commission snapshot REQUIRED'
+              : money(order.supplier_commission_percent),
+            money(p.commission_rate_percent));
           const comm=percentFee(p.gross_amount,p.commission_rate_percent);
           flag('COMMISSION_EXACT',exact.exactDecimalEquals(comm,p.commission_amount,2),
             comm,money(p.commission_amount));
