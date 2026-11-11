@@ -189,7 +189,31 @@ class PoolRepository {
 
   // All active pools — public listing with optional filters and location discovery (Phase 6D.3 & 6D.3.3)
   async findAllActive({ category, min_price, max_price, cluster_id, fulfillment_mode, include_all_pickup } = {}) {
-    let where = "WHERE p.status = 'ACTIVE' AND p.expires_at > NOW()";
+    // Only genuinely purchasable, currently approved supplier-owned physical
+    // SKUs may appear in buyer discovery. A pool's ACTIVE status alone is not
+    // enough after supplier suspension or catalog de-publication.
+    let where = `WHERE p.status = 'ACTIVE' AND p.expires_at > UTC_TIMESTAMP()
+      AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED'
+      AND EXISTS (SELECT 1 FROM supplier_profiles profile
+                  WHERE profile.supplier_id=p.supplier_id
+                    AND profile.verification_status='VERIFIED')
+      AND EXISTS (
+        SELECT 1 FROM supplier_listings sl
+        JOIN product_specifications spec ON spec.id=sl.product_spec_id
+        JOIN supplier_skus sku ON sku.id=spec.supplier_sku_id
+        JOIN supplier_products prod ON prod.id=sku.supplier_product_id
+        JOIN catalog_product_families fam ON fam.id=spec.family_id
+        JOIN catalog_categories cat ON cat.id=spec.category_id
+        WHERE sl.id=p.supplier_listing_id AND sl.supplier_id=p.supplier_id
+          AND sl.status='ACTIVE' AND sl.supplier_sku_id=p.supplier_sku_id
+          AND spec.id=p.product_spec_id AND spec.supplier_id=p.supplier_id
+          AND spec.is_active=1 AND spec.approval_status='APPROVED'
+          AND spec.lifecycle_status='PUBLISHED'
+          AND sku.supplier_id=p.supplier_id AND sku.status='PUBLISHED'
+          AND prod.supplier_id=p.supplier_id AND prod.status='PUBLISHED'
+          AND fam.is_active=1 AND fam.approval_status='APPROVED'
+          AND cat.is_active=1 AND cat.approval_status='APPROVED'
+      )`;
     const params = [];
 
     if (category) {
