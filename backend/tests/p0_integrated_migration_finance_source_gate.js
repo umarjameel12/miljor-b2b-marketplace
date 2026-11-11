@@ -26,7 +26,7 @@ for(const [v,name] of [
 ])assert.equal(byVersion.get(v),name);
 assert.match(runner,/selectedDb !== 'miljor_test_db'/);
 assert.match(runner,/MILJOR_RECONCILED_MIGRATION_TEST_APPROVED/);
-assert.match(fee,/options.lockProfile ? ' FOR UPDATE' : ''/);
+assert.match(fee,/options\\.lockProfile\\s*\\?\\s*' FOR UPDATE'/);
 assert.match(regular,/supplier_commission_percent/);
 assert.match(regular,/calculateSupplierFeeExact\(\s*pool.supplier_id, expectedSubtotalStr, connection, \{ lockProfile: true \}/);
 assert.match(flash,/supplier_commission_percent/);
