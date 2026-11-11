@@ -7,13 +7,21 @@ const catalogRepo = require('../repositories/catalogRepository');
 const catalogService = require('../services/catalogService');
 const listingRepo = require('../repositories/supplierListingRepo');
 
+// Public catalog remains English-only. Urdu is historical taxonomy metadata,
+// not a buyer/supplier-facing localized catalog or second product identity.
+const publicCatalogItem = item => {
+  if (!item) return item;
+  const { urdu_name, ...visible } = item;
+  return visible;
+};
+
 class CatalogController {
   // ---------------------------------------------------------------------------
   // Helper: Standardized Error Response
   // ---------------------------------------------------------------------------
   _handleError(res, err, contextLabel) {
     const status = err.status || err.statusCode || 500;
-    const code = err.code || 'SERVER_ERROR';
+    const code = status >= 500 ? 'SERVER_ERROR' : err.code || 'INVALID_CATALOG_REQUEST';
     if (status >= 500) {
       console.error(`[CatalogController:${contextLabel}]`, err);
     }
@@ -21,16 +29,16 @@ class CatalogController {
       success: false,
       error: {
         code,
-        message: err.message || 'An unexpected catalog error occurred.'
+        message: status >= 500 ? 'An unexpected catalog error occurred.' : err.message
       }
     };
-    if (err.subcode) payload.error.subcode = err.subcode;
-    if (err.details) payload.error.details = err.details;
-    if (err.existingFamily) payload.error.existing_family = err.existingFamily;
-    if (err.existingSpecification) payload.error.existing_specification = err.existingSpecification;
-    if (err.existingRequest) payload.error.existing_request = err.existingRequest;
-    if (err.existingProduct) payload.error.existing_product = err.existingProduct;
-    if (err.existingSku) payload.error.existing_sku = err.existingSku;
+    if (status < 500 && err.subcode) payload.error.subcode = err.subcode;
+    if (status < 500 && err.details) payload.error.details = err.details;
+    if (status < 500 && err.existingFamily) payload.error.existing_family = err.existingFamily;
+    if (status < 500 && err.existingSpecification) payload.error.existing_specification = err.existingSpecification;
+    if (status < 500 && err.existingRequest) payload.error.existing_request = err.existingRequest;
+    if (status < 500 && err.existingProduct) payload.error.existing_product = err.existingProduct;
+    if (status < 500 && err.existingSku) payload.error.existing_sku = err.existingSku;
     return res.status(status).json(payload);
   }
 
@@ -46,7 +54,7 @@ class CatalogController {
       return res.status(200).json({
         success: true,
         count: categories.length,
-        data: { categories }
+        data: { categories: categories.map(publicCatalogItem) }
       });
     } catch (err) {
       return this._handleError(res, err, 'getCategories');
@@ -76,7 +84,7 @@ class CatalogController {
       return res.status(200).json({
         success: true,
         count: families.length,
-        data: { category, families }
+        data: { category: publicCatalogItem(category), families: families.map(publicCatalogItem) }
       });
     } catch (err) {
       return this._handleError(res, err, 'getCategoryFamilies');
@@ -94,7 +102,7 @@ class CatalogController {
       return res.status(200).json({
         success: true,
         count: families.length,
-        data: { families }
+        data: { families: families.map(publicCatalogItem) }
       });
     } catch (err) {
       return this._handleError(res, err, 'getFamilies');
@@ -123,7 +131,7 @@ class CatalogController {
       const variants = await catalogRepo.findVariants({ familyId });
       return res.status(200).json({
         success: true,
-        data: { family, variants }
+        data: { family: publicCatalogItem(family), variants }
       });
     } catch (err) {
       return this._handleError(res, err, 'getFamilyById');
@@ -153,7 +161,7 @@ class CatalogController {
       return res.status(200).json({
         success: true,
         count: variants.length,
-        data: { family, variants }
+        data: { family: publicCatalogItem(family), variants }
       });
     } catch (err) {
       return this._handleError(res, err, 'getFamilyVariants');
