@@ -2,6 +2,19 @@
 
 This document tracks phase-by-phase execution, gates, and verification status for the MilJor B2B procurement backend.
 
+
+## B7 Post-Purchase Integration (Isolated, NON-UCP)
+
+- **Branch:** `feature/b7-fulfillment-gap-audit-20261111`, based on accepted B6 `6ef03de`.
+- **Business scope:** B6 supplier award -> buyer/supplier PAID fulfillment, physical SKU-line quantity shortage, exact per-supplier multi-item invoice, explicit buyer full-order confirmation, role-based post-purchase UI.
+- **Source implementation:** B6 award-line read models, 4-decimal quantity/2-decimal monetary shortage policy, line-scoped dispute persistence and idempotency conflict control; itemized supplier-order invoice with exact totals and payment prerequisite; dispute resolution no longer impersonates buyer receipt; new authenticated buyer/supplier page.
+- **New tests:** 12-assertion pure B7 contract gate, guarded PAID B6 order HTTP gate, existing fulfillment/dispute serial integration runner with migration identity checks, Playwright read-only buyer/supplier smoke and guarded full-write two-order E2E.
+- **Workstream safety:** UCP, B4/B5 pool engines, finance/settlement, E2 and global migrations untouched. No automatic money/refund/payout creation. Protected DBs untouched by these GitHub-only source changes.
+- **Evidence:** SOURCE COMMITTED; no new B7 test or frontend build successfully executed in this session. Earlier B6 406/406 is historical and does not prove B7.
+- **Status:** **PARTIALLY IMPLEMENTED / ACCEPTANCE BLOCKED** pending actual test outputs, approved disposable B6 paid fixtures, branch-compatible test migration history, financial P0 and full browser regression.
+- **Can merge:** NO before gate evidence and integration review. **Can deploy:** NO. **Start another phase:** NO.
+
+
 ---
 
 ## Phase B6-A to B6-Q Master Complete Acceptance (406/406 PASS)
