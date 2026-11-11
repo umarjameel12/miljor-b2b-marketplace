@@ -51,6 +51,8 @@ export const PoolsPage = () => {
   const initialType=String(searchParams.get('type')||'ALL').toUpperCase();
   const [poolType,setPoolType]=useState(['ALL','REGULAR','FLASH'].includes(initialType)?initialType:'ALL');
   const [serverTime,setServerTime]=useState(null);
+  const [nextCursor,setNextCursor]=useState(null);
+  const [loadingMore,setLoadingMore]=useState(false);
 
   const [pools, setPools] = useState([]);
   const [families, setFamilies] = useState([]);
@@ -112,6 +114,7 @@ export const PoolsPage = () => {
       ]);
       setPools(poolsRes.success&&Array.isArray(poolsRes.data?.pools)?poolsRes.data.pools:[]);
       setServerTime(poolsRes.data?.server_time||null);
+      setNextCursor(poolsRes.data?.next_cursor||null);
 
       setFamilies(familiesRes.success && Array.isArray(familiesRes.data?.families) ? familiesRes.data.families : []);
       setCatalogCategories(categoriesRes.success && Array.isArray(categoriesRes.data?.categories) ? categoriesRes.data.categories : []);
@@ -128,6 +131,30 @@ export const PoolsPage = () => {
   }, [fetchData]);
 
   // Type/category/cluster/search have already been server-filtered.
+  const loadMore=async()=>{
+    if(!nextCursor||loadingMore)return;
+    setLoadingMore(true);
+    try{
+      const result=await unifiedPoolsApi.discover({
+        type:poolType,
+        category_id:selectedCategory==='All Commodities'?undefined:Number(selectedCategory),
+        cluster_id:selectedClusterId?Number(selectedClusterId):undefined,
+        fulfillment_mode:selectedFulfillmentMode==='ALL'?undefined:selectedFulfillmentMode,
+        include_all_pickup:includeAllPickup,search:searchQuery.trim()||undefined,
+        limit:100,cursor:nextCursor
+      });
+      if(!result.success)throw Error(result.error?.message||'Could not load more pools');
+      setPools(previous=>{
+        const seen=new Set(previous.map(p=>p.type+':'+p.id));
+        return [...previous,...(result.data?.pools||[]).filter(p=>{
+          const id=p.type+':'+p.id;
+          if(seen.has(id))return false;seen.add(id);return true;
+        })];
+      });
+      setNextCursor(result.data?.next_cursor||null);
+    }catch(e){setError(e.response?.data?.error?.message||e.message||'Could not load more pools');}
+    finally{setLoadingMore(false);}
+  };
   const filteredPools = pools;
 
   const filteredFamilies = families.filter((family) => {
@@ -454,11 +481,19 @@ export const PoolsPage = () => {
           </div>
         ) : viewMode === 'pools' ? (
           filteredPools.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPools.map((pool) => (
-                <BuyerPoolCard key={pool.type+'-'+pool.id} pool={pool}
-                  serverTime={serverTime} clusterId={selectedClusterId} onChange={fetchData}/>
-              ))}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPools.map((pool) => (
+                  <BuyerPoolCard key={pool.type+'-'+pool.id} pool={pool}
+                    serverTime={serverTime} clusterId={selectedClusterId} onChange={fetchData}/>
+                ))}
+              </div>
+              {nextCursor&&<div className="text-center">
+                <button type="button" disabled={loadingMore} onClick={loadMore}
+                  className="border border-[var(--border-subtle)] rounded-xl px-5 py-2.5 text-xs font-semibold">
+                  {loadingMore?'Loading more…':'Load more wholesale pools'}
+                </button>
+              </div>}
             </div>
           ) : (
             <div
