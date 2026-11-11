@@ -105,7 +105,7 @@ class ProcurementDeliveryGroupingService {
    if(o.mode==='PICKUP')
     throw fail('PICKUP_USE_EXISTING_FULFILLMENT',
       'Supplier pickup is handled by the original paid order pickup workflow.',409);
-   const canonical=x=>String(x||'').trim().toLowerCase().replace(/\\s+/g,' ');
+   const canonical=x=>String(x||'').trim().toLowerCase().replace(/\s+/g,' ');
    if(!order.delivery_address || !address.full_address ||
       canonical(order.delivery_address)!==canonical(address.full_address))
     throw fail('PAID_DESTINATION_BINDING_REQUIRED',
