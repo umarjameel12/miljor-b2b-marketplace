@@ -64,11 +64,13 @@ class MessagingService {
       column = 'pool_id';
       const [pools] = await db.query('SELECT id FROM pools WHERE id=? AND supplier_id=?', [contextId, supplier]);
       if (!pools.length) fail('POOL_CONTEXT_FORBIDDEN', 'Pool does not belong to this supplier.');
-      const [res] = await db.query(
-        'SELECT id FROM reservations WHERE pool_id=? AND buyer_id=? LIMIT 1',
-        [contextId, buyer]
+      // Pre-purchase buyer questions are allowed for an active supplier pool.
+      // Buyer need not reserve/pay just to ask about an offered commodity.
+      const [visible] = await db.query(
+        "SELECT id FROM pools WHERE id=? AND supplier_id=? AND status='ACTIVE'",
+        [contextId, supplier]
       );
-      if (!res.length) fail('POOL_CONTEXT_FORBIDDEN', 'Buyer is not a participant in this pool.');
+      if (!visible.length) fail('POOL_CONTEXT_FORBIDDEN', 'Buyer may only initiate pre-purchase chats for active supplier pools.');
     }
     const [existing] = await db.query(
       `SELECT * FROM in_app_conversations WHERE buyer_id=? AND supplier_id=? AND ${column}=? ORDER BY id LIMIT 1`,
