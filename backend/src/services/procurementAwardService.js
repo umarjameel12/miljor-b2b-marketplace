@@ -307,7 +307,9 @@ class ProcurementAwardService{
       );
       const orderSummary=[];
       for(const group of calculated.groups){
-        const code='MJQ-'+crypto.randomBytes(10).toString('hex');
+        // Keep generated code within the existing orders.order_code varchar(20)
+        // while preserving a random unique key and DB uniqueness enforcement.
+        const code='MJQ-'+crypto.randomBytes(6).toString('hex');
         const [createdOrder]=await conn.query(
           `INSERT INTO orders
           (order_code,buyer_id,supplier_id,total_qty,unit_price,

@@ -183,6 +183,14 @@ jobs:
       - name: Real MySQL paid supplier to 100-80-20 buyer dispute, refund hold and invoice
         timeout-minutes: 8
         run: cd backend && node tests/demo_real_mysql_postpurchase_100_80_20_gate.js
+      - name: Real MySQL B6 request award to synthetic PAID supplier fulfillment and invoice
+        timeout-minutes: 8
+        env:
+          SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+          B6_FINANCIAL_GATE_ENABLED: 'true'
+          B6_B5_INVENTORY_RECONCILED: 'true'
+          B6_TAX_POLICY_APPROVED: 'true'
+        run: cd backend && node tests/demo_real_b6_award_paid_fulfillment_mysql_gate.js
 
   real-chromium-buyer-supplier:
     name: Real Chromium buyer/supplier auth, retry and offline journey
