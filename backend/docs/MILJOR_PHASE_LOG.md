@@ -1,5 +1,16 @@
 # MilJor — Phase Execution Log
 
+## B6 Backend Hardening & 25-Family Catalog Alignment — 2026-11-11
+
+- **Branch:** `fix/b6-backend-hardening` (not merged; original B6 branch preserved).
+- **Scope:** Supplier-owned physical SKU-only catalog/listings, English-only canonical family discovery, 25-family additive migration 046, demand requester migration 047, legacy procurement bypass containment, messaging privacy, paid-promotion fail-closed behavior, honest reviews, exact B6 invoice lines, unified fee arithmetic, and fail-closed migration journal.
+- **Authoritative repair report:** `backend/docs/MILJOR_B6_BACKEND_HARDENING_REPORT.md`.
+- **Source check:** JavaScript syntax parsing for modified backend modules only; no live MySQL/API/frontend integration acceptance and no protected DB writes from GitHub-only editing.
+- **Final gate:** **INTEGRATION PENDING / RELEASE BLOCKED**. Do not merge or proceed to live promotion/subscription billing without paid-provider verification and isolated acceptance tests.
+
+---
+
+
 This document tracks phase-by-phase execution, gates, and verification status for the MilJor B2B procurement backend.
 
 ---
