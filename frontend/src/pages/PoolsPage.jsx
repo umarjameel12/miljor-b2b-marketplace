@@ -5,11 +5,12 @@
 // Buyer Base Cluster Defaulting, and Quiet-Luxury B2B Aesthetic
 // =============================================================================
 import React, { useState, useEffect, useCallback } from 'react';
-import { poolsApi } from '../api/pools';
+import {useSearchParams} from 'react-router-dom';
+import {BuyerPoolCard} from '../components/pools/BuyerPoolCard';
+import unifiedPoolsApi from '../api/unifiedPools';
 import catalogApi from '../api/catalog';
 import { geoApi } from '../api/geo';
 import { useAuth } from '../context/AuthContext';
-import { PoolCard } from '../components/PoolCard';
 import { Skeleton } from '../components/ui/Skeleton';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -46,6 +47,10 @@ const FULFILLMENT_MODES = [
 
 export const PoolsPage = () => {
   const { user } = useAuth();
+  const [searchParams,setSearchParams]=useSearchParams();
+  const initialType=String(searchParams.get('type')||'ALL').toUpperCase();
+  const [poolType,setPoolType]=useState(['ALL','REGULAR','FLASH'].includes(initialType)?initialType:'ALL');
+  const [serverTime,setServerTime]=useState(null);
 
   const [pools, setPools] = useState([]);
   const [families, setFamilies] = useState([]);
@@ -59,7 +64,7 @@ export const PoolsPage = () => {
   const [selectedClusterId, setSelectedClusterId] = useState(user?.base_cluster_id ? String(user.base_cluster_id) : '');
   const [selectedFulfillmentMode, setSelectedFulfillmentMode] = useState('ALL');
   const [includeAllPickup, setIncludeAllPickup] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search')||'');
   const [viewMode, setViewMode] = useState('pools'); // 'pools' or 'catalog'
 
   // Update default cluster if user logs in or profile changes
@@ -88,26 +93,25 @@ export const PoolsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const categoryParam = viewMode === 'pools' && selectedCategory !== 'All Commodities' ? selectedCategory : undefined;
+      const categoryParam = selectedCategory !== 'All Commodities' ? Number(selectedCategory) : undefined;
       const clusterParam = selectedClusterId ? Number(selectedClusterId) : undefined;
       const modeParam = selectedFulfillmentMode === 'ALL' ? undefined : selectedFulfillmentMode;
 
       const [poolsRes, familiesRes, categoriesRes] = await Promise.all([
-        poolsApi.getActivePools({
-          category: categoryParam,
-          cluster_id: clusterParam,
-          fulfillment_mode: modeParam,
-          include_all_pickup: includeAllPickup,
+        unifiedPoolsApi.discover({
+          type:poolType,
+          category_id:categoryParam,
+          cluster_id:clusterParam,
+          fulfillment_mode:modeParam,
+          include_all_pickup:includeAllPickup,
+          search:searchQuery.trim()||undefined,
+          limit:100
         }),
         catalogApi.getFamilies(),
-        catalogApi.getCategories(),
+        catalogApi.getCategories()
       ]);
-
-      if (poolsRes.success && poolsRes.data?.pools) {
-        setPools(poolsRes.data.pools);
-      } else {
-        setPools([]);
-      }
+      setPools(poolsRes.success&&Array.isArray(poolsRes.data?.pools)?poolsRes.data.pools:[]);
+      setServerTime(poolsRes.data?.server_time||null);
 
       setFamilies(familiesRes.success && Array.isArray(familiesRes.data?.families) ? familiesRes.data.families : []);
       setCatalogCategories(categoriesRes.success && Array.isArray(categoriesRes.data?.categories) ? categoriesRes.data.categories : []);
@@ -117,18 +121,14 @@ export const PoolsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode]);
+  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode, poolType, searchQuery]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const filteredPools = pools.filter((p) => {
-    const titleMatch = (p.product_name || p.title || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const varietyMatch = (p.variety || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const codeMatch = (p.pool_code || p.spec_code || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return titleMatch || varietyMatch || codeMatch;
-  });
+  // Type/category/cluster/search have already been server-filtered.
+  const filteredPools = pools;
 
   const filteredFamilies = families.filter((family) => {
     const query = searchQuery.trim().toLocaleLowerCase();
@@ -137,9 +137,8 @@ export const PoolsPage = () => {
     return (!query || terms.some(term => String(term || '').toLocaleLowerCase().includes(query)))
       && (selectedCategory === 'All Commodities' || String(family.category_id) === selectedCategory);
   });
-  const categoryOptions = viewMode === 'catalog'
-    ? [{ id: 'All Commodities', name: 'All Commodities' }, ...catalogCategories.map(c => ({ id: String(c.id), name: c.name }))]
-    : CATEGORIES.map(name => ({ id: name, name }));
+  const categoryOptions = [{ id: 'All Commodities', name: 'All Commodities' },
+    ...catalogCategories.map(c=>({id:String(c.id),name:c.name}))];
   const handleViewChange = (nextView) => {
     setViewMode(nextView);
     setSelectedCategory('All Commodities');
@@ -423,6 +422,17 @@ export const PoolsPage = () => {
           </div>
         )}
 
+        {viewMode==='pools'&&<div className="flex flex-wrap gap-2" aria-label="Choose pool type">
+          {['ALL','REGULAR','FLASH'].map(t=><button type="button" key={t} onClick={()=>{
+            setPoolType(t);
+            const next=new URLSearchParams(searchParams);
+            if(t==='ALL')next.delete('type');else next.set('type',t);
+            setSearchParams(next);
+          }} aria-pressed={poolType===t}
+            className={`rounded-xl px-4 py-2 text-xs font-semibold border ${poolType===t?'border-emerald-600 bg-emerald-500/10 text-emerald-600':'border-[var(--border-subtle)]'}`}>
+            {t==='ALL'?'All Pools':t==='REGULAR'?'Regular Pools':'Flash Pools'}
+          </button>)}
+        </div>}
         {/* Content Grid: Pools vs Catalog */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -446,7 +456,8 @@ export const PoolsPage = () => {
           filteredPools.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPools.map((pool) => (
-                <PoolCard key={pool.id} pool={pool} />
+                <BuyerPoolCard key={pool.type+'-'+pool.id} pool={pool}
+                  serverTime={serverTime} clusterId={selectedClusterId} onChange={fetchData}/>
               ))}
             </div>
           ) : (
