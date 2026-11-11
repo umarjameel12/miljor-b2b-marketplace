@@ -400,7 +400,38 @@ class CatalogController {
           error: { code: 'FAMILY_NOT_FOUND', message: 'Product family not found.' }
         });
       }
-      const updated = await catalogRepo.updateFamily(id, req.body || {});
+      const updates = req.body || {};
+      if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+        return res.status(400).json({success:false,error:{code:'INVALID_FAMILY_UPDATE',message:'An update object is required'}});
+      }
+      const identityFields = ['category_id','allowed_pack_units','allowed_purchasing_units','required_attributes','default_product_id'];
+      if (identityFields.some(field => Object.prototype.hasOwnProperty.call(updates,field))) {
+        const db = require('../config/db');
+        const [[usage]] = await db.query(
+          `SELECT
+            (SELECT COUNT(*) FROM supplier_skus WHERE family_id=?) AS sku_count,
+            (SELECT COUNT(*) FROM product_specifications WHERE family_id=?) AS historical_count`,
+          [id,id]
+        );
+        if (Number(usage.sku_count) > 0 || Number(usage.historical_count) > 0) {
+          return res.status(409).json({success:false,error:{
+            code:'FAMILY_IDENTITY_LOCKED',
+            message:'Cannot reclassify a family or change physical units after SKUs/specifications reference it. Create a new canonical family instead.'
+          }});
+        }
+        if (updates.allowed_pack_units !== undefined) {
+          const unitService=require('../services/unitConversionService');
+          const units=updates.allowed_pack_units;
+          if (!Array.isArray(units)||units.length===0 ||
+              units.some(unit => !unitService.isMassUnit(unit) && !unitService.isVolumeUnit(unit)) ||
+              (units.some(unit => unitService.isMassUnit(unit)) && units.some(unit => unitService.isVolumeUnit(unit)))) {
+            return res.status(400).json({success:false,error:{
+              code:'INCOMPATIBLE_FAMILY_UNITS',message:'Pack units must be a nonempty single dimension (mass or volume).'
+            }});
+          }
+        }
+      }
+      const updated = await catalogRepo.updateFamily(id, updates);
       return res.status(200).json({
         success: true,
         message: 'Product family updated successfully.',
