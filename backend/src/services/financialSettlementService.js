@@ -31,6 +31,10 @@ function isAdminRole(role) {
   return ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'SUPPORT_ADMIN'].includes(role);
 }
 
+function isFinancialAdminRole(role) {
+  return ['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(role);
+}
+
 class FinancialSettlementService {
 
   /**
