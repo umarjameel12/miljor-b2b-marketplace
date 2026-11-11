@@ -12,7 +12,7 @@ async function appendDirectAwardNotice(conn,{order,eventId,statusCode}){
  if(order.pool_id!=null && Number(order.pool_id)>0)return false; // B4 legacy outbox
  if(order.notes!=='SMART_PROCUREMENT_BASKET')
   throw fail('POSTPURCHASE_SOURCE_NOT_SUPPORTED','Direct order source has no approved outbox policy.');
- if(typeof eventId!=='string'||eventId.length>80||
+ if(typeof eventId!=='string'||!/^EVT-[A-Za-z0-9_-]{4,72}$/.test(eventId)||eventId.length>80||
     typeof statusCode!=='string'||!/^[A-Z0-9_]{3,90}$/.test(statusCode))
   throw fail('POSTPURCHASE_EVENT_INVALID','Invalid durable B6 event key or status.');
  // For a committed order both buyer/supplier are entitled to its operational
