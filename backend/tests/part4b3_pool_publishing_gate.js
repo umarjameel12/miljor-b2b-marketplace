@@ -466,14 +466,47 @@ async function runPart4B3GateTests() {
       pass('20. Supplier successfully publishes DRAFT pool to ACTIVE with committed inventory allocation');
     } catch (e) { fail('20. Supplier publishes DRAFT to ACTIVE', e); }
 
-    // 21. Published pool now appears in public active pools listing
+    // 21. Publishing is independent of buyer discovery eligibility.
+    // This legacy B4 fixture exercises the publication/stock contract; it does
+    // not create the approved supplier-owned physical SKU chain required by UCP.
+    // Never make a legacy/unsellable pool public merely to satisfy this test.
+    // Positive approved-SKU discovery and revocation/restoration are asserted by
+    // p0_same_sku_publication_stress_gate.js against real disposable MySQL.
     try {
+      const [eligible] = await db.query(`
+        SELECT p.id FROM pools p
+        JOIN users u ON u.id=p.supplier_id
+        JOIN supplier_profiles profile ON profile.supplier_id=p.supplier_id
+        JOIN supplier_listings sl ON sl.id=p.supplier_listing_id
+          AND sl.supplier_id=p.supplier_id
+        JOIN product_specifications spec ON spec.id=sl.product_spec_id
+          AND spec.id=p.product_spec_id AND spec.supplier_id=p.supplier_id
+        JOIN supplier_skus sku ON sku.id=spec.supplier_sku_id
+          AND sku.id=p.supplier_sku_id AND sku.supplier_id=p.supplier_id
+        JOIN supplier_products prod ON prod.id=sku.supplier_product_id
+          AND prod.supplier_id=p.supplier_id
+        JOIN catalog_product_families fam ON fam.id=spec.family_id
+        JOIN catalog_categories cat ON cat.id=spec.category_id
+        WHERE p.id=? AND p.status='ACTIVE' AND p.expires_at>UTC_TIMESTAMP()
+          AND u.role='SUPPLIER' AND u.is_verified=1
+          AND u.verification_status='VERIFIED'
+          AND profile.verification_status='VERIFIED'
+          AND sl.status='ACTIVE'
+          AND spec.is_active=1 AND spec.approval_status='APPROVED'
+          AND spec.lifecycle_status='PUBLISHED'
+          AND sku.status='PUBLISHED' AND prod.status='PUBLISHED'
+          AND fam.is_active=1 AND fam.approval_status='APPROVED'
+          AND cat.is_active=1 AND cat.approval_status='APPROVED'
+      `, [testDraftPoolId]);
+      assert.strictEqual(eligible.length, 0,
+        'Historical B4 publishing fixture unexpectedly became buyer-purchasable; update fixture and dedicated eligibility tests intentionally');
       const res = await api('/api/v1/pools');
       assert.strictEqual(res.status, 200);
       const poolIds = res.body.data.pools.map(p => p.id);
-      assert.ok(poolIds.includes(testDraftPoolId), 'Published ACTIVE pool must appear in public listing');
-      pass('21. Newly published ACTIVE pool immediately appears in public active pools listing');
-    } catch (e) { fail('21. Published pool appears in public listing', e); }
+      assert.ok(!poolIds.includes(testDraftPoolId),
+        'Unapproved or legacy physical SKU must not leak into buyer public listing');
+      pass('21. Published legacy B4 pool stays hidden until supplier-owned SKU and listing meet discovery eligibility');
+    } catch (e) { fail('21. Published legacy pool discovery eligibility', e); }
 
     // 22. Database verifies inventory allocation row created with status COMMITTED
     try {
