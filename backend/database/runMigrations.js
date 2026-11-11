@@ -8,9 +8,15 @@ const mysql = require('mysql2/promise');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const crypto = require('crypto');
+const {scanMigrations,checkAppliedHistory} = require('./migrationManifest');
 
 async function runMigrations(targetDb) {
+  // Static preflight has NO database connection, lock or schema mutations.
+  // Failed/mismatched branch migrations must be rejected before any SQL.
+  const manifest = scanMigrations();
   const selectedDb = targetDb || process.env.DB_NAME || 'miljor_db';
+  if(process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' && selectedDb!=='miljor_test_db')
+    throw new Error('MIGRATION_PROTECTED_DB_BLOCKED: test acceptance can only target miljor_test_db');
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -46,51 +52,21 @@ async function runMigrations(targetDb) {
         failure_message VARCHAR(1000) NULL
       )
     `);
+    // Inspect ALL applied history and in-flight journal rows before the first
+    // business migration executes, not one-at-a-time after earlier DDL.
     const [appliedRows] = await connection.query('SELECT version,name FROM schema_migrations');
-    const appliedVersions = new Set(appliedRows.map(row => row.version));
-    // UCP migration numbers were moved from 046–048 to 051–053 before
-    // integration with B6 Phase 2. A DB that already applied the old UCP
-    // filename MUST be manually reconciled, not silently re-applied.
-    const oldUcpNames = new Map([
-      ['046','046_expand_canonical_product_families.sql'],
-      ['047','047_demand_requester_role.sql'],
-      ['048','048_regular_pool_payment_hold_deadlines.sql']
-    ]);
-    for(const row of appliedRows){
-      if(row.name===oldUcpNames.get(String(row.version)))
-        throw new Error('MIGRATION_RENUMBERED_HISTORY_REQUIRES_RECONCILIATION: '+row.name+
-          ' already applied as '+row.version+'. Do not reapply 051–053 automatically.');
-    }
-
-    const migrationsDir = path.join(__dirname, 'migrations');
-    if (!fs.existsSync(migrationsDir)) return;
-    const files = fs.readdirSync(migrationsDir)
-      .filter(file => file.endsWith('.sql') && !file.includes('rollback'))
-      .sort();
-    // PRE-FLIGHT BEFORE ANY DDL: parallel B6/UCP branches can reuse numeric
-    // prefixes (e.g. 046/047/048). Never silently skip a conflicting applied
-    // migration or partially apply earlier migrations before discovering it.
-    const versionMap=new Map();
-    for(const file of files){
-      const version=file.split('_')[0];
-      if(!/^\\d+$/.test(version))
-        throw new Error('INVALID_MIGRATION_VERSION: '+file);
-      const entries=versionMap.get(version)||[];
-      entries.push(file);versionMap.set(version,entries);
-    }
-    for(const [version,entries] of versionMap){
-      if(entries.length!==1)
-        throw new Error('DUPLICATE_MIGRATION_VERSION: '+version+' ('+entries.join(', ')+')');
-    }
+    const [attemptRows] = await connection.query(
+      'SELECT version,filename,sha256,status FROM schema_migration_attempts'
+    );
+    checkAppliedHistory(manifest,appliedRows,attemptRows);
+    const appliedVersions=new Set(appliedRows.map(row=>String(row.version).padStart(3,'0')));
+    const attemptsByVersion=new Map(attemptRows.map(row=>[String(row.version).padStart(3,'0'),row]));
+    const migrationsDir=path.join(__dirname,'migrations');
     let appliedCount=0;
-    for (const file of files) {
-      const version=file.split('_')[0];
+    for(const item of manifest){
+      const {filename:file,version,sha256}=item;
       const sql=fs.readFileSync(path.join(migrationsDir,file),'utf8');
-      const sha256=crypto.createHash('sha256').update(sql).digest('hex');
-      const [attempts]=await connection.query(
-        'SELECT filename,sha256,status FROM schema_migration_attempts WHERE version=?', [version]
-      );
-      const attempt=attempts[0];
+      const attempt=attemptsByVersion.get(version);
       if (appliedVersions.has(version)) {
         if (attempt && (attempt.status!=='APPLIED' || attempt.sha256!==sha256 || attempt.filename!==file))
           throw new Error(`MIGRATION_HISTORY_MISMATCH: ${file} differs from tracked journal. Inspect manually.`);
@@ -98,9 +74,7 @@ async function runMigrations(targetDb) {
       }
       if (attempt)
         throw new Error(`MIGRATION_RECOVERY_REQUIRED: ${file} previously reached ${attempt.status}. Verify schema manually before resuming.`);
-      // Detect duplicate version numbers in the migration directory before running DDL.
-      if (files.filter(other => other.split('_')[0] === version).length !== 1)
-        throw new Error(`DUPLICATE_MIGRATION_VERSION: ${version}`);
+      // Preflight verified every version and checksum before the first SQL migration.
       await connection.query(
         "INSERT INTO schema_migration_attempts(version,filename,sha256,status) VALUES(?,?,?,'RUNNING')",
         [version,file,sha256]
