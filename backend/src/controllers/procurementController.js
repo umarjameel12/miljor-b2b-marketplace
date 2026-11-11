@@ -17,6 +17,8 @@ const procurementCollectiveBidService = require('../services/procurementCollecti
 const procurementCollectiveApprovalService = require('../services/procurementCollectiveApprovalService');
 const procurementCollectiveRecurringService = require('../services/procurementCollectiveRecurringService');
 const procurementDeliveryGroupingService = require('../services/procurementDeliveryGroupingService');
+const procurementNotificationService = require('../services/procurementNotificationService');
+const procurementPreorderPolicy = require('../services/procurementPreorderPolicy');
 
 class ProcurementController {
 
@@ -537,6 +539,47 @@ class ProcurementController {
         req.user.id,req.params.orderId);
       res.json({success:true,data:{delivery}});
     }catch(e){this._smartError(res,e);}
+  }
+
+  // B6-N: future-cycle opt-out and organizer-controlled cohort state.
+  async leaveRecurringCohort(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.leaveCohort(
+        req.user.id,req.params.cohortId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async changeRecurringCohortStatus(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.changeCohortStatus(
+        req.user.id,req.params.cohortId,String(req.body?.action||''));
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async refreshDeliveryRun(req,res){
+    try{
+      const result=await procurementDeliveryGroupingService.refreshSupplierRun(
+        req.user.id,req.params.runId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  // B6-Q: role-scoped notification inbox. No arbitrary recipient lookup.
+  async myProcurementNotifications(req,res){
+    try{
+      const notifications=await procurementNotificationService.inbox(
+        req.user.id,req.user.role,{limit:50});
+      res.json({success:true,data:{notifications}});
+    }catch(e){this._smartError(res,e);}
+  }
+  async readProcurementNotification(req,res){
+    try{
+      const result=await procurementNotificationService.markRead(
+        req.user.id,req.user.role,req.params.noticeId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async procurementPreorderStatus(req,res){
+    res.json({success:true,data:procurementPreorderPolicy.getPreorderPolicy()});
   }
 
   // RFQs & Quotes
