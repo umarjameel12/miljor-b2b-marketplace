@@ -271,6 +271,25 @@ class DisputeService {
         };
       }
 
+      // A B6 award may contain different SKUs, units and prices. The
+      // order-level total_qty / unit_price are not an authoritative
+      // per-line contract for a shortage, damage or replacement claim.
+      // Preserve the existing paid order; require a future line-scoped
+      // dispute implementation rather than create an incorrect amount.
+      const [awardLines] = await connection.query(
+        `SELECT COUNT(*) AS line_count
+         FROM procurement_award_lines al
+         JOIN procurement_award_orders ao ON ao.id = al.award_order_id
+         WHERE ao.order_id = ?`,
+        [orderId]
+      );
+      if (Number(awardLines[0]?.line_count || 0) > 0) {
+        const err = new Error('Procurement award disputes require item-specific claims, immutable award-line prices and evidence');
+        err.code = 'LINE_ITEM_DISPUTE_REQUIRED';
+        err.statusCode = 409;
+        throw err;
+      }
+
       // Quantity validations and Line-Item integrity
       const orderTotalQty = Number(order.total_qty);
       let parsedDisputedQty = null;
@@ -305,6 +324,34 @@ class DisputeService {
           throw err;
         }
         parsedReportedQty = rQty;
+      }
+
+      // SHORT_QUANTITY must be an exact received-versus-ordered shortage.
+      // It is never permissible to claim the whole order by omission or to
+      // make a larger disputed quantity than the actual goods missing.
+      if (category === 'SHORT_QUANTITY') {
+        if (reportedQuantity === null || reportedQuantity === undefined) {
+          const err = new Error('SHORT_QUANTITY requires actual received quantity');
+          err.code = 'RECEIVED_QUANTITY_REQUIRED';
+          err.statusCode = 400;
+          throw err;
+        }
+        const evidence = require('./deliveryQuantityPolicy').calculateShortage(
+          String(order.total_qty), reportedQuantity
+        );
+        if (disputedQuantity !== null && disputedQuantity !== undefined) {
+          const supplied = require('./deliveryQuantityPolicy').calculateShortage(
+            String(order.total_qty), disputedQuantity
+          );
+          if (supplied.received_quantity !== evidence.short_quantity) {
+            const err = new Error('Disputed quantity must equal ordered minus received quantity');
+            err.code = 'DISPUTED_QUANTITY_MISMATCH';
+            err.statusCode = 422;
+            throw err;
+          }
+        }
+        parsedReportedQty = evidence.received_quantity;
+        parsedDisputedQty = Number(evidence.short_quantity);
       }
 
       // Check sum of existing active disputed quantities on this order
