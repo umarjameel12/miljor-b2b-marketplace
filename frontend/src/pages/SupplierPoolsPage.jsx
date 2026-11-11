@@ -117,6 +117,7 @@ export function SupplierPoolsPage(){
   const [data,setData]=useState({pools:[],counts:{total:0,regular:0,flash:0},server_time:null});
   const [listings,setListings]=useState([]);
   const [fulfillment,setFulfillment]=useState(null);
+  const [fulfillmentError,setFulfillmentError]=useState('');
   const [analytics,setAnalytics]=useState(null);
   const [analyticsError,setAnalyticsError]=useState('');
   const [stock,setStock]=useState(null);
@@ -135,12 +136,14 @@ export function SupplierPoolsPage(){
     setLoading(true);setError('');
     try{
       const [overview,listingsResult,deliveryResult,analyticsResult]=await Promise.all([
-        unifiedPoolsApi.overview(),unifiedPoolsApi.listings(),unifiedPoolsApi.fulfillment(),
+        unifiedPoolsApi.overview(),unifiedPoolsApi.listings(),
+        unifiedPoolsApi.fulfillment().catch(e=>({success:false,error:{message:e.response?.data?.error?.message||'Delivery configuration unavailable'}})),
         unifiedPoolsApi.analytics().catch(e=>({success:false,error:{message:e.response?.data?.error?.message||'Analytics unavailable'}}))
       ]);
       if(analyticsResult.success){setAnalytics(analyticsResult.data);setAnalyticsError('');}
       else{setAnalytics(null);setAnalyticsError(analyticsResult.error?.message||'Analytics unavailable');}
-      setFulfillment(deliveryResult.data);
+      if(deliveryResult.success){setFulfillment(deliveryResult.data);setFulfillmentError('');}
+      else{setFulfillment(null);setFulfillmentError(deliveryResult.error?.message||'Delivery configuration unavailable');}
       setData(overview?.data||{pools:[],counts:{total:0,regular:0,flash:0}});
       setListings((listingsResult?.data?.listings||[]).filter(l=>l.status==='ACTIVE'&&l.supplier_sku_id&&l.product_spec_id));
     }catch(e){setError(e.response?.data?.error?.message||'Supplier pools are unavailable.');}
@@ -297,6 +300,7 @@ export function SupplierPoolsPage(){
           </select>
         </label>
         {chosen&&<p className="text-xs bg-[var(--bg-elevated)] rounded-lg p-3">Reference listing: {chosen.variant_title||chosen.spec_title} · {chosen.available_stock} {chosen.pricing_unit} listed · Rs. {chosen.base_unit_price}/{chosen.pricing_unit}. Inventory allocations are checked on publish.</p>}
+        {fulfillmentError&&<p role="alert" className="text-xs text-amber-600">{fulfillmentError}</p>}
         {stockError&&<p role="alert" className="text-xs text-red-600">{stockError}</p>}
         {stock&&<div className="rounded-xl border border-[var(--border-subtle)] p-3 text-xs space-y-1">
           <p className="font-semibold">Physical SKU inventory · read-only snapshot</p>
