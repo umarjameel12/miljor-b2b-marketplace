@@ -1,0 +1,71 @@
+name: MilJor P0 Payment Fulfillment Settlement Combined E2E
+
+on:
+  push:
+    branches:
+      - integration/pr28-pr29-payment-e2e-safe-20261112
+  pull_request:
+    branches:
+      - main
+      - integration/demo-five-track-verified-safety-20261112
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  payment-fulfillment-buyer-settlement:
+    name: Real MySQL 8 + Express signed payment to disabled-external settlement
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      SAFEPAY_ENV: sandbox
+      SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install locked backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Validate canonical migration manifest without altering database
+        run: |
+          cd backend
+          npm run migration:preflight
+          node tests/canonical_migration_manifest_gate.js
+          node database/financeCompatibilityGate.js
+      - name: Bootstrap disposable historical MySQL reference data
+        run: cd backend && node database/bootstrapDisposableMigrationTest.js
+      - name: Apply canonical migrations to disposable MySQL only
+        run: cd backend && node database/runMigrations.js
+      - name: Verify canonical migration journal read-only
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
+      - name: Real HTTP and InnoDB payment to settlement acceptance
+        timeout-minutes: 9
+        run: cd backend && node tests/p0_payment_fulfillment_settlement_http_e2e.js
