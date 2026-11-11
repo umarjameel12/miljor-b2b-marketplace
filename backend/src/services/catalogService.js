@@ -120,6 +120,13 @@ class CatalogService {
       throw err;
     }
 
+    if (reqType === 'NEW_VARIANT') {
+      const err = new Error('Physical variants belong to suppliers. Create a supplier-owned SKU under an approved family.');
+      err.status = 409;
+      err.code = 'SUPPLIER_OWNED_VARIANTS';
+      throw err;
+    }
+
     if (!category_id || !Number.isInteger(Number(category_id)) || Number(category_id) <= 0) {
       const err = new Error('Valid category_id is required.');
       err.status = 400;
@@ -426,6 +433,13 @@ class CatalogService {
     }
 
     const reqType = existing.request_type;
+    if (reqType === 'NEW_VARIANT') {
+      const err = new Error('Legacy variant requests are read-only. Create your own SKU under the approved family.');
+      err.status = 409;
+      err.code = 'SUPPLIER_OWNED_VARIANTS';
+      throw err;
+    }
+
     const categoryId = payload.category_id !== undefined ? Number(payload.category_id) : Number(existing.category_id);
     const category = await catalogRepo.findCategoryById(categoryId);
     if (!category || !category.is_active || category.approval_status !== 'APPROVED') {
