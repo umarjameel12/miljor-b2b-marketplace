@@ -23,7 +23,8 @@ check(supplierRoute.includes("router.get('/pools/overview', authorizeStrict('SUP
 check(!supplierRoute.includes("router.post('/pools/overview'"),'Read facade cannot bypass B4/B5 writes');
 check(api.includes('poolsApi.createPool')&&api.includes("apiClient.post('/flash-pools'"),'Create delegates to original B4 and B5 routes');
 check(api.includes('poolsApi.publishPool')&&api.includes("/flash-pools/${id}/publish"),'Publish delegates to original B4 and B5 engines');
-check(page.includes("buildPayload(mode,form,chosen,edit)")&&page.includes("listing.supplier_sku_id"),'Drafts require supplier-owned SKU listing');
+check(page.includes("buildPayload(mode,validatedForm,chosen,edit)")&&page.includes("listing.supplier_sku_id")&&
+  page.includes("listing.status!=='ACTIVE'"),'Drafts require published supplier-owned SKU listing and validated fulfillment');
 check(page.includes('promised_delivery_at')&&page.includes('hours<24||hours>72'),'Regular delivery SLA preserved');
 check(page.includes('price_tiers:tiers')&&page.includes("form.tier2_price"),'Regular tiers preserved');
 check(page.includes('WHOLE_LOT')&&page.includes('discounted_unit_price'),'Flash selling modes and fixed price preserved');
