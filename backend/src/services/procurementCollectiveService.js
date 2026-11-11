@@ -4,6 +4,7 @@
 // No group bids, stock allocations, checkout, or payment in this service.
 const crypto=require('node:crypto');
 const db=require('../config/db');
+const notifications=require('./procurementNotificationService');
 const exact=require('./exactDecimal');
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=(v,label)=>{
@@ -197,6 +198,11 @@ class ProcurementCollectiveService{
          WHERE id=? AND status='INVITED'`,
         [key,payloadHash,JSON.stringify(consent),participant.id]
       );
+      await notifications.enqueue(conn,{
+        recipient_id:group.organizer_buyer_id,recipient_role:'BUYER',
+        event_key:'collective:join:'+gid+':participant:'+participant.id,
+        event_type:'GROUP_JOINED',payload:{group_id:gid}
+      });
       await conn.commit();
       return {participant_id:participant.id,consent_snapshot:consent,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
