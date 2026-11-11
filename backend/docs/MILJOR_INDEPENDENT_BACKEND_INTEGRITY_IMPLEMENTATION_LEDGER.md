@@ -87,3 +87,30 @@ Branch isolation: `fix/independent-backend-integrity`; no main/B6 merge or datab
 - Payment rail decision: code and authoritative business invariants specify Safepay-only, whereas older business plan called for JazzCash sandbox. Do not silently enable JazzCash until signed callback verification, reconciliation and refund handling are implemented end-to-end.
 - Refund state/payment status across repeated partial refunds and accounting allocation need final integrated DB proof.
 - Await final test evidence and branch reconciliation before any production approval.
+
+## Batch 5 — Launch catalog and supplier-owned SKU experience (2026-11-11)
+Status: IMPLEMENTED (targeted source changes); NOT TESTED / NOT VERIFIED.
+No backend/front-end build or MySQL database operations executed.
+
+### Implemented
+1. `frontend/src/pages/SupplierCatalogPage.jsx`: removed runtime fetch/presentation of historical global approved physical variants on the supplier family-selection view. The family browser now directs supplier to define their own product and distinct immutable physical SKUs. Existing my-products/SKUs, offers and pools tabs remain.
+2. `backend/src/controllers/catalogController.js`: public category/family responses omit `urdu_name`, treating it as legacy metadata rather than buyer/supplier-facing text. Unexpected 5xx catalog errors are redacted to avoid leaking SQL internals.
+3. `frontend/src/pages/AdminCatalogPage.jsx`: removed unused Urdu taxonomy fields from category/family creation state and payload. Existing historical Urdu metadata remains unchanged in the DB.
+4. `backend/docs/MILJOR_BUSINESS_INVARIANTS.md`: current 25-family English-only launch decision documented; supplier-owned specifications and SKU immutable lifecycle preserved.
+5. `backend/tests/phase5_canonical_catalog_launch_gate.js`: prepared read-only test-database check for 25 approved families/8 food categories; not executed.
+
+### Critical concurrent-branch schema collision (BLOCKED)
+- `fix/independent-backend-integrity` inherits migration `046_expand_canonical_product_families.sql` and `047_demand_requester_role.sql` from `fix/b6-backend-hardening`.
+- `feature/b6-phase2-nq` independently added `046_recurring_collective_cycles.sql` and `047_procurement_delivery_runs.sql`, plus `048_procurement_notification_outbox.sql`.
+- The same version identifiers 046 and 047 have different migration meanings. A direct merge is unsafe. Do not rename an applied SQL migration blindly or apply conflicting versions.
+- Reconcile both migration histories using read-only `schema_migrations` checks against the *actual target database*, determine which versions (if any) have already been applied, then establish one immutable consolidated append-only migration sequence with approved repair/mapping and tests on `miljor_test_db`.
+- Existing migration runner now rejects duplicate version numbers rather than pretending both applied; this is an intentional safety stop.
+- No claim that 25 active families exist in a live database. Migration 046 was not executed here.
+
+### Final acceptance (deferred)
+- Run migration collision recovery and preservation rehearsal on `miljor_test_db`.
+- Read-only canonical count gate plus public English-only response checks.
+- Supplier product/SKU creation, publish, immutable edit rejection, and new SKU-after-change with ownership and entitlement tests.
+- Supplier listing/pool creation must only reference supplier-owned published SKU, not historical shared variants.
+- Frontend build, buyer family discovery, supplier product/offer UX, and no old 16-staples/Urdu regression.
+- Reconcile latest B6 changes before any merge or production rollout.
