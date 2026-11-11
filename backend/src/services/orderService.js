@@ -426,6 +426,12 @@ class OrderService {
 
       const orderId = orderResult.insertId;
 
+      // B4: separate 15-minute payment lease starts only after actual buyer
+      // commitment converts to an order; never at pool publication/expiry.
+      await require('./regularPoolPaymentHoldService').createForOrder(connection, {
+        orderId, reservationId:reservation.id, poolId:pool.id, buyerId:actor.id
+      });
+
       // 16. Note: Pool remains in CONFIRMED state while individual buyer reservations convert to orders.
       // Pool status transitions to PAYMENT_PENDING upon checkout/payment phase.
 
