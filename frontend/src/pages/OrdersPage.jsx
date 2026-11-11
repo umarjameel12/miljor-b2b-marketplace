@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { RegularPaymentHoldCard } from '../components/RegularPaymentHoldCard';
 import {FlashBuyerOrdersPanel} from '../components/pools/FlashBuyerOrdersPanel';
+import {BuyerRegularReservationsPanel} from '../components/pools/BuyerRegularReservationsPanel';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -181,6 +182,8 @@ export const OrdersPage = () => {
             </button>
           ))}
         </div>
+
+        {isAuthenticated&&user?.role==='BUYER'&&<BuyerRegularReservationsPanel/>}
 
         {/* Real B4 orders use authoritative payment hold status, not sample data. */}
         {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
