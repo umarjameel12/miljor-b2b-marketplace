@@ -33,7 +33,7 @@ async function main(){
   try{
     const [o]=await db.query(
       'INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,order_status) VALUES(?,5,2,10.0000,100.00,1000.00,120.00,25.00,1145.00,2.50,?,?,?, ?,?)',
-      ['P0-SFPY-'+id(),'PKR','DOORSTEP','Synthetic Lahore address','AWAITING_PAYMENT','AWAITING_PAYMENT']
+      ['SFP-'+id(),'PKR','DOORSTEP','Synthetic Lahore address','AWAITING_PAYMENT','AWAITING_PAYMENT']
     );
     const order=o.insertId,tracker='track_p0_'+id();
     await db.query(
