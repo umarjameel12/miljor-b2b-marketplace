@@ -1,3 +1,15 @@
+## P0 B6/Finance Integration — 046–052 (2026-11-11)
+- Branch: `integration/p0-b6-finance-migrations-046-052`, isolated from all other active chat branches.
+- 046 B6 recurring, 047 repaired B6 delivery, 048 B6 notifications, 049 B4 dual timer, 050 25 catalog families, 051 demand requester, 052 immutable supplier commission snapshot staged. Old colliding integration filenames removed only from integration branch.
+- Implemented order-time supplier commission snapshot in Regular, Flash and B6 Smart Procurement without modifying their external source branches or timer behaviors. Supplier payable accrual uses order snapshot.
+- Updated manifest collision preflight and locked migration runner to explicitly-approved `miljor_test_db` only. No production DB/migrations run.
+- Static content review: Regular INSERT 18 placeholders/18 parameters, Flash 11/11, B6 Smart 10/10.
+- Deferred acceptance: `tests/migration_collision_preflight_gate.js`, `tests/p0_integrated_migration_finance_source_gate.js`. Not executed in this session.
+- BLOCKERS: actual durable applied-migration history, B4/B6 full branch merge review, payment end-to-end/DB suite, immutability policy and gateway proof.
+- Status: SOURCE INTEGRATION STAGED / NOT TESTED / NOT MIGRATED / BLOCKED FOR RELEASE.
+- CAN START NEXT DEVELOPMENT PHASE: NO. CAN SAFE-MERGE/DEPLOY: NO.
+- Details: `backend/docs/MILJOR_P0_B6_046_052_INTEGRATION_LEDGER.md`.
+
 ## P0 Isolated Supplier Commission Snapshot — 2026-11-11
 - Branch: `fix/p0-order-commission-snapshot-isolated`, from existing independent financial fixes.
 - SOURCE STAGED only: verified profile fee rate captured under transaction lock in regular order creation; settlement reads order-owned snapshot, not mutable profile.
