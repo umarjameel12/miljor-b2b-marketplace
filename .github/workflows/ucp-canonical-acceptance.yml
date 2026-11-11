@@ -61,6 +61,12 @@ jobs:
           node tests/p0_finance_readonly_integrity_gate.js
       - name: Buyer/supplier order source isolation and all order-origin coverage
         run: cd backend && node tests/p0_all_order_origins_source_gate.js
+      - name: PR26 quantity, partial fulfillment, B6 invoice and refund safety gates
+        run: |
+          node backend/tests/demo_delivery_quantity_policy_gate.js
+          node backend/tests/demo_fulfillment_discrepancy_service_gate.js
+          node backend/tests/demo_b6_fulfillment_invoice_source_gate.js
+          node backend/tests/demo_dispute_refund_safety_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
