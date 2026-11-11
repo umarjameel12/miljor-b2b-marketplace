@@ -1,8 +1,9 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {toast} from 'react-toastify';
 import {RefreshCw,Info} from 'lucide-react';
 import apiClient from '../../api/client';
+import {RegularReservationWorkflow} from '../RegularReservationWorkflow';
 
 // B4 only: buyer-owned real reservations. Does NOT silently accept final supplier
 // terms, convert orders, charge money, or pretend B6 requests are Regular Pools.
@@ -11,6 +12,8 @@ export function BuyerRegularReservationsPanel(){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(null);
+  const cancellationKeys=useRef({});
+  const [activeOffer,setActiveOffer]=useState(null);
   const load=async()=>{
     try{
       const res=await apiClient.get('/reservations/my');
@@ -25,9 +28,12 @@ export function BuyerRegularReservationsPanel(){
     if(!window.confirm('Cancel this uncommitted Regular Pool reservation?'))return;
     setBusy(r.id);
     try{
-      const idem='regular-cancel-'+r.id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+      if(!cancellationKeys.current[r.id])
+        cancellationKeys.current[r.id]='regular-cancel-'+r.id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+      const idem=cancellationKeys.current[r.id];
       await apiClient.post(`/reservations/${r.id}/cancel`,{},
         {headers:{'X-Idempotency-Key':idem}});
+      delete cancellationKeys.current[r.id];
       toast.success('Reservation cancelled according to B4 cancellation rules.');
       await load();
     }catch(e){toast.error(e.response?.data?.error?.message||'Reservation cannot be cancelled');}
@@ -54,12 +60,17 @@ export function BuyerRegularReservationsPanel(){
       {r.locked_unit_price!=null?<p className="text-xs text-emerald-700 dark:text-emerald-400">Locked unit price: Rs. {Number(r.locked_unit_price).toLocaleString('en-PK')}</p>:
         <p className="text-xs text-[var(--text-muted)]">Final supplier-approved wholesale price is not locked yet.</p>}
       <div className="flex gap-2 items-center flex-wrap">
+        <button type="button" onClick={()=>setActiveOffer(current=>current===r.id?null:r.id)}
+          className="text-xs px-3 py-2 border rounded-lg border-emerald-600 text-emerald-600">
+          {activeOffer===r.id?'Hide final offer':'Review final offer / commitment'}
+        </button>
         {r.permissions?.can_cancel&&<button type="button" disabled={busy===r.id}
           onClick={()=>cancel(r)} className="text-xs px-3 py-2 border rounded-lg border-amber-600 text-amber-600">
           {busy===r.id?'Cancelling…':'Cancel reservation'}
         </button>}
       </div>
-      <p className="text-[11px] text-[var(--text-muted)]"><Info size={12} className="inline mr-1"/>Final commercial decisions and payment remain governed by the separate B4 workflow.</p>
+      {activeOffer===r.id&&<RegularReservationWorkflow reservation={r} onRefresh={load}/>}
+      <p className="text-[11px] text-[var(--text-muted)]"><Info size={12} className="inline mr-1"/>Final commercial decisions require buyer consent and backend eligibility. Payment remains a separate Safepay action.</p>
     </article>)}</div>}
   </section>;
 }
