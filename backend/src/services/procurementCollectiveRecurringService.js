@@ -377,7 +377,7 @@ class ProcurementCollectiveRecurringService{
   if(!Number.isInteger(limit)||limit<1||limit>100)
    throw fail('INVALID_WORKER_LIMIT','Closure batch must be 1–100.');
   const [due]=await this.database.query(
-   "SELECT cy.id AS cycle_id,cy.group_id,g.request_id FROM procurement_recurring_collective_cycles cy JOIN procurement_collective_groups g ON g.id=cy.group_id WHERE cy.status='INVITING' AND g.status='FORMING' AND g.join_deadline<=UTC_TIMESTAMP() ORDER BY g.join_deadline,cy.id LIMIT ?",
+   "SELECT cy.id AS cycle_id,cy.group_id,g.request_id FROM procurement_recurring_collective_cycles cy JOIN procurement_collective_groups g ON g.id=cy.group_id WHERE cy.status='INVITING' AND g.status='FORMING' AND g.join_deadline<=UTC_TIMESTAMP() AND (SELECT COUNT(DISTINCT p.buyer_id) FROM procurement_collective_participants p WHERE p.group_id=g.id AND p.status='JOINED' AND p.consent_at IS NOT NULL) < g.minimum_buyers ORDER BY g.join_deadline,cy.id LIMIT ?",
    [limit]);
   const result={checked:due.length,unqualified:0,ready_for_bidding:0,replayed:0,
    orders_created:0,payments_created:0};
