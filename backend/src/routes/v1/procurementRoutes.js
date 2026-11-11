@@ -90,6 +90,15 @@ router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict
 router.post('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptSmartAward(req,res));
 router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartAward(req,res));
 
+// B6-N — buyer-owned recurring cohorts; existing I/J/K controls remain authoritative.
+router.post('/procurement/recurring/:contractId/cohorts',protect,authorizeStrict('BUYER'),(req,res)=>controller.createRecurringCohort(req,res));
+router.get('/procurement/recurring-cohorts',protect,authorizeStrict('BUYER'),(req,res)=>controller.listRecurringCohorts(req,res));
+router.post('/procurement/recurring-cohorts/:cohortId/invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.inviteRecurringCohortBuyer(req,res));
+router.post('/procurement/recurring-cohorts/:cohortId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentRecurringCohort(req,res));
+router.post('/procurement/recurring-cohorts/:cohortId/activate',protect,authorizeStrict('BUYER'),(req,res)=>controller.activateRecurringCohort(req,res));
+router.post('/procurement/recurring-cohorts/:cohortId/cycles/prepare',protect,authorizeStrict('BUYER'),(req,res)=>controller.prepareRecurringCohortCycle(req,res));
+router.get('/procurement/recurring-cohorts/:cohortId/cycles/:cycleId',protect,authorizeStrict('BUYER'),(req,res)=>controller.recurringCohortCycle(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
