@@ -134,6 +134,14 @@ router.get(
   (req, res) => financialSettlementController.getAdminOverview(req, res)
 );
 
+// Read-only internal money reconciliation for one order.
+router.get(
+  '/admin/orders/:id/integrity',
+  protect,
+  authorizeAdmin,
+  (req,res)=>financialSettlementController.getOrderIntegrity(req,res)
+);
+
 // Financial audit trail
 router.get(
   '/audit-trail',
