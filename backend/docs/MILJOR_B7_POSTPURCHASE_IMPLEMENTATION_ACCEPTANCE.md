@@ -50,6 +50,13 @@ Removed three paths that silently promoted orders to `BUYER_CONFIRMED`:
 
 After all blocking disputes are resolved, an originally supplier-delivered order can return to `SUPPLIER_DELIVERED` (not buyer-confirmed). The buyer must separately authenticate and confirm the **complete order** through `/fulfillment/buyer/orders/:id/confirm-receipt`. Existing 4E.5 regression strengthened to verify separate buyer action. No admin can release escrow just by closing a dispute.
 
+### Critical DB/FK seam — pool-less B6 award orders
+Migration `012_reservation_business_events.sql` enforces `pool_id INT NOT NULL` and a FK to `pools(id)`. B6 accepted orders are created directly through RFQ award with **no B4 pool_id**, so legacy fulfillment and dispute outbox inserts using `pool_id||0` could rollback correct post-purchase operations.
+
+New `b7PostpurchaseEventBridge.js` keeps every **real pooled order** on the existing reservation event outbox. Only `notes='SMART_PROCUREMENT_BASKET'` with no pool routes its post-purchase event via existing **B6-Q transactional `procurement_notifications`**, sending separate deduped buyer/supplier `DELIVERY_STATUS_CHANGED` notifications with allowlisted `order_id` and `status_code` only. It does not claim an external email/SMS was sent. Both target tables run under the caller's existing transaction: notification failure aborts the business update; no fake `pools.id=0` row is created.
+
+Adapted all four fulfillment outbox emitters (supplier transitions, supplier exception, buyer receipt, buyer discrepancy) plus three dispute emitters (buyer claim, supplier shortage, supplier response). Other direct order sources, including UCP/Flash, are NOT migrated here; their owner must implement the proper outbox contract separately. Added `tests/b7_direct_order_event_bridge_gate.js` with eight explicit role/PII/FK-policy/failure-propagation assertions.
+
 ### 5. Functional buyer/supplier UI and real browser gate
 New `/post-purchase` route and `PostPurchasePage.jsx`:
 - Buyer sees own paid orders, stage timeline, actual SKU lines and final invoice.
@@ -62,7 +69,7 @@ New `/post-purchase` route and `PostPurchasePage.jsx`:
 ## Test artifacts / how to run
 ### Gate S — source, no DB
 `cd backend && npm run test:b7:source`
-Checks 12 expected standalone assertions for 100/80 exact quantity, mixed rice/oil units, accepted subtotal, accepted order total, invalid evidence.
+Runs 12 exact shortage/invoice assertions plus 8 direct B6 outbox assertions (20 expected total). Checks 100/80 exact quantity, mixed rice/oil units, accepted subtotal, accepted order total, invalid evidence.
 GitHub B7 CI additionally syntax-checks backend services and builds/tests frontend.
 
 ### Gate H — paid B6 order HTTP read-only
