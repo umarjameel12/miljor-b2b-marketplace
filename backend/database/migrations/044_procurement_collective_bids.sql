@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS procurement_collective_supplier_invitations (
     REFERENCES procurement_collective_groups(id),
   CONSTRAINT fk_collective_supplier_invite_supplier FOREIGN KEY (supplier_id)
     REFERENCES users(id),
-  UNIQUE KEY uq_collective_supplier_invitation UNIQUE (group_id,supplier_id),
+  UNIQUE KEY uq_collective_supplier_invitation (group_id,supplier_id),
   KEY idx_collective_supplier_inbox (supplier_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

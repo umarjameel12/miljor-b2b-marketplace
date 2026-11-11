@@ -74,7 +74,10 @@ router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,auth
 router.post('/procurement/requests/:id/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.createSmartRecurring(req,res));
 router.get('/procurement/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartRecurring(req,res));
 router.get('/procurement/recurring/:contractId/upcoming',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringUpcoming(req,res));
-router.post('/procurement/recurring/:contractId/:action(activate|pause|resume|cancel)',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringAction(req,res));
+router.post('/procurement/recurring/:contractId/:action',protect,authorizeStrict('BUYER'),(req,res,next)=>{
+  if(!['activate','pause','resume','cancel'].includes(req.params.action)) return next();
+  return controller.smartRecurringAction(req,res);
+});
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/skip',protect,authorizeStrict('BUYER'),(req,res)=>controller.smartRecurringSkip(req,res));
 
 // B6-M: inspect and prepare recurring cycle drafts without payment authority.

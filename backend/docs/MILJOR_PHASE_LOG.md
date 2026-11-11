@@ -4,6 +4,24 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
+## Phase B6 Combined Phase 1 (G through M): Acceptance Complete (287/287 PASS)
+
+- **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `669a4b3addb27b531473bfa28f8b40400780933c`).
+- **Subphases verified:**
+  - **B6-G & B6-H:** Single & Split-Supplier Award, Server-Calculated Landed Fee Preview, Escrow-Ready Order Formation (14/14 PASS).
+  - **B6-I & B6-K:** Collective Procurement Group Participation & Qualification, Buyer Consent & Re-approval (13/13 + 12/12 + 23/23 PASS).
+  - **B6-J:** Collective Supplier Bidding, Aggregated Lot Quoting, Zero PII Leakage (16/16 PASS).
+  - **B6-L & B6-M:** Buyer Recurring Schedules, State Machine, Cycle Draft Generation Worker (15/15 + 8/8 + 11/11 + 17/17 PASS).
+  - **B5 Integration:** Flash Shared-Stock Clearance and Countdown Verification (39/39 PASS).
+  - **B6-F HTTP Concurrency & Privacy:** 25/25 PASS.
+- **Frontend & Build:** 24/24 unit assertions PASS, Vite production build clean (2,218 modules transformed, 0 errors).
+- **Connected Regression:** 107/107 assertions PASS across B6-A..F, B4, and B0.2. Grand total 287/287 PASS (100% Green).
+- **Database isolation:** Migrations 036, 041–045 applied to `miljor_test_db`; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B6_PHASE1_ACCEPTANCE_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED (B6 Phase 1 G–M)**. B6 Phase 2 (N–Q) NOT STARTED.
+
+---
+
 ## Phase B6-F — Smart Quote Comparison & Negotiation: Acceptance Complete (187/187 PASS)
 
 - **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `28f90e52a8730179afba736b15aa618ea66ad0e5`).
