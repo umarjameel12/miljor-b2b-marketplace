@@ -126,6 +126,14 @@ router.post(
 // 6. ADMINISTRATIVE OVERVIEW & AUDIT ENDPOINTS (ADMIN ONLY)
 // =============================================================================
 
+// Read-only order financial conservation (finance-authorized only).
+router.get(
+  '/admin/orders/:id/integrity',
+  protect,
+  authorizeStrict('ADMIN','SUPER_ADMIN','FINANCE_ADMIN'),
+  (req,res) => financialSettlementController.getOrderIntegrity(req,res)
+);
+
 // Financial overview
 router.get(
   '/admin/overview',
