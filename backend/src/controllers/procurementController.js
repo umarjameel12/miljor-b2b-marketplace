@@ -514,6 +514,13 @@ class ProcurementController {
   }
 
   // B6-O — paid-order, buyer-authorized delivery; supplier-owned run planning.
+  async previewDeliveryChoice(req,res){
+    try{
+      const preview=await procurementDeliveryGroupingService.previewBuyerDelivery(
+        req.user.id,req.params.orderId);
+      res.json({success:true,data:{preview}});
+    }catch(e){this._smartError(res,e);}
+  }
   async acceptDeliveryChoice(req,res){
     try{
       const result=await procurementDeliveryGroupingService.acceptBuyerDelivery(
