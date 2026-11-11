@@ -605,6 +605,16 @@ class DisputeService {
       }
 
       const order = orderRows[0];
+      // A B6 supplier order is a multi-SKU basket with total_qty=1.
+      // Supplier-originated shortage must not price a physical claim using
+      // the basket marker or basket-wide synthetic unit price.
+      if (order.notes === 'SMART_PROCUREMENT_BASKET') {
+        const err = new Error('Supplier B6 shortage requires a dedicated immutable SKU-line claim contract.');
+        err.code = 'B6_SUPPLIER_LINE_SHORTAGE_REQUIRED';
+        err.statusCode = 409;
+        throw err;
+      }
+
 
       if (Number(order.supplier_id) !== Number(actor.id)) {
         const err = new Error('Access denied. You are not the assigned supplier for this order.');
