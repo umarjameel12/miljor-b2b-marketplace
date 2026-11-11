@@ -274,10 +274,10 @@ class ProcurementAwardService{
         if(!exact.exactDecimalGte(needed.quantity,listing.buyer_min_qty,4))
           throw fail('BELOW_BUYER_MINIMUM','Quantity below supplier minimum.',409);
         const [allocations]=await conn.query(
-          `SELECT unit,SUM(allocated_qty) AS qty
+          `SELECT unit,allocated_qty AS qty
            FROM supplier_inventory_allocations
            WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED')
-           GROUP BY unit`,[listingId]
+           FOR UPDATE`,[listingId]
         );
         if(allocations.some(x=>String(x.unit).toLowerCase()!==needed.purchasing_unit))
           throw fail('INVENTORY_ALLOCATION_UNIT_MISMATCH',
