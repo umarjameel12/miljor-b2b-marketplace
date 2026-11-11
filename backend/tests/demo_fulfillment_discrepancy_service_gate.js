@@ -58,6 +58,9 @@ async function execute(){
     const x=instantiate();
     const response=await x.service.reportBuyerDiscrepancy(payload);
     assert.equal(response.fulfillment_status,'EXCEPTION');
+    assert.equal(response.receipt_summary.ordered_quantity,'100.00');
+    assert.equal(response.receipt_summary.received_quantity,'80.00');
+    assert.equal(response.receipt_summary.short_quantity,'20.00');
     assert.equal(x.tx.commit,1);
     assert.equal(x.tx.rollback,0);
     assert.equal(x.events.length,1);
