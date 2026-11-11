@@ -85,7 +85,8 @@ class FinancialSettlementService {
         actorId,
         fromStatus,
         toStatus,
-        amountDelta ? Number(amountDelta).toFixed(2) : null,
+        amountDelta === null || amountDelta === undefined
+          ? null : exactDecimal.toCanonical(amountDelta, 2),
         currency,
         notes,
         metadata ? JSON.stringify(metadata) : null
