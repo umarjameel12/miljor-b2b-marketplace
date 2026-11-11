@@ -23,7 +23,7 @@ async function main(){
   });
   const ok=await run({});
   assert.equal(ok.code,0,ok.out);
-  assert.match(ok.out,/PASS 12\/12/);
+  assert.match(ok.out,/PASS 13\/13; unresolved 0/);
   const protectedDb=await run({DB_NAME:'miljor_db'});
   assert.notEqual(protectedDb.code,0);
   assert.match(protectedDb.out,/Requested demo database: Set DB_NAME explicitly/);
