@@ -309,6 +309,70 @@ class ProcurementCollectiveRecurringService{
     throw fail('COHORT_CYCLE_CONFLICT','Parallel cycle created; refresh and replay.',409);
    throw e;}finally{conn.release()}
  }
+ async runDueCollectiveBatch({limit=20}={}){
+  if(!Number.isSafeInteger(limit)||limit<1||limit>100)
+   throw fail('INVALID_WORKER_LIMIT','Batch size must be 1–100.');
+  const [due]=await this.database.query(
+   "SELECT cohort.id AS cohort_id,cohort.organizer_buyer_id,cy.id AS organizer_cycle_id,cy.cycle_key FROM procurement_recurring_collectives cohort JOIN procurement_recurring_cycles cy ON cy.contract_id=cohort.organizer_contract_id JOIN procurement_recurring_contracts contract ON contract.id=cy.contract_id AND contract.status='ACTIVE' LEFT JOIN procurement_recurring_collective_cycles result ON result.cohort_id=cohort.id AND result.cycle_key=cy.cycle_key LEFT JOIN procurement_recurring_collective_attempts attempt ON attempt.cohort_id=cohort.id AND attempt.cycle_key=cy.cycle_key WHERE cohort.status='ACTIVE' AND cy.status='SCHEDULED' AND cy.due_at_utc<=UTC_TIMESTAMP() AND result.id IS NULL AND (attempt.id IS NULL OR (attempt.status='RETRY' AND (attempt.retry_after_utc IS NULL OR attempt.retry_after_utc<=UTC_TIMESTAMP()))) ORDER BY cy.due_at_utc,cohort.id LIMIT ?",
+   [limit]);
+  const summary={checked:due.length,prepared:0,unqualified:0,replayed:0,
+   retried:0,failed:0,orders_created:0,payments_created:0,outcomes:[]};
+  for(const row of due){
+   try{
+    const result=await this.prepareCycle(
+     row.organizer_buyer_id,row.cohort_id,row.organizer_cycle_id);
+    const state=result.status;
+    if(result.is_replay)summary.replayed++;
+    else if(state==='UNQUALIFIED')summary.unqualified++;
+    else summary.prepared++;
+    summary.outcomes.push({cohort_id:row.cohort_id,
+     cycle_key:row.cycle_key,status:state});
+   }catch(e){
+    if(e.code==='COHORT_CYCLE_CONFLICT'){
+     summary.replayed++;
+     continue;
+    }
+    const conn=await this.database.getConnection();
+    try{
+     await conn.beginTransaction();
+     const [cohorts]=await conn.query(
+      'SELECT id,status FROM procurement_recurring_collectives WHERE id=? FOR UPDATE',
+      [row.cohort_id]);
+     if(!cohorts.length||cohorts[0].status!=='ACTIVE'){
+      await conn.commit();summary.replayed++;continue;
+     }
+     await conn.query(
+      "INSERT INTO procurement_recurring_collective_attempts(cohort_id,organizer_cycle_id,cycle_key,status) VALUES (?,?,?,'RETRY') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)",
+      [row.cohort_id,row.organizer_cycle_id,row.cycle_key]);
+     const [attempts]=await conn.query(
+      'SELECT id,attempt_count,status FROM procurement_recurring_collective_attempts WHERE cohort_id=? AND cycle_key=? FOR UPDATE',
+      [row.cohort_id,row.cycle_key]);
+     const attempt=attempts[0];
+     if(attempt.status!=='RETRY'){
+      await conn.commit();summary.replayed++;continue;
+     }
+     const count=Number(attempt.attempt_count)+1;
+     const permanent=['COHORT_NOT_FOUND','INVALID_COHORT_UNIT',
+      'COHORT_TOO_MANY_PRODUCTS','INVALID_MEMBER_BASKET',
+      'DUPLICATE_COHORT_ITEM','COHORT_CYCLE_NOT_ACTIVE'].includes(e.code);
+     const terminal=count>=5||permanent;
+     const delays=[5,15,60,240];
+     const minutes=delays[Math.min(count-1,delays.length-1)];
+     await conn.query(
+      "UPDATE procurement_recurring_collective_attempts SET attempt_count=?,status=?,last_error_code=?,retry_after_utc=CASE WHEN ? THEN NULL ELSE DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE) END WHERE id=?",
+      [count,terminal?'FAILED':'RETRY',
+       String(e.code||'CYCLE_PREPARATION_ERROR').slice(0,100),
+       terminal?1:0,minutes,attempt.id]);
+     await conn.commit();
+     if(terminal)summary.failed++;else summary.retried++;
+     summary.outcomes.push({cohort_id:row.cohort_id,cycle_key:row.cycle_key,
+      status:terminal?'FAILED':'RETRY',error_code:e.code||'CYCLE_PREPARATION_ERROR'});
+    }catch(inner){await conn.rollback();throw inner}
+    finally{conn.release()}
+   }
+  }
+  return summary;
+ }
  async cycleForBuyer(buyerId,cohortId,cycleId){
   const buyer=id(buyerId),gid=id(cohortId),cid=id(cycleId);
   const [member]=await this.database.query(
