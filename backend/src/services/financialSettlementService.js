@@ -1179,6 +1179,24 @@ class FinancialSettlementService {
         throw err;
       }
 
+      // Internal PAID labels are not provider evidence. A supplier payout
+      // needs an independently verified Safepay completion linked to this
+      // captured payment and authoritative order.
+      const [paymentEvidence] = await connection.query(
+        `SELECT pa.id FROM payment_attempts pa
+         JOIN payments p ON p.transaction_ref = pa.provider_tracker_token
+         WHERE pa.order_id=? AND p.id=? AND pa.status='COMPLETED'
+           AND p.status IN ('PAID','PARTIALLY_REFUNDED')
+         LIMIT 2 FOR UPDATE`,
+        [payable.order_id,payable.payment_id]
+      );
+      if (paymentEvidence.length!==1) {
+        const err = new Error('Authoritative completed Safepay capture evidence is required before payout');
+        err.code = 'SUPPLIER_PAYOUT_PROVIDER_PROOF_REQUIRED';
+        err.statusCode = 409;
+        throw err;
+      }
+
       // A pending or approved refund is a live claim even before gateway
       // execution. It must not be paid away to the supplier.
       const [refundClaims] = await connection.query(
@@ -1366,10 +1384,17 @@ class FinancialSettlementService {
 
       const disb = disbursements[0];
 
-      // Separation of duties: preparing and approving a payout cannot be
-      // performed by the same administrator.
-      if (disb.prepared_by !== null && disb.prepared_by !== undefined &&
-          Number(disb.prepared_by) === Number(actor.id)) {
+      // Separation of duties is fail-closed, including legacy rows whose
+      // preparer identity is missing or unverifiable.
+      if (disb.prepared_by === null || disb.prepared_by === undefined ||
+          !Number.isSafeInteger(Number(disb.prepared_by)) ||
+          Number(disb.prepared_by) <= 0) {
+        const err = new Error('Original payout preparer identity is not verified');
+        err.code = 'DISBURSEMENT_PREPARER_UNVERIFIED';
+        err.statusCode = 409;
+        throw err;
+      }
+      if (Number(disb.prepared_by) === Number(actor.id)) {
         const err = new Error('A second authorized administrator must approve a supplier payout');
         err.code = 'DISBURSEMENT_DUAL_CONTROL_REQUIRED';
         err.statusCode = 403;
@@ -1390,6 +1415,24 @@ class FinancialSettlementService {
           disb.external_execution_status !== 'DISABLED') {
         const err = new Error('Supplier, delivery or external execution state changed; payout approval blocked');
         err.code = 'DISBURSEMENT_ELIGIBILITY_REVOKED';
+        err.statusCode = 409;
+        throw err;
+      }
+
+      // Internal PAID labels are not provider evidence. A supplier payout
+      // needs an independently verified Safepay completion linked to this
+      // captured payment and authoritative order.
+      const [paymentEvidence] = await connection.query(
+        `SELECT pa.id FROM payment_attempts pa
+         JOIN payments p ON p.transaction_ref = pa.provider_tracker_token
+         WHERE pa.order_id=? AND p.id=? AND pa.status='COMPLETED'
+           AND p.status IN ('PAID','PARTIALLY_REFUNDED')
+         LIMIT 2 FOR UPDATE`,
+        [payable.order_id,payable.payment_id]
+      );
+      if (paymentEvidence.length!==1) {
+        const err = new Error('Authoritative completed Safepay capture evidence is required before payout');
+        err.code = 'SUPPLIER_PAYOUT_PROVIDER_PROOF_REQUIRED';
         err.statusCode = 409;
         throw err;
       }
