@@ -16,8 +16,8 @@ const pick=(input,allow)=>Object.fromEntries(Object.entries(input||{}).filter(([
 function redactContact(value){
  if(typeof value!=='string')return value;
  return value
-  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[contact redacted]')
-  .replace(/\\b(?:\\+?92[-\\s]?)?0?3\\d{2}[-\\s]?\\d{7}\\b/g,'[contact redacted]')
+  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact redacted]')
+  .replace(/\b(?:\+?92[-\s]?)?0?3\d{2}[-\s]?\d{7}\b/g,'[contact redacted]')
   .replace(/https?:\/\/\S+/gi,'[external link redacted]');
 }
 function supplierDisputeRow(row){
