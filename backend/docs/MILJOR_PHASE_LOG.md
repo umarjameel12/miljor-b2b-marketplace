@@ -1,3 +1,14 @@
+## P0 Signed Refund Atomicity Hardening — 2026-11-11
+- Same financial branch only: `fix/p0-safepay-refund-evidence-isolated`. B4/B5/B6/pool/delivery/migrations untouched.
+- Signed refund event replay now compares immutable monetary identity across TEXT/JSON storage and allows changes only to delivery metadata.
+- Refund and payment status transitions require matching conditional SQL UPDATE affectedRows=1; all changes and audit stay transactional.
+- Offline V8/mock gate: `tests/p0_safepay_signed_refund_evidence_gate.js` **20/20 PASS**.
+- Separate concurrent refund simulator: `tests/p0_safepay_refund_concurrency_gate.js` committed with bounded watchdog, **NOT VERIFIED** after a simulated harness hang. No claim of concurrent production safety.
+- Production refund status confirmation still fails closed unless independently verified merchant refund amount unit gate is explicitly configured. Admin manual reference remains disabled.
+- No actual project Node/MySQL or Safepay live/sandbox execution; database and real-money operations untouched.
+- Gate: SOURCE IMPLEMENTED / OFFLINE TEST PASS / CONCURRENCY & DB BLOCKED / CAN DEPLOY: NO.
+- Ledger: `backend/docs/MILJOR_P0_SIGNED_REFUND_ATOMICITY_HARDENING.md`.
+
 ## P0 Safepay Signed Refund Evidence — 2026-11-11
 - Financial-only branch: `fix/p0-safepay-refund-evidence-isolated`.
 - Added signed `payment.refunded` reconciliation, immutable event token and cumulative refund ceiling checks. Payment controller dispatches refund webhook to financial-only handler, leaving original checkout handler unchanged for other event types.
