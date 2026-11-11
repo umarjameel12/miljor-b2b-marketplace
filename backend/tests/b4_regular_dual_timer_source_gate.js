@@ -1,0 +1,36 @@
+'use strict';
+// B4 Regular dual timer source contract. Execute only during the final unified testing gate.
+// Run from backend/: node tests/b4_regular_dual_timer_source_gate.js
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const service=read('src/services/regularPoolPaymentHoldService.js');
+const order=read('src/services/orderService.js');
+const checkout=read('src/services/safepayCheckoutService.js');
+const migration=read('database/migrations/048_regular_pool_payment_hold_deadlines.sql');
+const pool=read('src/controllers/poolController.js');
+const frontendRoot=path.resolve(root,'../frontend/src');
+const card=fs.readFileSync(path.join(frontendRoot,'components/RegularPaymentHoldCard.jsx'),'utf8');
+const orders=fs.readFileSync(path.join(frontendRoot,'pages/OrdersPage.jsx'),'utf8');
+const poolCard=fs.readFileSync(path.join(frontendRoot,'components/PoolCard.jsx'),'utf8');
+let passed=0;
+const check=(ok,message)=>{assert.ok(ok,message);passed++;console.log('PASS',passed,message)};
+check(migration.includes('regular_pool_payment_holds')&&migration.includes('UNIQUE KEY uq_regular_hold_order'),'Single hold per committed B4 order');
+check(!/DROP TABLE|DELETE FROM orders|DELETE FROM reservations/i.test(migration),'No destructive historical migrations');
+check(service.includes('HOLD_MINUTES = 15'),'15-minute payment initiation window');
+check(order.includes('createForOrder(connection')&&order.includes('orderId, reservationId:reservation.id'),'Hold created inside buyer order transaction');
+check(checkout.includes('claimCheckout(orderId,actor.id)'),'Checkout claims regular B4 hold');
+check(checkout.includes('assertCanCreateFreshCheckout(orderId,actor.id)'),'Deadline blocks new Safepay session');
+check(checkout.includes('releaseCheckoutClaim(orderId,actor.id)'),'Uninitiated failed provider requests can unwind');
+check(service.includes("status='INITIATED'"),'Never release an initiated provider attempt');
+check(checkout.includes('markPaid(connection,order.id)'),'Provider verified transaction marks hold paid');
+check(checkout.includes('regular_pool_payment_hold: regularPoolPaymentHold'),'Authenticated payment status returns server clock and deadline');
+check(checkout.includes("['ADMIN','SUPER_ADMIN','FINANCE_ADMIN']"),'Payment status access protected');
+check(pool.includes("pool_type:'REGULAR', server_time:clock.now_utc"),'Regular public pool discovery emits server time');
+check(poolCard.includes('CountdownTimer')&&poolCard.includes('pool.scheduled_close_at || pool.expires_at'),'Existing Regular expiry countdown remains separate');
+check(card.includes('CountdownTimer')&&card.includes('hold.expires_at')&&card.includes('hold.server_time'),'B4 buyer payment countdown uses server clock');
+check(card.includes('PAYMENT_PENDING')&&card.includes('Safepay confirmation'),'Pending payment is not auto-cancelled');
+check(orders.includes('RegularPaymentHoldCard')&&orders.includes("apiClient.get('/orders'"),'Orders page uses real authenticated orders');
+console.log('B4 DUAL TIMER SOURCE GATE:',passed+'/'+passed,'PASS');
