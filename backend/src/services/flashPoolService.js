@@ -296,7 +296,11 @@ class FlashPoolService {
   async getActive(filter={}) {
     const params=[];
     let clause='';
-    if(filter.category){clause=' AND p.category = ?';params.push(String(filter.category).slice(0,100));}
+    if(filter.category){
+      const category=String(filter.category).slice(0,100);
+      clause=' AND (p.category=? OR cat.name=? OR cat.slug=? OR CAST(cat.id AS CHAR)=?)';
+      params.push(category,category,category,category);
+    }
     const [rows]=await db.query(
       `SELECT fp.*,DATE_FORMAT(fp.expiry_time,'%Y-%m-%dT%H:%i:%sZ') AS expiry_at_utc,
         ps.title AS sku_title,ps.pack_size,ps.pack_unit,ps.purchasing_unit,
