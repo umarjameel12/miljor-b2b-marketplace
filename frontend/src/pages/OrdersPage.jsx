@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import apiClient from '../api/client';
+import { RegularPaymentHoldCard } from '../components/RegularPaymentHoldCard';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -17,6 +19,19 @@ export const OrdersPage = () => {
   const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('ALL');
   const [showSamplePreview, setShowSamplePreview] = useState(false);
+  const [realOrders,setRealOrders]=useState([]);
+  const [ordersLoading,setOrdersLoading]=useState(false);
+  const [ordersError,setOrdersError]=useState('');
+  useEffect(()=>{
+    if(!isAuthenticated || user?.role!=='BUYER')return;
+    let mounted=true;
+    setOrdersLoading(true);
+    apiClient.get('/orders',{params:{limit:20}}).then(({data})=>{
+      if(mounted)setRealOrders(data?.data?.orders||[]);
+    }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Could not load orders');})
+      .finally(()=>{if(mounted)setOrdersLoading(false)});
+    return()=>{mounted=false};
+  },[isAuthenticated,user?.role]);
 
   return (
     <AppShell>
@@ -77,9 +92,9 @@ export const OrdersPage = () => {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-sans tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                0
+                {realOrders.length}
               </span>
-              <span className="ml-1 text-xs text-stone-500">pools reserved</span>
+              <span className="ml-1 text-xs text-stone-500">orders</span>
             </div>
           </div>
 
@@ -158,6 +173,19 @@ export const OrdersPage = () => {
           ))}
         </div>
 
+        {/* Real B4 orders use authoritative payment hold status, not sample data. */}
+        {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
+        {ordersError && <p role="alert" className="text-xs text-red-600">{ordersError}</p>}
+        {!ordersLoading && realOrders.length > 0 && (
+          <section className="space-y-3" aria-label="Your regular pool orders">
+            <h2 className="font-semibold text-lg">Your Regular Pool Payments</h2>
+            {realOrders.filter(order=>order.pool_id&&order.reservation_id).map(order=>
+              <RegularPaymentHoldCard key={order.id} order={order}/>
+            )}
+          </section>
+        )}
+        {!ordersLoading && !ordersError && realOrders.length === 0 && (
+          <>
         {/* Empty State / Truthful Real Data Display */}
         <div
           className="p-8 sm:p-12 rounded-3xl border text-center flex flex-col items-center justify-center max-w-xl mx-auto shadow-xs"
@@ -304,6 +332,8 @@ export const OrdersPage = () => {
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </AppShell>
