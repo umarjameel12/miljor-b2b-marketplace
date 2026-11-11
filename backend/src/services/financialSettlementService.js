@@ -599,6 +599,32 @@ class FinancialSettlementService {
         throw err;
       }
 
+      // Idempotency lookup comes before duplicate-dispute rejection, so an
+      // identical network retry returns the original obligation instead of 409.
+      if (idempotencyKey) {
+        const [previous] = await connection.query(
+          'SELECT * FROM refund_obligations WHERE idempotency_key=? FOR UPDATE',
+          [idempotencyKey]
+        );
+        if (previous.length) {
+          if (Number(previous[0].order_id)!==Number(orderId) ||
+              Number(previous[0].buyer_id)!==Number(order.buyer_id) ||
+              (previous[0].dispute_id == null ? null : Number(previous[0].dispute_id)) !==
+                (disputeId == null ? null : Number(disputeId)) ||
+              previous[0].refund_type !== refundType ||
+              (previous[0].disputed_quantity == null ? null : String(previous[0].disputed_quantity)) !==
+                (disputedQuantity == null ? null : String(disputedQuantity))) {
+            const err = new Error('Idempotency key was already used for a different refund request');
+            err.code = 'REFUND_IDEMPOTENCY_CONFLICT';
+            err.statusCode = 409;
+            throw err;
+          }
+          await connection.commit();
+          return {success:true,message:'Idempotent replay: Refund assessment already recorded',
+            data:{refund:previous[0]}};
+        }
+      }
+
       // A buyer must not invent a partial monetary refund independent of a
       // real owned delivery dispute. The discrepancy service records evidence;
       // refund entitlement is separately assessed and remains non-executable.
@@ -736,22 +762,6 @@ class FinancialSettlementService {
         err.code = 'REFUND_EXCEEDS_CAPTURED_AMOUNT';
         err.statusCode = 422;
         throw err;
-      }
-
-      // Idempotency check if key provided
-      if (idempotencyKey) {
-        const [existingIdem] = await connection.query(
-          `SELECT * FROM refund_obligations WHERE idempotency_key = ?`,
-          [idempotencyKey]
-        );
-        if (existingIdem.length > 0) {
-          await connection.commit();
-          return {
-            success: true,
-            message: 'Idempotent replay: Refund assessment already recorded',
-            data: { refund: existingIdem[0] }
-          };
-        }
       }
 
       const refundCode = `RFND-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
