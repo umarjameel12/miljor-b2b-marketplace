@@ -137,7 +137,7 @@ class SupplierValidationService {
     const sanitized = {};
 
     // 1. Business Name
-    if (data.business_name !== undefined) {
+    if (data.business_name !== undefined && data.business_name !== null && data.business_name.trim() !== '') {
       if (typeof data.business_name !== 'string' || data.business_name.trim().length < 2) {
         errors.push('Business name must be at least 2 characters');
       } else if (data.business_name.trim().length > 100) {
@@ -150,18 +150,14 @@ class SupplierValidationService {
     }
 
     // 2. Business Type
-    if (data.business_type !== undefined && data.business_type !== null) {
-      if (typeof data.business_type !== 'string' || data.business_type.trim().length === 0) {
-        errors.push('Business type cannot be empty');
-      } else {
-        sanitized.business_type = data.business_type.trim();
-      }
+    if (data.business_type !== undefined && data.business_type !== null && data.business_type.trim() !== '') {
+      sanitized.business_type = data.business_type.trim();
     } else if (isSubmission) {
       errors.push('Business type is required for verification submission');
     }
 
     // 3. Contact Person Name
-    if (data.contact_person_name !== undefined && data.contact_person_name !== null) {
+    if (data.contact_person_name !== undefined && data.contact_person_name !== null && data.contact_person_name.trim() !== '') {
       if (typeof data.contact_person_name !== 'string' || data.contact_person_name.trim().length < 2) {
         errors.push('Contact person name must be at least 2 characters');
       } else if (data.contact_person_name.trim().length > 100) {
@@ -174,7 +170,7 @@ class SupplierValidationService {
     }
 
     // 4. Contact Person Phone
-    if (data.contact_person_phone !== undefined && data.contact_person_phone !== null) {
+    if (data.contact_person_phone !== undefined && data.contact_person_phone !== null && data.contact_person_phone.trim() !== '') {
       const phoneRes = this.validatePhone(data.contact_person_phone);
       if (!phoneRes.valid) {
         errors.push(phoneRes.error);
@@ -186,7 +182,7 @@ class SupplierValidationService {
     }
 
     // 5. Warehouse / Facility Address
-    if (data.warehouse_address !== undefined && data.warehouse_address !== null) {
+    if (data.warehouse_address !== undefined && data.warehouse_address !== null && data.warehouse_address.trim() !== '') {
       if (typeof data.warehouse_address !== 'string' || data.warehouse_address.trim().length < 5) {
         errors.push('Warehouse address must be at least 5 characters');
       } else if (data.warehouse_address.trim().length > 500) {
@@ -199,7 +195,7 @@ class SupplierValidationService {
     }
 
     // 6. Lahore Service Area
-    if (data.lahore_service_area !== undefined && data.lahore_service_area !== null) {
+    if (data.lahore_service_area !== undefined && data.lahore_service_area !== null && data.lahore_service_area.trim() !== '') {
       if (typeof data.lahore_service_area !== 'string' || data.lahore_service_area.trim().length < 3) {
         errors.push('Lahore service area must be specified');
       } else {
@@ -235,7 +231,7 @@ class SupplierValidationService {
     }
 
     // 9. Bank Information (Mandatory for verification submission to enable Safepay settlements)
-    if (data.bank_name !== undefined && data.bank_name !== null) {
+    if (data.bank_name !== undefined && data.bank_name !== null && data.bank_name.trim() !== '') {
       if (typeof data.bank_name !== 'string' || data.bank_name.trim().length < 2) {
         errors.push('Bank name must be at least 2 characters');
       } else {
@@ -243,9 +239,11 @@ class SupplierValidationService {
       }
     } else if (isSubmission) {
       errors.push('Bank name is required for settlement verification');
+    } else if (data.bank_name !== undefined) {
+      sanitized.bank_name = null;
     }
 
-    if (data.bank_account_title !== undefined && data.bank_account_title !== null) {
+    if (data.bank_account_title !== undefined && data.bank_account_title !== null && data.bank_account_title.trim() !== '') {
       if (typeof data.bank_account_title !== 'string' || data.bank_account_title.trim().length < 2) {
         errors.push('Bank account title must be at least 2 characters');
       } else {
@@ -253,9 +251,11 @@ class SupplierValidationService {
       }
     } else if (isSubmission) {
       errors.push('Bank account title is required for settlement verification');
+    } else if (data.bank_account_title !== undefined) {
+      sanitized.bank_account_title = null;
     }
 
-    if (data.bank_iban !== undefined && data.bank_iban !== null) {
+    if (data.bank_iban !== undefined && data.bank_iban !== null && data.bank_iban.trim() !== '') {
       const ibanRes = this.validateIban(data.bank_iban);
       if (!ibanRes.valid) {
         errors.push(ibanRes.error);
@@ -264,6 +264,8 @@ class SupplierValidationService {
       }
     } else if (isSubmission) {
       errors.push('Valid Pakistani IBAN is required for settlement verification');
+    } else if (data.bank_iban !== undefined) {
+      sanitized.bank_iban = null;
     }
 
     // 10. Business Description (Optional)
