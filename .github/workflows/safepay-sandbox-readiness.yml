@@ -1,0 +1,31 @@
+name: MilJor Safepay Sandbox Readiness (No Provider Traffic)
+on:
+  pull_request:
+    paths:
+      - 'backend/scripts/safepaySandboxPreflight.js'
+      - 'backend/tests/safepay_sandbox_readiness_gate.test.js'
+      - '.github/workflows/safepay-sandbox-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sandbox-isolation:
+    name: Sandbox-only static and negative safety checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and fail-closed scenario tests
+        run: |
+          node --check backend/scripts/safepaySandboxPreflight.js
+          node --check backend/tests/safepay_sandbox_readiness_gate.test.js
+          node --test backend/tests/safepay_sandbox_readiness_gate.test.js
+      - name: Read-only sandbox readiness, no keys in CI
+        env:
+          SAFEPAY_ENV: sandbox
+          ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+          DB_NAME: miljor_test_db
+        run: node backend/scripts/safepaySandboxPreflight.js
