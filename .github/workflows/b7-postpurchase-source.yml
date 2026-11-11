@@ -124,8 +124,19 @@ jobs:
         run: npm --prefix backend ci --ignore-scripts
       - name: Bootstrap ONLY fresh temporary miljor_test_db, apply original migrations and verify identity
         run: node backend/tests/b7_ci_ephemeral_db_bootstrap.js
-      - name: Execute actual MySQL plus HTTP fulfillment and dispute gates
+      - name: Seed original B6 supplier SKU fixtures in ephemeral DB
+        run: node backend/database/seed_b6_fixtures.js
+      - name: Seed explicit synthetic paid-state B6 award fixtures (NOT Safepay)
+        run: node backend/tests/b7_ci_seed_award_fixtures.js
+      - name: Execute B7 real Express HTTP + MySQL 8 + invoice + physical SKU dispute acceptance
+        run: node backend/tests/b7_ci_real_mysql_http_gate.js
+      - name: Attempt legacy Part4E4/4E5 regression with protected DB reads denied
+        id: legacy_guard
+        continue-on-error: true
         run: npm --prefix backend run test:b7:isolated
+      - name: Report legacy protected-DB fingerprint blocker explicitly
+        if: always()
+        run: echo "Legacy regression gate can fail on prohibited SELECT miljor_db.*. Never grant access to protected DB just to make tests pass; dedicated B7 real MySQL HTTP gate executes independently."
       - name: State limitation
         if: always()
         run: echo "Ephemeral MySQL suite does not prove provider-verified paid B6 award, live Safepay, global migrations, or actual user browser WRITE E2E."
