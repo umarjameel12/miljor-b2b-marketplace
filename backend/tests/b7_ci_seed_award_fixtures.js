@@ -92,4 +92,4 @@ async function run(){
  console.log('B7_CI_FIXTURE_ONLY: MOCK_GATEWAY paid-state fixtures, not Safepay-verified.');
  await db.end();
 }
-run().catch(e=>{console.error('B7_CI_FIXTURE_FAILED',e.message);process.exitCode=1});
+run().catch(async e=>{console.error('B7_CI_FIXTURE_FAILED',e.stack||e.message);process.exitCode=1;await db.end().catch(()=>{});});
