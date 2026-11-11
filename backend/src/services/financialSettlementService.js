@@ -30,6 +30,9 @@ function exactSub(a, b, scale = 2) {
 function isAdminRole(role) {
   return ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'SUPPORT_ADMIN'].includes(role);
 }
+function isFinancialAdminRole(role) {
+  return ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'].includes(role);
+}
 
 class FinancialSettlementService {
 
@@ -114,7 +117,7 @@ class FinancialSettlementService {
     try {
       // 1. Lock and fetch order
       const [orders] = await connection.query(
-        `SELECT o.*, u.is_verified AS supplier_user_verified, sp.verification_status AS supplier_profile_status, sp.transaction_fee_percent
+        `SELECT o.*, u.is_verified AS supplier_user_verified, sp.verification_status AS supplier_profile_status
          FROM orders o
          JOIN users u ON o.supplier_id = u.id
          LEFT JOIN supplier_profiles sp ON sp.supplier_id = o.supplier_id
@@ -175,7 +178,7 @@ class FinancialSettlementService {
 
       // A settlement must use the immutable order-time supplier fee,
       // never silently pick today's profile rate or an invented default.
-      const commissionPercent = order.transaction_fee_percent;
+      const commissionPercent = order.supplier_commission_percent;
       if (commissionPercent === null || commissionPercent === undefined ||
           String(commissionPercent).trim() === '') {
         const err = new Error('Locked order supplier commission is missing; settlement policy reconciliation required');
@@ -870,8 +873,8 @@ class FinancialSettlementService {
    * External execution remains strictly DISABLED.
    */
   async approveRefundObligation({ refundId, notes = null, actor }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Refund approval is strictly restricted to platform administrators');
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Refund approval is strictly restricted to finance administrators');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
@@ -911,6 +914,22 @@ class FinancialSettlementService {
         [refund.order_id]
       );
 
+      if (payables.length !== 1) {
+        const err = new Error('Refund cannot be approved before supplier liability and funding are reconciled');
+        err.code = 'REFUND_PAYABLE_RECONCILIATION_REQUIRED';
+        err.statusCode = 409;
+        throw err;
+      }
+      const [payoutInstructions] = await connection.query(
+        'SELECT id FROM supplier_disbursement_instructions WHERE supplier_payable_id=? LIMIT 1 FOR UPDATE',
+        [payables[0].id]
+      );
+      if (payoutInstructions.length) {
+        const err = new Error('Approved refund cannot overtake a previously prepared supplier payout');
+        err.code = 'REFUND_DISBURSEMENT_CONFLICT';
+        err.statusCode = 409;
+        throw err;
+      }
       if (payables.length > 0) {
         const payable = payables[0];
 
@@ -1050,8 +1069,8 @@ class FinancialSettlementService {
     actor,
     idempotencyKey = null
   }) {
-    if (!actor || !actor.id || !isAdminRole(actor.role)) {
-      const err = new Error('Only authorized administrators may prepare supplier disbursements');
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Only authorized finance administrators may prepare supplier disbursements');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
@@ -1290,8 +1309,8 @@ class FinancialSettlementService {
    * External execution remains strictly DISABLED.
    */
   async approveSupplierDisbursement({ disbursementId, notes = null, actor }) {
-    if (!actor || !actor.id || !isAdminRole(actor.role)) {
-      const err = new Error('Disbursement approval is strictly restricted to platform administrators');
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Disbursement approval is strictly restricted to finance administrators');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
