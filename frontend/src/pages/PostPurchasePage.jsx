@@ -20,6 +20,8 @@ export function PostPurchasePage(){
  const [error,setError]=useState(''),[notice,setNotice]=useState('');
  const [received,setReceived]=useState({}),[description,setDescription]=useState('');
  const [invoice,setInvoice]=useState(null),[deliveryRef,setDeliveryRef]=useState('');
+ const [deliveryMethod,setDeliveryMethod]=useState('');
+ const [remedyProposal,setRemedyProposal]=useState('NONE');
  const [disputes,setDisputes]=useState([]),[supplierReply,setSupplierReply]=useState('');
  const [remedyNotes,setRemedyNotes]=useState('');
  const route=buyer?'buyer':'supplier';
@@ -37,8 +39,8 @@ export function PostPurchasePage(){
   finally{setLoading(false)}
  },[buyer,supplier,route]);
  useEffect(()=>{refresh()},[refresh]);
- const details=async id=>{
-  setError('');setNotice('');setInvoice(null);
+ const details=async(id,{preserveNotice=false}={})=>{
+  setError('');if(!preserveNotice)setNotice('');setInvoice(null);
   try{
    const res=await apiClient.get('/fulfillment/'+route+'/orders/'+id);
    setSelected(res.data?.data?.order||null);
@@ -58,7 +60,7 @@ export function PostPurchasePage(){
    else if(action==='dispute')endpoint='/disputes';
    const res=await apiClient.post(endpoint,payload,{headers});
    setNotice(res.data?.message||'Request accepted. Refreshing authoritative status.');
-   await refresh();await details(selected.id);
+   await refresh();await details(selected.id,{preserveNotice:true});
   }catch(e){setError(msg(e))}
   finally{setBusy(false)}
  };
@@ -88,7 +90,7 @@ export function PostPurchasePage(){
    });
    setNotice(res.data?.message||'Dispute action recorded.');
    await refresh();
-   if(selected)await details(selected.id);
+   if(selected)await details(selected.id,{preserveNotice:true});
   }catch(e){setError(msg(e))}
   finally{setBusy(false)}
  };
@@ -158,13 +160,27 @@ export function PostPurchasePage(){
       {supplier&&nextStatus[selected.fulfillment_status]&&
        <div className="space-y-2">
         {nextStatus[selected.fulfillment_status]==='DISPATCHED'&&
-         <label className="block text-xs">Delivery reference (optional)
-          <input value={deliveryRef} onChange={e=>setDeliveryRef(e.target.value)} className="block rounded-lg border p-2 bg-transparent mt-1"/>
-         </label>}
-        <button disabled={busy} onClick={()=>execute('advance',{
+         <div className="space-y-2">
+          <label className="block text-xs">Actual supplier delivery method
+           <select required value={deliveryMethod} onChange={e=>setDeliveryMethod(e.target.value)}
+            className="block rounded-lg border p-2 bg-transparent mt-1 w-full">
+            <option value="">Select actual method</option>
+            <option value="SUPPLIER_FLEET">Supplier fleet</option>
+            <option value="THIRD_PARTY_COURIER">Third-party courier</option>
+            <option value="BUYER_PICKUP">Buyer pickup (only when already authorized)</option>
+            <option value="STANDARD_DELIVERY">Standard delivery</option>
+           </select>
+          </label>
+          <label className="block text-xs">Delivery reference (optional)
+           <input value={deliveryRef} onChange={e=>setDeliveryRef(e.target.value)}
+            className="block rounded-lg border p-2 bg-transparent mt-1 w-full"/>
+          </label>
+         </div>}
+        <button disabled={busy||(nextStatus[selected.fulfillment_status]==='DISPATCHED'&&!deliveryMethod)}
+         onClick={()=>execute('advance',{
          to_status:nextStatus[selected.fulfillment_status],
          ...(nextStatus[selected.fulfillment_status]==='DISPATCHED'?{
-           delivery_method:'SUPPLIER_FLEET',supplier_delivery_reference:deliveryRef
+           delivery_method:deliveryMethod,supplier_delivery_reference:deliveryRef
          }:{})
         })} className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm flex gap-2 items-center">
          <Truck size={15}/>Move to {paidStatus(nextStatus[selected.fulfillment_status])}</button>
@@ -194,12 +210,22 @@ export function PostPurchasePage(){
             <textarea value={supplierReply} onChange={e=>setSupplierReply(e.target.value)}
              className="block mt-1 w-full rounded-lg border bg-transparent p-2" rows={2}/>
            </label>
+           <label className="block text-xs">Your documented remediation proposal
+            <select value={remedyProposal} onChange={e=>setRemedyProposal(e.target.value)}
+             className="block mt-1 w-full rounded-lg border p-2 bg-transparent">
+             <option value="NONE">Respond without remediation proposal</option>
+             <option value="DELIVER_MISSING_QUANTITY">Deliver missing quantity</option>
+             <option value="REPLACE_DAMAGED_GOODS">Replace damaged goods</option>
+             <option value="CORRECT_WRONG_ITEM">Correct wrong item</option>
+             <option value="ESCALATE_FOR_ADMIN_REVIEW">Escalate to admin review</option>
+            </select>
+           </label>
            <button disabled={busy||supplierReply.trim().length<5}
             className="border rounded-lg px-3 py-2 text-xs"
             onClick={()=>actOnDispute(d,'respond',{
-             response:supplierReply,remediation_proposal:'DELIVER_MISSING_QUANTITY',
-             remediation_details:'Supplier proposes delivering the documented missing SKU quantity.'
-            })}>Propose missing-quantity remediation</button>
+             response:supplierReply,remediation_proposal:remedyProposal,
+             remediation_details:remedyProposal==='NONE'?null:supplierReply
+            })}>Submit supplier response</button>
           </div>}
          {supplier&&d.remediation_status==='PROPOSED'&&
           <div className="space-y-2">
