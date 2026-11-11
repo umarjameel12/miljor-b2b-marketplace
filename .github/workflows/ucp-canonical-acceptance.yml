@@ -85,6 +85,8 @@ jobs:
         run: npm --prefix backend ci --no-audit --no-fund
       - name: Validate canonical SQL names and source blobs without DB mutation
         run: cd backend && node tests/canonical_migration_manifest_gate.js
+      - name: Reconstruct historical pre-004 reference data in empty disposable DB ONLY
+        run: cd backend && node database/bootstrapDisposableMigrationTest.js
       - name: Apply migrations to disposable miljor_test_db ONLY
         run: cd backend && node database/runMigrations.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
