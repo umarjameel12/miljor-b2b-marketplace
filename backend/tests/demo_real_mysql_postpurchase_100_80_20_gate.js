@@ -9,6 +9,8 @@ const disputes=require('../src/services/disputeService');
 const finance=require('../src/services/financialSettlementService');
 const invoices=require('../src/services/invoiceService');
 const crypto=require('node:crypto');
+const jwt=require('jsonwebtoken');
+const app=require('../server');
 const safe=x=>String(x||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,35);
 const nonce=crypto.randomBytes(5).toString('hex');
 let passCount=0;
@@ -34,6 +36,26 @@ async function main(){
   assert.equal(Number(order.supplier_id),2);
   const orderId=Number(order.id);
   const buyer={id:5,role:'BUYER'},supplier={id:2,role:'SUPPLIER'};
+  // Actual Express HTTP + JWT test on disposable MySQL. No provider calls.
+  assert.ok(process.env.JWT_SECRET && process.env.JWT_SECRET.length>=32);
+  const httpServer=app.listen(0);
+  const apiBase='http://127.0.0.1:'+httpServer.address().port;
+  const token=(id,role)=>jwt.sign({id,role,verification_status:'VERIFIED'},
+    process.env.JWT_SECRET,{expiresIn:'10m',issuer:'miljor-api',audience:'miljor-app'});
+  async function api(url,id,role,method='GET',body=null){
+    const response=await fetch(apiBase+'/api/v1'+url,{
+      method,headers:{
+        Authorization:'Bearer '+token(id,role),
+        'Content-Type':'application/json',
+        'X-Idempotency-Key':'TEST-HTTP-'+nonce+'-'+role+'-'+id+'-'+method
+      },
+      body:body==null?undefined:JSON.stringify(body),
+      signal:AbortSignal.timeout(15000)
+    });
+    const raw=await response.text();
+    let data;try{data=JSON.parse(raw)}catch{data={raw}};
+    return {status:response.status,data};
+  }
   const [[paymentBefore]]=await db.query(
     'SELECT id,status,escrow_status,amount FROM payments WHERE order_id=? ORDER BY id DESC LIMIT 1',[orderId]
   );
@@ -45,6 +67,15 @@ async function main(){
   const incoming=await fulfillment.listSupplierFulfillmentOrders({actor:supplier});
   assert.ok(incoming.orders.some(x=>Number(x.order_id)===orderId),'Verified supplier missing paid order');
   pass('Real database supplier queue lists paid test order');
+  const supplierHttp=await api('/fulfillment/supplier/orders/'+orderId,2,'SUPPLIER');
+  assert.equal(supplierHttp.status,200,JSON.stringify(supplierHttp.data));
+  const buyerHttp=await api('/fulfillment/buyer/orders/'+orderId,5,'BUYER');
+  assert.equal(buyerHttp.status,200,JSON.stringify(buyerHttp.data));
+  const outsider=await api('/fulfillment/buyer/orders/'+orderId,6,'BUYER');
+  assert.equal(outsider.status,403,JSON.stringify(outsider.data));
+  const wrongRole=await api('/fulfillment/supplier/orders/'+orderId,5,'BUYER');
+  assert.equal(wrongRole.status,403,JSON.stringify(wrongRole.data));
+  pass('Real JWT HTTP buyer/supplier details and nonowner/cross-role denial');
 
   const statuses=['PREPARING','READY_FOR_DISPATCH','DISPATCHED','SUPPLIER_DELIVERED'];
   for(const target of statuses){
@@ -64,13 +95,19 @@ async function main(){
   assert.equal(delivered.buyer_confirmed_at,null);
   pass('Real SQL supplier transition through delivered does not confirm buyer receipt');
 
-  const discrepancy=await fulfillment.reportBuyerDiscrepancy({
-    orderId,actor:buyer,reason:'QUANTITY_MISMATCH',
-    reportedQuantity:'80.00',
-    description:'Only 80 kg received out of 100 kg',
-    idempotencyKey:'MYSQL-DEMO-'+nonce+'-RECEIPT',
-    metadata:{short_quantity:'999.00'}
-  });
+  const denied=await api('/fulfillment/buyer/orders/'+orderId+'/report-discrepancy',
+    2,'SUPPLIER','POST',{reason:'QUANTITY_MISMATCH',reported_quantity:'80.00',
+      description:'Unauthorized supplier acting as buyer'});
+  assert.equal(denied.status,403,JSON.stringify(denied.data));
+  const discrepancyHttp=await api('/fulfillment/buyer/orders/'+orderId+'/report-discrepancy',
+    5,'BUYER','POST',{
+      reason:'QUANTITY_MISMATCH',
+      reported_quantity:'80.00',
+      description:'Only 80 kg received out of 100 kg',
+      metadata:{short_quantity:'999.00'}
+    });
+  assert.equal(discrepancyHttp.status,200,JSON.stringify(discrepancyHttp.data));
+  const discrepancy=discrepancyHttp.data.data;
   assert.equal(discrepancy.fulfillment_status,'EXCEPTION');
   assert.equal(discrepancy.receipt_summary.ordered_quantity,'100.00');
   assert.equal(discrepancy.receipt_summary.received_quantity,'80.00');
@@ -83,12 +120,13 @@ async function main(){
   assert.equal(evidence.short_quantity,'20.00');
   pass('Buyer shortage 100/80/20 persisted exactly and spoofed metadata ignored');
 
-  const claim=await disputes.createBuyerDispute({
-    orderId,actor:buyer,category:'SHORT_QUANTITY',
-    description:'20 kg missing from delivered 100 kg contract',
-    reportedQuantity:'80.00',disputedQuantity:'20.00',
-    idempotencyKey:'MYSQL-DEMO-'+nonce+'-DISPUTE'
-  });
+  const claimHttp=await api('/disputes',5,'BUYER','POST',{
+      order_id:orderId,category:'SHORT_QUANTITY',
+      description:'20 kg missing from delivered 100 kg contract',
+      reported_quantity:'80.00',disputed_quantity:'20.00'
+    });
+  assert.equal(claimHttp.status,201,JSON.stringify(claimHttp.data));
+  const claim=claimHttp.data.data;
   assert.equal(claim.status,'OPEN');
   assert.equal(Number(claim.disputed_quantity),20);
   assert.equal(claim.claimed_amount,'200.00');
@@ -102,12 +140,13 @@ async function main(){
   );
   pass('Buyer receipt cannot be silently confirmed while discrepancy/dispute unresolved');
 
-  const assessment=await finance.assessRefundObligation({
-    orderId,actor:buyer,disputeId:claim.dispute_id,
-    disputedQuantity:'20.00',refundType:'PARTIAL',
-    reason:'Twenty kilograms missing on a 100kg paid test-only contract',
-    idempotencyKey:'MYSQL-DEMO-'+nonce+'-REFUND'
+  const refundHttp=await api('/settlements/refunds/assess',5,'BUYER','POST',{
+    order_id:orderId,dispute_id:claim.dispute_id,
+    disputed_quantity:'20.00',refund_type:'PARTIAL',
+    reason:'Twenty kilograms missing on a 100kg paid test-only contract'
   });
+  assert.equal(refundHttp.status,201,JSON.stringify(refundHttp.data));
+  const assessment=refundHttp.data;
   assert.equal(assessment.success,true);
   assert.equal(String(assessment.data.refund.assessed_refund_amount),'200.00');
   assert.equal(assessment.data.refund.external_execution_status,'DISABLED');
@@ -115,7 +154,7 @@ async function main(){
     orderId,actor:buyer,disputeId:claim.dispute_id,
     disputedQuantity:'20.00',refundType:'PARTIAL',
     reason:'Twenty kilograms missing on a 100kg paid test-only contract',
-    idempotencyKey:'MYSQL-DEMO-'+nonce+'-REFUND'
+    idempotencyKey:'TEST-HTTP-'+nonce+'-BUYER-5-POST'
   });
   assert.equal(Number(replay.data.refund.id),Number(assessment.data.refund.id));
   pass('Dispute-scoped PKR200 refund obligation is non-executable and idempotent');
@@ -147,6 +186,7 @@ async function main(){
   pass('Unresolved 20kg claim cannot release escrow, complete order or create duplicate refunds');
   console.log('REAL MYSQL POSTPURCHASE 100/80/20: '+passCount+'/'+passCount+
     ' PASS; synthetic Safepay fixture only, no provider-issued callback or external refund');
+  await new Promise(resolve=>httpServer.close(resolve));
 }
 main().then(()=>process.exit(0)).catch(e=>{
  console.error('FAIL REAL MYSQL POSTPURCHASE 100/80/20:',e.stack||e);
