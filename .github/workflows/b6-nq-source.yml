@@ -37,5 +37,11 @@ jobs:
         env:
           NODE_ENV: test
         run: npm run test:b6:nq:source
+      - name: Install frontend dependencies
+        run: npm --prefix ../frontend ci --ignore-scripts
+      - name: Frontend countdown and design tests
+        run: npm --prefix ../frontend test
+      - name: Vite production build
+        run: npm --prefix ../frontend run build
       - name: Explicit scope notice
         run: echo "Source-only CI; no database, Safepay, HTTP or production acceptance."
