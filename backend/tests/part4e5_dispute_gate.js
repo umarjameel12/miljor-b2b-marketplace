@@ -672,11 +672,23 @@ async function runDisputeGate() {
     assert.strictEqual(closeRes2.body.data.status, 'CLOSED');
     assert.strictEqual(closeRes2.body.data.order_resumed, true);
 
-    // Verify order fulfillment resumed to BUYER_CONFIRMED
+    // Admin closure is NOT buyer consent. Resume to supplier-delivered only.
+    const [awaitingBuyer] = await db.query('SELECT fulfillment_status, order_status FROM orders WHERE id = ?', [deliveredOrderId]);
+    assert.strictEqual(awaitingBuyer[0].fulfillment_status, 'SUPPLIER_DELIVERED');
+    assert.strictEqual(awaitingBuyer[0].order_status, 'OUT_FOR_DELIVERY');
+    pass('Admin dispute closure never impersonates buyer receipt or settlement eligibility');
+
+    // Only the authenticated owner may now confirm the FULL original delivery.
+    const finalReceipt = await makeRequest('POST',
+      `${baseUrl}/api/v1/fulfillment/buyer/orders/${deliveredOrderId}/confirm-receipt`, {
+        Authorization: `Bearer ${buyer1Token}`,
+        'X-Idempotency-Key': `IDEMP-B7-RECEIPT-${Date.now()}`
+      }, { notes: 'Replacement and original order fully received.' });
+    assert.strictEqual(finalReceipt.status, 200);
     const [finalOrder] = await db.query('SELECT fulfillment_status, order_status FROM orders WHERE id = ?', [deliveredOrderId]);
     assert.strictEqual(finalOrder[0].fulfillment_status, 'BUYER_CONFIRMED');
     assert.strictEqual(finalOrder[0].order_status, 'DELIVERED');
-    pass('Safe Fulfillment Resumption: Order successfully completes to BUYER_CONFIRMED after all disputes closed');
+    pass('Only explicit buyer confirmation completes the original order after dispute closure');
 
     // -------------------------------------------------------------------------
     // SECTION 10: Audit Timeline & Evidence Security
