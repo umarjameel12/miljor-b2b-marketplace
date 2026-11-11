@@ -36,6 +36,32 @@ class SupplierPoolAnalyticsService {
        FROM flash_purchase_holds h JOIN flash_pools fp ON fp.id=h.flash_pool_id
        WHERE fp.supplier_id=?`,[sid])
   ]);
+  const [regularByPool,flashByPool]=await Promise.all([
+    db.query(`SELECT o.pool_id,COUNT(*) AS paid_orders,
+         COALESCE(SUM(o.subtotal_amount),0) AS paid_goods_pkr,
+         COALESCE(SUM(o.total_qty),0) AS paid_quantity
+        FROM orders o JOIN pools p ON p.id=o.pool_id
+        WHERE p.supplier_id=? AND o.supplier_id=?
+          AND o.payment_status='PAID' GROUP BY o.pool_id`,[sid,sid]),
+    db.query(`SELECT h.flash_pool_id,COUNT(*) AS paid_orders,
+         COALESCE(SUM(o.subtotal_amount),0) AS paid_goods_pkr,
+         COALESCE(SUM(h.quantity),0) AS paid_quantity
+        FROM flash_purchase_holds h
+        JOIN flash_pools fp ON fp.id=h.flash_pool_id
+        JOIN orders o ON o.id=h.order_id
+        WHERE fp.supplier_id=? AND o.supplier_id=?
+          AND o.payment_status='PAID'
+          AND h.status IN ('PAID','HELD','PAYMENT_PENDING')
+        GROUP BY h.flash_pool_id`,[sid,sid])
+  ]);
+  const performance=[
+    ...regularByPool[0].map(p=>({type:'REGULAR',pool_id:Number(p.pool_id),
+      paid_orders:Number(p.paid_orders),paid_goods_pkr:String(p.paid_goods_pkr),
+      paid_quantity:String(p.paid_quantity)})),
+    ...flashByPool[0].map(p=>({type:'FLASH',pool_id:Number(p.flash_pool_id),
+      paid_orders:Number(p.paid_orders),paid_goods_pkr:String(p.paid_goods_pkr),
+      paid_quantity:String(p.paid_quantity)}))
+  ];
   const regular=regPaid[0][0],flash=flashPaid[0][0];
   const snapshot=all.pools;
   const now=Date.parse(all.server_time);
@@ -78,7 +104,7 @@ class SupplierPoolAnalyticsService {
      paid_quantity:String(flash.paid_quantity),
      open_holds:Number(flashHolds[0][0].open_holds||0),
      provider_pending_holds:Number(flashHolds[0][0].provider_pending_holds||0)},
-   alerts,description:'Paid goods amounts are verified-order subtotals, not net supplier payouts. Alerts are derived in-app signals only; not sent SMS/email.'
+   performance,alerts,description:'Paid goods amounts are verified-order subtotals, not net supplier payouts. Alerts are derived in-app signals only; not sent SMS/email.'
   };
  }
 }
