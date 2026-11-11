@@ -6,14 +6,18 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 ## B7 Post-Purchase Integration — Isolated B7 Real-MySQL/Browser Acceptance
 
 - **Branch:** `feature/b7-fulfillment-gap-audit-20261111`; base accepted B6 `6ef03de`.
-- **Latest complete executed acceptance:** GitHub Actions [run 43088991788](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43088991788), tested SHA `68298873e93072ea53819f3855e50e195b5508cd`. Three independent CI jobs all SUCCESS: source-and-build, browser-mock, mysql-ephemeral-integration.
-- **Actual counters:** B7 Node source/service tests **48/48 PASS**; existing frontend **24/24 PASS**; Chromium React UI with mocked HTTP **9/9 PASS**; real MySQL 8/Express buyer-supplier HTTP test **31/31 PASS**; real Chromium browser WRITE E2E against actual Express and MySQL **complete business scenario PASS** (separately logged, not converted to an invented count). All 48 B6-base migrations applied in fresh disposable `miljor_test_db`.
-- **Real post-purchase lifecycle verified:** B6 supplier-specific award lines, buyer/supplier ownership and IDOR, supplier preparing → dispatch → delivered, exact paid SKU invoice, buyer receipt, 100→80 shortage and PKR1600 operational claim, supplier remediation dispatch, buyer remediation receipt independent of final full-order receipt, no payment/escrow mutations, private transactional event projection.
-- **Test-driven repairs:** Correct API `order_id` mapping in frontend, order transition busy state and switching, supplier remediation transaction completion, precise SKU-line claims, privacy projections, B6 pool-less FK-safe event bridge and explicit buyer full receipt.
-- **Legacy Part4E4/4E5 suite:** **BLOCKED/FAIL** after 35 Part4E4 assertions; attempts read `miljor_db.pools` and the isolated account correctly gets permission denied. Part4E5 not executed by this legacy runner; no privileged cross-DB access was granted. This gate has `continue-on-error` and must NOT be counted as PASS despite CI job success.
-- **Still unverified/external:** provider-verified Safepay paid B6 awards (CI uses explicit `MOCK_GATEWAY` synthetic status only), cross-workstream global migration 046–052, financial payout/refund reconciliation, hard-browser-refresh cookie restoration, backend npm 8 advisories (1 high and 7 moderate), actual production deployment.
-- **Ownership:** UCP Regular/Flash consolidation, B4/B5, E2, finance, protected production/sandbox databases unchanged.
-- **Verdict:** **B7 isolated real-DB/browser business acceptance PASS, overall platform release BLOCKED**. CAN MERGE MAIN: NO; CAN DEPLOY: NO; START NEXT PHASE: NO. Evidence: `backend/docs/MILJOR_B7_SELF_EXECUTED_ACCEPTANCE_2026_11_11.md`.
+- **Latest full acceptance:** GitHub Actions [run 43090960956](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43090960956), SHA `21969f42ba17c3fcf86434750f92c259848a9d3d`; all three jobs SUCCESS.
+- **B7 source/service:** 48/48 PASS; existing frontend design/parser 24/24 PASS; mock HTTP Chromium 9/9 PASS; backend syntax and frontend production build PASS.
+- **Safepay Part 4E.3:** 28/28 PASS on disposable MySQL. Checkout amount tampering, idempotency, timeout/connection errors, missing/forged/tampered HMAC, amount mismatch, untracked tracker reconciliation, successful signed callback, duplicate replay and escrow hold verified. Provider HTTP is mocked with placeholder sandbox credentials; live Safepay provider callback NOT verified.
+- **B7 real MySQL 8 + Express HTTP:** 31/31 PASS using synthetic `MOCK_GATEWAY` paid-state B6 award orders. Migrations 001–048 applied to fresh disposable `miljor_test_db`, and identities 046–048 verified. Buyer/supplier ownership/IDOR, SKU reads, fulfillment, invoices, 100→80 shortage (PKR 1,600), remediation, separate buyer acknowledgement, private outbox and no payment/escrow mutation verified.
+- **Legacy Part 4E.4:** 36/36 PASS on disposable MySQL.
+- **Legacy Part 4E.5:** 41/41 PASS on disposable MySQL.
+- **Real Chromium WRITE E2E:** PASS against actual React UI + Express API + disposable MySQL. Supplier dispatch, buyer full receipt, SKU shortage, supplier remediation, buyer acknowledgement, immutable SKU and zero payment mutation verified.
+- **Isolation repair:** In B7 ephemeral CI only, legacy Part 4E.4/4E.5 and Safepay 4E.3 isolation checks assert `DATABASE() = miljor_test_db` instead of querying protected `miljor_db`. Normal local execution retains original cross-DB fingerprint checks. No grants/access to protected database.
+- **Still external/unverified:** live provider-verified Safepay payment callback, global migration reconciliation beyond 048, B6 finance-specific refund/settlement/payout compatibility, backend npm audit (8 advisories: 1 high, 7 moderate), production browser refresh/cookie restore.
+- **Ownership:** UCP Regular/Flash, B4/B5, E2 and Finance production branches and protected DBs not mutated.
+- **Verdict:** **B7 isolated real-DB/API/browser acceptance PASS; production release BLOCKED by live provider, Finance and global migration reconciliation.** CAN DEPLOY: NO; START NEXT PHASE: NO. Merge remains subject to parent-branch migration/finance gate. Evidence: `backend/docs/MILJOR_B7_SELF_EXECUTED_ACCEPTANCE_2026_11_11.md`.
+
 
 ---
 
