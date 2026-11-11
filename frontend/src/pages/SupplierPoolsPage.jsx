@@ -405,6 +405,11 @@ export function SupplierPoolsPage(){
         <p className="text-xs text-[var(--text-muted)]">{pool.code} · {pool.type==='REGULAR'?
           `${pool.quantity_current||0} / ${pool.quantity_target||0} ${pool.unit||''} committed`:
           `${pool.quantity_available??0} / ${pool.quantity_target||0} ${pool.unit||''} available`}</p>
+        {analytics?.performance?.some(x=>x.type===pool.type&&Number(x.pool_id)===Number(pool.id))&&
+          <div className="rounded-lg p-2 bg-[var(--bg-elevated)] text-xs">
+            {analytics.performance.filter(x=>x.type===pool.type&&Number(x.pool_id)===Number(pool.id))
+              .map(x=><span key={pool.code}>Verified orders: {x.paid_orders} · Paid goods: Rs. {Number(x.paid_goods_pkr).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})} · Paid quantity: {x.paid_quantity} {pool.unit}</span>)}
+          </div>}
         <div className="flex items-center gap-2 text-xs"><Clock size={14}/>{pool.status==='DRAFT'&&pool.type==='FLASH'?
           'Flash duration starts on publication':pool.expires_at?
           <CountdownTimer deadline={pool.expires_at} serverTime={data.server_time} compact label="Closes in"/>:
