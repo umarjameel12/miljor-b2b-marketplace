@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {Clock,ShieldCheck,RefreshCw,AlertTriangle} from 'lucide-react';
 import {CountdownTimer} from '../ui/CountdownTimer';
 import unifiedPoolsApi from '../../api/unifiedPools';
@@ -8,6 +8,7 @@ import {toast} from 'react-toastify';
 // Real buyer-owned B5 hold/order data. Checkout remains the existing Safepay endpoint.
 export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
   const [busy,setBusy]=useState(null);
+  const checkoutKeys=useRef({});
   const [clock,setClock]=useState(new Date().toISOString());
   const refresh=async()=>{
     setClock(new Date().toISOString());
@@ -17,7 +18,10 @@ export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
     if(busy)return;
     setBusy(hold.id);
     try {
-      const key='flash-checkout-'+hold.order_id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+      if(!checkoutKeys.current[hold.order_id]){
+        checkoutKeys.current[hold.order_id]='flash-checkout-'+hold.order_id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+      }
+      const key=checkoutKeys.current[hold.order_id];
       const result=await unifiedPoolsApi.initiateCheckout(hold.order_id,key);
       const url=result.data?.checkout_url;
       if(!url||typeof url!=='string'||!/^https:\/\//i.test(url))
