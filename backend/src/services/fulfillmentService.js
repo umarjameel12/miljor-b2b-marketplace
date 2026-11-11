@@ -1250,6 +1250,7 @@ class FulfillmentService {
         previous_status: currentStatus,
         fulfillment_status: 'EXCEPTION',
         exception_reason: reason,
+        ...(shortageEvidence ? {receipt_summary: shortageEvidence} : {}),
         message: 'Delivery discrepancy recorded safely. Order placed in exception state without modifying financial balances.'
       };
 
