@@ -17,13 +17,16 @@ async function main(){
      'SELECT table_name FROM information_schema.tables WHERE table_schema=? LIMIT 1',[target]
    );
    if(existing.length)throw Error('TEST_BOOTSTRAP_REQUIRES_EMPTY_DB: refuse to touch existing schema');
-   const sql=fs.readFileSync(path.join(__dirname,'migrations/001_initial_schema_baseline.sql'),'utf8');
-   for(const table of ['users','products']){
-     const idx=sql.indexOf('CREATE TABLE IF NOT EXISTS '+table+' (');
-     const end=sql.indexOf(';',idx);
-     if(idx<0||end<idx)throw Error('Cannot locate original 001 baseline table: '+table);
-     await db.query(sql.slice(idx,end+1));
-   }
+   // The actual historical pre-migration environment had the old schema.sql
+   // (17 legacy tables) + sample reference users/products. Migration 001 alone
+   // only creates 2 tables and therefore is NOT a valid upgrade-path fixture.
+   // Extract CREATE TABLE statements ONLY. Explicitly ignore USE miljor_db,
+   // DROP TABLE, foreign-key toggles and any other destructive SQL.
+   const legacy=fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8');
+   const createStatements=legacy.replace(/--.*$/gm,'').split(';')
+     .map(x=>x.trim()).filter(x=>/^CREATE TABLE\s+/i.test(x));
+   if(createStatements.length<15)throw Error('Unexpected historical baseline schema; fixture is invalid');
+   for(const statement of createStatements)await db.query(statement);
    // Legacy snapshot before 004 historically contained users #1–7 and products #1–5.
    // Synthetic names and disabled real payment integration; no actual credentials.
    const users=[
@@ -53,7 +56,7 @@ async function main(){
      `INSERT INTO products (id,title,category,brand,variety,processing_type,grade,pack_size,unit)
       VALUES (?,?,?,?,?,?,?,?,?)`,p
    );
-   console.log('TEST_BASELINE_PRE_004_READY:',users.length,'synthetic users +',products.length,'legacy products');
+   console.log('TEST_BASELINE_PRE_004_READY:',createStatements.length,'legacy tables,',users.length,'synthetic users +',products.length,'legacy products');
  }finally{await db.end();}
 }
 if(require.main===module)main().catch(e=>{
