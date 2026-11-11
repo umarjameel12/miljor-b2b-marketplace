@@ -108,7 +108,6 @@ function buildPayload(mode,form,listing,editing){
     payload.supplier_listing_id=Number(listing.id);
     payload.supplier_sku_id=Number(listing.supplier_sku_id);
     payload.product_spec_id=Number(listing.product_spec_id);
-    payload.product_id=Number(listing.product_id);
   }
   return payload;
 }
