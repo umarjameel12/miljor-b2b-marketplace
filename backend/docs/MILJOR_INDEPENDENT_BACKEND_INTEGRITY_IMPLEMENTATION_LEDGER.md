@@ -125,3 +125,15 @@ No backend/front-end build or MySQL database operations executed.
 - Added deferred `tests/migration_collision_preflight_gate.js` and detailed `docs/MILJOR_B6_CATALOG_MIGRATION_COLLISION_GATE.md` reconciliation runbook.
 - No renumbering, migration execution, live/test DB write, force push, B6 branch edit or merge.
 - Status: GUARD IMPLEMENTED / NOT TESTED / MIGRATION RECONCILIATION BLOCKED.
+
+## P0 Financial Contract Follow-Up — After Master Acceptance (2026-11-11)
+Status: CODE COMMITTED; NEW TESTS NOT RUN; FINANCIAL SETTLEMENT BLOCKED by missing immutable supplier commission snapshot and unresolved 046/047 migration histories.
+- Based on user-supplied Antigravity summary: 104 assertions executed, 103 passing, 1 failing on unapplied DB migration, 4 blocked. Full report `MILJOR_INDEPENDENT_PHASES_1_TO_5_MASTER_TEST_REPORT.md` was not yet present on remote branch; do not treat summary as verified current branch evidence.
+- Safepay only; untouched B5/B6 pool and timer code.
+- Supplier payable accrual: fail closed if order-time commission percent absent; exact basis-point arithmetic.
+- Supplier fee helper: missing profile percent rejects instead of 2.50 fallback.
+- Refund assessment: strict owning buyer/authorized admin; PAID/PARTIALLY_REFUNDED records supported.
+- Manual refund confirmation: returns 409 without authenticated Safepay refund-completed evidence; no fraudulent CONFIRMED bookkeeping from admin-supplied reference.
+- Deferred isolated acceptance: `backend/tests/financial_contract_fail_closed_gate.js`.
+- Full details: `backend/docs/MILJOR_P0_FINANCIAL_CONTRACT_SAFETY_DELTA.md`.
+- No test/migration/provider call or DB write in this follow-up. Keep 046/047 collision guard active.
