@@ -417,6 +417,10 @@ class FlashPoolService {
       if(!money.exactDecimalGte(offer.max_quantity_per_buyer,cumulative,2))
         throw fail('BUYER_FLASH_MAX_EXCEEDED','This buyer has reached the supplier-defined total purchase limit.',409);
       const subtotal = money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
+      const supplierFeeQuote = await feeService.calculateSupplierFeeExact(
+        offer.supplier_id, subtotal, conn, { lockProfile: true }
+      );
+      const lockedSupplierCommissionPercent = money.toCanonical(supplierFeeQuote.fee_percent, 2);
       const buyerFeeModel = await feeService.calculateBuyerFee(subtotal);
       const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
       const deliveryFee = dec(offer.delivery_fee||'0',{positive:false});
@@ -427,11 +431,12 @@ class FlashPoolService {
       // Order is persisted BEFORE the existing Safepay checkout endpoint can be called.
       const [order]=await conn.query(
         `INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,
-          subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,currency,
+          subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,
+          supplier_commission_percent,currency,
           delivery_type,delivery_address,payment_status,order_status)
-        VALUES (?,?,?,?,?,?,?,?,?,'PKR','DOORSTEP',?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
+        VALUES (?,?,?,?,?,?,?,?,?,?,'PKR','DOORSTEP',?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
         [orderCode,buyerId,offer.supplier_id,quantity,offer.discounted_unit_price,
-          subtotal,deliveryFee,buyerFee,amount,address]
+          subtotal,deliveryFee,buyerFee,amount,lockedSupplierCommissionPercent,address]
       );
       const [h]=await conn.query(
         `INSERT INTO flash_purchase_holds
