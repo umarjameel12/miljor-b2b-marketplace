@@ -21,7 +21,7 @@ class ReviewService {
 
     // Check order existence and status
     const [orderRows] = await db.query(
-      'SELECT id, buyer_id, supplier_id, order_status, fulfillment_status FROM orders WHERE id = ?',
+      'SELECT id, buyer_id, supplier_id, order_status, fulfillment_status, payment_status FROM orders WHERE id = ?',
       [orderId]
     );
 
@@ -33,6 +33,14 @@ class ReviewService {
     }
 
     const o = orderRows[0];
+
+    // Reviews represent real verified purchases, never unpaid or pending orders.
+    if (o.payment_status !== 'PAID') {
+      const err = new Error('Only paid delivered/completed orders are reviewable');
+      err.code = 'ORDER_NOT_PAID';
+      err.statusCode = 422;
+      throw err;
+    }
 
     // Must be COMPLETED or DELIVERED to review
     if (o.order_status !== 'COMPLETED' && o.order_status !== 'DELIVERED') {
@@ -87,7 +95,9 @@ class ReviewService {
       throw err;
     }
 
-    const [res] = await db.query(
+    let res;
+    try {
+      [res] = await db.query(
       `INSERT INTO order_reviews (
         order_id, reviewer_id, reviewer_role, target_id, rating,
         quality_rating, delivery_rating, communication_rating, review_text,
@@ -98,7 +108,16 @@ class ReviewService {
         qualityRating ?? rating, deliveryRating ?? rating, communicationRating ?? rating,
         reviewText || null
       ]
-    );
+      );
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        const conflict = new Error('You have already reviewed this order');
+        conflict.code = 'DUPLICATE_REVIEW';
+        conflict.statusCode = 409;
+        throw conflict;
+      }
+      throw err;
+    }
 
     const [created] = await db.query('SELECT * FROM order_reviews WHERE id = ?', [res.insertId]);
     return created[0];
