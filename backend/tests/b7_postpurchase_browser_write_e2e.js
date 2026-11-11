@@ -195,8 +195,14 @@ async function main(){
   const remedyBuyer=await logIn('BUYER');
   try{
    await pick(remedyBuyer.page,shortage.order_code);
+   console.log('B7_REMEDY_BUYER_INITIAL',
+    'alerts',await remedyBuyer.page.locator('[role=alert]').allTextContents(),
+    'body',String(await remedyBuyer.page.locator('body').innerText()).slice(-1850));
+   const [stateRows]=await db.query(
+    'SELECT id,status,remediation_status,order_id FROM order_disputes WHERE order_id=?',[shortage.id]);
+   console.log('B7_REMEDY_BUYER_DATABASE',JSON.stringify(stateRows));
    await remedyBuyer.page.getByRole('button',{name:'Confirm remediation goods received'})
-     .click();
+     .click({timeout:12000});
    await remedyBuyer.page.getByRole('button',{name:'Confirm complete receipt'})
      .waitFor({timeout:15000});
    const [[notAutoConfirmed]]=await db.query(
