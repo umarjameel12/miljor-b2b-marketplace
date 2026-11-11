@@ -3,6 +3,7 @@
 // NO inventory allocation, buyer acceptance, payment or checkout occurs here.
 const crypto = require('node:crypto');
 const db = require('../config/db');
+const notifications = require('./procurementNotificationService');
 const exact = require('./exactDecimal');
 const matching = require('./procurementMatchingService');
 
@@ -80,7 +81,7 @@ class ProcurementQuoteService{
       await conn.beginTransaction();
       // Parent request is always locked before quote rows to serialize close/withdraw/revisions.
       const [requests]=await conn.query(
-        `SELECT id, status, quote_deadline, delivery_area
+        `SELECT id, buyer_id, status, quote_deadline, delivery_area
            FROM procurement_requests WHERE id=? FOR UPDATE`,[rid]);
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
       // Durable response replay precedes expiry and stock checks: retries must
@@ -236,6 +237,12 @@ class ProcurementQuoteService{
            AND requested_version < ?`,
         [version,quote.id,supplier,version]
       );
+      await notifications.enqueue(conn,{
+        recipient_id:requests[0].buyer_id,recipient_role:'BUYER',
+        event_key:'proc:quote:'+quote.id+':v'+version,
+        event_type:version===1?'NEW_QUOTE':'QUOTE_REVISED',
+        payload:{request_id:rid,quote_id:quote.id,version_number:version,supplier_id:supplier}
+      });
       await conn.commit();
       return {...response,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
