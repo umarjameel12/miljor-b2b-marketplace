@@ -1235,13 +1235,13 @@ class DisputeService {
           [dispute.order_id]
         );
         if (sourceOrders[0]?.supplier_delivered_at) {
-          await connection.query(
+          const [resumeResult] = await connection.query(
             `UPDATE orders SET fulfillment_status = 'SUPPLIER_DELIVERED',
                order_status = 'OUT_FOR_DELIVERY', updated_at = NOW()
              WHERE id = ? AND fulfillment_status = 'EXCEPTION'`,
             [dispute.order_id]
           );
-          orderResumed = true;
+          orderResumed = Number(resumeResult.affectedRows) === 1;
         }
       }
 
@@ -1417,13 +1417,13 @@ class DisputeService {
             [dispute.order_id]
           );
           if (sourceOrders[0]?.supplier_delivered_at) {
-            await connection.query(
+            const [resumeResult] = await connection.query(
               `UPDATE orders SET fulfillment_status='SUPPLIER_DELIVERED',
                  order_status='OUT_FOR_DELIVERY', updated_at=NOW()
                WHERE id=? AND fulfillment_status='EXCEPTION'`,
               [dispute.order_id]
             );
-            orderResumed = true;
+            orderResumed = Number(resumeResult.affectedRows) === 1;
           }
         }
       }
@@ -1568,7 +1568,7 @@ class DisputeService {
         if (orderRows.length > 0 && orderRows[0].fulfillment_status === 'EXCEPTION') {
           // If order had reached supplier delivery or confirmation, complete it
           if (orderRows[0].supplier_delivered_at) {
-            await connection.query(
+            const [resumeResult] = await connection.query(
               `UPDATE orders
                SET fulfillment_status = 'SUPPLIER_DELIVERED',
                    order_status = 'OUT_FOR_DELIVERY',
@@ -1576,7 +1576,7 @@ class DisputeService {
                WHERE id = ? AND fulfillment_status = 'EXCEPTION'`,
               [dispute.order_id]
             );
-            orderResumed = true;
+            orderResumed = Number(resumeResult.affectedRows) === 1;
           }
         }
       }
