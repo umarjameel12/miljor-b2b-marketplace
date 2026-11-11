@@ -48,8 +48,6 @@ const FULFILLMENT_MODES = [
 export const PoolsPage = () => {
   const { user } = useAuth();
   const [searchParams,setSearchParams]=useSearchParams();
-  const initialType=String(searchParams.get('type')||'ALL').toUpperCase();
-  const [poolType,setPoolType]=useState(['ALL','REGULAR','FLASH'].includes(initialType)?initialType:'ALL');
   const [serverTime,setServerTime]=useState(null);
   const [nextCursor,setNextCursor]=useState(null);
   const [loadingMore,setLoadingMore]=useState(false);
@@ -103,7 +101,7 @@ export const PoolsPage = () => {
 
       const [poolsRes, familiesRes, categoriesRes] = await Promise.all([
         unifiedPoolsApi.discover({
-          type:poolType,
+          type:'ALL',
           category_id:categoryParam,
           cluster_id:clusterParam,
           fulfillment_mode:modeParam,
@@ -126,7 +124,7 @@ export const PoolsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode, poolType, debouncedSearch]);
+  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode, debouncedSearch]);
 
   useEffect(() => {
     fetchData();
@@ -138,7 +136,7 @@ export const PoolsPage = () => {
     setLoadingMore(true);
     try{
       const result=await unifiedPoolsApi.discover({
-        type:poolType,
+        type:'ALL',
         category_id:selectedCategory==='All Commodities'?undefined:Number(selectedCategory),
         cluster_id:selectedClusterId?Number(selectedClusterId):undefined,
         fulfillment_mode:selectedFulfillmentMode==='ALL'?undefined:selectedFulfillmentMode,
@@ -177,7 +175,7 @@ export const PoolsPage = () => {
   const selectedClusterObj = clusters.find((c) => String(c.id) === String(selectedClusterId));
 
   return (
-    <AppShell title="Wholesale Procurement Pools">
+    <AppShell title="MilJor Supplier Pools">
       <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
         {/* Marketplace Search & Discovery Controls */}
         <div
@@ -231,7 +229,7 @@ export const PoolsPage = () => {
               >
                 <Package className="w-3.5 h-3.5" />
                 <span>Product Families</span>
-                {products.length > 0 && (
+                {families.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
                     {families.length}
                   </span>
@@ -451,17 +449,7 @@ export const PoolsPage = () => {
           </div>
         )}
 
-        {viewMode==='pools'&&<div className="flex flex-wrap gap-2" aria-label="Choose pool type">
-          {['ALL','REGULAR','FLASH'].map(t=><button type="button" key={t} onClick={()=>{
-            setPoolType(t);
-            const next=new URLSearchParams(searchParams);
-            if(t==='ALL')next.delete('type');else next.set('type',t);
-            setSearchParams(next);
-          }} aria-pressed={poolType===t}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold border ${poolType===t?'border-emerald-600 bg-emerald-500/10 text-emerald-600':'border-[var(--border-subtle)]'}`}>
-            {t==='ALL'?'All Pools':t==='REGULAR'?'Regular Pools':'Flash Pools'}
-          </button>)}
-        </div>}
+        {/* Single supplier-pool marketplace: no independent Regular/Flash discovery tabs. */}
         {/* Content Grid: Pools vs Catalog */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
