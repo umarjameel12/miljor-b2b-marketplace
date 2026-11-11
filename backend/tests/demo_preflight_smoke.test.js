@@ -26,7 +26,7 @@ async function main(){
   assert.match(ok.out,/PASS 13\/13; unresolved 0/);
   const protectedDb=await run({DB_NAME:'miljor_db'});
   assert.notEqual(protectedDb.code,0);
-  assert.match(protectedDb.out,/Requested demo database: Set DB_NAME explicitly/);
+  assert.match(protectedDb.out,/Approved demo database: Set DB_NAME explicitly/);
   const down=await run({DEMO_BACKEND_URL:'http:\/\/127.0.0.1:1'});
   assert.notEqual(down.code,0);
   assert.match(down.out,/Express liveness/);
