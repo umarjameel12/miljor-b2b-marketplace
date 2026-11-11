@@ -1,8 +1,150 @@
 # MilJor — Phase Execution Log
 
+## UCP-3 to UCP-5 Combined Delivery, Marketplace & Operations — 2026-11-11
+
+- **Branch:** `feature/ucp3-5-delivery-marketplace-ops` (derived from UCP-1/2; does not merge B4/B5 state machines or B6 procurements).
+- **Plan:** `backend/docs/MILJOR_UCP3_TO_UCP5_MASTER_IMPLEMENTATION_PLAN.md`.
+- **Implementation report:** `backend/docs/MILJOR_UCP3_TO_UCP5_IMPLEMENTATION_REPORT.md`.
+- **UCP-3:** supplier delivery/cluster and exact supplier inventory read models; Flash verified saved buyer delivery-address eligibility.
+- **UCP-4:** public B4/B5 supplier-owned pool discovery, buyer Regular reservations, Flash holds/Safepay initiation and recovery, search and filters.
+- **UCP-5:** supplier-scoped truthful order/pool analytics and non-financial read-only alerts.
+- **Acceptance gate:** **SOURCE COMMITTED / DB + API + VITE + SAFEPAY E2E + CONCURRENCY + B4/B5/B6 REGRESSION NOT RUN / MERGE BLOCKED**. Final gates deferred per owner instruction; no production DB writes.
+
+---
+
+
+## Phase B6 Combined Phase 1 (G through M): Acceptance Complete (287/287 PASS)
+
+- **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `669a4b3addb27b531473bfa28f8b40400780933c`).
+- **Subphases verified:**
+  - **B6-G & B6-H:** Single & Split-Supplier Award, Server-Calculated Landed Fee Preview, Escrow-Ready Order Formation (14/14 PASS).
+  - **B6-I & B6-K:** Collective Procurement Group Participation & Qualification, Buyer Consent & Re-approval (13/13 + 12/12 + 23/23 PASS).
+  - **B6-J:** Collective Supplier Bidding, Aggregated Lot Quoting, Zero PII Leakage (16/16 PASS).
+  - **B6-L & B6-M:** Buyer Recurring Schedules, State Machine, Cycle Draft Generation Worker (15/15 + 8/8 + 11/11 + 17/17 PASS).
+  - **B5 Integration:** Flash Shared-Stock Clearance and Countdown Verification (39/39 PASS).
+  - **B6-F HTTP Concurrency & Privacy:** 25/25 PASS.
+- **Frontend & Build:** 24/24 unit assertions PASS, Vite production build clean (2,218 modules transformed, 0 errors).
+- **Connected Regression:** 107/107 assertions PASS across B6-A..F, B4, and B0.2. Grand total 287/287 PASS (100% Green).
+- **Database isolation:** Migrations 036, 041–045 applied to `miljor_test_db`; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B6_PHASE1_ACCEPTANCE_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED (B6 Phase 1 G–M)**. B6 Phase 2 (N–Q) NOT STARTED.
+
+---
+
+## B6 Backend Hardening & 25-Family Catalog Alignment — 2026-11-11
+
+- **Branch:** `fix/b6-backend-hardening` (not merged; original B6 branch preserved).
+- **Scope:** Supplier-owned physical SKU-only catalog/listings, English-only canonical family discovery, 25-family additive migration 051, demand requester migration 052, legacy procurement bypass containment, messaging privacy, paid-promotion fail-closed behavior, honest reviews, exact B6 invoice lines, unified fee arithmetic, and fail-closed migration journal.
+- **Authoritative repair report:** `backend/docs/MILJOR_B6_BACKEND_HARDENING_REPORT.md`.
+- **Source check:** JavaScript syntax parsing for modified backend modules only; no live MySQL/API/frontend integration acceptance and no protected DB writes from GitHub-only editing.
+- **Final gate:** **INTEGRATION PENDING / RELEASE BLOCKED**. Do not merge or proceed to live promotion/subscription billing without paid-provider verification and isolated acceptance tests.
+
+---
+
+
 This document tracks phase-by-phase execution, gates, and verification status for the MilJor B2B procurement backend.
 
 ---
+
+## Phase B6-F — Smart Quote Comparison & Negotiation: Acceptance Complete (187/187 PASS)
+
+- **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `28f90e52a8730179afba736b15aa618ea66ad0e5`).
+- **Subphase verified:** B6-F (Combinatorial Quote Comparison, Transparent Value Rankings, Non-Binding Improvement Requests, Append-Only Quote Revision/Negotiation Synchronization).
+- **Core Gates:**
+  - `b6_quote_comparison_gate.js`: **12/12 PASS**
+  - `b6_quote_negotiation_gate.js`: **19/19 PASS**
+  - `b6_procurement_http_concurrency_gate.js`: **25/25 PASS** (HTTP RBAC, JWT authorization, overlapping improvement requests, idempotency, privacy).
+- **Frontend & Build:** 24/24 unit assertions PASS, Vite production build clean (2,218 modules transformed, 0 errors).
+- **Connected Regression:** 107/107 assertions PASS across B6-A, B6-B, B6-D, B6-E, B4, and B0.2. Grand total 187/187 PASS.
+- **Database isolation:** Migration 040 applied to `miljor_test_db`; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B6_COMPARISON_NEGOTIATION_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED (B6-F)**. B6-G (Award & Checkout Settlement) NOT AUTHORIZED / NOT STARTED.
+
+---
+
+## Phase B6 — Smart Procurement Hub (B6-A to B6-E): Acceptance Complete (194/194 PASS)
+
+- **Branch:** `feature/b6-private-rfq` (HEAD checkpoint `de8cbeb890067db84712af986722e6a9c9318f86`).
+- **Subphases verified:**
+  - **B6-A:** Foundation contracts, multi-item exact decimals, whole packaging units, strict UTC deadline handling, and exact landed quote comparison helpers (15/15 + 12/12 PASS).
+  - **B6-B:** Multi-product request lifecycle, buyer draft creation, multi-line updates, idempotency guards, and atomic publish transitions (19/19 PASS).
+  - **B6-C:** Frontend buyer procurement hub UI, shopping list builder, deadline countdown, and quote comparison integration; Vite build 0 errors (2,218 modules transformed).
+  - **B6-D:** Geographic supplier matching against Lahore delivery zones, zero unawarded buyer contact leak, private inbox invitations, and idempotent supplier interest registration (17/17 PASS).
+  - **B6-E:** Versioned supplier quotes, immutable snapshots, exact line-level landed totals, off-platform contact rejection, and durable withdrawal tracking (23/23 PASS).
+- **Consolidated acceptance:** 86/86 B6 core assertions PASS, 24/24 frontend unit tests PASS, 84/84 connected regression assertions PASS (Grand Total: 194/194 PASS, 100% Green).
+- **Database isolation:** All migrations (037–039) and tests executed against `miljor_test_db`; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B6_PROCUREMENT_HUB_IMPLEMENTATION_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED (B6-A through B6-E)**. B6-F (Negotiation & Split-Award) NOT STARTED.
+
+---
+
+## B0.2 Follow-up Closure — Final Integration Accepted
+
+- **Review basis:** B0.2 committed source at `47a9ed058b1376d1e38ec49ad28045937267cae2`, subsequently aligned agent execution policy on `feature/package-e`.
+- **Direct GitHub repairs:** Legacy payment verification PAID/ledger mutation removed; exact payment attempt provider provenance scoped to buyer/order; blocked refund audit outcomes added; focused B0.2 test assertions strengthened and B0.1 audit fixture cleanup updated.
+- **Evidence file:** `backend/docs/MILJOR_B0_2_FOLLOWUP_CLOSURE_REPORT.md`.
+- **Final follow-up status:** **PASS — Antigravity final gate accepted**, with 22/22 updated B0.2 safety assertions and 161/161 total backend assertions reported in `MILJOR_B0_2_FOLLOWUP_CLOSURE_REPORT.md`. The prior 18/18 result was superseded by the updated final B0.2 gate.
+- **Database:** No MySQL connection or local application test execution was performed during GitHub-only corrections; protected databases were not directly accessed. Antigravity must verify actual `miljor_test_db` identity, protected DB preservation, and complete negative/regression checks at phase end.
+- **Next phase:** **B1 NOT STARTED — DO NOT ADVANCE**.
+
+---
+
+## Phase B1 — Final Antigravity Integration Accepted (73/73 PASS)
+
+- **Authorized scope:** Canonical categories/families controlled by MilJor; supplier-owned physical products, variable packaging/SKUs and unlimited same-family listings; launch food-only category policy.
+- **Source implementation:** Supplier catalog portal now accepts supplier-defined packaging and no longer advertises mandatory variant requests. Legacy family FK anchors no longer invent physical details. Direct admin physical-variant creation is blocked while historical moderation remains compatible. Supplier listing family quota and insert now share an atomic transaction; legacy listing-count cap no longer blocks valid same-family offers.
+- **Source verification:** GitHub file review and JavaScript syntax-only static parsing. **No local MySQL/API/frontend integration suite has yet been run for B1.**
+- **Authoritative report:** `backend/docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED — Antigravity reported 73/73 relevant assertions PASS and 0 frontend build errors**. Source and local originals synced; evidence recorded in B1 implementation report.
+- **B2:** **NOT AUTHORIZED / NOT STARTED**.
+
+---
+
+## Phase B2 — Supplier Product/SKU Lifecycle Core; Media Workstream Separated
+
+- **Authorized source implementation:** On `feature/package-e`: supplier draft family cannot change after child SKUs; supplier SKU creation serialized with parent lock; optional shelf-life and purchasing unit validated; archived supplier products/SKUs block on open pools and retire supplier-owned legacy specification bridges; UI supplier physical fields, actual titles and explicit archive confirmation.
+- **B2 source report:** `backend/docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`.
+- **Current gate status:** **B2-CORE IMPLEMENTED — INTEGRATION PENDING**. No local DB/API build run by GitHub-only implementation. Final test count and PASS unclaimed.
+- **B2-Media:** No secure upload/storage infrastructure yet; tracked separately, not implemented; do not state full B2/media completion.
+- **Parallel B3 planning (explicit user authorization):** B2 acceptance runs on frozen `feature/package-e` while B3 independent implementation uses `feature/b3-commercial-offers`. No B3 merge/release or phase PASS until dependent B2 gate passes.
+- **B4:** NOT STARTED.
+
+---
+
+## Phase B3 — Supplier Commercial Listings Implementation (Isolated Branch)
+
+- **Branch:** `feature/b3-commercial-offers` (separate from B2 test branch `feature/package-e`).
+- **Subphases:** B3-A listing lifecycle/authorization; B3-B exact atomic pricing/history; B3-C inventory/MOQ/pool contract guards; B3-D 4/13/25 family entitlement/activation; B3-E secure buyer discovery & supplier UI; B3-F focused tests and acceptance evidence.
+- **Source:** B3-A through B3-E implemented in source; B3-F regression assertions added to relevant E2/E3 tests. Backend static JavaScript syntax checks passed on edited JS at checkpoint. **No B3 MySQL/API/frontend runtime gate executed.**
+- **Report:** `backend/docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`.
+- **Status:** **IMPLEMENTED IN SOURCE — PENDING B2-DEPENDENT ANTIGRAVITY REGRESSION GATE**. B3 not yet accepted. B4 cannot start.
+- **Concurrency:** B2 and B3 are isolated Git branches/worktrees; never run both sets of mutable tests simultaneously on `miljor_test_db`. Sync B2 fixes deliberately after B2 PASS and rerun affected B3 gate.
+
+---
+
+## Phase B4 — Regular Pool Lifecycle Hardening: Final Acceptance Complete (266/266 PASS)
+
+- **Branch:** `feature/b4-regular-pools` (isolated original-path worktree `Documents/MilJor-B4`).
+- **Accepted dependency integration:** B2 SHA `fcbd82da` and B3 SHA `44f591d7`, both verified Git ancestors of B4.
+- **B4-A:** Supplier SKU/spec/legacy product FK corrected; mismatched physical IDs blocked (`POOL_PHYSICAL_IDENTITY_MISMATCH`); historical spec-only listing compatibility preserved.
+- **B4-B:** Exact DECIMAL(12,4) precision enforced; nonfinite/scale overflow rejected (`INVALID_POOL_DECIMAL`); positivity checks take precedence (`INVALID_QUANTITY` / `INVALID_CAPACITY`).
+- **B4-C:** Exact decimal allocation arithmetic, compatible allocation-unit validation, existing atomic pool/listing locks reused.
+- **B4-D:** Final publish atomically validates matching listing/supplier, physical product and SKU publication; locks commercial snapshot and 24–72h delivery SLA.
+- **B4-E:** Tier pricing continuity validated; discrete-pack stepped intervals (`prevMax + 1`) accepted alongside increment steps; fast tier contract tests 7/7 PASS.
+- **B4-F:** Existing commercial qualification, supplier decision and buyer commitment workflows audited and 100% verified; retired legacy confirm route fails closed.
+- **B4-G:** Buyer reservation/capacity flow verified under concurrency; supplier-defined physical packaging units (`bundle`, `bag`, `tin`) indivisible; custom unit tests 4/4 PASS.
+- **B4-H:** Supplier pool modal and buyer SKU title presentation verified. Frontend Vite build passed with 0 errors (2,216 modules transformed).
+- **B4-I:** Consolidated acceptance gate executed against `miljor_test_db`: 11 test suites, 266/266 assertions PASS, 0 exit code.
+- **Database isolation:** `miljor_test_db` active; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED — 266/266 Assertions PASS, Frontend Build PASS, miljor_db Pristine**. B5 not authorized.
+
+---
+
+### Accepted B3 Reconciliation Recorded for B4
+- B3 source accepted: `44f591d7fdd9c16f7a43c10d01de2b50bb637e7e`, 81/81 assertions, frontend build PASS, protected `miljor_db` unchanged (per supplied Antigravity gate).
+- B4 copies the exact accepted `catalogService.js`, `supplierListingMutationService.js`, B2 and B3 reports into original paths. Its pool source and additional B4 tests stay isolated.
+- This is a file-content reconciliation, not a claim of a Git merge commit or local worktree parity. B4 final acceptance must verify both source history and local/remote sync.
 
 ## Approved Engineering Roadmap & Phase Status Summary
 
@@ -26,13 +168,22 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 | **Part 4E.1.1** | Exact Financial Arithmetic & Reconciliation Hardening | **COMPLETE AND VERIFIED** | `src/services/exactDecimal.js`; `tests/part4e1_1_financial_hardening_gate.js` (22/22 PASS); Master Regression (24 suites, 554/554 assertions PASS, 37.13s) | 2026-10-19 |
 | **Part 4E.2** | Authoritative Order Conversion & Order Lifecycle Engine | **NOT STARTED** | Requires explicit user authorization | — |
 | **Part 5** | Flash Clearance Pools Engine | **MISSING** | Database schema only; zero mounted routes | — |
-| **Part 6** | Private RFQs & Versioned Quotes | **MISSING** | Database schema only; zero mounted routes | — |
+| **Part 6 (B6-A..E)** | Private RFQs & Versioned Quotes | **COMPLETE AND VERIFIED** | `docs/MILJOR_B6_PROCUREMENT_HUB_IMPLEMENTATION_REPORT.md`; 86/86 B6 core PASS; 24/24 UI test PASS; 84/84 regression PASS; miljor_db Pristine | 2026-11-10 |
 | **Part 7** | Recurring Procurement Engine | **MISSING** | Database schema only; zero mounted routes | — |
 | **Part 8** | Orders, Fulfillment & Delivery Logistics | **MISSING** | Database schema only; zero mounted routes | — |
 | **Part 9** | Invoicing, Communications & Notifications | **MISSING** | Not implemented | — |
 | **Part 10** | External Auth (Google/Apple) & KYC | **BLOCKED BY EXTERNAL CREDENTIALS** | Live OAuth credentials & SMS gateway missing | — |
 | **Part 11** | Supplier Matching & MilJor Assistant | **MISSING** | Not implemented | — |
 | **Part 12** | End-to-End Hardening & Regression Suite | **NOT TESTED** | Pending full system implementation | — |
+| **Package E1 / E1.1** | Supplier Profile, Onboarding, Verification & Release Gate | **COMPLETE AND VERIFIED** | Migration 032 on test DB; AES-256-GCM encryption-at-rest; Admin Verification UI; 25/25 E1 Gate PASS; 106/106 Master Assertions PASS; Vite Build PASS | 2026-11-10 |
+| **Phase B0** | Backend Safety Recovery: Safepay-Only Consolidation, Invoice Authorization-Before-Generation, Subscription Gating & Regression Protection | **COMPLETE AND INDEPENDENTLY VERIFIED** | 46/46 B0 Gate PASS; 72/72 Regression PASS (118/118 Total PASS); miljor_db 100% Pristine (0 writes); Safepay sole active provider; Mock bypass eliminated | 2026-11-10 |
+| **Phase B0.1** | Financial Integrity & Payment Consistency: Safepay Verification State Safety, Provider/Method Provenance, Refund Gating, Webhook Exact Matching, Invoice Uniqueness & Decimal Precision, Subscription Read Model & UI Alignment | **COMPLETE AND VERIFIED** | `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
+| **Phase B0.2** | Backend Safety Closure & Final Acceptance Gate: Admin Subscription Bypass Hardening, Invoice Internal Authority Hardening, Exact Payment Provider Provenance, Safepay Amount Contract, and Legacy Refund False Completion Prevention | **COMPLETE AND VERIFIED** | `tests/phase_b0_2_safety_closure_gate.js` (22/22 PASS); `tests/phase_b0_1_financial_integrity_gate.js` (21/21 PASS); Phase B0 Gate (46/46 PASS); E1-E6 Regression (72/72 PASS); Total 161/161 Assertions PASS; Frontend Build 0 Errors; miljor_db 100% Pristine | 2026-11-10 |
+| **Phase B1** | Canonical Catalog Cleanup & Supplier-Owned Product Alignment: supplier-defined SKUs, family-only 4/13/25 quotas, atomic listings, legacy compatibility and eight food-only launch categories | **COMPLETE AND VERIFIED** | `docs/MILJOR_B1_CANONICAL_CATALOG_IMPLEMENTATION_REPORT.md`; 73/73 Assertions PASS across E2/E3/E4-E6 gates; Frontend Vite Build PASS (2,216 modules, 0 errors); miljor_db 100% Pristine; Verified SHA: `986b2737` | 2026-11-10 |
+| **Phase B2-Core** | Supplier Product/SKU Lifecycle: parent-family integrity, atomic SKU creation, optional attributes, archive pool obligations, linked spec bridge deactivation, supplier UI display/confirmation | **COMPLETE AND VERIFIED — 67/67 PASS** | `docs/MILJOR_B2_SUPPLIER_PRODUCT_SKU_LIFECYCLE_IMPLEMENTATION_REPORT.md`; accepted `fcbd82da`, frontend build PASS, miljor_db pristine | 2026-11-10 |
+| **Phase B3** | Supplier Commercial Listings & Entitlements: transactional pricing/history, stock allocations/MOQs, activation & pool safeguards, private supplier price history, verified buyer discovery | **COMPLETE AND VERIFIED (B3 upstream SHA 44f591d7, 81/81 acceptance); B4 branch source now manually reconciled** | `docs/MILJOR_B3_COMMERCIAL_LISTINGS_IMPLEMENTATION_REPORT.md`; modified E2/E3 B3 test assertions 81/81 B3 accepted on 44f591d7; B4 source integration tracked separately | — |
+| **Phase B4** | Regular Pool lifecycle A–H: physical FK, exact pool quantities, inventory, publishing/terms lock, tier pricing/progress, qualification, buyer reservations, supplier UI | **COMPLETE AND VERIFIED** | `docs/MILJOR_B4_REGULAR_POOL_IMPLEMENTATION_REPORT.md`; 266/266 assertions PASS across 11 suites; Vite Build PASS; miljor_db 100% Pristine | 2026-11-10 |
+| **Phase B2-Media** | Optional supplier product images; secure upload/storage architecture and implementation | **DEFERRED — NOT IMPLEMENTED** | No existing authenticated image storage/upload provider verified; requires separate approved infrastructure and tests; do not claim B2-media COMPLETE | — |
 
 ---
 
@@ -1025,5 +1176,383 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - **DEVELOPMENT DB: UNTOUCHED**
   - **PART 4E.3 FINAL GATE: PASS**
 
+---
+
+## Package E1 Execution Detail — Supplier Business Profile, Onboarding & Verification
+- **Execution Date:** 2026-11-10
+- **Objective:** Fully implement Package E1 as a complete working vertical slice across MySQL schema, backend, API, frontend, authorization, validation, and automated tests.
+- **Migration Executed (Test Database Only):**
+  - Migration 032: `032_supplier_profile_onboarding_and_verification.sql` applied cleanly to `miljor_test_db`.
+  - Added operational fields: `business_type`, `food_license_type`, `business_description`, `contact_person_name`, `contact_person_phone`, `warehouse_address`, `lahore_service_area`, `bank_name`, `bank_account_title`, `bank_iban`, `rejection_reason`, `submitted_at`, `verified_at`, `updated_at`.
+- **Files Modified/Created:**
+  - `backend/database/migrations/032_supplier_profile_onboarding_and_verification.sql`
+  - `backend/database/migrations/rollback/032_rollback_supplier_profile_onboarding_and_verification.sql`
+  - `backend/src/services/supplierValidationService.js` (Pakistani Phone, Modulo-97 IBAN checksum, NTN, sanitization)
+  - `backend/src/repositories/supplierProfileRepository.js` (CRUD, atomic transactions, row locking)
+  - `backend/src/services/supplierProfileService.js` (Draft saves, submission validation, re-review triggers, IBAN masking)
+  - `backend/src/controllers/supplierProfileController.js` (GET/PUT /profile, POST /verification/submit, GET /verification/status)
+  - `backend/src/routes/v1/supplierRoutes.js` (Unified supplier portal routes preserving G2 delivery routes)
+  - `backend/src/controllers/adminController.js` (Added rejection_reason and verified_at support)
+  - `backend/server.js` (Mounted unified `supplierRoutes` under `/api/v1/supplier`)
+  - `frontend/src/api/supplier.js` (Client API methods for supplier portal)
+  - `frontend/src/components/supplier/SupplierVerificationBadge.jsx` (Database-backed status badge)
+  - `frontend/src/components/supplier/SupplierOnboardingWizard.jsx` (Multi-step wizard with save-draft and verification submit)
+  - `frontend/src/pages/SupplierProfilePage.jsx` (Supplier portal page with onboarding, delivery, and entitlements tabs)
+  - `frontend/src/pages/SupplierOnboardingPage.jsx` (Dedicated onboarding page)
+  - `frontend/src/App.jsx` (Registered routes `/supplier/profile` and `/supplier/onboarding`)
+  - `frontend/src/components/layout/AppShell.jsx` (Added Supplier Portal direct link in account menu for suppliers)
+  - `backend/tests/package_e1_supplier_profile_gate.js` (22-assertion dedicated automated test gate)
+- **Automated Gate Results:**
+  - `node backend/tests/package_e1_supplier_profile_gate.js`: **22/22 assertions passed (100% PASS)**.
+  - `node backend/tests/part2_security_gate.js`: **16/16 assertions passed (100% PASS)**.
+  - `node backend/tests/part_g2_delivery_integration_gate.js`: **44/44 assertions passed (100% PASS)**.
+  - `node backend/tests/part3_specification_gate.js`: **15/15 assertions passed (100% PASS)**.
+  - `cd frontend && npm run build`: **0 errors (built in 1.56s)**.
+- **Database & Business Data Preservation:**
+  - Migration 032 applied strictly to `miljor_test_db`.
+  - Development database `miljor_db` verified 100% PRISTINE (users: 8, migrations: 31, 0 mutations).
+- **Package Status:**
+  - **PACKAGE E1: PASS**
+  - **SUPPLIER PROFILE & ONBOARDING: VERIFIED**
+  - **MODULO-97 IBAN VALIDATION: VERIFIED**
+  - **ADMIN VERIFICATION & RE-REVIEW TRIGGER: VERIFIED**
+  - **SENSITIVE DATA PROTECTION & MASKING: VERIFIED**
+
+---
+
+## Package E1.1 Execution Detail — Final Integration, Security & Release Gate
+- **Execution Date:** 2026-11-10
+- **Objective:** Independently verify Package E1 implementation, close sensitive banking security gaps (authenticated AES-256-GCM encryption-at-rest), implement complete admin verification frontend interface (Gate B), verify Migration 032 integrity without mutating dev database, and run comprehensive automated test gates.
+- **Files Modified/Created:**
+  - `backend/src/services/encryptionService.js`: Corrected deterministic test key length derivation to exact 32 bytes (SHA-256 hash) preventing `ERR_CRYPTO_INVALID_KEYLEN`.
+  - `backend/src/repositories/supplierProfileRepository.js`: Integrated authenticated AES-256-GCM encryption before storing `bank_iban`; transparent decryption on retrieval.
+  - `frontend/src/api/admin.js`: Created admin API client with `getPendingSuppliers`, `verifySupplier`, `suspendUser`, `reactivateUser`.
+  - `frontend/src/pages/AdminVerificationPage.jsx`: Created complete administrative verification UI with pending applications queue, detail inspection, tier/level approval modal, reason-mandated rejection modal, and self-approval protection.
+  - `frontend/src/App.jsx`: Mounted `/admin/verifications` route in AppShell layout.
+  - `frontend/src/components/layout/AppShell.jsx`: Added "Admin Verifications" link in account menu for administrative roles (`SUPER_ADMIN`, `VERIFICATION_ADMIN`, `ADMIN`).
+  - `backend/tests/package_e1_supplier_profile_gate.js`: Extended suite to 25 assertions with direct DB AES-GCM ciphertext verification at rest, cryptographic round-trip tamper-resistance tests, and admin pending queue authorization checks.
+  - `frontend/tests/package_e1_frontend_integration.test.cjs`: Dedicated 6-assertion test suite verifying frontend API contracts, wizard validation, badge mappings, admin interface, and AppShell routing.
+  - `backend/docs/MILJOR_PACKAGE_E1_FINAL_INTEGRATION_SECURITY_REPORT.md`: Comprehensive final acceptance report.
+- **Automated Gate Results:**
+  - `backend/tests/package_e1_supplier_profile_gate.js`: **27/27 assertions passed (100% PASS)**.
+  - `frontend/tests/package_e1_frontend_integration.test.cjs`: **6/6 assertions passed (100% PASS)**.
+  - `backend/tests/part2_security_gate.js`: **16/16 assertions passed (100% PASS)**.
+  - `backend/tests/part_g2_delivery_integration_gate.js`: **44/44 assertions passed (100% PASS)**.
+  - `backend/tests/part3_specification_gate.js`: **15/15 assertions passed (100% PASS)**.
+  - Total Active Gate Assertions: **108/108 passed (100% GREEN)**.
+  - `cd frontend && npm run build`: **0 errors (built in 1.68s)**.
+- **Database & Business Data Preservation:**
+  - `miljor_test_db`: Contains verified Migration 032 with expanded `bank_iban VARCHAR(150)`.
+  - `miljor_db`: Verified 100% PRISTINE (8 users, 31 migrations, 0 writes).
+  - Development database migration status: **DEPLOYMENT BLOCKED** pending separate explicit authorization.
+- **Final Correction Gate Summary:**
+  - **Supplier Plan Safety:** Aligned enum options to `STARTER` (4), `GROWTH` (13), and `BUSINESS` (25); prevented implicit 25 slots for Free/Starter tier.
+  - **Encrypted Banking Data:** Enforced fail-closed behavior on unencrypted legacy data (`UNENCRYPTED_LEGACY_DATA`) unless `{ allowLegacy: true }` is authorized; enforced fail-closed validation on malformed/tampered ciphertexts.
+  - **Missing Encryption Configuration:** Confirmed bank detail storage fails closed if `BANK_DATA_ENCRYPTION_KEY` is missing in non-test environments (`ENCRYPTION_KEY_NOT_CONFIGURED`).
+  - **Admin Authorization:** Enforced server-side allowlists for `verification_level` (`LEVEL_1_CONTACT`, `LEVEL_2_BUSINESS`, `LEVEL_3_QUALITY`) and `subscription_plan` (`STARTER`, `GROWTH`, `BUSINESS`).
+- **Package Status:**
+  - **PACKAGE E1.1: PASS**
+  - **GATE A (BANKING DATA ENCRYPTION AT REST): VERIFIED (AES-256-GCM)**
+  - **GATE B (ADMIN VERIFICATION INTERFACE): COMPLETE & VERIFIED**
+  - **GATE C (MIGRATION 032 INTEGRITY & PRISTINE DEV DB): VERIFIED**
+  - **GATE D (AUTOMATED TEST GATES & BUILD): 108/108 PASS & 0 BUILD ERRORS**
+
+---
+
+## Package E1.2 Execution Detail — GitHub Code Review Fixes
+- **Execution Date:** 2026-11-10
+- **Objective:** Resolve three confirmed code review issues on `feature/package-e`: (1) Explicit response field allowlist in `getPendingSuppliers()` to eliminate raw/ciphertext leakage; (2) Server-side enforcement of authorized plan caps (`STARTER`=4, `GROWTH`=13, `BUSINESS`=25) rejecting client bypass with `400 PLAN_CAP_EXCEEDED`; (3) Removal of implicit legacy plaintext acceptance from normal runtime in `supplierProfileRepository.findBySupplierId()` with explicit, authorized migration procedure.
+- **Files Modified/Created:**
+  - `backend/src/controllers/adminController.js`: Replaced `SELECT sp.*` with explicit response field allowlist; derived `bank_iban_masked` without raw/ciphertext leakage; enforced server-side plan caps rejecting requests > authorized cap with `400 PLAN_CAP_EXCEEDED`.
+  - `backend/src/repositories/supplierProfileRepository.js`: Removed `{ allowLegacy: true }` from normal path; legacy records flag `LEGACY_MIGRATION_REQUIRED` without data loss; implemented `migrateLegacyBankingRecord()` requiring `{ authorized: true }`.
+  - `frontend/src/pages/AdminVerificationPage.jsx`: Updated IBAN display to strictly use `bank_iban_masked`; bounded listing cap input to authorized plan cap.
+  - `backend/tests/package_e1_supplier_profile_gate.js`: Extended to 28 assertions covering response field allowlist, plan cap overreach rejection (400), and legacy migration lifecycle.
+  - `backend/docs/MILJOR_PACKAGE_E1_FINAL_INTEGRATION_SECURITY_REPORT.md`: Updated with E1.2 code review fixes and evidence.
+- **Automated Gate Results:**
+  - `backend/tests/package_e1_supplier_profile_gate.js`: **28/28 assertions passed (100% PASS)**.
+  - `frontend/tests/package_e1_frontend_integration.test.cjs`: **6/6 assertions passed (100% PASS)**.
+  - `backend/tests/part2_security_gate.js`: **16/16 assertions passed (100% PASS)**.
+  - `backend/tests/part_g2_delivery_integration_gate.js`: **44/44 assertions passed (100% PASS)**.
+  - `backend/tests/part3_specification_gate.js`: **15/15 assertions passed (100% PASS)**.
+  - Total Active Gate Assertions: **109/109 passed (100% GREEN)**.
+  - `cd frontend && npm run build`: **0 errors (built in 771ms)**.
+- **Database & Business Data Preservation:**
+  - `miljor_test_db`: Contains verified Migration 032 with expanded `bank_iban VARCHAR(150)`.
+  - `miljor_db`: Verified 100% PRISTINE (8 users, 31 migrations, 0 writes).
+  - Development database migration status: **DEPLOYMENT BLOCKED** pending separate explicit authorization.
+- **Package Status:**
+  - **PACKAGE E1: COMPLETE & VERIFIED**
+  - **RESPONSE FIELD ALLOWLIST: VERIFIED (Zero raw/ciphertext leakage)**
+  - **SERVER-SIDE PLAN CAPS: VERIFIED (STARTER 4, GROWTH 13, BUSINESS 25)**
+  - **FAIL-CLOSED LEGACY PATH: VERIFIED (Normal path refuses implicit plaintext)**
+  - **HARDENED MAINTENANCE WORKFLOW: VERIFIED (Row-level lock, SUPER_ADMIN context, audit trail)**
+  - **CAN START E2: NO (Strict Stop Enforced)**
+
+---
+
+## Package E2 Execution Detail — Canonical Catalog Architecture, Supplier Catalog Requests, Product/Variant Management & E1 Security Closure
+- **Execution Date:** 2026-11-10
+- **Objective:** Implement the complete canonical four-level catalog hierarchy (`CATEGORY → PRODUCT FAMILY → APPROVED PHYSICAL VARIANT → SUPPLIER OFFER`), supplier catalog addition requests (`NEW_FAMILY` and `NEW_VARIANT`), admin moderation workflow (`DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED / REJECTED`), and close all remaining E1 security review findings.
+- **Database Migration Applied (Test DB Only):**
+  - Migration 033: `backend/database/migrations/033_canonical_catalog_and_moderation.sql`
+  - Rollback script: `backend/database/migrations/rollback/033_rollback_canonical_catalog_and_moderation.sql`
+  - Applied strictly to `miljor_test_db` (`miljor_db` remains untouched at Migration 031).
+- **Files Modified/Created:**
+  - `backend/src/services/encryptionService.js`: Enforced high-entropy 256-bit key validation in non-test environments (`WEAK_ENCRYPTION_KEY`) and optional legacy key rotation support.
+  - `backend/src/repositories/supplierProfileRepository.js`: Added `authorizeLegacyBankMigration` with JWT + DB `SUPER_ADMIN` verification and one-time `WeakSet` capability token; unconditionally blocked `miljor_db` and `miljor_sandbox_db` in `migrateLegacyBankingRecord`.
+  - `backend/src/controllers/adminController.js`: Replaced `parseInt()` with strict positive safe integer validation (`INVALID_LISTING_CAP`).
+  - `backend/src/services/specificationService.js`: Added cross-commodity semantic validation (`validateFamilyAndCommodityCoherence`), strict decimal `validatePackSize`, and `computeCatalogRequestHash`.
+  - `backend/src/repositories/catalogRepository.js` & `backend/src/services/catalogService.js`: Full canonical catalog repository and transactional moderation service.
+  - `backend/src/controllers/catalogController.js`, `backend/src/routes/v1/catalogRoutes.js`, `backend/src/routes/v1/adminRoutes.js`: Public catalog discovery, supplier request endpoints, and admin moderation endpoints.
+  - `backend/src/controllers/productController.js` & `backend/src/controllers/productSpecificationController.js`: Closed direct supplier catalog creation bypass (`403 DIRECT_CATALOG_CREATION_PROHIBITED`).
+  - `backend/src/controllers/supplierListingController.js` & `backend/src/repositories/supplierListingRepo.js`: Enforced `APPROVED` variant/family/category checks and added `getSupplierCatalogUsageSummary` (`active_distinct_families`) for Package E3 readiness.
+  - `frontend/src/api/catalog.js`, `frontend/src/pages/SupplierCatalogPage.jsx`, `frontend/src/pages/AdminCatalogPage.jsx`, `frontend/src/App.jsx`, `frontend/src/components/layout/AppShell.jsx`: Complete supplier and admin catalog interfaces.
+  - `backend/tests/package_e2_catalog_foundation_gate.js`, `backend/tests/package_e2_catalog_moderation_gate.js`, `backend/tests/package_e2_catalog_security_gate.js`, `frontend/tests/package_e2_frontend_catalog.test.cjs`: Automated verification suites.
+- **Automated Gate Results:**
+  - `package_e1_supplier_profile_gate.js`: **28/28 PASS**
+  - `package_e2_catalog_foundation_gate.js`: **9/9 PASS**
+  - `package_e2_catalog_moderation_gate.js`: **8/8 PASS**
+  - `package_e2_catalog_security_gate.js`: **8/8 PASS**
+  - `part3_specification_gate.js`: **15/15 PASS**
+  - `package_e2_frontend_catalog.test.cjs`: **4/4 PASS**
+  - `cd frontend && npm run build`: **0 errors (built in 767ms)**
+- **Package Status:**
+  - **PACKAGE E2: PASS**
+  - **CAN START E3: NO (Strict Stop Enforced)**
 
 
+
+
+
+
+
+
+
+---
+
+## Package E2 Final Closure — Supplier-Owned Products, Physical SKUs, Immutable Published Pools, 24–72h Delivery SLA, `miljor_db` Activation & Master Documentation Suite
+- **Execution Date:** 2026-11-10
+- **Database Migration Applied:**
+  - Migration `034`: `database/migrations/034_supplier_owned_products_skus_and_immutable_pools.sql` (and rollback script `database/migrations/rollback/034_rollback_supplier_owned_products_skus_and_immutable_pools.sql`).
+  - Applied, rolled back, and re-applied cleanly on `miljor_test_db`.
+  - Full external backup of `miljor_db` verified in `miljor_recovery_verify_db` (50/50 tables parity), followed by ordered activation of Migrations `032`, `033`, and `034` on `miljor_db`.
+- **Key Deliverables Completed:**
+  1. **6-Level Product Ownership Hierarchy:** Implemented `supplier_products` (with optional `brand` via `is_unbranded`, optional `quality_grade`, optional `processing_method`) and `supplier_skus` (separate physical SKUs for `25kg` vs `50kg`, strict mass vs volume enforcement, `DRAFT -> PUBLISHED -> ARCHIVED` lifecycle with bridge linkage to `product_specifications`).
+  2. **Regular Pool Invariants (Rules P1–P13):** Enforced supplier-only pool creation/editing/publishing (`ADMIN` blocked with `403 SUPPLIER_CONSENT_REQUIRED`), unconditional commercial & cluster immutability after publish (`is_terms_locked = 1`, `published_terms_snapshot`, `422 POOL_TERMS_IMMUTABLE` even at 0 reservations), `SELECT ... FOR UPDATE` serialization between draft updates and publish, and mandatory `promised_delivery_at` within `[scheduled_close_at + 24h, scheduled_close_at + 72h]`.
+  3. **Frontend Studio & Marketplace Updates:** Refactored `SupplierCatalogPage.jsx` for Supplier Products & Physical SKUs, updated `PoolCard.jsx` to display promised delivery SLA and unbranded/optional-grade metadata, and verified `npm run build` (`0` errors).
+  4. **Master Documentation Suite:** Authored 12 comprehensive architectural and domain specifications in `backend/docs/`.
+- **Automated Gate Results:**
+  - `node tests/package_e2_product_ownership_and_immutable_pools_gate.js`: **20/20 PASS**
+  - `node tests/package_e1_supplier_profile_gate.js`: **28/28 PASS**
+  - `node tests/package_e2_catalog_foundation_gate.js`: **9/9 PASS**
+  - `node tests/package_e2_catalog_moderation_gate.js`: **8/8 PASS**
+  - `node tests/package_e2_catalog_security_gate.js`: **8/8 PASS**
+  - `node tests/part3_specification_gate.js`: **15/15 PASS**
+  - `node tests/part4b2_pool_creation_gate.js`: **22/22 PASS**
+  - `node tests/part4b3_pool_publishing_gate.js`: **25/25 PASS**
+  - `node tests/part_6d3_buyer_onboarding_pool_clusters_gate.js`: **11/11 PASS**
+  - `node tests/part_6d3_2_backend_hardening_gate.js`: **11/11 PASS**
+- **Status:** **PASS (COMPLETE — READY FOR GITHUB SYNC)**.
+
+---
+
+## Packages E3–E6: Complete Marketplace Experience Implementation & Release
+- **Execution Date:** 2026-11-10
+- **Scope:** Package E3 (Subscriptions & Entitlements Engine), Package E4 (Advanced Procurement Modes: Flash Pools, Demand Requests, RFQs/Quotes, Recurring Contracts, Supplier Matching), Package E5 (Invoicing & JazzCash Gateway Sandbox Adapter), Package E6 (Two-Way Reviews, In-App Contextual Messaging & Anti-Bypass Filter, Sponsored Campaigns).
+- **Database Migration:**
+  - Migration `035`: `database/migrations/035_package_e3_e6_complete_marketplace_schema.sql` (and rollback script).
+  - Applied and verified on `miljor_test_db`.
+  - Consistent mysqldump backup of `miljor_db` verified via restoration parity check on temporary `miljor_recovery_verify_db` (64/64 tables, 8/8 users).
+  - Migration 035 applied to development database `miljor_db` with zero data loss.
+- **Architectural Deliverables:**
+  1. `subscriptionEntitlementService.js`: Distinct active canonical product family counting (`STARTER=4`, `GROWTH=13`, `BUSINESS=25`), multi-SKU family rule, concurrency-safe row locking, downgrade preservation guarantee.
+  2. `procurementService.js`: Flash clearance pools, buyer demand requests ("Request a Pool"), RFQ bidding with automatic order generation in `AWAITING_PAYMENT`, recurring procurement contracts, and multi-factor supplier matching.
+  3. `jazzcashAdapter.js`: HMAC-SHA256 signature calculation over sorted transaction parameters and server-side callback tamper detection.
+  4. `invoiceService.js`: Immutable commercial and tax invoice snapshots (`INV-YYYY-XXXXX`) with strict RBAC order party access control.
+  5. `reviewService.js`: Two-way ratings and reviews requiring completed/delivered orders, duplicate prevention, and anti-self-dealing verification.
+  6. `messagingService.js`: In-app conversation threads with automated heuristic detection of external contact leaks (Pakistani mobile numbers, WhatsApp, email) to preserve platform escrow guarantees.
+  7. `promotionService.js`: Sponsored campaigns and featured pool placements for verified suppliers.
+  8. Frontend Pages & Routes: `SupplierDashboardPage.jsx`, `SupplierSubscriptionPage.jsx`, `FlashPoolsPage.jsx`, `DemandRequestsPage.jsx`, `RfqPage.jsx`, wired cleanly into `App.jsx` with responsive AppShell layout.
+- **Automated Gate Results:**
+  - `package_e1_supplier_profile_gate.js`: **28/28 PASS (100%)**
+  - `package_e2_product_ownership_and_immutable_pools_gate.js`: **20/20 PASS (100%)**
+  - `package_e3_entitlements_and_supplier_portal_gate.js`: **14/14 PASS (100%)**
+  - `package_e4_e6_marketplace_engine_gate.js`: **10/10 PASS (100%)**
+  - Frontend production build (`vite build`): **PASS (0 errors, 5.72s)**
+- **Status:** **COMPLETE AND INDEPENDENTLY VERIFIED**.
+
+---
+
+## Phase B0 Execution Detail — Backend Safety Recovery, Payment Consolidation & Protection Gate
+- **Execution Date:** 2026-11-10
+- **Directive Version:** B0-FINAL-2.0
+- **Working Branch:** `feature/package-e`
+- **Scope:** Phase B0 ONLY (Strict Stop — Do Not Start Phase B1).
+- **Schema Baseline:** Migration `035` (zero schema mutations performed in B0).
+- **Core Security & Architectural Fixes:**
+  1. **Safepay-Only Active Payment Provider Consolidation & Mock Gateway Containment:**
+     - Decommissioned `jazzcashAdapter.js` via `git rm`.
+     - Consolidated `paymentProviderService.js` to enforce `PROVIDERS.SAFEPAY = 'SAFEPAY'` as the sole active provider.
+     - Stripped mock payment completion: `verifyPayment` refuses `MOCK-` references and unapproved providers (`JAZZCASH`, `EASYPAISA`, `MOCK_GATEWAY`) with `UNSUPPORTED_PAYMENT_PROVIDER`.
+     - `paymentController.initiatePayment` rejects non-Safepay requests with 400 `UNSUPPORTED_PAYMENT_PROVIDER`, ignores client-sent `status: 'PAID'`, and mandates authoritative orders prior to checkout (`ORDER_REQUIRED_FOR_PAYMENT`).
+     - `paymentController.verifyPayment` fails closed against simulated client references; zero fraudulent PAID state transitions or ledger entries created.
+     - `paymentController.initiateRefund` blocks refunds for mock and unapproved providers with 400 `UNSUPPORTED_PAYMENT_PROVIDER`.
+  2. **Invoice Authorization-Before-Generation & Concurrency Safety:**
+     - Completely overhauled `invoiceService.js`: order details and authorization verified strictly BEFORE invoice generation or row insertion.
+     - Strict RBAC: only purchasing buyer, fulfilling supplier, or admin (`ADMIN`, `SUPER_ADMIN`, `FINANCE_ADMIN`) may access; unauthorized 3rd parties receive `403 INVOICE_ACCESS_FORBIDDEN` with **zero rows inserted into the `invoices` table**.
+     - Atomic concurrency serialization: multi-worker generation requests serialized inside MySQL transaction under `SELECT ... FOR UPDATE` row locks, ensuring exactly one invoice row and snapshot per order.
+  3. **Subscription Payment Gating & Entitlements Security:**
+     - Enforced server-side gating in `subscriptionEntitlementService.js`: ordinary suppliers cannot self-upgrade to paid plans (`GROWTH`, `BUSINESS`) without verified Safepay checkout (`402 SUBSCRIPTION_PAYMENT_REQUIRED`).
+     - Unsupported `ANNUAL` billing cycle strictly rejected (`400 INVALID_BILLING_CYCLE`) until Phase B11.
+     - Cross-supplier tampering blocked with `403 FORBIDDEN`.
+     - Administrative plan overrides restricted strictly to `ADMIN` / `SUPER_ADMIN` with audit trail in `system_audit_logs` (`action = 'SUBSCRIPTION_PLAN_CHANGED_BY_ADMIN'`).
+     - Downgrade safety: downgrading to `STARTER` (free tier) preserves all historical products and SKUs with zero truncation, setting `is_over_limit = true` without deleting catalog records.
+  4. **Frontend Protection:**
+     - `SupplierSubscriptionPage.jsx` hardened to handle 402 `SUBSCRIPTION_PAYMENT_REQUIRED` with informative error notifications and zero false optimism.
+- **Automated Verification Evidence:**
+  - `phase_b0_backend_safety_recovery_gate.js`: **46/46 PASS (100% GREEN)**
+    - Suite 1 (Mock Containment & Provider Gating M1–M10): 10/10 PASS
+    - Suite 2 (Safepay Active Provider & Webhook HMAC S1–S10): 10/10 PASS
+    - Suite 3 (Invoice Authorization & Concurrency I1–I12): 12/12 PASS
+    - Suite 4 (Subscription Security & Entitlements U1–U14): 14/14 PASS
+  - Impacted Regression Gates:
+    - `package_e1_supplier_profile_gate.js`: **28/28 PASS (100%)**
+    - `package_e2_product_ownership_and_immutable_pools_gate.js`: **20/20 PASS (100%)**
+    - `package_e3_entitlements_and_supplier_portal_gate.js`: **14/14 PASS (100%)**
+    - `package_e4_e6_marketplace_engine_gate.js`: **10/10 PASS (100%)**
+  - Total Verified Assertions: **118/118 PASS (100% GREEN)**
+- **Development Database Protection Audit:**
+  - Database: `miljor_db`
+  - Users Count: **8** (exact initial state)
+  - Orders Count: **0**
+  - Payments Count: **0**
+  - Invoices Count: **0**
+  - Test Rows Leaked: **0** (100% PRISTINE)
+- **Status:** **COMPLETE AND INDEPENDENTLY VERIFIED (STOPPING — PHASE B1 NOT STARTED)**.
+
+
+---
+
+## Phase B6-A — Smart Procurement Hub Foundation Checkpoint (2026-11-10)
+
+- **Branch:** `feature/b6-private-rfq` — B4 accepted base `5689c377ffe80b1c94c37ddaa84d57bf569e9ea0`; B4/B5/main remain unmodified.
+- **Master scope:** Unified Multi-Product Personalized RFQ + Collective Quote + single/collective Recurring + Demand-First + area/delivery-day matching; buyer-facing **Get Best Quotes**. Subphases B6-A–B6-Q in `backend/docs/MILJOR_B6_PRIVATE_RFQ_IMPLEMENTATION_PLAN.md`.
+- **Actual source added:** `backend/src/services/procurementRequestPolicy.js` pure exact-decimal request normalization; `backend/tests/b6_procurement_request_policy_gate.js` focused planned cases. Does not mutate DB, create orders or charge buyer.
+- **Audit:** Legacy `procurementService.js` RFQ/recurring paths lack robust multi-product SKU financial invariants; must not be treated as accepted B6.
+- **Test status:** NOT RUN; GitHub interface cannot execute local MySQL, Node or Vite. Need local test execution and schema contract gate, with B5 shared-inventory reconciliation.
+- **Evidence:** `backend/docs/MILJOR_B6_A_FOUNDATION_IMPLEMENTATION_REPORT.md`. No production/development DB mutations.
+- **Verdict:** PARTIAL — B6-A source foundation committed, full B6-A acceptance BLOCKED. B6-B NOT STARTED. **CAN START NEXT PHASE: NO**.
+
+
+### B6-A/P1 checkpoint update — 2026-11-10
+- B6 expanded plan grouped into four packages: P1 A–D, P2 E–H, P3 I–N, P4 O–Q, while maintaining individual gates.
+- New pure `backend/src/services/procurementQuoteComparisonService.js` and `backend/tests/b6_quote_comparison_gate.js` provide exact-decimal multi-product full/split supplier quote preview; NO orders/payments/stock mutation.
+- Direct GitHub-source sandbox JS execution: request policy **15/15 PASS**, quote comparison **12/12 PASS**, combined **27/27 PASS**. These were NOT run in Node/MySQL; no connected DB or Vite evidence.
+- B4/B5 remain divergent: B5 ahead 39 and behind 38 from accepted B4 at audit time; no shared-stock integration assumed.
+- Updated evidence: `backend/docs/MILJOR_B6_A_FOUNDATION_IMPLEMENTATION_REPORT.md`.
+- **Current P1/B6-A gate: PARTIAL / BLOCKED.** Need local `miljor_test_db` migration/schema/API gate and independently accepted B5 integration before declaring end-to-end PASS. **CAN START NEXT PHASE: NO.**
+
+
+### B5 acceptance handoff + B6 countdown compatibility — 2026-11-10
+- B5 report received; remote B5 head confirmed `ecd7d2ee67d280dab9550e8ffc9497207106cbf6`; remote acceptance report records Migration 036, 302/302 regression assertions, frontend build PASS and protected DB zero writes.
+- B5/B4 graph is still diverged (40 ahead / 38 behind); selected B4 `poolController.js` and `tierPricingService.js` contents independently verified byte-identical between B5 and B6. No merge/force-push performed.
+- B6 added `frontend/src/utils/parseDeadline.js`, CountdownTimer integration, parser tests and npm test script. Exact parser/test source executed in isolated JS runtime: **14/14 PASS**; Vite build/browser timer test NOT RUN.
+- Updated B6 master plan with B5 integration requirements: single inventory allocation ceiling, Safepay claim/release/reconciliation, strict route auth, and sequential combined regression.
+- B6 still B4-ancestry; B5 Flash service, Migration 036 and Flash UI are not yet ported into B6. They must remain separate and be reconciled before B6 stock/payment acceptance.
+- **Verdict:** B5 handoff REMOTE-VERIFIED FROM REPORT; B6-A/P1 PARTIAL/BLOCKED pending local Node/MySQL/API verification and schema audit. No production DB writes. B6-B NOT STARTED. **CAN START NEXT PHASE: NO**.
+
+- **B5 report arithmetic check:** the 13 displayed suite counts sum to **319**, not the reported aggregate 302 (difference 17). This is a report-total reconciliation item only; no evidence of a failing suite. Do not quote 302 as independently verified until Antigravity reconciles it with raw output. B5 branch was not modified.
+
+
+---
+
+## B6-B — Multi-Product Buyer Request Vertical Slice (2026-11-10)
+
+- **Worktree/branch:** GitHub original files on `feature/b6-private-rfq`. B4 and B5 branches untouched. No file renames or alternative implementation trees.
+- **Database source:** additive `037_smart_procurement_requests.sql` with buyer-owned requests, line items and durable replay snapshots; physical SQL checked against catalog family INT ID. **Migration NOT RUN** (no access to local MySQL via GitHub connector).
+- **Backend source:** `procurementRequestService.js` (verified buyer, approved family/unit, atomic create/edit/publish, optimistic version, durable replay); existing `procurementController.js` and `procurementRoutes.js` extended with strict buyer-only API.
+- **Buyer frontend:** existing `RfqPage.jsx` enhanced with canonical family dropdown, valid units, multi-item shopping list, delivery area and quotation deadline, create/edit/publish/list.
+- **Test file:** `backend/tests/b6_procurement_request_lifecycle_gate.js`; fail-closed `miljor_test_db` 14+ scenario real DB integration acceptance test created but **NOT EXECUTED**.
+- **Actual verification:** new backend service/controller/routes/test syntax parsed successfully using JS parser; previously 41/41 isolated pure-domain assertions were executed. New live MySQL/API and Vite/UX acceptance **NOT RUN**.
+- **Business safety:** no stock, orders, payments, refunds or recurring buyer obligations generated by request lifecycle; collective and recurring publish fail closed.
+- **Dedicated report:** `backend/docs/MILJOR_B6_REQUEST_IMPLEMENTATION_REPORT.md`.
+- **Verdict: SOURCE IMPLEMENTED / B6-B ACCEPTANCE BLOCKED** until reviewed Migration 037 execution, authenticated API + authorization tests, isolated DB regression and Vite build pass; **CAN START NEXT PHASE: NO**.
+
+- **B6-B source hardening update:** Migration 037 includes original create-response snapshots and mutation replay snapshots; request service validates family plus parent category, allowed units, verified buyer and immutable original create replay.
+- **Direct code-level execution:** 8/8 mocked persistence lifecycle assertions PASS on the current GitHub service source, distinct from prior 41/41 pure helper assertions. **No real MySQL/API/Node/Vite test execution claimed.** Full B6-B gate remains BLOCKED pending test DB migration and actual runtime acceptance.
+
+
+---
+
+## B6-D — Supplier Matching & Private Invitations (2026-11-10)
+
+- **Branch:** `feature/b6-private-rfq` — preserve B4/B5/main branches; no renames or duplicate app trees.
+- **Schema source:** additive `038_procurement_supplier_invitations.sql`, durable (request,supplier) unique invitation key, supplier response status and JSON matched item IDs. Migration NOT EXECUTED on MySQL in this GitHub-only session.
+- **Backend source:** `procurementMatchingService.js` verified supplier-owned listing/physical SKU eligibility, approved spec/family, qty/unit and declared service area; parent request ownership/deadline enforcement and transactional invitation/response. Existing `procurementController.js` and `procurementRoutes.js` extended with strict buyer/supplier role endpoints.
+- **Frontend source:** original `RfqPage.jsx` extended with matching supplier list, per-item coverage, invite/status, private supplier inbox and interest/decline interactions. No separate duplicate page.
+- **Focused final gate file:** `backend/tests/b6_supplier_matching_gate.js` created; test DB integration to execute at consolidated end gate per user's instruction.
+- **Actual source checks:** JS parses; 7/7 isolated mocked-adapter supplier matching lifecycle checks PASS. NOT a full DB/API/browser PASS; no live migration, frontend build, financial processing or stock allocation.
+- **Evidence:** `backend/docs/MILJOR_B6_SUPPLIER_MATCHING_REPORT.md`.
+- **Verdict:** B6-D SOURCE IMPLEMENTED; FINAL INTEGRATION VERIFICATION DEFERRED. `CAN START NEXT PHASE: NO` under strict phase stop rule until next explicit approval.
+
+
+---
+
+## B6-E — Versioned Supplier Quotations (2026-11-10)
+
+- **Branch:** `feature/b6-private-rfq`. Original project files updated; B4/B5/main untouched.
+- **Migration source:** `039_procurement_supplier_quotes.sql` adds durable quote headers, append-only version snapshots and SKU/item quote lines. NOT APPLIED to any database in this GitHub-only session.
+- **Backend:** `procurementQuoteService.js` implements strict supplier invitation/role/spec/listing eligibility, subset/full shopping list quotations, purchasing-unit exact quantity validation, exact unit prices/delivery, immutable revisions, supplier and buyer scoped reads, SHA-256 idempotency and old-response replay after quote expiry. No buyer order/hold/payment.
+- **B6-D bridge:** `procurementMatchingService.js` now exposes eligible physical listings in supplier private inbox. Existing `procurementController.js`/`procurementRoutes.js` extended with strictly SUPPLIER / BUYER quote routes.
+- **Buyer/supplier UI:** Existing `RfqPage.jsx` updated with line-level supplier quotes and buyer quote viewing; supplier can quote partial item coverage; no buyer quote acceptance until B6-G.
+- **Testing source:** `backend/tests/b6_supplier_quote_gate.js`; existing `b6_supplier_matching_gate.js` enhanced for eligible SKU choices.
+- **Observed mocked source execution:** B6-E quotation lifecycle **9/9 PASS** (revisions, exact money, idempotency, supplier/tenant privacy). No real Node/MySQL/HTTP/Vite tests executed; no protected database writes. Final integration deferred per user.
+- **Dedicated report:** `backend/docs/MILJOR_B6_SUPPLIER_QUOTE_REPORT.md`.
+- **Verdict:** B6-E SOURCE IMPLEMENTED / INTEGRATION NOT VERIFIED. **CAN START NEXT PHASE: NO** until explicit subsequent instruction.
+
+- **B6-E lifecycle completion:** supplier quote withdrawal with idempotent same-key retry, historical version preservation, owner-scoped buyer quote-history endpoint, supplier quote listing/withdrawal UI; minimum buyer quantity enforced in matching and submission. Migration 039 includes `withdrawal_key` and `withdrawn_at`.
+- **Focused tests extended:** `b6_supplier_matching_gate.js` and `b6_supplier_quote_gate.js` now include inbox eligible SKU choices, quote history/withdrawal, key conflicts, privacy, MOQ-compatible fixtures and no phantom orders/payments. Tests require reviewed 037–039 migrations on `miljor_test_db`; **NOT RUN**. Last 9/9 source mock check predates latest changes. Final integration verification DEFERRED; B4/B5 untouched.
+
+
+---
+
+## B6-F — Smart Quote Comparison & Negotiation (2026-11-10)
+
+- **Authorized scope:** Strictly approved B6-F plan (full vs split quote comparison, transparent rankings, buyer better-offer request, immutable supplier counterquote). No B6-G/H inventory, order or payment execution.
+- **Original project paths:** `040_procurement_quote_negotiations.sql`, `procurementQuoteComparisonService.js`, `procurementNegotiationService.js`, existing `procurementQuoteService.js`/controller/routes/`RfqPage.jsx`, and `tests/b6_quote_negotiation_gate.js`.
+- **Buyer-visible:** lowest supplier-quoted basket cost, fastest declared delivery, transparent best value (supplier consolidation), item grade/brand/pack/requirements, explicit item/shipping amounts and pending platform fee disclaimer; non-binding Request Better Offer, history.
+- **Supplier-visible:** own negotiation requests and response status; new immutable quote revision atomically marks request RESPONDED; quote withdrawal closes pending negotiation. Buyer contact/address never exposed in negotiation inbox.
+- **Precision/privacy/security:** exact BigInt decimals, current quote version, supplier verification and quote/role ownership checks, deadline validation, durable idempotency with original JSON response snapshot; bounded 8-quote combination engine, explicit limitation not fake optimum.
+- **Observed code checks:** 12/12 existing pure comparison assertions PASS in JS sandbox; targeted server comparison mock returned accurate Rs.600.00 and SKU details; JS syntax parses. **No real MySQL migration, Node HTTP integration, Vite build or full B0–B5 regression executed.**
+- **Phase report:** `backend/docs/MILJOR_B6_COMPARISON_NEGOTIATION_REPORT.md`.
+- **QA parallel safety:** Prior A–E QA should remain pinned to its earlier checkout worktree; latest B6-F code requires reviewed Migration 040. Do not blindly reset/rebase or run two mutable suites on `miljor_test_db`.
+- **Verdict: B6-F SOURCE IMPLEMENTED / FINAL ACCEPTANCE BLOCKED** pending actual test DB migration, authorized API/browser checks and affected regression. **CAN START NEXT PHASE: NO.**
+
+
+---
+
+## Combined B6 Phase 1 — G–M bridge checkpoint
+
+- **Plan:** Approved `backend/docs/MILJOR_B6_COMBINED_PHASE1_IMPLEMENTATION_PLAN.md` preserved; same 7 subphases G–M in a single implementation batch.
+- **B5 source parity in B6 branch:** accepted Migration 036 and `flashPoolService.js` copied unchanged from accepted B5; B5 Flash role-restricted routes/controllers and Safepay hold claim, tracker-failure release and verified-paid stock reconciliation integrated while preserving B6 award reconciler.
+- **G/H correctness:** financial source strictly requires test/sandbox environment, `miljor_test_db` (or specifically approved sandbox DB), B5 stock hooks, schema evidence, explicit reconciliation/tax policy flags; real money and production DB remain blocked. UTC DB date conversion hardened.
+- **I/J:** verified supplier and private invitations, compatible item/pack grouping, exact per-buyer demand, moderated catalog and supplier MOQ, group stock sum across identical listing. Original buyer address/contact must not be disclosed.
+- **K:** immutable buyer consent, explicit reapproval after quote change, organizer-only `QUALIFIED` group freeze after all buyers consent to one current bid with shared-stock readiness check. No payment/stock hold generated by qualification.
+- **L/M:** recurring schedule and buyer-owned due-cycle draft generation preserved, fixtures revised to select valid supported units; never auto-charge.
+- **Focused executed JavaScript:** 58/58 pure policy assertions PASS in isolated JS runtime (14 G/H, 13 I, 15 L/M, 16 J/K). **Real MySQL migrations/tests, actual HTTP and Vite build have not run in this GitHub-only work session.**
+- **Report:** `backend/docs/MILJOR_B6_PHASE1_INTEGRATION_REPORT.md` lists exact implemented source and critical gaps.
+- **Financial blockers:** B5 + B4 + B6 shared inventory races, signed Safepay payment/escrow, order release/refunds and full K per-buyer paid settlement still require implementation/acceptance; recurring worker dispatch and integration are pending.
+- **Verdict:** **SOURCE ADVANCED / FULL G–M ACCEPTANCE BLOCKED.** Do not begin N–Q or turn on payment gate.
+
+- **B6-M worker follow-up:** Existing `schedulerService.js` now optionally runs `procurementRecurringService.runDueBatch` every five minutes under two explicit enable/approval flags; durable bounded retries and buyer-review draft-only semantics. `b6_recurring_worker_gate.js`: **8/8 isolated JS mock PASS**, separate from earlier **58/58 pure-policy PASS**, combined 66/66 source-level checks; not MySQL or frontend PASS.
+- **B6-K group readiness:** organizer-only atomic `qualifyGroup` checks all buyer consents on the same current supplier bid/version, minimum independent buyers, expiry and shared stock; freezes group only, no stock allocation or payment.
+- **B6 G–M acceptance stays BLOCKED:** K financial settlement/refund requirements and full G/H cross-pool Safepay/MySQL tests pending. Report `backend/docs/MILJOR_B6_PHASE1_INTEGRATION_REPORT.md` updated.
+
+
+## 2026-11-11 — UCP-3/4/5 INDEPENDENT AUDIT FIX (source committed / release blocked)
+- Branch: `fix/ucp3-5-audit-repair` (isolated from `feature/ucp3-5-delivery-marketplace-ops`); neither merge nor production DB mutation performed.
+- Fixed Flash best-before ISO regex and strict calendar validation; buyer Flash hold expiry field, countdown refresh and expired checkout UX; active commitment counting; Regular checkout retry idempotency.
+- Confirmed cross-branch 046/047/048 migration version conflicts. Renumbered unapplied UCP migrations to 051/052/053, preserving B6 Phase 2's own 046/047/048; migration runner rejects duplicate versions before DDL and blocks already-applied old UCP history from being replayed. Reconciled identified source gates/docs and updated release preflight.
+- Source parse verified on 18/18 inspected backend JS files prior to final report; no MySQL/HTTP/JSX build/real Safepay regression executed. New source audit gate prepared for final suite.
+- **Gate: BLOCKED** pending merge reconciliation, isolated `miljor_test_db` migration execution, full B4/B5/B6 security/concurrency/payment/JSX E2E acceptance and review.
+- See `backend/docs/MILJOR_UCP3_5_INDEPENDENT_AUDIT_FIX_REPORT.md` for exact findings, changed files and remaining gates.

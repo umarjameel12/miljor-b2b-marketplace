@@ -28,9 +28,9 @@
    - Complete all mandatory steps needed for the feature to function. Do not implement unrelated future features.
 
 4. **Smart Risk-Based Testing:**
-   - **Level 1 (Focused):** Run only the modified component's test suite immediately after editing (expected baseline ~5s; not a hard timeout).
-   - **Level 2 (Impacted):** Run directly affected subsystem suites when needed (expected baseline ~15s; not a hard timeout).
-   - **Level 3 (Master Regression):** Run once at the explicitly authorized final phase gate via `node tests/master_regression_runner.js`.
+   - **During Phase Implementation:** Complete all in-scope edits without repeatedly running integration/regression suites after each change. Run a narrow diagnostic check only if needed to isolate a failure or prevent immediate data/transaction damage.
+   - **End-of-Phase Verification:** Run one consolidated relevant test/integration/regression gate after implementation stabilizes, strictly against `miljor_test_db` for mutable tests. Include essential financial/security negative and concurrency coverage. Run the master runner at most once when the phase gate explicitly requires it.
+   - **Failure Handling:** If the final gate fails, repair the root cause and rerun affected failures, then verify the consolidated gate once after stabilization; do not claim PASS prematurely.
    - For security-critical or financial changes, include negative and concurrency tests within the focused scope.
    - Do not skip essential tests. Do not run full regression repeatedly. Do not start browser E2E, frontend builds, or load tests unless required by the task.
 
@@ -49,13 +49,13 @@
    - Never fabricate evidence or test counts.
 
 8. **Concise Professional Task Report (10–20 Lines):**
-   Provide a structured summary: `TASK`, `IMPLEMENTED`, `FILES`, `TESTS`, `EVIDENCE`, `DATABASE`, `UNRESOLVED`, `RESULT` (`PASS / PARTIAL / FAIL / BLOCKED`).
+   Provide a structured summary: `TASK`, `IMPLEMENTED`, `FILES`, `TESTS`, `EVIDENCE`, `DATABASE`, `UNRESOLVED`, `RESULT` (`PASS / PARTIAL / FAIL / BLOCKED`). At the end of each phase, save factual final integration/test commands, results, protected-DB checks, changed-file list, git SHA and phase status in a dedicated `backend/docs/` phase report, and update `backend/docs/MILJOR_PHASE_LOG.md`; commit/push this evidence with the verified phase changes.
 
 9. **Data & Project Safety:**
    - All tests, fixtures, and failure simulations run strictly in `miljor_test_db`.
    - `miljor_db` must remain pristine. Never modify `miljor_db` without explicit authorization.
    - Never perform live financial transactions. Preserve existing accounts, pools, quotes, and records.
-   - Zero git mutations without user approval (`git commit`, `git push`, `git merge`, `git rebase`). Never reset uncommitted user work.
+   - **Git Authorization Policy:** Explicit user approval to implement a named phase also authorizes committing and pushing that phase's verified changes to its approved feature branch. No separate commit/push confirmation is required. A new phase, force-push, merge to main, destructive database action, unrelated change or external money movement still requires its own authorization. If verification fails, do not label the phase complete. Never reset uncommitted user work.
 
 10. **Strict Stop Rule:**
     - Complete only the authorized task. Produce the final report. Output `CAN START NEXT PHASE: NO` and stop cleanly. Do not launch autonomous tasks.
@@ -94,7 +94,7 @@ MilJor maintains an authoritative project skill inventory located at `.agents/sk
    - **User Authorization Required:** Never install (`npx skills add`) or update skills automatically; always present the recommendation and request explicit user authorization.
 6. **Testing & Debugging Policy (`systematic-debugging`, `test-driven-development`, `verification-before-completion`):**
    - Enforce the 4-phase root-cause protocol (reproduce -> isolate -> hypothesize -> verify) before proposing fixes.
-   - Follow MilJor's risk-based testing (Level 1 focused tests during development; Level 3 master regression only once at the final phase gate).
+   - Follow MilJor's consolidated end-of-phase testing policy: no repeated development-cycle integration suites; one relevant final gate, with targeted reruns only to resolve failures.
    - Never run entire test suites solely because a skill suggests generic verification.
 7. **Security Review Policy (`security-review`):**
    - Employ for systematic vulnerability analysis across auth, authorization, database queries, and input validation.
@@ -107,7 +107,11 @@ Where any installed skill instruction conflicts with MilJor project policies, **
 1. **Protocol & Invariant Supremacy:** `MILJOR_ENGINEERING_EXECUTION_PROTOCOL.md` and `MILJOR_BUSINESS_INVARIANTS.md` take absolute precedence over all skill suggestions (as explicitly conceded by `using-superpowers/SKILL.md` line 63).
 2. **Financial Safety & Money Movement:** No agent skill has authorization to move funds, initiate live external refunds, execute supplier payouts, or alter financial ledgers. External execution remains strictly `DISABLED`.
 3. **Database Isolation & Evidence Preservation:** All testing and dynamic fixtures run strictly against `miljor_test_db`. Never run dynamic test fixtures against `miljor_db` or mutate `miljor_sandbox_db`. Never delete or overwrite historical commercial evidence.
-4. **Git Mutation Prohibition:** Skills suggesting automated git actions (such as `finishing-a-development-branch` or `using-git-worktrees`) are strictly barred from running `git commit`, `git push`, `git merge`, or `git rebase` without explicit user command.
+4. **Git Mutation Safeguards:** Skills suggesting automated git actions (such as `finishing-a-development-branch` or `using-git-worktrees`) cannot push to unapproved branches or execute merges without explicit user command. Explicit user approval to implement a named phase authorizes committing and pushing that phase's verified changes to its approved feature branch.
 5. **Graceful Fallback:** If a skill is unavailable, broken, or ambiguous, immediately fall back to standard MilJor Protocol v2.0 engineering conventions.
+   **B0/B0.1/B0.2 Source-Code Reconciliation (not just reports):** Antigravity must confirm the actual GitHub-committed B0, B0.1 and B0.2 implementations are present in the ORIGINAL checked-out local source paths (controllers, services, repositories, tests, migrations, agent rules), not merely referenced by reports. Compare `git rev-parse HEAD`, `git status` and source file diffs against `origin/feature/package-e`; safely integrate changes without clobbering uncommitted local edits or overwriting local MySQL data. Verify B0–B0.2 recorded implementation commits/paths are reachable from current branch HEAD, including ChatGPT-authored payment safety and B0.2 test corrections. If local originals are behind, sync tracked files via a safe fast-forward/rebase only when clean and appropriate; stop and report conflicts otherwise. Do not recreate, duplicate or casually replace already-merged work. Record source synchronization and source-file equivalence separately from the historic accepted B0–B0.2 test outcomes. This same original-source reconciliation rule applies to B1 and future B phases.
+
+   **Permanent B-Phase Source & Evidence Sync Rule (B0 onward):** The checked-out GitHub repository's existing original source and documentation paths are the system of record. Before each final Antigravity test gate, safely fetch/pull the approved feature branch (inspect and preserve uncommitted work; never reset, force-push, or overwrite local changes). Reconcile B0/B0.1/B0.2 historical acceptance reports with the phase log without changing their original evidence. For B1 and every future authorized B phase, write the implementation delta and *actual* final test evidence to the existing phase report in `backend/docs/` (create a report only when absent), update `backend/docs/MILJOR_PHASE_LOG.md`, and commit/push those project files alongside verified changes. Avoid duplicate reports, detached chat-only summaries, or invented test counts. Run a **single fastest sufficient phase-end affected-suite gate**, reuse successful unaffected historical evidence, avoid repeated full master regression/builds; retain required risk-based security, ownership, financial, data-isolation and concurrency checks. FAIL/BLOCKED remains FAIL/BLOCKED until proven fixed. Do not start the next phase automatically.
+
 6. **Reporting:** When a substantial phase or task utilizes one or more installed skills, document the exact skills applied and their outcome in the phase report.
 

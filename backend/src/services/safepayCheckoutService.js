@@ -20,6 +20,7 @@ const db = require('../config/db');
 const safepayAdapter = require('./safepayAdapter');
 const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
+const procurementAwardService = require('./procurementAwardService');
 
 class SafepayCheckoutService {
 
@@ -120,6 +121,11 @@ class SafepayCheckoutService {
       throw err;
     }
 
+    // B5 Flash: claim the hold before contacting Safepay. For non-Flash
+    // orders this is a no-op; B6's separate award hooks remain untouched.
+    await require('./flashPoolService').claimCheckout(orderId,actor.id);
+    await require('./regularPoolPaymentHoldService').claimCheckout(orderId,actor.id);
+
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
     if (!totalPayable || totalPayable <= 0 || isNaN(totalPayable)) {
@@ -163,13 +169,38 @@ class SafepayCheckoutService {
       };
     }
 
+    // A pre-existing Safepay attempt can still be reconciled after deadline.
+    // A NEW attempt cannot be created after the original 15-minute hold ends.
+    try {
+      await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+    } catch (holdError) {
+      // If the deadline elapsed between claim and provider call, do not strand
+      // the order in PAYMENT_PENDING when no checkout was actually created.
+      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[B4] Could not unwind uninitiated checkout:',error));
+      throw holdError;
+    }
+
     // Step 2: Call Safepay API OUTSIDE transaction lock
-    const { trackerToken, rawResponse } = await safepayAdapter.createTracker({
-      amount: totalPayable,
-      currency: order.currency || 'PKR',
-      orderCode: order.order_code,
-      mockClient
-    });
+    let trackerToken, rawResponse;
+    try {
+      const tracker = await safepayAdapter.createTracker({
+        amount: totalPayable,
+        currency: order.currency || 'PKR',
+        orderCode: order.order_code,
+        mockClient
+      });
+      trackerToken = tracker.trackerToken;
+      rawResponse = tracker.rawResponse;
+    } catch (trackerError) {
+      await require('./flashPoolService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(releaseError => {
+          console.error('[B5/B6] Flash checkout claim release failed:', releaseError);
+        });
+      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[B4] Regular pool payment claim recovery:', error));
+      throw trackerError;
+    }
 
     let tbtToken = null;
     try {
@@ -267,7 +298,7 @@ class SafepayCheckoutService {
     }
 
     const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
-    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.webhook_event_type || 'unknown';
+    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.event || parsedPayload.webhook_event_type || 'unknown';
 
     // 2. Check for duplicate webhook receipt (Idempotency)
     const [existingEvent] = await db.query(
@@ -300,7 +331,9 @@ class SafepayCheckoutService {
 
     const providerAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
       ? Number(data.tracker.amount)
-      : (data.amount !== undefined ? Number(data.amount) : null);
+      : (data.amount !== undefined
+          ? Number(data.amount)
+          : (data.net !== undefined && data.net !== null ? Number(data.net) : null));
     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
       || data.currency
       || parsedPayload.currency
@@ -403,24 +436,24 @@ class SafepayCheckoutService {
         throw err;
       }
 
-      // Exact Amount check (fail-closed)
-      if (providerAmount !== null) {
-        // Safepay amount in order/v1 is in major units (e.g. 192450.00)
-        // If provider reports subunits (>10000x), convert, but standard init returns exact decimal
-        let normalizedProviderAmount = providerAmount;
-        if (providerAmount === Number(order.total_amount) * 100) {
-          normalizedProviderAmount = Number((providerAmount / 100).toFixed(2));
-        }
+      // Exact Amount check (fail-closed - Repair P0-C & B0.2 Fix 4)
+      if (providerAmount === null || providerAmount === undefined || isNaN(providerAmount) || providerAmount <= 0) {
+        const err = new Error('Safepay webhook payment event must contain a valid positive amount');
+        err.code = 'INVALID_PAYLOAD';
+        err.statusCode = 422;
+        throw err;
+      }
 
-        const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
-        const receivedAmountStr = exactDecimal.toCanonicalString(normalizedProviderAmount, 2);
+      // Safepay official contract: tracker amount is in major units (PKR decimal e.g. 192450.00).
+      // Speculative 100x subunit normalizations are strictly eliminated (B0.2 Fix 4).
+      const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
+      const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
 
-        if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
-          const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
-          err.code = 'AMOUNT_MISMATCH';
-          err.statusCode = 422;
-          throw err;
-        }
+      if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
+        const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
+        err.code = 'AMOUNT_MISMATCH';
+        err.statusCode = 422;
+        throw err;
       }
 
       // Check if order was already confirmed PAID
@@ -491,6 +524,11 @@ class SafepayCheckoutService {
         ]
       );
 
+      // For B6 supplier orders, atomically mark the shared ORDER_DIRECT
+      // listing allocations COMMITTED only after verified provider payment.
+      await procurementAwardService.reconcilePaidOrder(connection,order.id);
+      await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
+
       // 8. Record Webhook Event as PROCESSED
       await connection.query(
         `INSERT INTO payment_webhook_events (
@@ -509,42 +547,54 @@ class SafepayCheckoutService {
         ]
       );
 
-      // 9. Transactional Outbox Event: ORDER_PAID
-      const eventIdOutbox = reservationEventService.generateEventId({
-        event_type: 'ORDER_PAID',
-        pool_id: order.pool_id || 0,
-        reservation_id: order.reservation_id || 0,
-        actor_id: order.buyer_id,
-        mutation_type: 'PAYMENT_CONFIRMATION',
-        idempotency_key: effectiveEventId,
-        event_sequence: 1
-      });
+      // 9. Transactional Outbox Event: ORDER_PAID (only if associated with a pool)
+      if (order.pool_id) {
+        const eventIdOutbox = reservationEventService.generateEventId({
+          event_type: 'ORDER_PAID',
+          pool_id: order.pool_id,
+          reservation_id: order.reservation_id || 0,
+          actor_id: order.buyer_id,
+          mutation_type: 'PAYMENT_CONFIRMATION',
+          idempotency_key: effectiveEventId,
+          event_sequence: 1
+        });
 
-      await connection.query(
-        `INSERT INTO reservation_business_events (
-          event_id, pool_id, reservation_id, actor_id, actor_role,
-          event_type, event_payload, idempotency_key, created_at
-        ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_PAID', ?, ?, NOW())`,
-        [
-          eventIdOutbox,
-          order.pool_id || 0,
-          order.reservation_id || 0,
-          order.buyer_id,
-          JSON.stringify({
-            order_id: order.id,
-            order_code: order.order_code,
-            amount: Number(order.total_amount),
-            currency: order.currency || 'PKR',
-            provider: 'SAFEPAY',
-            tracker_token: trackerToken,
-            payment_status: 'PAID',
-            order_status: 'PAID'
-          }),
-          effectiveEventId
-        ]
-      );
+        await connection.query(
+          `INSERT INTO reservation_business_events (
+            event_id, pool_id, reservation_id, actor_id, actor_role,
+            event_type, event_payload, idempotency_key, created_at
+          ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_PAID', ?, ?, NOW())`,
+          [
+            eventIdOutbox,
+            order.pool_id,
+            order.reservation_id || null,
+            order.buyer_id,
+            JSON.stringify({
+              order_id: order.id,
+              order_code: order.order_code,
+              amount: Number(order.total_amount),
+              currency: order.currency || 'PKR',
+              provider: 'SAFEPAY',
+              tracker_token: trackerToken,
+              payment_status: 'PAID',
+              order_status: 'PAID'
+            }),
+            effectiveEventId
+          ]
+        );
+      }
 
       await connection.commit();
+
+      // B5 Flash pool stock transitions only AFTER an authentic confirmed
+      // payment. Reconciliation uses its own transaction and is idempotent;
+      // a transient failure must stay recoverable from the buyer hold endpoint.
+      try {
+        await require('./flashPoolService').reconcilePaidOrder(order.id);
+      } catch (flashError) {
+        console.error('[B5/B6] Verified Flash payment needs reconciliation:',
+          flashError.code || flashError.message);
+      }
 
       return {
         success: true,
@@ -596,8 +646,9 @@ class SafepayCheckoutService {
 
     const order = orders[0];
 
-    // Tenancy check: Buyer can only inspect their own orders; Admin can inspect any
-    if (actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+    // Payment and checkout tracker URLs are private to the buyer or finance/admin roles.
+    if (!actor || !(actor.role === 'BUYER' && Number(order.buyer_id) === Number(actor.id)) &&
+        !['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(actor.role)) {
       const err = new Error('You do not have permission to view payment status for this order');
       err.code = 'FORBIDDEN';
       err.statusCode = 403;
@@ -627,6 +678,9 @@ class SafepayCheckoutService {
       }
     }
 
+    const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
+      .readForOrder(order.id,order.buyer_id);
+
     return {
       order_id: order.id,
       order_code: order.order_code,
@@ -636,6 +690,7 @@ class SafepayCheckoutService {
       total_amount: Number(order.total_amount),
       currency: order.currency,
       lifecycle_phase: lifecyclePhase,
+      regular_pool_payment_hold: regularPoolPaymentHold,
       latest_attempt: latestAttempt ? {
         attempt_code: latestAttempt.attempt_code,
         status: latestAttempt.status,
@@ -686,8 +741,10 @@ class SafepayCheckoutService {
 
     const order = orders[0];
 
-    // Tenant check if actor provided
-    if (actor && actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+    // An authenticated caller cannot reconcile somebody else's payment.
+    // Internal trusted provider hooks may call with actor=null.
+    if (actor && !(actor.role === 'BUYER' && Number(order.buyer_id) === Number(actor.id)) &&
+        !['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(actor.role)) {
       const err = new Error('You do not have permission to reconcile this order');
       err.code = 'FORBIDDEN';
       err.statusCode = 403;
@@ -850,6 +907,8 @@ class SafepayCheckoutService {
         [order.id]
       );
 
+      await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
+
       // Insert into payments
       const paymentCode = `PAY-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
       const [paymentInsert] = await connection.query(
@@ -896,6 +955,11 @@ class SafepayCheckoutService {
         ]
       );
 
+      await procurementAwardService.reconcilePaidOrder(connection,order.id);
+
+      // B4 pool outbox: only valid for actual pool-backed orders.
+      // B5/B6 poolless orders use verified payment rows and their own lifecycle events.
+      if (order.pool_id) {
       // Transactional Outbox Event: ORDER_PAID
       const eventIdOutbox = reservationEventService.generateEventId({
         event_type: 'ORDER_PAID',
@@ -932,8 +996,16 @@ class SafepayCheckoutService {
           reconciliationEventId
         ]
       );
+      }
 
       await connection.commit();
+
+      try {
+        await require('./flashPoolService').reconcilePaidOrder(order.id);
+      } catch (flashError) {
+        console.error('[B5/B6] Reconciled Flash payment needs stock update:',
+          flashError.code || flashError.message);
+      }
 
       const [newPayments] = await db.query(
         `SELECT * FROM payments WHERE id = ?`,

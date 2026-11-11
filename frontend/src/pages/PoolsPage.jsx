@@ -5,11 +5,12 @@
 // Buyer Base Cluster Defaulting, and Quiet-Luxury B2B Aesthetic
 // =============================================================================
 import React, { useState, useEffect, useCallback } from 'react';
-import { poolsApi } from '../api/pools';
-import { productsApi } from '../api/products';
+import {useSearchParams} from 'react-router-dom';
+import {BuyerPoolCard} from '../components/pools/BuyerPoolCard';
+import unifiedPoolsApi from '../api/unifiedPools';
+import catalogApi from '../api/catalog';
 import { geoApi } from '../api/geo';
 import { useAuth } from '../context/AuthContext';
-import { PoolCard } from '../components/PoolCard';
 import { Skeleton } from '../components/ui/Skeleton';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -46,9 +47,16 @@ const FULFILLMENT_MODES = [
 
 export const PoolsPage = () => {
   const { user } = useAuth();
+  const [searchParams,setSearchParams]=useSearchParams();
+  const initialType=String(searchParams.get('type')||'ALL').toUpperCase();
+  const [poolType,setPoolType]=useState(['ALL','REGULAR','FLASH'].includes(initialType)?initialType:'ALL');
+  const [serverTime,setServerTime]=useState(null);
+  const [nextCursor,setNextCursor]=useState(null);
+  const [loadingMore,setLoadingMore]=useState(false);
 
   const [pools, setPools] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [families, setFamilies] = useState([]);
+  const [catalogCategories, setCatalogCategories] = useState([]);
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -58,7 +66,9 @@ export const PoolsPage = () => {
   const [selectedClusterId, setSelectedClusterId] = useState(user?.base_cluster_id ? String(user.base_cluster_id) : '');
   const [selectedFulfillmentMode, setSelectedFulfillmentMode] = useState('ALL');
   const [includeAllPickup, setIncludeAllPickup] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search')||'');
+  const [debouncedSearch,setDebouncedSearch]=useState(searchParams.get('search')||'');
+  useEffect(()=>{const timer=setTimeout(()=>setDebouncedSearch(searchQuery),300);return()=>clearTimeout(timer)},[searchQuery]);
   const [viewMode, setViewMode] = useState('pools'); // 'pools' or 'catalog'
 
   // Update default cluster if user logs in or profile changes
@@ -87,58 +97,82 @@ export const PoolsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const categoryParam = selectedCategory === 'All Commodities' ? undefined : selectedCategory;
+      const categoryParam = selectedCategory !== 'All Commodities' ? Number(selectedCategory) : undefined;
       const clusterParam = selectedClusterId ? Number(selectedClusterId) : undefined;
       const modeParam = selectedFulfillmentMode === 'ALL' ? undefined : selectedFulfillmentMode;
 
-      const [poolsRes, productsRes] = await Promise.all([
-        poolsApi.getActivePools({
-          category: categoryParam,
-          cluster_id: clusterParam,
-          fulfillment_mode: modeParam,
-          include_all_pickup: includeAllPickup,
+      const [poolsRes, familiesRes, categoriesRes] = await Promise.all([
+        unifiedPoolsApi.discover({
+          type:poolType,
+          category_id:categoryParam,
+          cluster_id:clusterParam,
+          fulfillment_mode:modeParam,
+          include_all_pickup:includeAllPickup,
+          search:debouncedSearch.trim()||undefined,
+          limit:100
         }),
-        productsApi.getAllProducts({ category: categoryParam }),
+        catalogApi.getFamilies(),
+        catalogApi.getCategories()
       ]);
+      setPools(poolsRes.success&&Array.isArray(poolsRes.data?.pools)?poolsRes.data.pools:[]);
+      setServerTime(poolsRes.data?.server_time||null);
+      setNextCursor(poolsRes.data?.next_cursor||null);
 
-      if (poolsRes.success && poolsRes.data?.pools) {
-        setPools(poolsRes.data.pools);
-      } else {
-        setPools([]);
-      }
-
-      if (productsRes.success && productsRes.data?.products) {
-        setProducts(productsRes.data.products);
-      } else {
-        setProducts([]);
-      }
+      setFamilies(familiesRes.success && Array.isArray(familiesRes.data?.families) ? familiesRes.data.families : []);
+      setCatalogCategories(categoriesRes.success && Array.isArray(categoriesRes.data?.categories) ? categoriesRes.data.categories : []);
     } catch (err) {
       console.warn('Could not fetch marketplace data:', err.message);
       setError(err.response?.data?.error?.message || 'Unable to connect to MilJor procurement service.');
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup]);
+  }, [selectedCategory, selectedClusterId, selectedFulfillmentMode, includeAllPickup, viewMode, poolType, debouncedSearch]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const filteredPools = pools.filter((p) => {
-    const titleMatch = (p.product_name || p.title || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const varietyMatch = (p.variety || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const codeMatch = (p.pool_code || p.spec_code || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return titleMatch || varietyMatch || codeMatch;
-  });
+  // Type/category/cluster/search have already been server-filtered.
+  const loadMore=async()=>{
+    if(!nextCursor||loadingMore)return;
+    setLoadingMore(true);
+    try{
+      const result=await unifiedPoolsApi.discover({
+        type:poolType,
+        category_id:selectedCategory==='All Commodities'?undefined:Number(selectedCategory),
+        cluster_id:selectedClusterId?Number(selectedClusterId):undefined,
+        fulfillment_mode:selectedFulfillmentMode==='ALL'?undefined:selectedFulfillmentMode,
+        include_all_pickup:includeAllPickup,search:debouncedSearch.trim()||undefined,
+        limit:100,cursor:nextCursor
+      });
+      if(!result.success)throw Error(result.error?.message||'Could not load more pools');
+      setPools(previous=>{
+        const seen=new Set(previous.map(p=>p.type+':'+p.id));
+        return [...previous,...(result.data?.pools||[]).filter(p=>{
+          const id=p.type+':'+p.id;
+          if(seen.has(id))return false;seen.add(id);return true;
+        })];
+      });
+      setNextCursor(result.data?.next_cursor||null);
+    }catch(e){setError(e.response?.data?.error?.message||e.message||'Could not load more pools');}
+    finally{setLoadingMore(false);}
+  };
+  const filteredPools = pools;
 
-  const filteredProducts = products.filter((p) => {
-    const titleMatch = (p.title || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const brandMatch = (p.brand || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const varietyMatch = (p.variety || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const codeMatch = (p.spec_code || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const categoryMatch = selectedCategory === 'All Commodities' || p.category === selectedCategory;
-    return (titleMatch || brandMatch || varietyMatch || codeMatch) && categoryMatch;
+  const filteredFamilies = families.filter((family) => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const terms = [family.name, family.description, family.family_code,
+      ...(Array.isArray(family.aliases) ? family.aliases : [])];
+    return (!query || terms.some(term => String(term || '').toLocaleLowerCase().includes(query)))
+      && (selectedCategory === 'All Commodities' || String(family.category_id) === selectedCategory);
   });
+  const categoryOptions = [{ id: 'All Commodities', name: 'All Commodities' },
+    ...catalogCategories.map(c=>({id:String(c.id),name:c.name}))];
+  const handleViewChange = (nextView) => {
+    setViewMode(nextView);
+    setSelectedCategory('All Commodities');
+    setSearchQuery('');
+  };
 
   const selectedClusterObj = clusters.find((c) => String(c.id) === String(selectedClusterId));
 
@@ -165,7 +199,7 @@ export const PoolsPage = () => {
             >
               <button
                 type="button"
-                onClick={() => setViewMode('pools')}
+                onClick={() => handleViewChange('pools')}
                 className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'pools' ? 'shadow-xs font-bold' : 'hover:text-[var(--text-primary)]'
                 }`}
@@ -185,7 +219,7 @@ export const PoolsPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('catalog')}
+                onClick={() => handleViewChange('catalog')}
                 className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'catalog' ? 'shadow-xs font-bold' : 'hover:text-[var(--text-primary)]'
                 }`}
@@ -196,10 +230,10 @@ export const PoolsPage = () => {
                 }}
               >
                 <Package className="w-3.5 h-3.5" />
-                <span>16 Staple Specifications</span>
+                <span>Product Families</span>
                 {products.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
-                    {products.length}
+                    {families.length}
                   </span>
                 )}
               </button>
@@ -231,7 +265,7 @@ export const PoolsPage = () => {
                 placeholder={
                   viewMode === 'pools'
                     ? 'Search pools by commodity, spec code, or variety (e.g. Basmati, 1121, SPEC-001)...'
-                    : 'Search 16 staple specs (Super Kernel, Kainat, Chakki Atta, Daal Chana)...'
+                    : 'Search product families (e.g. Rice, Daal Chana, Cooking Oil)...'
                 }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -340,12 +374,12 @@ export const PoolsPage = () => {
 
           {/* Commodity Categories Scroll Strip */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-            {CATEGORIES.map((cat) => {
-              const active = selectedCategory === cat;
+            {categoryOptions.map((cat) => {
+              const active = selectedCategory === cat.id;
               return (
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
                   className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-150 cursor-pointer ${
                     active ? 'shadow-xs font-semibold' : 'hover:opacity-80'
                   }`}
@@ -355,7 +389,7 @@ export const PoolsPage = () => {
                     border: `1px solid ${active ? 'var(--brand-primary)' : 'var(--border-subtle)'}`,
                   }}
                 >
-                  <span>{cat}</span>
+                  <span>{cat.name}</span>
                 </button>
               );
             })}
@@ -369,9 +403,9 @@ export const PoolsPage = () => {
               <span>
                 Showing{' '}
                 <strong className="font-semibold text-stone-700 dark:text-stone-300">
-                  {viewMode === 'pools' ? filteredPools.length : filteredProducts.length}
+                  {viewMode === 'pools' ? filteredPools.length : filteredFamilies.length}
                 </strong>{' '}
-                {viewMode === 'pools' ? 'wholesale pools' : 'standard specifications'}
+                {viewMode === 'pools' ? 'wholesale pools' : 'product families'}
               </span>
 
               {selectedClusterObj && (
@@ -389,7 +423,7 @@ export const PoolsPage = () => {
             </div>
 
             <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-              {viewMode === 'pools' ? '● Real-Time Volume Pooling' : '✓ 16 Authoritative Lahore Commodities'}
+              {viewMode === 'pools' ? '● Real-Time Volume Pooling' : '✓ MilJor-governed product families'}
             </span>
           </div>
         )}
@@ -417,6 +451,17 @@ export const PoolsPage = () => {
           </div>
         )}
 
+        {viewMode==='pools'&&<div className="flex flex-wrap gap-2" aria-label="Choose pool type">
+          {['ALL','REGULAR','FLASH'].map(t=><button type="button" key={t} onClick={()=>{
+            setPoolType(t);
+            const next=new URLSearchParams(searchParams);
+            if(t==='ALL')next.delete('type');else next.set('type',t);
+            setSearchParams(next);
+          }} aria-pressed={poolType===t}
+            className={`rounded-xl px-4 py-2 text-xs font-semibold border ${poolType===t?'border-emerald-600 bg-emerald-500/10 text-emerald-600':'border-[var(--border-subtle)]'}`}>
+            {t==='ALL'?'All Pools':t==='REGULAR'?'Regular Pools':'Flash Pools'}
+          </button>)}
+        </div>}
         {/* Content Grid: Pools vs Catalog */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -438,10 +483,19 @@ export const PoolsPage = () => {
           </div>
         ) : viewMode === 'pools' ? (
           filteredPools.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPools.map((pool) => (
-                <PoolCard key={pool.id} pool={pool} />
-              ))}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPools.map((pool) => (
+                  <BuyerPoolCard key={pool.type+'-'+pool.id} pool={pool}
+                    serverTime={serverTime} clusterId={selectedClusterId} onChange={fetchData}/>
+                ))}
+              </div>
+              {nextCursor&&<div className="text-center">
+                <button type="button" disabled={loadingMore} onClick={loadMore}
+                  className="border border-[var(--border-subtle)] rounded-xl px-5 py-2.5 text-xs font-semibold">
+                  {loadingMore?'Loading more…':'Load more wholesale pools'}
+                </button>
+              </div>}
             </div>
           ) : (
             <div
@@ -489,77 +543,32 @@ export const PoolsPage = () => {
             </div>
           )
         ) : (
-          /* 16 Authoritative Staple Specifications Grid */
-          filteredProducts.length > 0 ? (
+          /* Canonical families: never display legacy spec brands, fixed packs or invented MOQ. */
+          filteredFamilies.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProducts.map((prod) => (
-                <div
-                  key={prod.id}
-                  className="p-5 rounded-3xl border shadow-xs space-y-3.5 flex flex-col justify-between transition hover:shadow-md"
-                  style={{
-                    backgroundColor: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
-                  }}
-                >
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                        {prod.category}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{prod.spec_code || `SPEC-${prod.id}`}</span>
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="font-sans font-bold text-base" style={{ color: 'var(--text-primary)' }}>
-                        {prod.title}
-                      </h3>
-                      <p className="text-xs text-stone-500 mt-0.5">
-                        Brand: <strong className="text-stone-700 dark:text-stone-300">{prod.brand}</strong> &bull; {prod.variety}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <div>
-                        <span className="text-[10px] text-stone-400 block">Packaging</span>
-                        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{prod.pack_size}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-stone-400 block">Grade</span>
-                        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{prod.grade}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-stone-400 block">Processing</span>
-                        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{prod.processing_type}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-stone-400 block">Standard Unit</span>
-                        <span className="font-medium uppercase" style={{ color: 'var(--brand-accent)' }}>{prod.unit}</span>
-                      </div>
-                    </div>
+              {filteredFamilies.map((family) => (
+                <div key={family.id} className="p-5 rounded-3xl border shadow-xs flex flex-col gap-4"
+                  style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">{family.category_name}</span>
+                    <span className="text-[10px] text-stone-500 font-mono">{family.family_code}</span>
                   </div>
-
-                  <div className="pt-2.5 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-[10px] text-stone-400 font-mono">
-                      MOQ: {prod.moq_buyer || 20} {prod.unit}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setViewMode('pools');
-                        setSearchQuery(prod.title.split(' ')[0]);
-                      }}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer"
-                      style={{
-                        backgroundColor: 'var(--brand-accent)',
-                        color: 'var(--text-on-champagne)',
-                      }}
-                    >
-                      Find Active Pools
-                    </button>
+                  <div>
+                    <h3 className="font-sans font-bold text-base" style={{ color: 'var(--text-primary)' }}>{family.name}</h3>
+                    <p className="text-xs text-stone-500 mt-2">{family.description}</p>
                   </div>
+                  <div className="mt-auto border-t pt-3 text-xs text-stone-500"
+                    style={{ borderColor: 'var(--border-subtle)' }}>
+                    Brand, grade, pack size, price and MOQ depend on each supplier's actual SKU and offer.
+                  </div>
+                  <button type="button" onClick={() => {
+                    setViewMode('pools');
+                    setSelectedCategory('All Commodities');
+                    setSearchQuery(family.name);
+                  }} className="px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                    style={{ backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}>
+                    Find Live Pools
+                  </button>
                 </div>
               ))}
             </div>
@@ -573,10 +582,10 @@ export const PoolsPage = () => {
             >
               <Package className="w-10 h-10 mx-auto text-stone-300 dark:text-stone-600 mb-3" />
               <h3 className="font-display font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
-                No Specifications Found
+                No Product Families Found
               </h3>
               <p className="text-xs text-stone-500 mt-1">
-                Try selecting another commodity category or clearing your search filter.
+                Try another category or clear your search. Product families are maintained by MilJor.
               </p>
             </div>
           )

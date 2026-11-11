@@ -1,0 +1,205 @@
+'use strict';
+// B6-K: each collective buyer consents to OWN exact bid version and fee preview.
+// Intentionally NO order, stock allocation or Safepay until independent settlement gate.
+const crypto=require('node:crypto');
+const db=require('../config/db');
+const exact=require('./exactDecimal');
+const feeService=require('./feeService');
+const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
+const id=v=>{if(v==null||typeof v==='boolean'||!/^[1-9]\d*$/.test(String(v))||
+ !Number.isSafeInteger(Number(v)))throw fail('INVALID_ID','Positive numeric ID required.');return Number(v)};
+const key=v=>{if(typeof v!=='string'||!/^[a-zA-Z0-9:_-]{12,120}$/.test(v))
+ throw fail('INVALID_IDEMPOTENCY_KEY','Provide X-Idempotency-Key of 12–120 safe chars.');return v};
+const decode=x=>typeof x==='string'?JSON.parse(x):x;
+class ProcurementCollectiveApprovalService {
+ constructor(database=db){this.database=database}
+ async _preview(conn,buyerId,groupId,bidId,lock=false){
+  const buyer=id(buyerId),gid=id(groupId),bid=id(bidId);
+  const [verified]=await conn.query(
+   "SELECT id FROM users WHERE id=? AND role='BUYER' AND is_verified=1 AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'",[buyer]);
+  if(!verified.length)throw fail('BUYER_NOT_ELIGIBLE','Verified active B2B buyer required.',403);
+  const [groups]=await conn.query("SELECT g.id,g.status,r.quote_deadline,g.qualification_policy FROM procurement_collective_groups g JOIN procurement_requests r ON r.id=g.request_id WHERE g.id=?"+(lock?' FOR UPDATE':''),[gid]);
+  if(!groups.length)throw fail('GROUP_NOT_FOUND','Collective not found.',404);
+  if(groups[0].status!=='QUOTING')throw fail('GROUP_NOT_QUOTING','Collective is not accepting bid consent.',409);
+  const [[clock]]=await conn.query("SELECT (? > UTC_TIMESTAMP()) AS quote_open",[groups[0].quote_deadline]);
+  if(Number(clock?.quote_open)!==1)throw fail('GROUP_QUOTE_EXPIRED','Bid approval window closed.',409);
+  const [members]=await conn.query("SELECT id,status,consent_at FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?"+(lock?' FOR UPDATE':''),[gid,buyer]);
+  const member=members[0];
+  if(!member||member.status!=='JOINED'||!member.consent_at)
+   throw fail('PARTICIPANT_NOT_JOINED','Only a consented group participant can approve.',403);
+  const [bids]=await conn.query("SELECT b.id,b.status,b.current_version,v.id AS version_id,v.valid_until,v.full_snapshot FROM procurement_collective_bids b JOIN procurement_collective_bid_versions v ON v.bid_id=b.id AND v.version_number=b.current_version WHERE b.id=? AND b.group_id=?"+(lock?' FOR UPDATE':''),[bid,gid]);
+  const current=bids[0];
+  if(!current||current.status!=='ACTIVE')throw fail('BID_NOT_AVAILABLE','Supplier bid unavailable.',404);
+  const [[valid]]=await conn.query('SELECT (? > UTC_TIMESTAMP()) AS bid_open',[current.valid_until]);
+  if(Number(valid?.bid_open)!==1)throw fail('BID_EXPIRED','Supplier bid expired.',409);
+  const bidTerms=decode(current.full_snapshot);
+  if(bidTerms.coverage!=='FULL_BASKET')
+   throw fail('PARTIAL_GROUP_BID_REQUIRES_CONSENT_POLICY','Partial group settlement requires additional buyer approvals.',409);
+  const [rows]=await conn.query("SELECT request_item_id,quantity,purchasing_unit FROM procurement_collective_participant_lines WHERE participant_id=? ORDER BY request_item_id",[member.id]);
+  if(!rows.length)throw fail('PARTICIPANT_LINES_REQUIRED','No approved buyer demand.',409);
+  const offers=new Map(bidTerms.lines.map(line=>[Number(line.request_item_id),line]));
+  const lines=rows.map(row=>{
+   const term=offers.get(Number(row.request_item_id));
+   if(!term||String(row.purchasing_unit).toLowerCase()!==term.purchasing_unit)
+    throw fail('PHYSICAL_SPEC_MISMATCH','Seller bid does not match buyer requested lines.',409);
+   return {request_item_id:Number(row.request_item_id),quantity:String(row.quantity),
+    purchasing_unit:term.purchasing_unit,unit_price:term.unit_price,
+    supplier_sku_id:term.supplier_sku_id,product_spec_id:term.product_spec_id,
+    supplier_listing_id:term.supplier_listing_id,
+    physical_snapshot:term.physical_snapshot,
+    subtotal:exact.exactMultiplyRound(row.quantity,term.unit_price,2)};
+  });
+  const subtotal=exact.exactDecimalSum(lines.map(x=>x.subtotal),2);
+  const fee=await feeService.calculateBuyerFeeExact(subtotal,conn);
+  const total=exact.exactDecimalSum([subtotal,bidTerms.delivery_fee_per_buyer,fee.buyer_fee],2);
+  return {buyer_id:buyer,group_id:gid,participant_id:member.id,bid_id:bid,
+   bid_version_id:current.version_id,version_number:current.current_version,
+   supplier_id:bidTerms.supplier_id,items:lines,item_subtotal:subtotal,
+   supplier_delivery_fee:bidTerms.delivery_fee_per_buyer,buyer_platform_fee:fee.buyer_fee,
+   total_preview:total,currency:'PKR',status:'PREVIEW_ONLY',
+   requires_explicit_payment:true,creates_order:false,authorizes_payment:false};
+ }
+ async preview(buyerId,groupId,bidId){
+  return this._preview(this.database,buyerId,groupId,bidId);
+ }
+ async consent(buyerId,groupId,bidId,payload,rawKey){
+  const buyer=id(buyerId),gid=id(groupId),bid=id(bidId),idem=key(rawKey);
+  if(payload?.physical_specifications_accepted!==true||payload?.buyer_total_confirmed!==true)
+   throw fail('EXPLICIT_BUYER_CONSENT_REQUIRED','Buyer must approve exact physical SKU and own payable preview.');
+  let expected;
+  try{expected=exact.toCanonical(payload.total_preview,2)}
+  catch{throw fail('INVALID_TOTAL','Exact buyer preview total required.')}
+  const version=id(payload.bid_version_id);
+  const replacePrevious=payload.replace_previous_consent===true;
+  const hash=crypto.createHash('sha256').update(JSON.stringify({
+    buyer,gid,bid,version,expected,consent:true,replacePrevious
+  })).digest('hex');
+  const conn=await this.database.getConnection();
+  try{await conn.beginTransaction();
+   const [groups]=await conn.query('SELECT id FROM procurement_collective_groups WHERE id=? FOR UPDATE',[gid]);
+   if(!groups.length)throw fail('GROUP_NOT_FOUND','Collective not found.',404);
+   const [existing]=await conn.query('SELECT request_hash,original_response_snapshot FROM procurement_collective_buyer_approvals WHERE buyer_id=? AND idempotency_key=? FOR UPDATE',[buyer,idem]);
+   if(existing.length){
+    if(existing[0].request_hash!==hash)throw fail('IDEMPOTENCY_CONFLICT','Approval key already used for different terms.',409);
+    await conn.commit();return {approval:decode(existing[0].original_response_snapshot),is_replay:true};
+   }
+   const current=await this._preview(conn,buyer,gid,bid,true);
+   if(Number(current.bid_version_id)!==version)
+    throw fail('BID_VERSION_CHANGED','Supplier bid changed; refresh before consenting.',409);
+   if(!exact.exactDecimalEquals(current.total_preview,expected,2))
+    throw fail('BUYER_REAPPROVAL_REQUIRED','Supplier quote or buyer fees changed.',409);
+   const [prior]=await conn.query(
+    "SELECT id,bid_version_id,status FROM procurement_collective_buyer_approvals WHERE group_id=? AND participant_id=? AND status='CONSENTED_NOT_PAYABLE' FOR UPDATE",
+    [gid,current.participant_id]);
+   if(prior.length){
+    if(!replacePrevious)
+      throw fail('EXPLICIT_REAPPROVAL_REQUIRED','Buyer must explicitly replace previous consent after a supplier quote change.',409);
+    if(prior.some(row=>Number(row.bid_version_id)===version))
+      throw fail('BUYER_ALREADY_APPROVED','Buyer already approved this immutable quote version.',409);
+    await conn.query(
+      "UPDATE procurement_collective_buyer_approvals SET status='REVOKED' WHERE group_id=? AND participant_id=? AND status='CONSENTED_NOT_PAYABLE'",
+      [gid,current.participant_id]
+    );
+   }
+   const snapshot={buyer_id:buyer,group_id:gid,bid_version_id:version,
+    physical_specifications_accepted:true,items:current.items,
+    total_preview:expected,replaces_prior_consent:replacePrevious,
+    creates_payment:false};
+   const [saved]=await conn.query("INSERT INTO procurement_collective_buyer_approvals(group_id,participant_id,buyer_id,bid_version_id,item_subtotal,delivery_fee,buyer_fee_preview,total_preview,consent_snapshot,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?)",[gid,current.participant_id,buyer,version,current.item_subtotal,current.supplier_delivery_fee,current.buyer_platform_fee,expected,JSON.stringify(snapshot),idem,hash]);
+   const response={approval_id:saved.insertId,group_id:gid,buyer_id:buyer,
+    bid_version_id:version,status:'CONSENTED_NOT_PAYABLE',total_preview:expected,
+    creates_order:false,creates_payment:false};
+   await conn.query('UPDATE procurement_collective_buyer_approvals SET original_response_snapshot=? WHERE id=?',[JSON.stringify(response),saved.insertId]);
+   await conn.commit();return {approval:response,is_replay:false};
+  }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
+    throw fail('APPROVAL_CONFLICT','Another buyer approval already exists.',409);throw e}
+  finally{conn.release()}
+ }
+
+  // Freeze exactly one current supplier bid after EVERY joined buyer consents.
+  // Readiness only: no inventory reservation or payment happens here.
+  async qualifyGroup(organizerId,groupId,bidVersionId){
+    const organizer=id(organizerId),gid=id(groupId),version=id(bidVersionId);
+    const conn=await this.database.getConnection();
+    try{
+      await conn.beginTransaction();
+      const [groups]=await conn.query(
+        'SELECT id,organizer_buyer_id,status,minimum_buyers,join_deadline,qualification_snapshot FROM procurement_collective_groups WHERE id=? FOR UPDATE',[gid]
+      );
+      const group=groups[0];
+      if(!group)throw fail('GROUP_NOT_FOUND','Collective not found.',404);
+      if(Number(group.organizer_buyer_id)!==organizer)
+        throw fail('ORGANIZER_ONLY','Only the organizer may qualify.',403);
+      if(group.status==='QUALIFIED'){
+        const snapshot=decode(group.qualification_snapshot);
+        if(Number(snapshot?.bid_version_id)!==version)
+          throw fail('GROUP_ALREADY_QUALIFIED','Group locked to another supplier bid.',409);
+        await conn.commit();return {qualification:snapshot,is_replay:true};
+      }
+      if(group.status!=='QUOTING')
+        throw fail('GROUP_NOT_QUOTING','Group must be quoting.',409);
+      const [[clock]]=await conn.query('SELECT (? <= UTC_TIMESTAMP()) AS closed',[group.join_deadline]);
+      if(Number(clock?.closed)!==1)
+        throw fail('JOIN_CUTOFF_NOT_REACHED','Joining remains open.',409);
+      const [members]=await conn.query(
+        "SELECT id,buyer_id FROM procurement_collective_participants WHERE group_id=? AND status='JOINED' ORDER BY id FOR UPDATE",[gid]
+      );
+      if(members.length<Number(group.minimum_buyers))
+        throw fail('GROUP_MINIMUM_UNMET','Too few consenting buyers.',409);
+      const [bids]=await conn.query(
+        'SELECT b.id,b.supplier_id,b.status,b.current_version,v.id AS version_id,v.version_number,v.valid_until,v.full_snapshot FROM procurement_collective_bid_versions v JOIN procurement_collective_bids b ON b.id=v.bid_id WHERE v.id=? AND b.group_id=? FOR UPDATE',[version,gid]
+      );
+      const bid=bids[0];
+      if(!bid||bid.status!=='ACTIVE'||Number(bid.current_version)!==Number(bid.version_number))
+        throw fail('BID_NOT_CURRENT','Supplier bid changed.',409);
+      const [[valid]]=await conn.query('SELECT (? > UTC_TIMESTAMP()) AS live',[bid.valid_until]);
+      if(Number(valid?.live)!==1)throw fail('BID_EXPIRED','Supplier bid expired.',409);
+      const [approvals]=await conn.query(
+        "SELECT id,participant_id,buyer_id FROM procurement_collective_buyer_approvals WHERE group_id=? AND bid_version_id=? AND status='CONSENTED_NOT_PAYABLE' ORDER BY participant_id FOR UPDATE",[gid,version]
+      );
+      const approved=new Map(approvals.map(x=>[Number(x.participant_id),Number(x.buyer_id)]));
+      if(approvals.length!==members.length||
+        members.some(x=>approved.get(Number(x.id))!==Number(x.buyer_id)))
+        throw fail('GROUP_BUYER_CONSENT_INCOMPLETE',
+          'Each joined buyer must accept the same exact bid version.',409);
+      const terms=decode(bid.full_snapshot);
+      if(terms.coverage!=='FULL_BASKET'||!Array.isArray(terms.lines)||!terms.lines.length)
+        throw fail('GROUP_PARTIAL_AWARD_NOT_READY','Full group basket coverage required.',409);
+      const byListing=new Map();
+      for(const line of terms.lines){
+        const listing=id(line.supplier_listing_id),qty=exact.toCanonical(line.aggregate_quantity,4);
+        byListing.set(listing,exact.exactDecimalSum([byListing.get(listing)||'0.0000',qty],4));
+      }
+      for(const [listing,qty] of [...byListing.entries()].sort((a,b)=>a[0]-b[0])){
+        const [stock]=await conn.query('SELECT available_stock,status FROM supplier_listings WHERE id=? FOR UPDATE',[listing]);
+        if(!stock.length||stock[0].status!=='ACTIVE')
+          throw fail('GROUP_LISTING_CHANGED','Supplier listing unavailable.',409);
+        const [allocations]=await conn.query(
+          "SELECT SUM(allocated_qty) AS reserved FROM supplier_inventory_allocations WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED')",[listing]
+        );
+        const demand=exact.exactDecimalSum([qty,allocations[0]?.reserved||'0.0000'],4);
+        if(!exact.exactDecimalGte(stock[0].available_stock,demand,4))
+          throw fail('GROUP_STOCK_UNAVAILABLE','Shared stock no longer covers demand.',409);
+      }
+      const qualification={
+        group_id:gid,bid_version_id:version,supplier_id:bid.supplier_id,
+        qualified_buyer_count:members.length,item_line_count:terms.lines.length,
+        status:'QUALIFIED_AWAITING_INDIVIDUAL_PAYMENT',
+        stock_reserved:false,orders_created:false,payment_authorized:false
+      };
+      await conn.query(
+        "UPDATE procurement_collective_participants SET status='LOCKED' WHERE group_id=? AND status='JOINED'",[gid]
+      );
+      const [updated]=await conn.query(
+        "UPDATE procurement_collective_groups SET status='QUALIFIED',qualification_snapshot=? WHERE id=? AND status='QUOTING'",
+        [JSON.stringify(qualification),gid]
+      );
+      if(updated.affectedRows!==1)
+        throw fail('GROUP_QUALIFICATION_RACE','Group changed before qualification.',409);
+      await conn.commit();
+      return {qualification,is_replay:false};
+    }catch(e){await conn.rollback();throw e}finally{conn.release()}
+  }
+}
+module.exports=new ProcurementCollectiveApprovalService();
+module.exports.ProcurementCollectiveApprovalService=ProcurementCollectiveApprovalService;

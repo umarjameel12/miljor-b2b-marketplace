@@ -1,134 +1,115 @@
 // =============================================================================
-// src/services/paymentProviderService.js  — NEW
-// Provider abstraction layer — isolates payment gateway from business logic.
-// JazzCash: BLOCKED_BY_EXTERNAL_CREDENTIALS (no sandbox credentials provided)
-// MOCK_GATEWAY: Active for development — clearly labelled, never trusts itself
+// src/services/paymentProviderService.js
+// MilJor Phase B0: Payment Provider Consolidation & Safety Engine
+//
+// ENFORCES:
+// 1. SAFEPAY is the SOLE authorized active payment provider.
+// 2. MOCK_GATEWAY is strictly disabled in operational workflows — no fake PAID state.
+// 3. JAZZCASH and EASYPAISA are rejected with UNSUPPORTED_PAYMENT_PROVIDER.
+// 4. Client-supplied verification references cannot bypass authoritative verification.
 // =============================================================================
 
 const PROVIDERS = {
-  MOCK_GATEWAY: 'MOCK_GATEWAY',
-  JAZZCASH: 'JAZZCASH',
-  EASYPAISA: 'EASYPAISA',
+  SAFEPAY: 'SAFEPAY'
 };
 
 class PaymentProviderService {
+  get PROVIDERS() {
+    return PROVIDERS;
+  }
+
+  isProviderSupported(provider) {
+    const normalized = (provider || '').toUpperCase();
+    return normalized === PROVIDERS.SAFEPAY;
+  }
 
   // ---------------------------------------------------------------------------
-  // initiatePayment — Creates a payment request with the provider
-  // Returns: { success, transaction_ref, redirect_url, raw }
+  // initiatePayment — Creates payment session with active provider (SAFEPAY ONLY)
   // ---------------------------------------------------------------------------
   async initiatePayment({ provider, amount, orderId, buyerId, description }) {
-    switch (provider) {
+    const normalizedProvider = (provider || '').toUpperCase();
 
-      case PROVIDERS.MOCK_GATEWAY: {
-        // ⚠️  DEVELOPMENT ONLY — Never use in production
-        // Generates a fake transaction ref that verifyPayment() will accept
-        const transaction_ref = `MOCK-${Date.now()}-${Math.floor(Math.random() * 99999)}`;
-        console.log(`[MOCK GATEWAY] Payment initiated: ${transaction_ref} | Amount: Rs ${amount}`);
-        return {
-          success: true,
-          provider: PROVIDERS.MOCK_GATEWAY,
-          transaction_ref,
-          status: 'PENDING',
-          message: '[DEV MODE] Mock payment initiated. Call /verify to complete.',
-          raw: { mock: true, amount, order_id: orderId }
-        };
-      }
-
-      case PROVIDERS.JAZZCASH:
-        // =====================================================================
-        // BLOCKED_BY_EXTERNAL_CREDENTIALS
-        // JazzCash sandbox credentials not provided.
-        // To enable: add JAZZCASH_MERCHANT_ID, JAZZCASH_PASSWORD,
-        //            JAZZCASH_INTEGRITY_SALT to .env
-        // =====================================================================
-        return {
-          success: false,
-          provider: PROVIDERS.JAZZCASH,
-          status: 'BLOCKED_BY_EXTERNAL_CREDENTIALS',
-          message: 'JazzCash integration requires sandbox credentials. See .env.example for required keys.',
-          raw: null
-        };
-
-      case PROVIDERS.EASYPAISA:
-        return {
-          success: false,
-          provider: PROVIDERS.EASYPAISA,
-          status: 'BLOCKED_BY_EXTERNAL_CREDENTIALS',
-          message: 'Easypaisa integration not yet configured.',
-          raw: null
-        };
-
-      default:
-        return {
-          success: false,
-          status: 'UNKNOWN_PROVIDER',
-          message: `Unknown payment provider: ${provider}`,
-          raw: null
-        };
+    if (normalizedProvider !== PROVIDERS.SAFEPAY) {
+      return {
+        success: false,
+        provider: normalizedProvider || 'UNKNOWN',
+        status: 'UNSUPPORTED_PAYMENT_PROVIDER',
+        message: `Payment provider '${provider}' is not supported. Safepay is the sole active payment provider for MilJor.`,
+        raw: null
+      };
     }
+
+    // Safepay operational flow is handled through safepayCheckoutService
+    return {
+      success: true,
+      provider: PROVIDERS.SAFEPAY,
+      status: 'SAFEPAY_CHECKOUT_REQUIRED',
+      message: 'Please initiate checkout via authoritative order endpoint: /api/v1/orders/:id/checkout',
+      raw: null
+    };
   }
 
   // ---------------------------------------------------------------------------
-  // verifyPayment — Server-side verification of a payment transaction
-  // CRITICAL: Frontend success signals must NEVER be trusted. Always verify here.
-  // Returns: { verified: bool, status, amount_verified, raw }
+  // verifyPayment — Server-side payment verification (NEVER trusts client/mock)
   // ---------------------------------------------------------------------------
   async verifyPayment({ provider, transaction_ref, expected_amount }) {
-    switch (provider) {
+    const normalizedProvider = (provider || '').toUpperCase();
 
-      case PROVIDERS.MOCK_GATEWAY: {
-        // ⚠️  DEVELOPMENT ONLY
-        // In mock mode, any MOCK-prefixed transaction ref is "verified"
-        if (!transaction_ref || !transaction_ref.startsWith('MOCK-')) {
-          return { verified: false, status: 'VERIFICATION_FAILED', amount_verified: false };
-        }
-        console.log(`[MOCK GATEWAY] Payment verified: ${transaction_ref}`);
-        return {
-          verified: true,
-          provider: PROVIDERS.MOCK_GATEWAY,
-          status: 'PAID',
-          amount_verified: true,
-          raw: { mock: true, transaction_ref, verified_amount: expected_amount }
-        };
-      }
-
-      case PROVIDERS.JAZZCASH:
-        return {
-          verified: false,
-          status: 'BLOCKED_BY_EXTERNAL_CREDENTIALS',
-          message: 'JazzCash verification requires live credentials.'
-        };
-
-      default:
-        return { verified: false, status: 'UNKNOWN_PROVIDER' };
+    if (normalizedProvider === 'MOCK_GATEWAY' || (transaction_ref && String(transaction_ref).startsWith('MOCK-'))) {
+      return {
+        verified: false,
+        status: 'UNSUPPORTED_PAYMENT_PROVIDER',
+        amount_verified: false,
+        message: 'Mock payment gateway is disabled in operational workflows. Simulated client references cannot verify payment.'
+      };
     }
+
+    if (normalizedProvider !== PROVIDERS.SAFEPAY) {
+      return {
+        verified: false,
+        status: 'UNSUPPORTED_PAYMENT_PROVIDER',
+        amount_verified: false,
+        message: `Payment provider '${provider}' is not supported. Safepay is the sole active payment provider for MilJor.`
+      };
+    }
+
+    // Safepay payments are verified authoritatively via cryptographic webhooks or safepayCheckoutService reconciliation
+    return {
+      verified: false,
+      status: 'WEBHOOK_VERIFICATION_REQUIRED',
+      amount_verified: false,
+      message: 'Safepay payments require authoritative cryptographic webhook confirmation.'
+    };
   }
 
   // ---------------------------------------------------------------------------
-  // initiateRefund — Requests refund from provider
+  // initiateRefund — Requests refund from provider (SAFEPAY ONLY)
   // ---------------------------------------------------------------------------
   async initiateRefund({ provider, transaction_ref, amount, reason }) {
-    switch (provider) {
-      case PROVIDERS.MOCK_GATEWAY:
-        console.log(`[MOCK GATEWAY] Refund initiated: ${transaction_ref} | Amount: Rs ${amount}`);
-        return {
-          success: true,
-          refund_ref: `REFUND-${Date.now()}`,
-          status: 'REFUNDED',
-          raw: { mock: true }
-        };
+    const normalizedProvider = (provider || '').toUpperCase();
 
-      case PROVIDERS.JAZZCASH:
-        return {
-          success: false,
-          status: 'BLOCKED_BY_EXTERNAL_CREDENTIALS',
-          message: 'JazzCash refund requires live credentials.'
-        };
-
-      default:
-        return { success: false, status: 'UNKNOWN_PROVIDER' };
+    if (normalizedProvider === 'MOCK_GATEWAY') {
+      return {
+        success: false,
+        status: 'UNSUPPORTED_PAYMENT_PROVIDER',
+        message: 'Mock payment gateway cannot perform real financial refunds.'
+      };
     }
+
+    if (normalizedProvider !== PROVIDERS.SAFEPAY) {
+      return {
+        success: false,
+        status: 'UNSUPPORTED_PAYMENT_PROVIDER',
+        message: `Refund is not supported for payment provider '${provider}'.`
+      };
+    }
+
+    // Safepay refund delegation
+    return {
+      success: false,
+      status: 'REFUND_PENDING_GATEWAY',
+      message: 'Safepay refunds require direct dashboard settlement or authorized gateway credentials.'
+    };
   }
 }
 

@@ -52,8 +52,11 @@ const fulfillmentRoutes = require('./src/routes/v1/fulfillmentRoutes');
 const financialSettlementRoutes = require('./src/routes/v1/financialSettlementRoutes');
 const geographicRoutes = require('./src/routes/v1/geographicRoutes');
 const buyerAddressRoutes = require('./src/routes/v1/buyerAddressRoutes');
-const supplierDeliveryRoutes = require('./src/routes/v1/supplierDeliveryRoutes');
+const supplierRoutes = require('./src/routes/v1/supplierRoutes');
+const catalogRoutes = require('./src/routes/v1/catalogRoutes');
 const deliveryQuotationRoutes = require('./src/routes/v1/deliveryQuotationRoutes');
+const procurementRoutes = require('./src/routes/v1/procurementRoutes');
+const marketplaceOperationsRoutes = require('./src/routes/v1/marketplaceOperationsRoutes');
 const paymentController = require('./src/controllers/paymentController');
 
 const app = express();
@@ -168,6 +171,7 @@ app.get('/health/ready', (req, res) => healthController.getReadiness(req, res));
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/pools', poolRoutes);
+app.use('/api/v1', require('./src/routes/v1/unifiedPoolRoutes'));
 app.use('/api/v1/reservations', reservationRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/audit', auditRoutes);
@@ -180,8 +184,11 @@ app.use('/api/v1/fulfillment', fulfillmentRoutes);
 app.use('/api/v1/settlements', financialSettlementRoutes);
 app.use('/api/v1/geo', geographicRoutes);
 app.use('/api/v1/buyer/addresses', buyerAddressRoutes);
-app.use('/api/v1/supplier', supplierDeliveryRoutes);
+app.use('/api/v1/supplier', supplierRoutes);
+app.use('/api/v1/catalog', catalogRoutes);
 app.use('/api/v1', deliveryQuotationRoutes);
+app.use('/api/v1', procurementRoutes);
+app.use('/api/v1', marketplaceOperationsRoutes);
 app.post('/api/v1/webhooks/safepay', (req, res) => paymentController.handleSafepayWebhook(req, res));
 
 // =============================================================================

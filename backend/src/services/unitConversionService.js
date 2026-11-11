@@ -36,7 +36,12 @@ class UnitConversionService {
   }
 
   isDiscreteUnit(unit) {
-    return this.DISCRETE_PACKAGING_UNITS.has(this.normalizeUnit(unit).toLowerCase());
+    const normalized = this.normalizeUnit(unit).toLowerCase();
+    if (this.DISCRETE_PACKAGING_UNITS.has(normalized)) return true;
+    // B4-G: Suppliers may name physical purchasing packs (e.g. bundle, drum,
+    // sack). Any valid non-mass/non-volume purchasing unit is indivisible.
+    return Boolean(normalized && /^[a-z][a-z0-9_-]{0,29}$/.test(normalized) &&
+      !this.isMassUnit(normalized) && !this.isVolumeUnit(normalized));
   }
 
   // Check if two units are physically dimensionally compatible
@@ -92,12 +97,19 @@ class UnitConversionService {
       const packUnit = this.normalizeUnit(spec.pack_unit);
 
       // From packs (e.g., bags/tins) to base units (e.g. kg, L)
-      if (this.isDiscreteUnit(from) && to === packUnit) {
+      const skuPurchasingUnit = this.normalizeUnit(spec.purchasing_unit);
+      const matchesPurchasing = (unit) => skuPurchasingUnit === unit ||
+        // Historical global specs predate supplier-owned SKU packs and allowed
+        // standard bag/pack/tin aliases. Keep only that legacy bridge compatible.
+        (!spec.supplier_sku_id &&
+          this.DISCRETE_PACKAGING_UNITS.has(unit.toLowerCase()) &&
+          (!skuPurchasingUnit || this.DISCRETE_PACKAGING_UNITS.has(skuPurchasingUnit.toLowerCase())));
+      if (this.isDiscreteUnit(from) && matchesPurchasing(from) && to === packUnit) {
         return qty * packSize;
       }
 
-      // From base units to packs
-      if (from === packUnit && this.isDiscreteUnit(to)) {
+      // From base units to packs; do not accept any arbitrary unrelated unit.
+      if (from === packUnit && this.isDiscreteUnit(to) && matchesPurchasing(to)) {
         return qty / packSize;
       }
     }

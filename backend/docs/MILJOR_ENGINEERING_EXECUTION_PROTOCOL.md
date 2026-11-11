@@ -167,30 +167,28 @@ When any test fails:
 
 ---
 
-## 8. Smart Test Execution System (Risk-Based Testing)
+## 8. Consolidated End-of-Phase Test Execution
 
-Adopt a strictly flat, risk-based three-level execution strategy:
+**Phase-Completion First:** Implement the authorized phase's scoped changes before launching integration or regression runs. Do not run full or overlapping suites repeatedly after individual edits. Small diagnostics are permitted only to identify a blocker or to protect immediate data/transaction safety; they are not a substitute for the final phase gate.
 
-### Level 1 — Focused Tests
-- Run the exact affected feature tests immediately after implementation.
-- Expected diagnostic baseline: ~5 seconds; not a hard timeout.
+**One End-of-Phase Verification Gate:**
+1. Verify the actual connected test database is `miljor_test_db` before any fixture mutation.
+2. After implementation stabilizes, execute one consolidated, relevant test/integration/regression gate covering all changed functionality and affected dependencies, including necessary authorization, negative, idempotency, concurrency, and rollback scenarios.
+3. Run `node tests/master_regression_runner.js` at most once if explicitly required by the approved phase or release gate, and avoid overlapping duplicate suites.
+4. When the final gate fails, inspect the actual error, fix the smallest root cause, rerun only affected failed checks, and re-verify the final gate once after stabilization; never misrepresent unexecuted or failed assertions as PASS.
+5. Do not run browser E2E, frontend builds, load tests, or real external-money operations without a phase-specific reason or authorization.
 
-### Level 2 — Impacted Subsystem Tests
-- Run related subsystem and integration tests only when the code changes directly affect those components.
-- Skip an explicit Level 2 run when the upcoming final master run already provides the same coverage and no intermediate feedback is needed.
-- Expected diagnostic baseline: ~15 seconds; not a hard timeout.
+**Persistent Phase Evidence — Mandatory After Final Verification:**
+- **Prior B0 implementation source assurance:** This reconciliation includes ORIGINAL application source files and test scripts for B0, B0.1 and B0.2—not only Markdown reports. Ensure current `origin/feature/package-e` contains historical B0/B0.1/B0.2 implementation commits, and locally checked-out original source paths match that branch once safely synchronized. Preserve existing code from B0 financial recovery, B0.1 financial integrity, B0.2 provider verification/refund/invoice/subscription safety, and their regression tests. Check Git commit ancestry/file deltas rather than copying code from a chat or rebuilding a duplicate backend. Include synchronized code paths, local/remote SHA, dirty-tree safeguards and any unresolved divergence in the next phase acceptance report. Never claim a local sync succeeded just because GitHub has the commits.
+- **Original repository synchronization, B0 through future B phases:** Before each final phase gate, Antigravity must safely sync the approved `feature/package-e` GitHub branch while preserving any uncommitted local edits. Treat already tracked original code/docs paths as authoritative; do not create alternate reports outside the repository or overwrite historical B0/B0.1/B0.2 PASS evidence. Reconcile legacy status text without erasing original counts/commits. For B1 and all later approved B phases, append truthful execution results to the phase's dedicated `backend/docs/` report and `backend/docs/MILJOR_PHASE_LOG.md`, commit and push to the approved branch.
+- **Quick but sufficient acceptance:** Run one selected final affected suite set with explicit DB-identity guard. Prefer E2 catalog/moderation/security/ownership and E3 entitlement plus directly impacted listing/pool checks for B1; reuse B0/B0.1/B0.2 historical accepted test evidence unless a code dependency actually requires a relevant rerun. Avoid repeated full master suites, frontend builds, redundant fixtures or test runs after every edit. A failure permits targeted diagnosis/repair and relevant re-verification, never false PASS.
 
-### Level 3 — Master Regression
-- Run `node tests/master_regression_runner.js`.
-- Run **at most once** at the explicitly authorized final phase or release gate after code and environment stabilize.
-- For security-critical or financial changes, include the necessary negative, idempotency, and concurrency tests within the relevant focused scope.
+- Save a dedicated factual phase acceptance report under `backend/docs/`, with actual commands and exit codes, test counts and statuses, isolated database identity, unchanged protected-data checks, affected files, limitations, unresolved issues, branch, and final commit SHA.
+- Update `backend/docs/MILJOR_PHASE_LOG.md` with PASS/FAIL/BLOCKED and the report path.
+- Include both files in the authorized phase's verified Git commit/push. Never invent test evidence or alter prior reports to conceal defects.
+- Stop after the phase; `CAN START NEXT PHASE: NO`.
 
-**Testing Efficiency Invariants:**
-- **Do not skip essential tests** merely to save time.
-- **Do not run full regression repeatedly** during iterative development.
-- **Do not run multiple overlapping test suites** without technical reason.
-- **Do not start browser E2E, frontend builds, load tests, or external integration checks** unless explicitly required by the active task.
-- Preserve all existing assertions. Never recursively invoke suites. Ensure one suite is registered only once. Never mark an unexecuted suite PASS.
+**Non-negotiable:** Consolidation reduces redundant executions, not safety coverage. Run all essential checks at the phase gate; do not skip critical tests solely for speed.
 
 ---
 
@@ -266,7 +264,7 @@ Do not introduce arbitrary delays:
    - Never perform live financial transactions, gateway charges, or external disbursements.
    - Preserve existing accounts, pools, quotes, orders, and historical business records.
    - Do not delete unrelated data or drop active tables.
-   - **Zero Git Mutations:** Do not commit, push, merge, or rebase without explicit user approval. Never reset uncommitted user work.
+   - **Git Authorization Policy:** Explicit user approval to implement a named phase also authorizes committing and pushing that phase's verified changes to its approved feature branch. No separate commit/push confirmation is required. A new phase, force-push, merge to main, destructive database action, unrelated change or external money movement still requires its own authorization. If verification fails, do not label the phase complete. Never reset uncommitted user work.
 
 2. **Migration Workflow:**
    1. Check current schema and latest applied migration in `schema_migrations`.

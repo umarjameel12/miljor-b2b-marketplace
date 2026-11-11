@@ -783,9 +783,13 @@ class AuthController {
       });
 
       if (!result.success) {
-        // Clear stale or compromised cookie
-        sessionService.clearRefreshCookie(res);
-        return res.status(401).json({
+        // Same-browser concurrent refresh during the 15s rotation grace
+        // is NOT a stolen/replayed session. Never delete the legitimate
+        // replacement cookie merely because an older in-flight request lost
+        // this race. True theft/reuse outside grace still revokes and clears.
+        const concurrentGrace = result.code === 'TOKEN_ALREADY_ROTATED';
+        if (!concurrentGrace) sessionService.clearRefreshCookie(res);
+        return res.status(concurrentGrace ? 409 : 401).json({
           success: false,
           error: { code: result.code || 'REFRESH_FAILED', message: result.message }
         });

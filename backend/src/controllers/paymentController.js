@@ -8,29 +8,79 @@
 // Full flow: CREATED → PENDING → PAID → Ledger entry
 // =============================================================================
 const paymentRepo = require('../repositories/paymentRepo');
-const ledgerRepo = require('../repositories/ledgerRepo');
-const feeService = require('../services/feeService');
 const paymentProviderService = require('../services/paymentProviderService');
 const safepayCheckoutService = require('../services/safepayCheckoutService');
 const db = require('../config/db');
+
+
+// Read-only provenance resolver. Payment method (CARD) is not the provider.
+// Never select an arbitrary attempt belonging to the same order.
+async function resolveRecordedProvider(payment) {
+  let responseProvider = null;
+  if (payment.provider_response) {
+    try {
+      const evidence = typeof payment.provider_response === 'string'
+        ? JSON.parse(payment.provider_response)
+        : payment.provider_response;
+      if (typeof evidence?.provider === 'string') {
+        responseProvider = evidence.provider.trim().toUpperCase();
+      }
+    } catch (_) {
+      return null; // Corrupt evidence must not be silently ignored.
+    }
+  }
+
+  let attemptProvider = null;
+  if (payment.transaction_ref) {
+    const [attempts] = await db.query(
+      'SELECT provider, order_id, buyer_id FROM payment_attempts WHERE provider_tracker_token = ? LIMIT 2',
+      [payment.transaction_ref]
+    );
+    if (attempts.length > 1) return null;
+    if (attempts.length === 1) {
+      const attempt = attempts[0];
+      if ((payment.order_id && Number(attempt.order_id) !== Number(payment.order_id))
+          || Number(attempt.buyer_id) !== Number(payment.buyer_id)) {
+        return null; // Exact tracker must also belong to this payment's buyer/order.
+      }
+      attemptProvider = String(attempt.provider || '').toUpperCase();
+    }
+  }
+
+  if (responseProvider && attemptProvider && responseProvider !== attemptProvider) return null;
+  // Legacy explicit SAFEPAY method is not sufficient to override conflicting evidence.
+  const legacyProvider = !payment.transaction_ref && payment.payment_method === 'SAFEPAY'
+    ? 'SAFEPAY' : null;
+  return responseProvider || attemptProvider || legacyProvider;
+}
 
 class PaymentController {
 
   // ---------------------------------------------------------------------------
   // POST /api/v1/payments/initiate
-  // Step 1: Buyer initiates payment for a CONFIRMED reservation
-  // BUG-11 FIX: Validates ownership + reservation status + amount
-  // BUG-01 FIX: Writes to 'payments' table only
+  // Buyer payment initiation (Safepay Only)
   // ---------------------------------------------------------------------------
   async initiatePayment(req, res) {
     try {
       const buyer_id = req.user.id;
-      const { reservation_id, payment_method = 'MOCK_GATEWAY' } = req.body;
+      const { reservation_id, payment_method = 'SAFEPAY' } = req.body;
 
       if (!reservation_id) {
         return res.status(400).json({
           success: false,
           error: { code: 'VALIDATION_ERROR', message: 'reservation_id is required' }
+        });
+      }
+
+      // Phase B0: Safepay is the SOLE active payment provider
+      const normalizedProvider = String(payment_method || '').toUpperCase();
+      if (normalizedProvider !== 'SAFEPAY') {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'UNSUPPORTED_PAYMENT_PROVIDER',
+            message: `Payment provider '${payment_method}' is not supported. Safepay is the sole active payment provider for MilJor.`
+          }
         });
       }
 
@@ -49,7 +99,7 @@ class PaymentController {
 
       const reservation = reservations[0];
 
-      // BUG-11 FIX: Ownership check
+      // Ownership check
       if (reservation.buyer_id !== buyer_id) {
         return res.status(403).json({
           success: false,
@@ -57,7 +107,7 @@ class PaymentController {
         });
       }
 
-      // BUG-11 FIX: Status check — must be CONFIRMED (price is locked)
+      // Status check — must be CONFIRMED (price is locked)
       if (reservation.status !== 'CONFIRMED') {
         return res.status(422).json({
           success: false,
@@ -81,76 +131,35 @@ class PaymentController {
         });
       }
 
-      // 2. Use locked price (never trust any amount from client)
-      const lockedAmount = parseFloat(reservation.locked_total_price);
+      // Canonical Safepay Flow: Check if an authoritative order has been converted for this reservation
+      const [orders] = await db.query(
+        'SELECT id, order_code, order_status FROM orders WHERE reservation_id = ?',
+        [reservation_id]
+      );
 
-      // 3. Calculate buyer marketplace fee using feeService
-      const feeResult = await feeService.calculateBuyerFee(lockedAmount);
-      const buyerFee = parseFloat(feeResult.buyer_fee);
-      const totalWithFee = (lockedAmount + buyerFee).toFixed(2);
-
-      // 4. Initiate with payment provider
-      const providerResult = await paymentProviderService.initiatePayment({
-        provider: payment_method,
-        amount: totalWithFee,
-        orderId: `RES-${reservation_id}`,
-        buyerId: buyer_id,
-        description: `MilJor Pool Reservation #${reservation.reservation_code}`
-      });
-
-      if (!providerResult.success) {
-        return res.status(503).json({
+      if (!orders[0]) {
+        return res.status(422).json({
           success: false,
           error: {
-            code: providerResult.status,
-            message: providerResult.message
+            code: 'ORDER_REQUIRED_FOR_PAYMENT',
+            message: 'Reservations must be converted to an authoritative order before Safepay checkout can initiate. Please use /api/v1/orders/:id/checkout once orders are generated.'
           }
         });
       }
 
-      // 5. Create payment record in 'payments' table (BUG-01 FIX)
-      const payment_code = 'MJ-PAY-' + Math.floor(100000 + Math.random() * 900000);
-
-      const paymentId = await paymentRepo.createPayment({
-        payment_code,
-        reservation_id,
-        buyer_id,
-        amount: totalWithFee,
-        buyer_fee: buyerFee.toFixed(2),
-        payment_method,
-        transaction_ref: providerResult.transaction_ref
-      });
-
-      // 6. Update reservation status to PAID (pending verify step)
-      await db.query(
-        "UPDATE payments SET status = 'PENDING' WHERE id = ?",
-        [paymentId]
-      );
-
-      // 7. Audit
-      await db.query(
-        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-         VALUES (?, 'BUYER', 'PAYMENT_INITIATED', 'payments', ?, ?)`,
-        [buyer_id, paymentId, JSON.stringify({ payment_code, reservation_id, amount: totalWithFee, payment_method })]
-      );
-
+      const order = orders[0];
+      // Redirect / delegate directly to canonical Safepay checkout flow
       return res.status(200).json({
         success: true,
-        message: 'Payment initiated. Call /verify to confirm payment with the transaction reference.',
+        message: 'Order identified for reservation. Please complete checkout via canonical Safepay order endpoint.',
         data: {
-          payment_id: paymentId,
-          payment_code,
           reservation_id,
-          status: 'PENDING',
-          payment_method,
-          base_amount: lockedAmount.toFixed(2),
-          buyer_fee: buyerFee.toFixed(2),
-          total_amount: totalWithFee,
-          transaction_ref: providerResult.transaction_ref,
-          provider_message: providerResult.message
+          order_id: order.id,
+          order_code: order.order_code,
+          checkout_endpoint: `/api/v1/orders/${order.id}/checkout`,
+          payment_method: 'SAFEPAY'
         }
       });
-
     } catch (error) {
       console.error('Payment Initiate Error:', error);
       return res.status(500).json({
@@ -162,8 +171,7 @@ class PaymentController {
 
   // ---------------------------------------------------------------------------
   // POST /api/v1/payments/verify
-  // Step 2: Server-side payment verification — NEVER trust frontend success
-  // Marks payment PAID and creates ledger entry
+  // Legacy read-only verification compatibility: NEVER updates financial state.
   // ---------------------------------------------------------------------------
   async verifyPayment(req, res) {
     try {
@@ -210,96 +218,35 @@ class PaymentController {
         });
       }
 
-      // Verify with provider (server-side — never trust frontend)
-      const verifyResult = await paymentProviderService.verifyPayment({
-        provider: payment.payment_method,
-        transaction_ref,
-        expected_amount: payment.amount
-      });
-
-      if (!verifyResult.verified) {
-        // Mark as FAILED
-        await paymentRepo.updateStatus(payment_id, 'FAILED', {
-          provider_response: verifyResult
-        });
+      const provider = await resolveRecordedProvider(payment);
+      if (!provider) {
         return res.status(402).json({
           success: false,
-          error: { code: 'PAYMENT_VERIFICATION_FAILED', message: 'Payment could not be verified with the provider.' }
+          error: { code: 'PAYMENT_VERIFICATION_FAILED', message: 'Missing or conflicting payment provider evidence.' }
         });
       }
 
-      const connection = await db.getConnection();
-      try {
-        await connection.beginTransaction();
-
-        // Mark payment as PAID
-        await connection.query(
-          `UPDATE payments
-           SET status = 'PAID', escrow_status = 'HELD_IN_ESCROW',
-               transaction_ref = ?, provider_response = ?, paid_at = NOW(), updated_at = NOW()
-           WHERE id = ?`,
-          [transaction_ref, JSON.stringify(verifyResult.raw), payment_id]
-        );
-
-        // Mark reservation as PAID
-        if (payment.reservation_id) {
-          await connection.query(
-            "UPDATE reservations SET status = 'PAID', updated_at = NOW() WHERE id = ?",
-            [payment.reservation_id]
-          );
-        }
-
-        // Create ledger entry (supplier net after supplier fee)
-        const [supplierRows] = await connection.query(
-          `SELECT sp.transaction_fee_percent, r.pool_id, p.supplier_id
-           FROM reservations r
-           JOIN pools p ON r.pool_id = p.id
-           LEFT JOIN supplier_profiles sp ON sp.supplier_id = p.supplier_id
-           WHERE r.id = ?`,
-          [payment.reservation_id]
-        );
-
-        const feePercent = supplierRows[0]?.transaction_fee_percent || 2.5;
-        const grossAmount = parseFloat(payment.amount) - parseFloat(payment.buyer_fee || 0);
-
-        const ledgerCode = 'MJ-LDG-' + Math.floor(100000 + Math.random() * 900000);
-        const platformFee = (grossAmount * (feePercent / 100)).toFixed(2);
-        const supplierNet = (grossAmount - parseFloat(platformFee)).toFixed(2);
-
-        await connection.query(
-          `INSERT INTO platform_ledger (ledger_code, payment_id, gross_amount, platform_fee_amount, supplier_net_amount, payout_status)
-           VALUES (?, ?, ?, ?, ?, 'HELD_IN_ESCROW')`,
-          [ledgerCode, payment_id, grossAmount.toFixed(2), platformFee, supplierNet]
-        );
-
-        // Audit
-        await connection.query(
-          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-           VALUES (?, 'BUYER', 'PAYMENT_VERIFIED', 'payments', ?, ?)`,
-          [buyer_id, payment_id, JSON.stringify({ transaction_ref, amount: payment.amount, ledger_code: ledgerCode })]
-        );
-
-        await connection.commit();
-        connection.release();
-
-      } catch (err) {
-        await connection.rollback();
-        connection.release();
-        throw err;
+      // Legacy endpoint must NEVER write PAID/reservation/ledger state.
+      // Only canonical Safepay signed webhooks or trusted order reconciliation may complete payment.
+      const verification = await paymentProviderService.verifyPayment({
+        provider, transaction_ref, expected_amount: payment.amount
+      });
+      if (verification.verified) {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'LEGACY_VERIFICATION_DISABLED',
+            message: 'Complete payment through the authoritative order Safepay reconciliation endpoint.'
+          }
+        });
       }
-
-      return res.status(200).json({
-        success: true,
-        message: 'Payment verified and confirmed. Funds held in escrow.',
-        data: {
-          payment_id,
-          payment_code: payment.payment_code,
-          status: 'PAID',
-          amount: payment.amount,
-          escrow_status: 'HELD_IN_ESCROW'
+      return res.status(402).json({
+        success: false,
+        error: {
+          code: 'PAYMENT_VERIFICATION_FAILED',
+          message: 'Payment is not confirmed. Use the authorized order payment-status or reconciliation endpoint.'
         }
       });
-
     } catch (error) {
       console.error('Payment Verify Error:', error);
       return res.status(500).json({
@@ -376,39 +323,54 @@ class PaymentController {
         });
       }
 
+      const provider = await resolveRecordedProvider(payment);
+
+      // If still missing, reject refund initiation immediately
+      if (!provider) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'UNSUPPORTED_PAYMENT_PROVIDER', message: 'Payment record lacks identifiable provider provenance' }
+        });
+      }
+
       // Initiate refund with provider
       const refundResult = await paymentProviderService.initiateRefund({
-        provider: payment.payment_method,
+        provider,
         transaction_ref: payment.transaction_ref,
         amount: payment.amount,
         reason: reason || 'Admin-initiated refund'
       });
 
       if (!refundResult.success) {
-        return res.status(503).json({
+        // Audit the attempted, unexecuted refund; this is NOT an approved refund obligation.
+        // Do not create an actual financial refund record or change payment/ledger state.
+        await db.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
+           VALUES (?, ?, 'PAYMENT_REFUND_ATTEMPT_BLOCKED', 'payments', ?, ?)`,
+          [req.user.id, req.user.role, id, JSON.stringify({
+            reason: reason || 'Admin-initiated refund', provider, outcome: refundResult.status
+          })]
+        );
+        const errStatus = refundResult.status === 'UNSUPPORTED_PAYMENT_PROVIDER' ? 400 : 503;
+        return res.status(errStatus).json({
           success: false,
           error: { code: refundResult.status, message: refundResult.message }
         });
       }
 
-      await paymentRepo.updateStatus(id, 'REFUNDED', { escrow_status: 'REFUNDED' });
-
-      await db.query(
-        `UPDATE platform_ledger SET payout_status = 'REFUNDED_TO_BUYER', updated_at = NOW()
-         WHERE payment_id = ?`,
-        [id]
-      );
-
+      // FIX 5: Legacy refund endpoint MUST NOT independently finalize refunds or mark REFUNDED.
+      // External money movement is DISABLED. Refund request/approval != external refund completion.
+      // Authoritative settlement completion is strictly governed by financialSettlementService.
       await db.query(
         `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-         VALUES (?, ?, 'PAYMENT_REFUNDED', 'payments', ?, ?)`,
+         VALUES (?, ?, 'PAYMENT_REFUND_REQUESTED', 'payments', ?, ?)`,
         [req.user.id, req.user.role, id, JSON.stringify({ reason, refund_ref: refundResult.refund_ref })]
       );
 
-      return res.status(200).json({
+      return res.status(202).json({
         success: true,
-        message: 'Refund initiated successfully',
-        data: { payment_id: parseInt(id), status: 'REFUNDED', refund_ref: refundResult.refund_ref }
+        message: 'Refund requested successfully. Awaiting verified external/manual settlement evidence.',
+        data: { payment_id: parseInt(id), status: payment.status, refund_ref: refundResult.refund_ref }
       });
 
     } catch (error) {

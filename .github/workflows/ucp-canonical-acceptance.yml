@@ -1,0 +1,242 @@
+name: MilJor UCP Canonical Reconciliation Acceptance
+on:
+  push:
+    branches:
+      - feature/ucp-canonical-reconciliation-release
+      - fix/ucp-final-reconciliation-thischat
+      - fix/p0-provider-browser-stock-finance-acceptance
+      - fix/p0-morning-demo-canonical-gates
+      - integration/ucp-verified-main-handoff-20261112
+  pull_request:
+    branches:
+      - main
+      - fix/p0-provider-browser-stock-finance-acceptance
+      - feature/ucp-canonical-reconciliation-release
+      - fix/ucp-final-reconciliation-thischat
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-frontend:
+    name: Source gates and production frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_ENV: test
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci --no-audit --no-fund
+      - name: Canonical migration manifest and integrity assertions (no DB)
+        run: |
+          cd backend
+          npm run migration:preflight
+          node tests/canonical_migration_manifest_gate.js
+          node database/financeCompatibilityGate.js
+          node tests/ucp_thischat_reconciliation_gate.js
+      - name: New commission migration and Regular order/settlement source contract
+        run: cd backend && node tests/p0_four_track_commission_source_gate.js
+      - name: Build actual frontend Vite bundle
+        run: npm --prefix frontend run build
+      - name: Existing UCP and B4/B5/B6 source checks
+        run: |
+          cd backend
+          npm run test:ucp
+          node tests/ucp_thischat_reconciliation_gate.js
+
+  disposable-mysql-migrations:
+    name: Disposable MySQL 8.0 migration installation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      SAFEPAY_ENV: sandbox
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Validate canonical SQL and finance compatibility without DB mutation
+        run: |
+          cd backend
+          node tests/canonical_migration_manifest_gate.js
+          node database/financeCompatibilityGate.js
+          node tests/ucp_thischat_reconciliation_gate.js
+      - name: Reconstruct historical pre-004 reference data in empty disposable DB ONLY
+        run: cd backend && node database/bootstrapDisposableMigrationTest.js
+      - name: Verify existing disposable migration history read-only BEFORE applying
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
+      - name: Install through 053 with guarded test-only stop boundary
+        run: cd backend && MILJOR_TEST_STOP_BEFORE_VERSION=054 node database/runMigrations.js
+      - name: Capture actual pre054 historical order fingerprint
+        run: cd backend && node tests/p0_finance_historical_upgrade_gate.js seed
+      - name: Apply canonical migration 054 to existing historical order
+        run: cd backend && node database/runMigrations.js
+      - name: Verify historical order fingerprint and NULL contractual rate survived migration
+        run: cd backend && node tests/p0_finance_historical_upgrade_gate.js verify
+      - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
+        run: |
+          cd backend
+          node - <<'JS'
+          const mysql=require('mysql2/promise');
+          (async()=>{
+            const db=await mysql.createConnection({
+              host:'127.0.0.1',user:'root',password:process.env.DB_PASSWORD,database:'miljor_test_db'
+            });
+            try{
+              const [rows]=await db.query('SELECT version,name FROM schema_migrations WHERE version IN (?,?,?,?,?,?) ORDER BY version',
+                ['046','047','048','051','052','053']);
+              const expected=['046_recurring_collective_cycles.sql','047_procurement_delivery_runs.sql',
+                '048_procurement_notification_outbox.sql','051_expand_canonical_product_families.sql',
+                '052_demand_requester_role.sql','053_regular_pool_payment_hold_deadlines.sql'];
+              if(rows.length!==6||rows.some((r,i)=>r.name!==expected[i]))
+                throw Error('Canonical migration mismatch '+JSON.stringify(rows));
+              console.log('PASS canonical migration history',rows.length,'versions on disposable DB');
+            }finally{await db.end()}
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Confirm second migration run is idempotent (same isolated DB)
+        run: cd backend && node database/runMigrations.js
+      - name: Verify installed journal integrity read-only
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
+      - name: Verify finance 054 installed schema and exact checksum (read only)
+        run: cd backend && node tests/p0_finance_054_installed_gate.js
+      - name: Synthetic signed Safepay HTTP/escrow/replay acceptance (no provider calls)
+        env:
+          SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+        run: cd backend && node tests/p0_safepay_signed_http_acceptance.js
+      # The B6 Package E2 foundation tests assert EXACT historical 16-spec data.
+      # B5 integration gates create additional synthetic supplier specifications.
+      # Run the historical baseline checks first, never against B5-contaminated DB.
+      - name: B6 procurement independent release suite (clean historical fixture)
+        timeout-minutes: 12
+        run: cd backend && node tests/b6_release_gate.js
+      - name: B5 Flash + shared inventory concurrency acceptance
+        if: ${{ always() }}
+        timeout-minutes: 8
+        run: cd backend && node tests/part5_flash_pool_gate.js
+      - name: B4 Regular pool publication and tier acceptance
+        if: ${{ always() }}
+        timeout-minutes: 8
+        run: cd backend && node tests/part4b3_pool_publishing_gate.js
+
+      - name: B4 and B5 same-SKU simultaneous publication 2/10/50/100 clients
+        if: ${{ always() }}
+        timeout-minutes: 12
+        run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
+
+  real-chromium-buyer-supplier:
+    name: Real Chromium buyer/supplier auth, retry and offline journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      SAFEPAY_ENV: sandbox
+      TRANSACTIONAL_EMAIL_MODE: mock
+      P0_BROWSER_BASE_URL: http://127.0.0.1:3000
+      P0_BROWSER_TEST_PASSWORD: P0DisposableBrowserPass_2026_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install backend and frontend
+        run: |
+          npm --prefix backend ci --no-audit --no-fund
+          npm --prefix frontend ci --no-audit --no-fund
+      - name: Migrate disposable MySQL only
+        run: |
+          cd backend
+          node database/financeCompatibilityGate.js
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node tests/p0_finance_054_installed_gate.js
+      - name: Seed isolated buyer and supplier
+        run: cd backend && node tests/p0_browser_fixture_seed.js
+      - name: Install Chromium automation only inside CI
+        run: |
+          npm --prefix backend install --no-save --no-package-lock --no-audit --no-fund playwright@1.65.0
+          cd backend && npx playwright install --with-deps chromium
+      - name: Launch real Express and Vite
+        run: |
+          (cd backend && nohup node server.js > /tmp/miljor-api.log 2>&1 &)
+          (cd frontend && nohup npm run dev -- --host 127.0.0.1 > /tmp/miljor-vite.log 2>&1 &)
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:5000/health/live > /dev/null 2>&1 &&
+               curl -fsS http://127.0.0.1:3000/ > /dev/null 2>&1; then exit 0; fi
+            sleep 2
+          done
+          tail -n 50 /tmp/miljor-api.log || true
+          tail -n 50 /tmp/miljor-vite.log || true
+          exit 1
+      - name: Real Chromium separate buyer/supplier acceptance
+        timeout-minutes: 10
+        run: cd backend && node tests/p0_real_browser_journey.js

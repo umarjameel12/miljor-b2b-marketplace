@@ -7,22 +7,102 @@
 //   - Mandatory audit logging for every administrative state change
 // =============================================================================
 const db = require('../config/db');
+const encryptionService = require('../services/encryptionService');
+const validationService = require('../services/supplierValidationService');
 
 class AdminController {
 
   // ---------------------------------------------------------------------------
   // GET /api/v1/admin/suppliers/pending
   // Permitted Roles: VERIFICATION_ADMIN, SUPER_ADMIN
+  // Returns explicit allowlisted fields; never leaks raw bank_iban or ciphertext
   // ---------------------------------------------------------------------------
   async getPendingSuppliers(req, res) {
     try {
-      const [suppliers] = await db.query(
-        `SELECT sp.*, u.full_name, u.business_name, u.email, u.phone, u.city, u.area, u.address
+      const [rows] = await db.query(
+        `SELECT
+           sp.supplier_id,
+           sp.business_type,
+           sp.business_description,
+           sp.contact_person_name,
+           sp.contact_person_phone,
+           sp.warehouse_address,
+           sp.lahore_service_area,
+           sp.tax_ntn,
+           sp.food_license_no,
+           sp.food_license_type,
+           sp.bank_name,
+           sp.bank_account_title,
+           sp.bank_iban,
+           sp.verification_status,
+           sp.verification_level,
+           sp.subscription_plan,
+           sp.max_active_listings,
+           sp.transaction_fee_percent,
+           sp.rejection_reason,
+           sp.submitted_at,
+           sp.created_at,
+           u.full_name,
+           u.business_name,
+           u.email,
+           u.phone,
+           u.city,
+           u.area,
+           u.address
          FROM supplier_profiles sp
          JOIN users u ON sp.supplier_id = u.id
          WHERE sp.verification_status IN ('PENDING_REVIEW', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED')
-         ORDER BY sp.created_at ASC`
+         ORDER BY sp.submitted_at ASC, sp.created_at ASC`
       );
+
+      // Map to explicit response allowlist: mask banking identifiers, omit raw/ciphertext bank_iban
+      const suppliers = rows.map((r) => {
+        let bankIbanMasked = null;
+        if (r.bank_iban) {
+          if (encryptionService.isEncrypted(r.bank_iban)) {
+            try {
+              const decrypted = encryptionService.decrypt(r.bank_iban);
+              bankIbanMasked = validationService.maskIban(decrypted);
+            } catch {
+              bankIbanMasked = 'PK** **** **** [CIPHERTEXT_ERROR]';
+            }
+          } else {
+            // Strict security invariant: do not parse or mask raw legacy plaintext in normal API paths
+            bankIbanMasked = 'PK** **** **** [LEGACY_MIGRATION_REQUIRED]';
+          }
+        }
+
+        return {
+          supplier_id: r.supplier_id,
+          business_name: r.business_name || r.full_name,
+          full_name: r.full_name,
+          email: r.email,
+          phone: r.phone,
+          business_type: r.business_type || null,
+          business_description: r.business_description || null,
+          contact_person_name: r.contact_person_name || null,
+          contact_person_phone: r.contact_person_phone || null,
+          warehouse_address: r.warehouse_address || null,
+          lahore_service_area: r.lahore_service_area || null,
+          city: r.city || 'Lahore',
+          area: r.area || null,
+          address: r.address || null,
+          tax_ntn: r.tax_ntn || null,
+          food_license_no: r.food_license_no || null,
+          food_license_type: r.food_license_type || null,
+          bank_name: r.bank_name || null,
+          bank_account_title: r.bank_account_title || null,
+          bank_iban_masked: bankIbanMasked,
+          verification_status: r.verification_status,
+          verification_level: r.verification_level,
+          subscription_plan: r.subscription_plan,
+          max_active_listings: r.max_active_listings,
+          transaction_fee_percent: r.transaction_fee_percent,
+          rejection_reason: r.rejection_reason || null,
+          submitted_at: r.submitted_at || null,
+          created_at: r.created_at
+        };
+      });
 
       return res.status(200).json({
         success: true,
@@ -39,11 +119,19 @@ class AdminController {
   // PUT /api/v1/admin/suppliers/:id/verify
   // Permitted Roles: VERIFICATION_ADMIN, SUPER_ADMIN
   // Verifies/Rejects a supplier profile with tier and verification level
+  // Enforces authorized plan listing caps (STARTER=4, GROWTH=13, BUSINESS=25)
   // ---------------------------------------------------------------------------
   async verifySupplier(req, res) {
     try {
       const { id } = req.params; // supplier_id (user id)
-      const { verification_status, verification_level = 'LEVEL_2_BUSINESS', subscription_plan = 'GROWTH', max_active_listings = 25, transaction_fee_percent = 1.50 } = req.body;
+      const {
+        verification_status,
+        verification_level = 'LEVEL_2_BUSINESS',
+        subscription_plan = 'GROWTH',
+        max_active_listings,
+        transaction_fee_percent = 1.50,
+        rejection_reason = null
+      } = req.body;
       const adminId = req.user.id;
 
       // 1. Self-Verification Restriction
@@ -62,6 +150,84 @@ class AdminController {
         });
       }
 
+      // Server-side allowlists for verification level and subscription plan
+      const ALLOWED_VERIFICATION_LEVELS = ['LEVEL_1_CONTACT', 'LEVEL_2_BUSINESS', 'LEVEL_3_QUALITY'];
+      const ALLOWED_SUBSCRIPTION_PLANS = ['STARTER', 'GROWTH', 'BUSINESS'];
+      const AUTHORIZED_PLAN_LISTING_CAPS = {
+        STARTER: 4,
+        GROWTH: 13,
+        BUSINESS: 25
+      };
+
+      if (verification_level && !ALLOWED_VERIFICATION_LEVELS.includes(verification_level)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_VERIFICATION_LEVEL',
+            message: `Verification level must be one of: [${ALLOWED_VERIFICATION_LEVELS.join(', ')}]`
+          }
+        });
+      }
+
+      if (subscription_plan && !ALLOWED_SUBSCRIPTION_PLANS.includes(subscription_plan)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_SUBSCRIPTION_PLAN',
+            message: `Subscription plan must be one of: [${ALLOWED_SUBSCRIPTION_PLANS.join(', ')}]`
+          }
+        });
+      }
+
+      // Enforce exact authorized plan caps: STARTER=4, GROWTH=13, BUSINESS=25
+      // Never allow admin UI input to silently bypass authorized limits
+      const effectivePlan = subscription_plan || 'GROWTH';
+      const authorizedPlanCap = AUTHORIZED_PLAN_LISTING_CAPS[effectivePlan] || 4;
+
+      let effectiveListingCap = authorizedPlanCap;
+      if (max_active_listings !== undefined && max_active_listings !== null) {
+        let isValidInteger = false;
+        let requestedCap = NaN;
+
+        if (typeof max_active_listings === 'number') {
+          if (Number.isInteger(max_active_listings) && Number.isSafeInteger(max_active_listings) && max_active_listings >= 1) {
+            isValidInteger = true;
+            requestedCap = max_active_listings;
+          }
+        } else if (typeof max_active_listings === 'string') {
+          const trimmed = max_active_listings.trim();
+          if (/^[1-9]\d*$/.test(trimmed)) {
+            const num = Number(trimmed);
+            if (Number.isSafeInteger(num) && num >= 1) {
+              isValidInteger = true;
+              requestedCap = num;
+            }
+          }
+        }
+
+        if (!isValidInteger) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'INVALID_LISTING_CAP',
+              message: 'max_active_listings must be an exact positive safe integer (decimals, trailing characters, arrays, and objects are prohibited)'
+            }
+          });
+        }
+
+        if (requestedCap > authorizedPlanCap) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: 'PLAN_CAP_EXCEEDED',
+              message: `max_active_listings for plan ${effectivePlan} cannot exceed authorized cap of ${authorizedPlanCap} (requested: ${max_active_listings})`
+            }
+          });
+        }
+
+        effectiveListingCap = requestedCap;
+      }
+
       // Check supplier profile exists
       const [profiles] = await db.query('SELECT * FROM supplier_profiles WHERE supplier_id = ?', [id]);
       if (!profiles[0]) {
@@ -73,6 +239,7 @@ class AdminController {
         await connection.beginTransaction();
 
         const isApproved = verification_status === 'VERIFIED';
+        const effectiveRejectionReason = isApproved ? null : (rejection_reason || null);
 
         // Update supplier profile
         await connection.query(
@@ -81,9 +248,11 @@ class AdminController {
                verification_level = ?,
                subscription_plan = ?,
                max_active_listings = ?,
-               transaction_fee_percent = ?
+               transaction_fee_percent = ?,
+               rejection_reason = ?,
+               verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END
            WHERE supplier_id = ?`,
-          [verification_status, verification_level, subscription_plan, max_active_listings, transaction_fee_percent, id]
+          [verification_status, verification_level, effectivePlan, effectiveListingCap, transaction_fee_percent, effectiveRejectionReason, isApproved ? 1 : 0, id]
         );
 
         // Update users table
@@ -119,7 +288,8 @@ class AdminController {
             supplier_id: parseInt(id),
             verification_status,
             verification_level,
-            subscription_plan
+            subscription_plan,
+            rejection_reason: effectiveRejectionReason
           }
         });
 

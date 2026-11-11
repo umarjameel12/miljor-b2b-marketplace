@@ -7,11 +7,14 @@ const db = require('../config/db');
 
 class SupplierListingRepository {
   // Create a new supplier listing
-  async create(listingData) {
+  async create(listingData, connection = null) {
+    const executor = connection || db;
     const {
       listing_code,
       supplier_id,
       product_spec_id,
+      supplier_product_id,
+      supplier_sku_id,
       available_stock,
       base_unit_price,
       pricing_unit,
@@ -26,17 +29,19 @@ class SupplierListingRepository {
       notes
     } = listingData;
 
-    const [result] = await db.query(
+    const [result] = await executor.query(
       `INSERT INTO supplier_listings (
-        listing_code, supplier_id, product_spec_id, available_stock,
-        base_unit_price, pricing_unit, price_per_base_unit, currency,
+        listing_code, supplier_id, product_spec_id, supplier_product_id, supplier_sku_id,
+        available_stock, base_unit_price, pricing_unit, price_per_base_unit, currency,
         supplier_min_qty, buyer_min_qty, delivery_zones, delivery_fee_policy,
         fulfilment_lead_time_days, status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         listing_code,
         supplier_id,
         product_spec_id,
+        supplier_product_id || null,
+        supplier_sku_id || null,
         available_stock || 0.00,
         base_unit_price,
         pricing_unit || 'pack',
@@ -55,9 +60,10 @@ class SupplierListingRepository {
     return result.insertId;
   }
 
-  // Find listing by ID with complete spec and supplier information
-  async findById(id) {
-    const [rows] = await db.query(
+  // Find listing by ID with complete spec, canonical family/category, and supplier information
+  async findById(id, connection = null, forUpdate = false) {
+    const executor = connection || db;
+    const [rows] = await executor.query(
       `SELECT sl.*,
               u.full_name as supplier_name,
               u.email as supplier_email,
@@ -66,6 +72,7 @@ class SupplierListingRepository {
               sp.subscription_plan,
               ps.spec_code,
               ps.title as spec_title,
+              ps.variant_title,
               ps.brand,
               ps.variety,
               ps.quality_grade,
@@ -73,13 +80,23 @@ class SupplierListingRepository {
               ps.pack_size,
               ps.pack_unit,
               ps.purchasing_unit,
-              p.category as product_category
+              ps.approval_status as spec_approval_status,
+              p.category as product_category,
+              COALESCE(ps.category_id, p.category_id) as category_id,
+              COALESCE(ps.family_id, p.family_id) as family_id,
+              c.name as category_name,
+              c.slug as category_slug,
+              f.name as family_name,
+              f.slug as family_slug,
+              f.family_code
        FROM supplier_listings sl
        JOIN users u ON sl.supplier_id = u.id
        LEFT JOIN supplier_profiles sp ON u.id = sp.supplier_id
        JOIN product_specifications ps ON sl.product_spec_id = ps.id
        JOIN products p ON ps.product_id = p.id
-       WHERE sl.id = ?`,
+       LEFT JOIN catalog_categories c ON COALESCE(ps.category_id, p.category_id) = c.id
+       LEFT JOIN catalog_product_families f ON COALESCE(ps.family_id, p.family_id) = f.id
+       WHERE sl.id = ?${forUpdate ? ' FOR UPDATE' : ''}`,
       [id]
     );
 
@@ -95,8 +112,9 @@ class SupplierListingRepository {
   }
 
   // Find existing listing by supplier and exact spec
-  async findBySupplierAndSpec(supplierId, specId) {
-    const [rows] = await db.query(
+  async findBySupplierAndSpec(supplierId, specId, connection = null) {
+    const executor = connection || db;
+    const [rows] = await executor.query(
       'SELECT * FROM supplier_listings WHERE supplier_id = ? AND product_spec_id = ?',
       [supplierId, specId]
     );
@@ -111,6 +129,7 @@ class SupplierListingRepository {
               sp.verification_level,
               ps.spec_code,
               ps.title as spec_title,
+              ps.variant_title,
               ps.brand,
               ps.variety,
               ps.quality_grade,
@@ -118,19 +137,46 @@ class SupplierListingRepository {
               ps.pack_size,
               ps.pack_unit,
               ps.purchasing_unit,
-              p.category as product_category
+              ps.approval_status as spec_approval_status,
+              p.category as product_category,
+              COALESCE(ps.category_id, p.category_id) as category_id,
+              COALESCE(ps.family_id, p.family_id) as family_id,
+              c.name as category_name,
+              c.slug as category_slug,
+              f.name as family_name,
+              f.slug as family_slug,
+              f.family_code
        FROM supplier_listings sl
        JOIN users u ON sl.supplier_id = u.id
        LEFT JOIN supplier_profiles sp ON u.id = sp.supplier_id
        JOIN product_specifications ps ON sl.product_spec_id = ps.id
        JOIN products p ON ps.product_id = p.id
+       LEFT JOIN catalog_categories c ON COALESCE(ps.category_id, p.category_id) = c.id
+       LEFT JOIN catalog_product_families f ON COALESCE(ps.family_id, p.family_id) = f.id
        WHERE 1=1
     `;
     const params = [];
 
     // Buyer-facing active query: must be active AND in stock
     if (filters.activeOnly !== false) {
-      sql += " AND sl.status = 'ACTIVE' AND sl.available_stock > 0 AND sl.available_stock >= sl.buyer_min_qty";
+      // B3: Buyer discovery must never expose stale or unverified supplier offers.
+      sql += ` AND sl.status = 'ACTIVE'
+        AND sl.available_stock > 0 AND sl.available_stock >= sl.buyer_min_qty
+        AND u.role = 'SUPPLIER' AND u.is_verified = 1 AND u.verification_status = 'VERIFIED'
+        AND sp.verification_status = 'VERIFIED'
+        AND ps.is_active = 1 AND ps.approval_status = 'APPROVED'
+        AND ps.lifecycle_status = 'PUBLISHED'
+        AND ps.supplier_id = sl.supplier_id AND ps.supplier_sku_id = sl.supplier_sku_id
+        AND EXISTS (SELECT 1 FROM supplier_skus sku JOIN supplier_products prod
+          ON prod.id=sku.supplier_product_id AND prod.status='PUBLISHED'
+          WHERE sku.id=sl.supplier_sku_id AND sku.status='PUBLISHED'
+            AND sku.supplier_id=sl.supplier_id AND prod.supplier_id=sl.supplier_id)
+        AND c.is_active = 1 AND c.approval_status = 'APPROVED'
+        AND f.is_active = 1 AND f.approval_status = 'APPROVED'
+        AND NOT EXISTS (
+          SELECT 1 FROM supplier_skus sk
+          WHERE sk.id = ps.supplier_sku_id AND sk.status <> 'PUBLISHED'
+        )`;
     } else if (filters.status) {
       sql += ' AND sl.status = ?';
       params.push(filters.status);
@@ -144,14 +190,22 @@ class SupplierListingRepository {
       sql += ' AND sl.product_spec_id = ?';
       params.push(filters.product_spec_id);
     }
+    if (filters.family_id) {
+      sql += ' AND COALESCE(ps.family_id, p.family_id) = ?';
+      params.push(Number(filters.family_id));
+    }
+    if (filters.category_id) {
+      sql += ' AND COALESCE(ps.category_id, p.category_id) = ?';
+      params.push(Number(filters.category_id));
+    }
     if (filters.category) {
-      sql += ' AND p.category = ?';
-      params.push(filters.category);
+      sql += ' AND (p.category = ? OR c.name = ? OR c.slug = ?)';
+      params.push(filters.category, filters.category, filters.category);
     }
     if (filters.search) {
-      sql += ' AND (ps.title LIKE ? OR ps.brand LIKE ? OR ps.variety LIKE ? OR u.full_name LIKE ?)';
+      sql += ' AND (ps.title LIKE ? OR ps.brand LIKE ? OR ps.variety LIKE ? OR u.full_name LIKE ? OR f.name LIKE ?)';
       const term = `%${filters.search}%`;
-      params.push(term, term, term, term);
+      params.push(term, term, term, term, term);
     }
 
     sql += ' ORDER BY sl.base_unit_price ASC';
@@ -164,8 +218,38 @@ class SupplierListingRepository {
     }));
   }
 
+  // Count distinct active product families, products, SKUs, and active offers for a supplier (E2 + E3 preparation)
+  async getSupplierCatalogUsageSummary(supplierId) {
+    const [rows] = await db.query(
+      `SELECT
+         COUNT(sl.id) AS total_offers,
+         SUM(CASE WHEN sl.status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_offers,
+         COUNT(DISTINCT CASE WHEN sl.status = 'ACTIVE' THEN COALESCE(ps.family_id, p.family_id) END) AS active_distinct_families,
+         (SELECT COUNT(*) FROM supplier_products sp WHERE sp.supplier_id = ?) AS total_supplier_products,
+         (SELECT COUNT(*) FROM supplier_products sp WHERE sp.supplier_id = ? AND sp.status = 'PUBLISHED') AS published_supplier_products,
+         (SELECT COUNT(*) FROM supplier_skus sk WHERE sk.supplier_id = ?) AS total_supplier_skus,
+         (SELECT COUNT(*) FROM supplier_skus sk WHERE sk.supplier_id = ? AND sk.status = 'PUBLISHED') AS published_supplier_skus
+       FROM supplier_listings sl
+       JOIN product_specifications ps ON sl.product_spec_id = ps.id
+       JOIN products p ON ps.product_id = p.id
+       WHERE sl.supplier_id = ?`,
+      [supplierId, supplierId, supplierId, supplierId, supplierId]
+    );
+    const r = rows[0] || {};
+    return {
+      total_offers: Number(r.total_offers || 0),
+      active_offers: Number(r.active_offers || 0),
+      active_distinct_families: Number(r.active_distinct_families || 0),
+      total_supplier_products: Number(r.total_supplier_products || 0),
+      published_supplier_products: Number(r.published_supplier_products || 0),
+      total_supplier_skus: Number(r.total_supplier_skus || 0),
+      published_supplier_skus: Number(r.published_supplier_skus || 0)
+    };
+  }
+
   // Update listing with ownership verification
-  async update(id, updateData) {
+  async update(id, updateData, connection = null) {
+    const executor = connection || db;
     const allowed = [
       'available_stock',
       'base_unit_price',
@@ -193,7 +277,7 @@ class SupplierListingRepository {
     if (sets.length === 0) return false;
 
     params.push(id);
-    const [result] = await db.query(
+    const [result] = await executor.query(
       `UPDATE supplier_listings SET ${sets.join(', ')} WHERE id = ?`,
       params
     );
@@ -202,8 +286,9 @@ class SupplierListingRepository {
   }
 
   // Update listing status (e.g. ACTIVE <-> PAUSED)
-  async updateStatus(id, newStatus) {
-    const [result] = await db.query(
+  async updateStatus(id, newStatus, connection = null) {
+    const executor = connection || db;
+    const [result] = await executor.query(
       'UPDATE supplier_listings SET status = ? WHERE id = ?',
       [newStatus, id]
     );
@@ -211,8 +296,9 @@ class SupplierListingRepository {
   }
 
   // Record price change history
-  async recordPriceChange(listingId, previousPrice, newPrice, changedBy, reason = null) {
-    const [result] = await db.query(
+  async recordPriceChange(listingId, previousPrice, newPrice, changedBy, reason = null, connection = null) {
+    const executor = connection || db;
+    const [result] = await executor.query(
       `INSERT INTO supplier_listing_price_history (
         listing_id, previous_price, new_price, changed_by, change_reason
       ) VALUES (?, ?, ?, ?, ?)`,

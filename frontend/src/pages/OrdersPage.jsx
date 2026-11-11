@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import apiClient from '../api/client';
+import { RegularPaymentHoldCard } from '../components/RegularPaymentHoldCard';
+import {FlashBuyerOrdersPanel} from '../components/pools/FlashBuyerOrdersPanel';
+import {BuyerRegularReservationsPanel} from '../components/pools/BuyerRegularReservationsPanel';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -17,6 +21,29 @@ export const OrdersPage = () => {
   const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('ALL');
   const [showSamplePreview, setShowSamplePreview] = useState(false);
+  const [realOrders,setRealOrders]=useState([]);
+  const [flashHolds,setFlashHolds]=useState([]);
+  const [ordersLoading,setOrdersLoading]=useState(false);
+  const [ordersError,setOrdersError]=useState('');
+  const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
+  const activeCommitmentCount=regularOrders.filter(o=>!['PAID','CANCELLED','REFUNDED'].includes(o.payment_status)).length+
+    flashHolds.filter(h=>!['PAID','EXPIRED','RELEASED','FAILED'].includes(h.status)&&h.payment_status!=='PAID').length;
+  useEffect(()=>{
+    if(!isAuthenticated || user?.role!=='BUYER')return;
+    let mounted=true;
+    setOrdersLoading(true);
+    Promise.all([
+      apiClient.get('/orders',{params:{limit:100}}),
+      apiClient.get('/flash-pools/holds/mine')
+    ]).then(([orders,flash])=>{
+      if(mounted){
+        setRealOrders(orders?.data?.data?.orders||[]);
+        setFlashHolds(flash?.data?.data?.holds||[]);
+      }
+    }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Could not load orders');})
+      .finally(()=>{if(mounted)setOrdersLoading(false)});
+    return()=>{mounted=false};
+  },[isAuthenticated,user?.role]);
 
   return (
     <AppShell>
@@ -77,9 +104,9 @@ export const OrdersPage = () => {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-sans tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                0
+                {activeCommitmentCount}
               </span>
-              <span className="ml-1 text-xs text-stone-500">pools reserved</span>
+              <span className="ml-1 text-xs text-stone-500">orders</span>
             </div>
           </div>
 
@@ -158,6 +185,26 @@ export const OrdersPage = () => {
           ))}
         </div>
 
+        {isAuthenticated&&user?.role==='BUYER'&&<BuyerRegularReservationsPanel/>}
+
+        {/* Real B4 orders use authoritative payment hold status, not sample data. */}
+        {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
+        {ordersError && <p role="alert" className="text-xs text-red-600">{ordersError}</p>}
+        {!ordersLoading && regularOrders.length > 0 && (
+          <section className="space-y-3" aria-label="Your regular pool orders">
+            <h2 className="font-semibold text-lg">Your Regular Pool Payments</h2>
+            {regularOrders.map(order=>
+              <RegularPaymentHoldCard key={order.id} order={order}/>
+            )}
+          </section>
+        )}
+        {!ordersLoading && flashHolds.length>0&&<FlashBuyerOrdersPanel holds={flashHolds}
+          onRefresh={async()=>{
+            const res=await apiClient.get('/flash-pools/holds/mine');
+            if(res?.data?.success)setFlashHolds(res.data.data?.holds||[]);
+          }}/>}
+        {!ordersLoading && !ordersError && regularOrders.length === 0 && flashHolds.length===0 && (
+          <>
         {/* Empty State / Truthful Real Data Display */}
         <div
           className="p-8 sm:p-12 rounded-3xl border text-center flex flex-col items-center justify-center max-w-xl mx-auto shadow-xs"
@@ -177,12 +224,12 @@ export const OrdersPage = () => {
           </div>
 
           <h3 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>
-            No Active Procurement Reservations
+            No Regular Pool Orders Yet
           </h3>
 
           <p className="text-xs text-stone-500 mt-2 max-w-sm leading-relaxed">
             {isAuthenticated
-              ? 'You have not reserved quantities in any open pools yet. Browse active commodity pools to group your volume with other buyers and unlock wholesale discounts.'
+              ? 'You do not have any Regular Pool orders requiring payment right now. Browse live Regular Pools to join a supplier offer.'
               : 'Sign in to reserve quantities and aggregate bulk volume for lower wholesale prices with guaranteed escrow delivery.'}
           </p>
 
@@ -304,6 +351,8 @@ export const OrdersPage = () => {
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </AppShell>

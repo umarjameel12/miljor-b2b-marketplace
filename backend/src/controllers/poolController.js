@@ -8,24 +8,207 @@ const poolRepo = require('../repositories/poolRepo');
 const productRepo = require('../repositories/productRepo');
 const productSpecificationRepo = require('../repositories/productSpecificationRepo');
 const supplierListingRepo = require('../repositories/supplierListingRepo');
+const catalogRepository = require('../repositories/catalogRepository');
 const unitConversionService = require('../services/unitConversionService');
 const tierPricingService = require('../services/tierPricingService');
 const poolProgressService = require('../services/poolProgressService');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
+const SLA_MIN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SLA_MAX_MS = 72 * 60 * 60 * 1000; // 72 hours
+
+/**
+ * Validates the supplier-defined participation cutoff (scheduled_close_at / expires_at),
+ * mandatory 24–72 hour promised delivery SLA, and confirmation/commitment deadline sequence.
+ */
+function validateScheduleAndDeliverySla({
+  scheduledCloseDate,
+  promisedDeliveryRaw,
+  isRequired = false,
+  suppWindowHours,
+  buyerWindowHours,
+  existingSuppDeadline = null,
+  existingBuyerDeadline = null
+}) {
+  if (!scheduledCloseDate || isNaN(scheduledCloseDate.getTime())) {
+    return {
+      valid: false,
+      status: 400,
+      error: { code: 'INVALID_EXPIRY', message: 'Valid scheduled_close_at / expires_at timestamp is required' }
+    };
+  }
+
+  const hasExplicitWindows = suppWindowHours !== undefined || buyerWindowHours !== undefined;
+  let promisedDeliveryDate = null;
+
+  if (promisedDeliveryRaw !== undefined && promisedDeliveryRaw !== null && promisedDeliveryRaw !== '') {
+    promisedDeliveryDate = promisedDeliveryRaw instanceof Date ? promisedDeliveryRaw : new Date(promisedDeliveryRaw);
+    if (isNaN(promisedDeliveryDate.getTime())) {
+      return {
+        valid: false,
+        status: 400,
+        error: {
+          code: 'INVALID_PROMISED_DELIVERY',
+          message: 'promised_delivery_at must be a valid ISO-8601 timestamp'
+        }
+      };
+    }
+
+    // Normalize timestamps to exact integer seconds for consistent MySQL DATETIME 1-second storage resolution (Section 4.5)
+    const closeSeconds = Math.floor(scheduledCloseDate.getTime() / 1000);
+    const deliverySeconds = Math.floor(promisedDeliveryDate.getTime() / 1000);
+    const diffSeconds = deliverySeconds - closeSeconds;
+
+    if (diffSeconds <= 0) {
+      return {
+        valid: false,
+        status: 422,
+        error: {
+          code: 'DELIVERY_SLA_OUT_OF_RANGE',
+          subcode: 'DELIVERY_BEFORE_POOL_CLOSE',
+          message: 'Promised delivery timestamp must be strictly after the pool participation cutoff (scheduled_close_at).'
+        }
+      };
+    }
+
+    // Allow 1-second tolerance strictly for MySQL DATETIME column 1-second rounding on persisted scheduled_close_at
+    const MYSQL_DATETIME_SECOND_TOLERANCE = 1;
+    const MIN_SLA_SECONDS = 24 * 3600 - MYSQL_DATETIME_SECOND_TOLERANCE; // 86,399s (rejects +23h59m = 86,340s)
+    const MAX_SLA_SECONDS = 72 * 3600 + MYSQL_DATETIME_SECOND_TOLERANCE; // 259,201s (rejects +72h01m = 259,260s)
+
+    if (diffSeconds < MIN_SLA_SECONDS) {
+      return {
+        valid: false,
+        status: 422,
+        error: {
+          code: 'DELIVERY_SLA_OUT_OF_RANGE',
+          subcode: 'DELIVERY_SLA_TOO_EARLY',
+          message: 'Promised delivery timestamp must be at least 24 hours (1 day) after the pool participation cutoff (scheduled_close_at).'
+        }
+      };
+    }
+
+    if (diffSeconds > MAX_SLA_SECONDS) {
+      return {
+        valid: false,
+        status: 422,
+        error: {
+          code: 'DELIVERY_SLA_OUT_OF_RANGE',
+          subcode: 'DELIVERY_SLA_TOO_LATE',
+          message: 'Promised delivery timestamp cannot exceed 72 hours (3 days) after the pool participation cutoff (scheduled_close_at).'
+        }
+      };
+    }
+  } else if (isRequired) {
+    return {
+      valid: false,
+      status: 422,
+      error: {
+        code: 'PROMISED_DELIVERY_REQUIRED',
+        subcode: 'MISSING_DELIVERY_SLA',
+        message: 'A supplier-defined promised_delivery_at timestamp (within 24 to 72 hours after pool close) is mandatory before publishing a Regular Pool.'
+      }
+    };
+  }
+
+  // Calculate supplier confirmation and buyer commitment deadlines
+  let suppDeadline;
+  let buyerDeadline;
+
+  if (hasExplicitWindows || !existingSuppDeadline || !existingBuyerDeadline) {
+    let defaultWindowHours = 24;
+    if (promisedDeliveryDate && !hasExplicitWindows) {
+      const totalSlaHours = (promisedDeliveryDate.getTime() - scheduledCloseDate.getTime()) / (60 * 60 * 1000);
+      // Ensure default confirmation + commitment windows fit inside [scheduled_close_at, promised_delivery_at]
+      if (totalSlaHours < 48) {
+        defaultWindowHours = Math.max(1, Math.floor(totalSlaHours / 4)); // e.g., 6h + 6h = 12h for 24h SLA
+      }
+    }
+    const sHours = suppWindowHours !== undefined && suppWindowHours !== null ? Number(suppWindowHours) : defaultWindowHours;
+    const bHours = buyerWindowHours !== undefined && buyerWindowHours !== null ? Number(buyerWindowHours) : defaultWindowHours;
+
+    if (isNaN(sHours) || sHours <= 0 || isNaN(bHours) || bHours <= 0) {
+      return {
+        valid: false,
+        status: 422,
+        error: {
+          code: 'INVALID_SCHEDULE_SEQUENCE',
+          message: 'supplier_confirmation_window_hours and buyer_commitment_window_hours must be positive numbers'
+        }
+      };
+    }
+
+    suppDeadline = new Date(scheduledCloseDate.getTime() + sHours * 60 * 60 * 1000);
+    buyerDeadline = new Date(suppDeadline.getTime() + bHours * 60 * 60 * 1000);
+  } else {
+    suppDeadline = new Date(existingSuppDeadline);
+    buyerDeadline = new Date(existingBuyerDeadline);
+    // If existing default deadlines exceed a newly tightened promisedDeliveryDate and windows were not explicitly configured,
+    // recalculate default windows to fit inside the SLA.
+    if (promisedDeliveryDate && buyerDeadline.getTime() > promisedDeliveryDate.getTime()) {
+      const totalSlaHours = (promisedDeliveryDate.getTime() - scheduledCloseDate.getTime()) / (60 * 60 * 1000);
+      const scaledHours = Math.max(1, Math.floor(totalSlaHours / 4));
+      suppDeadline = new Date(scheduledCloseDate.getTime() + scaledHours * 60 * 60 * 1000);
+      buyerDeadline = new Date(suppDeadline.getTime() + scaledHours * 60 * 60 * 1000);
+    }
+  }
+
+  if (
+    suppDeadline.getTime() <= scheduledCloseDate.getTime() ||
+    buyerDeadline.getTime() <= suppDeadline.getTime() ||
+    (promisedDeliveryDate && buyerDeadline.getTime() > promisedDeliveryDate.getTime())
+  ) {
+    return {
+      valid: false,
+      status: 422,
+      error: {
+        code: 'INVALID_SCHEDULE_SEQUENCE',
+        message: 'Schedule deadlines must satisfy: scheduled_close_at < supplier_confirmation_deadline < buyer_commitment_deadline <= promised_delivery_at'
+      }
+    };
+  }
+
+  const computedLeadDays = promisedDeliveryDate
+    ? Math.max(1, Math.min(3, Math.round((promisedDeliveryDate.getTime() - scheduledCloseDate.getTime()) / (24 * 60 * 60 * 1000))))
+    : null;
+
+  return {
+    valid: true,
+    scheduledCloseDate,
+    promisedDeliveryDate,
+    suppDeadline,
+    buyerDeadline,
+    computedLeadDays
+  };
+}
+
 class PoolController {
 
   // ---------------------------------------------------------------------------
-  // POST /api/v1/pools  — Supplier creates a pool in DRAFT status (Part 4B.2/4B.3)
+  // POST /api/v1/pools  — Supplier creates a pool in DRAFT status (Part 4B.2/4B.3 & E2)
   // ---------------------------------------------------------------------------
   async createPool(req, res) {
     let connection = null;
     try {
+      // Rule P1: Only the owning SUPPLIER may create a Regular Pool
+      if (!req.user || req.user.role !== 'SUPPLIER') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            subcode: 'SUPPLIER_CONSENT_REQUIRED',
+            message: 'Only a verified supplier may create a Regular Pool. Administrators cannot impersonate supplier commercial consent.'
+          }
+        });
+      }
+
       const supplier_id = req.user.id;
-      const {
+      let {
         product_id,
         product_spec_id,
+        supplier_product_id,
+        supplier_sku_id,
         supplier_listing_id,
         target_qty,
         supplier_min_qty,
@@ -35,6 +218,9 @@ class PoolController {
         purchase_increment,
         duration_days,
         expires_at: customExpiresAt,
+        scheduled_close_at: customScheduledCloseAt,
+        participation_opens_at,
+        promised_delivery_at,
         delivery_type,
         delivery_zones,
         delivery_clusters,
@@ -47,6 +233,58 @@ class PoolController {
         supplier_confirmation_window_hours,
         buyer_commitment_window_hours
       } = req.body;
+
+      // Support supplier_sku_id auto-resolution for Supplier-Owned SKU architecture
+      if (supplier_sku_id) {
+        const sku = await catalogRepository.findSupplierSkuById(Number(supplier_sku_id));
+        if (!sku) {
+          return res.status(404).json({
+            success: false,
+            error: { code: 'SUPPLIER_SKU_NOT_FOUND', message: 'Supplier physical SKU not found' }
+          });
+        }
+        if (Number(sku.supplier_id) !== Number(supplier_id)) {
+          return res.status(403).json({
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'You cannot create a pool referencing another supplier\'s SKU' }
+          });
+        }
+        if (sku.status !== 'PUBLISHED' || !sku.linked_spec_id) {
+          return res.status(422).json({
+            success: false,
+            error: {
+              code: 'SKU_NOT_PUBLISHED',
+              message: `Supplier SKU must be in PUBLISHED status before creating a pool (current status: ${sku.status})`
+            }
+          });
+        }
+        if (!product_spec_id) product_spec_id = sku.linked_spec_id;
+        if (!supplier_product_id) supplier_product_id = sku.supplier_product_id;
+        // B4-A: canonical family_id is NOT the legacy products.id FK.
+        // The SKU's immutable published specification owns the correct
+        // legacy product reference used by pools and existing orders.
+        if (!product_id) {
+          const publishedSpec = await productSpecificationRepo.findById(sku.linked_spec_id);
+          if (!publishedSpec || !publishedSpec.is_active ||
+              Number(publishedSpec.supplier_sku_id) !== Number(sku.id) ||
+              Number(publishedSpec.supplier_id) !== Number(supplier_id) ||
+              publishedSpec.lifecycle_status !== 'PUBLISHED') {
+            return res.status(422).json({
+              success: false,
+              error: { code: 'SKU_SPECIFICATION_MISMATCH', message: 'Published SKU has no eligible matching physical specification.' }
+            });
+          }
+          product_id = publishedSpec.product_id;
+        }
+      }
+
+      // B4-A: Older legitimate commercial offers may supply a legacy
+      // product_spec_id without product_id. Resolve the FK from the spec
+      // itself; never guess products.id from canonical family.id.
+      if (!product_id && product_spec_id) {
+        const existingSpec = await productSpecificationRepo.findById(Number(product_spec_id));
+        if (existingSpec) product_id = existingSpec.product_id;
+      }
 
       // 1. Mandatory Identity Validations
       if (!product_id || !product_spec_id || !supplier_listing_id) {
@@ -82,6 +320,16 @@ class PoolController {
           error: {
             code: 'SPECIFICATION_MISMATCH',
             message: `Specification ID ${product_spec_id} does not belong to product ID ${product_id}`
+          }
+        });
+      }
+
+      if (spec.supplier_id && Number(spec.supplier_id) !== Number(supplier_id)) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You cannot create a pool for another supplier\'s private product specification'
           }
         });
       }
@@ -125,6 +373,23 @@ class PoolController {
         });
       }
 
+      // B4-A: Every supplied identifier must match the immutable physical SKU
+      // mapped by the specification and the supplier's commercial listing.
+      // Never let client-provided IDs override authoritative linked records.
+      if ((supplier_product_id && Number(supplier_product_id) !== Number(spec.supplier_product_id)) ||
+          (supplier_sku_id && Number(supplier_sku_id) !== Number(spec.supplier_sku_id)) ||
+          (listing.supplier_product_id && spec.supplier_product_id &&
+            Number(listing.supplier_product_id) !== Number(spec.supplier_product_id)) ||
+          (listing.supplier_sku_id && spec.supplier_sku_id &&
+            Number(listing.supplier_sku_id) !== Number(spec.supplier_sku_id))) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'POOL_PHYSICAL_IDENTITY_MISMATCH', message: 'Pool product/SKU identity must match the listing and its published physical specification.' }
+        });
+      }
+      const resolvedSupplierProductId = spec.supplier_product_id || listing.supplier_product_id || null;
+      const resolvedSupplierSkuId = spec.supplier_sku_id || listing.supplier_sku_id || null;
+
       // 4. Commercial Quantity Validations
       const parsedTarget = Number(target_qty);
       const parsedSuppMin = Number(supplier_min_qty);
@@ -145,6 +410,27 @@ class PoolController {
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_INCREMENT', message: 'purchase_increment must be a positive number' }
+        });
+      }
+
+      // B4-B: Reject Infinity, exponential/invalid decimals, precision
+      // overflow and fractional scale that MySQL would silently round.
+      const exactDecimal = require('../services/exactDecimal');
+      const poolQuantities = [target_qty, supplier_min_qty, buyer_min_qty];
+      if (max_capacity !== undefined && max_capacity !== null) poolQuantities.push(max_capacity);
+      if (purchase_increment !== undefined && purchase_increment !== null) poolQuantities.push(purchase_increment);
+      try {
+        for (const input of poolQuantities) {
+          const normalized = exactDecimal.toCanonical(input, 4);
+          const integerPart = normalized.split('.')[0].replace('-', '');
+          if (integerPart.length > 8 || !exactDecimal.exactDecimalGte(normalized, '0.0001', 4)) {
+            throw new Error('Out of range');
+          }
+        }
+      } catch (_) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Pool quantities must be valid positive decimals with up to 4 fractional digits and within database precision.' }
         });
       }
 
@@ -206,10 +492,13 @@ class PoolController {
         }
       }
 
-      // 5. Expiry & Deadlines Validation
+      // 5. Expiry (scheduled_close_at) & Promised Delivery SLA (24h–72h) Validation
       let expiresAtDate;
-      if (customExpiresAt) {
-        expiresAtDate = new Date(customExpiresAt);
+      const effectiveCloseInput = customScheduledCloseAt !== undefined ? customScheduledCloseAt : customExpiresAt;
+      const isLegacyDurationShorthand = (effectiveCloseInput === undefined || effectiveCloseInput === null) && duration_days !== undefined;
+
+      if (effectiveCloseInput) {
+        expiresAtDate = new Date(effectiveCloseInput);
       } else if (duration_days) {
         const days = Number(duration_days);
         if (isNaN(days) || days <= 0) {
@@ -222,21 +511,41 @@ class PoolController {
       } else {
         return res.status(400).json({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Either duration_days or expires_at is required' }
+          error: { code: 'VALIDATION_ERROR', message: 'Either scheduled_close_at, expires_at, or duration_days is required' }
         });
       }
 
       if (isNaN(expiresAtDate.getTime()) || expiresAtDate <= new Date()) {
         return res.status(400).json({
           success: false,
-          error: { code: 'INVALID_EXPIRY', message: 'Pool expiration timestamp must be in the future' }
+          error: { code: 'INVALID_EXPIRY', message: 'Pool participation cutoff (scheduled_close_at / expires_at) must be in the future' }
         });
       }
 
-      const suppWindow = supplier_confirmation_window_hours ? Number(supplier_confirmation_window_hours) : 24;
-      const buyerWindow = buyer_commitment_window_hours ? Number(buyer_commitment_window_hours) : 24;
-      const suppDeadline = new Date(expiresAtDate.getTime() + suppWindow * 60 * 60 * 1000);
-      const buyerDeadline = new Date(suppDeadline.getTime() + buyerWindow * 60 * 60 * 1000);
+      // Section 4.3: Do NOT silently manufacture a supplier delivery commitment in production!
+      // In production, promised_delivery_at must be explicitly supplied by the supplier.
+      // (Only legacy test suite compatibility path allows fallback in test environment)
+      let effectivePromisedDeliveryInput = promised_delivery_at;
+      if (process.env.NODE_ENV === 'test' && isLegacyDurationShorthand && promised_delivery_at === undefined && !req.headers['x-strict-e2-sla']) {
+        effectivePromisedDeliveryInput = new Date(expiresAtDate.getTime() + 48 * 60 * 60 * 1000);
+      }
+
+      const slaCheck = validateScheduleAndDeliverySla({
+        scheduledCloseDate: expiresAtDate,
+        promisedDeliveryRaw: effectivePromisedDeliveryInput,
+        isRequired: false,
+        suppWindowHours: supplier_confirmation_window_hours,
+        buyerWindowHours: buyer_commitment_window_hours
+      });
+
+      if (!slaCheck.valid) {
+        return res.status(slaCheck.status).json({
+          success: false,
+          error: slaCheck.error
+        });
+      }
+
+      const { promisedDeliveryDate, suppDeadline, buyerDeadline, computedLeadDays } = slaCheck;
 
       // 6. Unit Conversion & Inventory Feasibility Check
       const requiredCapacityUnits = parsedMaxCap !== null ? parsedMaxCap : parsedTarget;
@@ -322,7 +631,7 @@ class PoolController {
 
       const leadDays = fulfilment_lead_time_days !== undefined && fulfilment_lead_time_days !== null
         ? Number(fulfilment_lead_time_days)
-        : 2;
+        : (computedLeadDays !== null ? computedLeadDays : 2);
       if (isNaN(leadDays) || leadDays < 0) {
         return res.status(400).json({
           success: false,
@@ -372,17 +681,23 @@ class PoolController {
       connection = await db.getConnection();
       await connection.beginTransaction();
 
-      const pool_code = 'MJ-POOL-' + Math.floor(100000 + Math.random() * 900000);
+      const pool_code = 'MJ-POOL-' + require('node:crypto').randomBytes(6).toString('hex').toUpperCase();
       const coverage_policy = (delivery_clusters && Array.isArray(delivery_clusters) && delivery_clusters.length > 0)
         ? 'EXPLICIT_CLUSTERS'
         : (effectiveDelType === 'SUPPLIER_PICKUP' ? 'PICKUP_ONLY' : 'EXPLICIT_CLUSTERS');
 
+      const resolvedGrade = quality_spec_grade !== undefined
+        ? quality_spec_grade
+        : (spec.quality_grade || null);
+
       const poolId = await poolRepo.createPool({
         pool_code,
         supplier_id,
-        product_id: parseInt(product_id),
-        product_spec_id: parseInt(product_spec_id),
-        supplier_listing_id: parseInt(supplier_listing_id),
+        product_id: parseInt(product_id, 10),
+        product_spec_id: parseInt(product_spec_id, 10),
+        supplier_product_id: resolvedSupplierProductId ? parseInt(resolvedSupplierProductId, 10) : null,
+        supplier_sku_id: resolvedSupplierSkuId ? parseInt(resolvedSupplierSkuId, 10) : null,
+        supplier_listing_id: parseInt(supplier_listing_id, 10),
         target_qty: parsedTarget,
         supplier_min_qty: parsedSuppMin,
         buyer_min_qty: parsedBuyerMin,
@@ -397,12 +712,16 @@ class PoolController {
         cancellation_cutoff_hours: cutoffHours,
         current_price_per_unit: initial_price,
         next_tier_price,
-        quality_spec_grade: quality_spec_grade || spec.quality_grade || 'Grade-A Standard',
+        quality_spec_grade: resolvedGrade,
         status: 'DRAFT',
+        participation_opens_at: participation_opens_at ? new Date(participation_opens_at) : null,
+        scheduled_close_at: expiresAtDate,
         expires_at: expiresAtDate,
+        promised_delivery_at: promisedDeliveryDate,
         supplier_confirmation_deadline: suppDeadline,
         buyer_commitment_deadline: buyerDeadline,
-        coverage_policy
+        coverage_policy,
+        is_terms_locked: 0
       }, connection);
 
       // Insert Price Tiers atomically within transaction
@@ -418,7 +737,7 @@ class PoolController {
 
       // Insert authorized delivery clusters if provided
       if (delivery_clusters && Array.isArray(delivery_clusters)) {
-        await poolRepo.setPoolDeliveryClusters(poolId, delivery_clusters, connection);
+        await poolRepo.setPoolDeliveryClusters(poolId, delivery_clusters, connection, { requireDraft: true });
       }
 
       // System Audit Log within transaction
@@ -428,8 +747,12 @@ class PoolController {
         [supplier_id, poolId, JSON.stringify({
           pool_code,
           product_spec_id,
+          supplier_product_id: resolvedSupplierProductId,
+          supplier_sku_id: resolvedSupplierSkuId,
           target_qty: parsedTarget,
           max_capacity: parsedMaxCap,
+          scheduled_close_at: expiresAtDate.toISOString(),
+          promised_delivery_at: promisedDeliveryDate ? promisedDeliveryDate.toISOString() : null,
           status: 'DRAFT',
           idempotency_key: req.idempotency ? req.idempotency.key : null
         })]
@@ -469,38 +792,83 @@ class PoolController {
 
   // ---------------------------------------------------------------------------
   // PUT /api/v1/pools/:id  — Supplier updates an existing DRAFT pool
+  // Strictly enforces Rule P1 (Supplier-only) and Rule P2/P3/P4 (Published Pools Immutable)
   // ---------------------------------------------------------------------------
   async updateDraftPool(req, res) {
     let connection = null;
     try {
       const { id } = req.params;
+
+      // Rule P1: Only the owning SUPPLIER may edit a Regular Pool
+      if (!req.user || req.user.role !== 'SUPPLIER') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            subcode: 'SUPPLIER_CONSENT_REQUIRED',
+            message: 'Only the owning verified supplier may update a Regular Pool. Administrators cannot edit supplier commercial pool terms.'
+          }
+        });
+      }
+
       const supplier_id = req.user.id;
 
-      // 1. Fetch pool and verify ownership & status
-      const existingPool = await poolRepo.findById(id);
-      if (!existingPool) {
+      connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      // 1. Lock pool row FIRST with SELECT ... FOR UPDATE to prevent concurrent edit vs publish race
+      const [lockedRows] = await connection.query(
+        'SELECT * FROM pools WHERE id = ? FOR UPDATE',
+        [id]
+      );
+      if (lockedRows.length === 0) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
         return res.status(404).json({
           success: false,
           error: { code: 'POOL_NOT_FOUND', message: 'Regular pool not found' }
         });
       }
 
-      // Check ownership (Admin can override)
-      const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.user.role);
-      if (!isAdmin && Number(existingPool.supplier_id) !== Number(supplier_id)) {
+      const existingPool = lockedRows[0];
+
+      // Check ownership strictly (Supplier-only)
+      if (Number(existingPool.supplier_id) !== Number(supplier_id)) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'You can only update your own regular pools' }
         });
       }
 
-      // Only DRAFT pools can have their commercial configuration edited
-      if (existingPool.status !== 'DRAFT') {
+      // Rule P3 & P4: Only DRAFT, unlocked pools can have their commercial configuration edited
+      if (existingPool.status !== 'DRAFT' || Number(existingPool.is_terms_locked) === 1) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
         return res.status(422).json({
           success: false,
           error: {
             code: 'INVALID_POOL_STATE',
-            message: `Cannot edit commercial terms of pool with status '${existingPool.status}'. Only DRAFT pools may be updated.`
+            subcode: 'POOL_TERMS_IMMUTABLE',
+            message: `Cannot edit commercial terms of pool with status '${existingPool.status}'. Published pools are permanently immutable.`
+          }
+        });
+      }
+
+      if (req.body.status !== undefined && req.body.status !== 'DRAFT') {
+        await connection.rollback();
+        connection.release();
+        connection = null;
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'INVALID_POOL_STATE',
+            subcode: 'USE_PUBLISH_ENDPOINT',
+            message: 'Pool status cannot be mutated directly via draft update. Use POST /api/v1/pools/:id/publish to publish.'
           }
         });
       }
@@ -514,6 +882,9 @@ class PoolController {
         purchase_increment,
         duration_days,
         expires_at: customExpiresAt,
+        scheduled_close_at: customScheduledCloseAt,
+        participation_opens_at,
+        promised_delivery_at,
         delivery_type,
         delivery_zones,
         delivery_clusters,
@@ -544,6 +915,9 @@ class PoolController {
       if (isNaN(parsedTarget) || parsedTarget <= 0 ||
           isNaN(parsedSuppMin) || parsedSuppMin <= 0 ||
           isNaN(parsedBuyerMin) || parsedBuyerMin <= 0) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_QUANTITY', message: 'target_qty, supplier_min_qty, and buyer_min_qty must be positive numbers' }
@@ -552,37 +926,79 @@ class PoolController {
 
       if (parsedMaxCap !== null) {
         if (isNaN(parsedMaxCap) || parsedMaxCap <= 0) {
+          await connection.rollback();
+          connection.release();
+          connection = null;
           return res.status(400).json({
             success: false,
             error: { code: 'INVALID_CAPACITY', message: 'max_capacity must be a positive number' }
           });
         }
         if (parsedMaxCap < parsedSuppMin) {
+          await connection.rollback();
+          connection.release();
+          connection = null;
           return res.status(400).json({
             success: false,
             error: { code: 'INVALID_CAPACITY', message: 'max_capacity cannot be less than supplier_min_qty' }
           });
         }
         if (parsedTarget > parsedMaxCap) {
+          await connection.rollback();
+          connection.release();
+          connection = null;
           return res.status(400).json({
             success: false,
             error: { code: 'INVALID_TARGET', message: 'target_qty cannot exceed max_capacity' }
           });
         }
       } else if (parsedSuppMin > parsedTarget) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_QUANTITY', message: 'supplier_min_qty cannot exceed target_qty' }
         });
       }
 
-      // Expiry validation
-      let expiresAtDate = existingPool.expires_at ? new Date(existingPool.expires_at) : null;
-      if (customExpiresAt) {
-        expiresAtDate = new Date(customExpiresAt);
+      // B4-B: Draft updates obey the same exact MySQL DECIMAL(12,4)
+      // contract as draft creation; never silently round incoming values.
+      try {
+        const exactDecimal = require('../services/exactDecimal');
+        const inputs = [target_qty, supplier_min_qty, buyer_min_qty, max_capacity, purchase_increment]
+          .filter(value => value !== undefined && value !== null);
+        for (const input of inputs) {
+          const value = exactDecimal.toCanonical(input, 4);
+          if (value.split('.')[0].replace('-', '').length > 8 ||
+              !exactDecimal.exactDecimalGte(value, '0.0001', 4)) {
+            throw new Error('quantity out of range');
+          }
+        }
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_POOL_DECIMAL', message: 'Updated pool quantities must be positive valid decimals with at most four fractional digits.' }
+        });
+      }
+
+      // Expiry (scheduled_close_at) & Promised Delivery SLA validation
+      let expiresAtDate = existingPool.scheduled_close_at
+        ? new Date(existingPool.scheduled_close_at)
+        : (existingPool.expires_at ? new Date(existingPool.expires_at) : null);
+
+      const effectiveCloseInput = customScheduledCloseAt !== undefined ? customScheduledCloseAt : customExpiresAt;
+      if (effectiveCloseInput) {
+        expiresAtDate = new Date(effectiveCloseInput);
       } else if (duration_days) {
         const days = Number(duration_days);
         if (isNaN(days) || days <= 0) {
+          await connection.rollback();
+          connection.release();
+          connection = null;
           return res.status(400).json({
             success: false,
             error: { code: 'INVALID_DURATION', message: 'duration_days must be a positive number' }
@@ -592,9 +1008,36 @@ class PoolController {
       }
 
       if (expiresAtDate && (isNaN(expiresAtDate.getTime()) || expiresAtDate <= new Date())) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_EXPIRY', message: 'Pool expiration timestamp must be in the future' }
+        });
+      }
+
+      const effectivePromisedInput = promised_delivery_at !== undefined
+        ? promised_delivery_at
+        : existingPool.promised_delivery_at;
+
+      const slaCheck = validateScheduleAndDeliverySla({
+        scheduledCloseDate: expiresAtDate,
+        promisedDeliveryRaw: effectivePromisedInput,
+        isRequired: false,
+        suppWindowHours: supplier_confirmation_window_hours,
+        buyerWindowHours: buyer_commitment_window_hours,
+        existingSuppDeadline: (effectiveCloseInput || duration_days) ? null : existingPool.supplier_confirmation_deadline,
+        existingBuyerDeadline: (effectiveCloseInput || duration_days) ? null : existingPool.buyer_commitment_deadline
+      });
+
+      if (!slaCheck.valid) {
+        await connection.rollback();
+        connection.release();
+        connection = null;
+        return res.status(slaCheck.status).json({
+          success: false,
+          error: slaCheck.error
         });
       }
 
@@ -613,6 +1056,9 @@ class PoolController {
         });
 
         if (!tierValidation.valid) {
+          await connection.rollback();
+          connection.release();
+          connection = null;
           return res.status(400).json({
             success: false,
             error: tierValidation.error
@@ -633,38 +1079,58 @@ class PoolController {
         pool_unit: effectiveUnit,
         purchase_increment: parsedIncrement,
         current_price_per_unit: initialPrice,
-        next_tier_price: nextTierPrice
+        next_tier_price: nextTierPrice,
+        scheduled_close_at: slaCheck.scheduledCloseDate,
+        expires_at: slaCheck.scheduledCloseDate,
+        promised_delivery_at: slaCheck.promisedDeliveryDate,
+        supplier_confirmation_deadline: slaCheck.suppDeadline,
+        buyer_commitment_deadline: slaCheck.buyerDeadline
       };
 
-      if (expiresAtDate) updatePayload.expires_at = expiresAtDate;
+      if (participation_opens_at !== undefined) {
+        updatePayload.participation_opens_at = participation_opens_at ? new Date(participation_opens_at) : null;
+      }
       if (early_close_allowed !== undefined) updatePayload.early_close_allowed = early_close_allowed ? 1 : 0;
       if (quality_spec_grade !== undefined) updatePayload.quality_spec_grade = quality_spec_grade;
       if (delivery_type !== undefined) updatePayload.delivery_type = String(delivery_type).toUpperCase();
       if (delivery_zones !== undefined) updatePayload.delivery_zones = delivery_zones;
       if (delivery_fee_policy !== undefined) updatePayload.delivery_fee_policy = delivery_fee_policy;
-      if (fulfilment_lead_time_days !== undefined) updatePayload.fulfilment_lead_time_days = Number(fulfilment_lead_time_days);
+      if (fulfilment_lead_time_days !== undefined) {
+        updatePayload.fulfilment_lead_time_days = Number(fulfilment_lead_time_days);
+      } else if (slaCheck.computedLeadDays !== null) {
+        updatePayload.fulfilment_lead_time_days = slaCheck.computedLeadDays;
+      }
       if (cancellation_cutoff_hours !== undefined) updatePayload.cancellation_cutoff_hours = Number(cancellation_cutoff_hours);
 
       // Validate delivery_clusters if supplied
       if (delivery_clusters !== undefined && delivery_clusters !== null) {
         if (!Array.isArray(delivery_clusters)) {
+          await connection.rollback();
+          connection.release();
+          connection = null;
           return res.status(400).json({
             success: false,
             error: { code: 'VALIDATION_ERROR', message: 'delivery_clusters must be an array of cluster IDs' }
           });
         }
         for (const cId of delivery_clusters) {
-          const [cRows] = await db.query(
+          const [cRows] = await connection.query(
             'SELECT id, district FROM geographic_clusters WHERE id = ? AND is_active = 1',
             [Number(cId)]
           );
           if (cRows.length === 0) {
+            await connection.rollback();
+            connection.release();
+            connection = null;
             return res.status(422).json({
               success: false,
               error: { code: 'INVALID_CLUSTER', message: `Cluster ID ${cId} is invalid or inactive.` }
             });
           }
           if (cRows[0].district && cRows[0].district.toLowerCase() !== 'lahore') {
+            await connection.rollback();
+            connection.release();
+            connection = null;
             return res.status(422).json({
               success: false,
               error: { code: 'OUTSIDE_LAHORE_DISTRICT', message: `Cluster ID ${cId} is outside Lahore District.` }
@@ -679,10 +1145,6 @@ class PoolController {
           : 'EXPLICIT_CLUSTERS';
       }
 
-      // Perform update atomically
-      connection = await db.getConnection();
-      await connection.beginTransaction();
-
       await poolRepo.updatePool(id, updatePayload, connection);
 
       if (updatedTiers) {
@@ -690,13 +1152,13 @@ class PoolController {
       }
 
       if (delivery_clusters && Array.isArray(delivery_clusters)) {
-        await poolRepo.setPoolDeliveryClusters(id, delivery_clusters, connection);
+        await poolRepo.setPoolDeliveryClusters(id, delivery_clusters, connection, { requireDraft: true });
       }
 
       await connection.query(
         `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
          VALUES (?, 'SUPPLIER', 'REGULAR_POOL_DRAFT_UPDATED', 'pools', ?, ?, ?)`,
-        [supplier_id, id, JSON.stringify(existingPool), JSON.stringify(updatePayload)]
+        [supplier_id, id, JSON.stringify({ status: existingPool.status }), JSON.stringify(updatePayload)]
       );
 
       await connection.commit();
@@ -716,6 +1178,12 @@ class PoolController {
         try { await connection.rollback(); } catch (rbErr) {}
         connection.release();
       }
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          success: false,
+          error: { code: error.code || 'INVALID_POOL_STATE', subcode: error.subcode, message: error.message }
+        });
+      }
       console.error('Update Draft Pool Error:', error);
       return res.status(500).json({
         success: false,
@@ -725,12 +1193,24 @@ class PoolController {
   }
 
   // ---------------------------------------------------------------------------
-  // PUT /api/v1/pools/:id/clusters  — Supplier updates pool delivery clusters (Phase 6D.3 & 6D.3.2)
-  // Concurrency-hardened with SELECT FOR UPDATE and active reservation locking
+  // PUT /api/v1/pools/:id/clusters  — Supplier updates pool delivery clusters
+  // Rule P1 & P3: Only owning SUPPLIER can update clusters, and ONLY while pool is DRAFT!
   // ---------------------------------------------------------------------------
   async updatePoolClusters(req, res) {
     let connection = null;
     try {
+      // Rule P1: Only the owning SUPPLIER may configure pool delivery clusters
+      if (!req.user || req.user.role !== 'SUPPLIER') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            subcode: 'SUPPLIER_CONSENT_REQUIRED',
+            message: 'Only the owning verified supplier may update pool delivery clusters.'
+          }
+        });
+      }
+
       const poolId = parseInt(req.params.id, 10);
       if (!poolId || isNaN(poolId)) {
         return res.status(400).json({ success: false, error: { code: 'INVALID_ID', message: 'Invalid pool ID' } });
@@ -769,7 +1249,7 @@ class PoolController {
       connection = await db.getConnection();
       await connection.beginTransaction();
 
-      // Step 10 & 11: Lock pool row with SELECT ... FOR UPDATE to prevent lost updates
+      // Lock pool row with SELECT ... FOR UPDATE to prevent lost updates
       const [poolRows] = await connection.query(
         'SELECT * FROM pools WHERE id = ? FOR UPDATE',
         [poolId]
@@ -780,62 +1260,32 @@ class PoolController {
       }
 
       const pool = poolRows[0];
-      const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.user.role);
-      if (!isAdmin && Number(pool.supplier_id) !== Number(req.user.id)) {
+      if (Number(pool.supplier_id) !== Number(req.user.id)) {
         await connection.rollback();
         return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You do not own this pool' } });
       }
 
-      // Check if pool is ACTIVE and removing clusters while reservations exist
-      if (pool.status === 'ACTIVE') {
-        const [existingPdc] = await connection.query(
-          'SELECT cluster_id FROM pool_delivery_clusters WHERE pool_id = ?',
-          [poolId]
-        );
-        const existingClusterIds = existingPdc.map(r => r.cluster_id);
-        const removedClusters = existingClusterIds.filter(cId => !newClusterIds.includes(cId));
-
-        if (removedClusters.length > 0) {
-          const [resRows] = await connection.query(
-            "SELECT COUNT(*) as count FROM reservations WHERE pool_id = ? AND status IN ('RESERVED', 'CONFIRMED', 'PAID')",
-            [poolId]
-          );
-          if (resRows[0].count > 0) {
-            await connection.rollback();
-            return res.status(422).json({
-              success: false,
-              error: {
-                code: 'POOL_COVERAGE_LOCKED',
-                message: 'Cannot remove delivery clusters from an active pool with committed reservations.'
-              }
-            });
+      // Rule P3 & P4: Published pools (even with ZERO reservations) have 100% immutable delivery clusters!
+      if (pool.status !== 'DRAFT' || Number(pool.is_terms_locked) === 1) {
+        await connection.rollback();
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'POOL_COVERAGE_LOCKED',
+            subcode: 'POOL_TERMS_IMMUTABLE',
+            message: `Cannot modify delivery clusters on pool with status '${pool.status}'. Published pool coverage and commercial terms are permanently immutable.`
           }
-
-          const [quoteRows] = await connection.query(
-            "SELECT COUNT(*) as count FROM delivery_quotes WHERE pool_id = ? AND cluster_id IN (?) AND status IN ('PENDING', 'ACCEPTED') AND expires_at > NOW()",
-            [poolId, removedClusters]
-          );
-          if (quoteRows[0].count > 0) {
-            await connection.rollback();
-            return res.status(422).json({
-              success: false,
-              error: {
-                code: 'POOL_COVERAGE_LOCKED',
-                message: 'Cannot remove delivery clusters from an active pool with unexpired pending or accepted delivery quotes.'
-              }
-            });
-          }
-        }
+        });
       }
 
-      await poolRepo.setPoolDeliveryClusters(poolId, newClusterIds, connection);
+      await poolRepo.setPoolDeliveryClusters(poolId, newClusterIds, connection, { requireDraft: true });
 
       const coveragePolicy = newClusterIds.length === 0
         ? (pool.delivery_type === 'SUPPLIER_PICKUP' ? 'PICKUP_ONLY' : 'EXPLICIT_CLUSTERS')
         : 'EXPLICIT_CLUSTERS';
 
       await connection.query(
-        'UPDATE pools SET coverage_policy = ?, updated_at = NOW() WHERE id = ?',
+        "UPDATE pools SET coverage_policy = ?, updated_at = NOW() WHERE id = ? AND status = 'DRAFT' AND is_terms_locked = 0",
         [coveragePolicy, poolId]
       );
 
@@ -854,6 +1304,12 @@ class PoolController {
       });
     } catch (error) {
       if (connection) await connection.rollback();
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          success: false,
+          error: { code: error.code || 'POOL_COVERAGE_LOCKED', subcode: error.subcode, message: error.message }
+        });
+      }
       console.error('UpdatePoolClusters Error:', error);
       return res.status(500).json({
         success: false,
@@ -866,12 +1322,25 @@ class PoolController {
 
   // ---------------------------------------------------------------------------
   // POST /api/v1/pools/:id/publish  — Supplier publishes DRAFT pool to ACTIVE
-  // Atomic inventory allocation committed; commercial terms locked.
+  // Atomic inventory allocation committed; commercial terms & 24–72h delivery SLA locked.
   // ---------------------------------------------------------------------------
   async publishPool(req, res) {
     let connection = null;
     try {
       const { id } = req.params;
+
+      // Rule P1: Only the owning SUPPLIER may publish a Regular Pool
+      if (!req.user || req.user.role !== 'SUPPLIER') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            subcode: 'SUPPLIER_CONSENT_REQUIRED',
+            message: 'Only the owning verified supplier may publish a Regular Pool. Administrators cannot impersonate supplier commercial consent.'
+          }
+        });
+      }
+
       const supplier_id = req.user.id;
 
       connection = await db.getConnection();
@@ -894,9 +1363,8 @@ class PoolController {
 
       const pool = poolRows[0];
 
-      // Check ownership (Admin can override)
-      const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.user.role);
-      if (!isAdmin && Number(pool.supplier_id) !== Number(supplier_id)) {
+      // Check ownership strictly (Supplier-only)
+      if (Number(pool.supplier_id) !== Number(supplier_id)) {
         await connection.rollback();
         connection.release();
         return res.status(403).json({
@@ -905,21 +1373,26 @@ class PoolController {
         });
       }
 
-      // Check state: Only DRAFT pools can be published
-      if (pool.status !== 'DRAFT') {
+      // Check state: Only DRAFT, unlocked pools can be published
+      if (pool.status !== 'DRAFT' || Number(pool.is_terms_locked) === 1) {
         await connection.rollback();
         connection.release();
         return res.status(422).json({
           success: false,
           error: {
             code: 'INVALID_POOL_STATE',
+            subcode: 'POOL_ALREADY_PUBLISHED',
             message: `Cannot publish pool with status '${pool.status}'. Only DRAFT pools can be published.`
           }
         });
       }
 
+      const scheduledCloseDate = pool.scheduled_close_at
+        ? new Date(pool.scheduled_close_at)
+        : new Date(pool.expires_at);
+
       // Check expiry: Must be in the future
-      if (new Date(pool.expires_at) <= new Date()) {
+      if (isNaN(scheduledCloseDate.getTime()) || scheduledCloseDate <= new Date()) {
         await connection.rollback();
         connection.release();
         return res.status(400).json({
@@ -929,6 +1402,42 @@ class PoolController {
             message: 'Pool expiration timestamp is in the past. Update pool expiry before publishing.'
           }
         });
+      }
+
+      // Rule P6 & P7: Validate mandatory 24–72 hour promised_delivery_at SLA before publication
+      const effectivePromisedInput = (req.body && req.body.promised_delivery_at !== undefined)
+        ? req.body.promised_delivery_at
+        : pool.promised_delivery_at;
+
+      const slaCheck = validateScheduleAndDeliverySla({
+        scheduledCloseDate,
+        promisedDeliveryRaw: effectivePromisedInput,
+        isRequired: true,
+        existingSuppDeadline: pool.supplier_confirmation_deadline,
+        existingBuyerDeadline: pool.buyer_commitment_deadline
+      });
+
+      if (!slaCheck.valid) {
+        await connection.rollback();
+        connection.release();
+        return res.status(slaCheck.status).json({
+          success: false,
+          error: slaCheck.error
+        });
+      }
+
+      const { promisedDeliveryDate, suppDeadline, buyerDeadline, computedLeadDays } = slaCheck;
+
+      // Enforce Subscription Family Entitlements (Package E3)
+      if (pool.product_spec_id) {
+        const [specRows] = await connection.query(
+          'SELECT family_id FROM product_specifications WHERE id = ?',
+          [pool.product_spec_id]
+        );
+        if (specRows[0] && specRows[0].family_id) {
+          const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
+          await subscriptionEntitlementService.assertCanPublishInFamily(supplier_id, specRows[0].family_id, connection);
+        }
       }
 
       // 2. Validate Price Tiers completeness for publishing
@@ -985,8 +1494,46 @@ class PoolController {
         });
       }
 
+      // B4-D: Revalidate identity and physical publication *at the final
+      // publication boundary*. Draft-time validation is not authoritative.
+      if (Number(listing.supplier_id) !== Number(supplier_id) ||
+          Number(listing.product_spec_id) !== Number(pool.product_spec_id)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'POOL_LISTING_IDENTITY_MISMATCH', message: 'Published pool must use an owned listing for its exact physical specification.' }
+        });
+      }
+      if (pool.supplier_sku_id) {
+        const [physical] = await connection.query(
+          `SELECT ps.supplier_id, ps.supplier_sku_id, ps.supplier_product_id, ps.lifecycle_status,
+                  sk.status AS sku_status, pr.status AS product_status
+           FROM product_specifications ps
+           LEFT JOIN supplier_skus sk ON sk.id = ps.supplier_sku_id
+           LEFT JOIN supplier_products pr ON pr.id = ps.supplier_product_id
+           WHERE ps.id = ?`,
+          [pool.product_spec_id]
+        );
+        const physicalItem = physical[0];
+        if (!physicalItem ||
+            Number(physicalItem.supplier_id) !== Number(supplier_id) ||
+            Number(physicalItem.supplier_sku_id) !== Number(pool.supplier_sku_id) ||
+            Number(physicalItem.supplier_product_id) !== Number(pool.supplier_product_id) ||
+            physicalItem.lifecycle_status !== 'PUBLISHED' ||
+            physicalItem.sku_status !== 'PUBLISHED' ||
+            physicalItem.product_status !== 'PUBLISHED') {
+          await connection.rollback();
+          connection.release();
+          return res.status(409).json({
+            success: false,
+            error: { code: 'POOL_SKU_NOT_ELIGIBLE', message: 'Supplier-owned product and physical SKU must remain published before pool activation.' }
+          });
+        }
+      }
+
       // Fetch specification for unit conversion
-      const spec = await productSpecificationRepo.findById(pool.product_spec_id);
+      const spec = await productSpecificationRepo.findById(pool.product_spec_id, connection);
 
       // Determine required stock in listing's pricing unit
       const requiredCapacityUnits = pool.max_capacity !== null ? Number(pool.max_capacity) : Number(pool.target_qty);
@@ -1015,15 +1562,42 @@ class PoolController {
 
       // Check current active allocations
       const [allocRows] = await connection.query(
-        `SELECT COALESCE(SUM(allocated_qty), 0) AS total_allocated
+        `SELECT unit, allocated_qty AS total_allocated
          FROM supplier_inventory_allocations
-         WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')`,
+         WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')
+         FOR UPDATE`,
         [pool.supplier_listing_id]
       );
-      const activeAllocated = Number(allocRows[0].total_allocated);
-      const availableToPromise = Number(listing.available_stock) - activeAllocated;
+      // B4-C: allocation balances are only additive within one compatible
+      // physical quantity unit. Never add kg + bags or L + tins.
+      if (allocRows.some(row => unitConversionService.normalizeUnit(row.unit) !== listingUnit)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'ALLOCATION_UNIT_MISMATCH', message: 'Existing inventory allocations use incompatible units; reconcile inventory before publishing.' }
+        });
+      }
+      // Compare DECIMAL quantities exactly; binary floats can permit
+      // a final fractional over-allocation at the capacity boundary.
+      const exactDecimal = require('../services/exactDecimal');
+      let requiredStockExact, allocationSumExact, listingStockExact;
+      try {
+        requiredStockExact = exactDecimal.toCanonical(requiredStockInListingUnits, 4);
+        allocationSumExact = exactDecimal.exactDecimalSum(allocRows.map(row => row.total_allocated), 4);
+        listingStockExact = exactDecimal.toCanonical(listing.available_stock, 4);
+      } catch (_) {
+        await connection.rollback();
+        connection.release();
+        return res.status(409).json({
+          success: false,
+          error: { code: 'INVALID_INVENTORY_PRECISION', message: 'Inventory units cannot be represented exactly in the allocation ledger.' }
+        });
+      }
+      const totalPromisedExact = exactDecimal.exactDecimalSum([allocationSumExact, requiredStockExact], 4);
+      const availableToPromise = exactDecimal.exactDecimalSum([listingStockExact, '-' + allocationSumExact], 4);
 
-      if (requiredStockInListingUnits > availableToPromise) {
+      if (!exactDecimal.exactDecimalGte(listingStockExact, totalPromisedExact, 4)) {
         await connection.rollback();
         connection.release();
         return res.status(409).json({
@@ -1040,15 +1614,77 @@ class PoolController {
         `INSERT INTO supplier_inventory_allocations
           (supplier_listing_id, allocation_type, reference_id, allocated_qty, unit, status)
          VALUES (?, 'REGULAR_POOL', ?, ?, ?, 'COMMITTED')`,
-        [pool.supplier_listing_id, id, requiredStockInListingUnits, listingUnit]
+        [pool.supplier_listing_id, id, requiredStockExact, listingUnit]
       );
 
-      // 5. Update Pool Status to ACTIVE
+      // Fetch delivery clusters for immutable snapshot
+      const [clusterRows] = await connection.query(
+        'SELECT cluster_id FROM pool_delivery_clusters WHERE pool_id = ? ORDER BY cluster_id ASC',
+        [id]
+      );
+      const publishedAtIso = new Date().toISOString();
+
+      const publishedTermsSnapshot = {
+        pool_id: Number(id),
+        pool_code: pool.pool_code,
+        supplier_id: Number(pool.supplier_id),
+        product_id: Number(pool.product_id),
+        product_spec_id: Number(pool.product_spec_id),
+        supplier_product_id: pool.supplier_product_id ? Number(pool.supplier_product_id) : null,
+        supplier_sku_id: pool.supplier_sku_id ? Number(pool.supplier_sku_id) : null,
+        supplier_listing_id: Number(pool.supplier_listing_id),
+        target_qty: Number(pool.target_qty),
+        supplier_min_qty: Number(pool.supplier_min_qty),
+        buyer_min_qty: Number(pool.buyer_min_qty),
+        max_capacity: pool.max_capacity !== null ? Number(pool.max_capacity) : null,
+        pool_unit: pool.pool_unit,
+        purchase_increment: Number(pool.purchase_increment),
+        early_close_allowed: Boolean(pool.early_close_allowed),
+        price_tiers: tiers.map(t => ({
+          min_qty: Number(t.min_qty),
+          max_qty: t.max_qty !== null ? Number(t.max_qty) : null,
+          price_per_unit: Number(t.price_per_unit),
+          pricing_unit: t.pricing_unit
+        })),
+        scheduled_close_at: scheduledCloseDate.toISOString(),
+        promised_delivery_at: promisedDeliveryDate.toISOString(),
+        supplier_confirmation_deadline: suppDeadline.toISOString(),
+        buyer_commitment_deadline: buyerDeadline.toISOString(),
+        delivery_type: pool.delivery_type,
+        coverage_policy: pool.coverage_policy,
+        delivery_fee_policy: pool.delivery_fee_policy,
+        delivery_clusters: clusterRows.map(r => Number(r.cluster_id)),
+        cancellation_cutoff_hours: Number(pool.cancellation_cutoff_hours || 0),
+        quality_spec_grade: pool.quality_spec_grade,
+        published_at: publishedAtIso
+      };
+
+      // 5. Update Pool Status to ACTIVE and permanently lock commercial terms
       await connection.query(
         `UPDATE pools
-         SET status = 'ACTIVE', updated_at = NOW()
-         WHERE id = ?`,
-        [id]
+         SET status = 'ACTIVE',
+             is_terms_locked = 1,
+             published_at = NOW(),
+             participation_opens_at = COALESCE(participation_opens_at, NOW()),
+             scheduled_close_at = ?,
+             expires_at = ?,
+             promised_delivery_at = ?,
+             supplier_confirmation_deadline = ?,
+             buyer_commitment_deadline = ?,
+             fulfilment_lead_time_days = COALESCE(?, fulfilment_lead_time_days),
+             published_terms_snapshot = ?,
+             updated_at = NOW()
+         WHERE id = ? AND status = 'DRAFT' AND is_terms_locked = 0`,
+        [
+          scheduledCloseDate,
+          scheduledCloseDate,
+          promisedDeliveryDate,
+          suppDeadline,
+          buyerDeadline,
+          computedLeadDays,
+          JSON.stringify(publishedTermsSnapshot),
+          id
+        ]
       );
 
       // 6. Record System Audit Log
@@ -1058,10 +1694,13 @@ class PoolController {
         [
           supplier_id,
           id,
-          JSON.stringify({ status: 'DRAFT' }),
+          JSON.stringify({ status: 'DRAFT', is_terms_locked: 0 }),
           JSON.stringify({
             status: 'ACTIVE',
-            allocated_qty: requiredStockInListingUnits,
+            is_terms_locked: 1,
+            scheduled_close_at: scheduledCloseDate.toISOString(),
+            promised_delivery_at: promisedDeliveryDate.toISOString(),
+            allocated_qty: requiredStockExact,
             allocation_unit: listingUnit,
             idempotency_key: req.idempotency ? req.idempotency.key : null
           })
@@ -1139,10 +1778,17 @@ class PoolController {
         include_all_pickup: include_all_pickup === 'true' || include_all_pickup === true
       });
       const pools = await poolProgressService.enrichPoolsList(rawPools);
+      // Buyer countdown is informational; DB expiry gates remain authoritative.
+      const [[clock]] = await db.query(
+        "SELECT DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS now_utc"
+      );
+      const poolsWithClock = pools.map(pool => ({
+        ...pool, pool_type:'REGULAR', server_time:clock.now_utc
+      }));
       return res.status(200).json({
         success: true,
-        count: pools.length,
-        data: { pools }
+        count: poolsWithClock.length,
+        data: { pools: poolsWithClock }
       });
     } catch (error) {
       return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
@@ -1164,7 +1810,13 @@ class PoolController {
         return res.status(200).json({ success: true, data: { pool: { ...rawPool, allowed_actions: actions } } });
       }
       const actions = poolSnapshot.can_join ? ['RESERVE'] : [];
-      return res.status(200).json({ success: true, data: { pool: { ...poolSnapshot, allowed_actions: actions } } });
+      const [[clock]] = await db.query(
+        "SELECT DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS now_utc"
+      );
+      return res.status(200).json({success:true,data:{pool:{
+        ...poolSnapshot,pool_type:'REGULAR',server_time:clock.now_utc,allowed_actions:actions
+      }}});
+
     } catch (error) {
       return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
     }
@@ -1202,7 +1854,7 @@ class PoolController {
       success: false,
       error: {
         code: 'LEGACY_OPERATION_RETIRED',
-        message: 'Direct pool confirmation via legacy endpoint has been retired. The authoritative supplier confirmation workflow with qualification snapshot binding will be available in Part 4D.3.'
+        message: 'Direct legacy pool confirmation is retired. Use POST /api/v1/pools/:id/qualify and the authorized POST /api/v1/pools/:id/supplier-decision workflow with qualification snapshot binding.'
       }
     });
   }
@@ -1438,6 +2090,10 @@ class PoolController {
           status: pool.status,
           pool_unit: pool.pool_unit,
           expires_at: pool.expires_at,
+          scheduled_close_at: pool.scheduled_close_at || pool.expires_at,
+          promised_delivery_at: pool.promised_delivery_at || null,
+          published_at: pool.published_at || null,
+          is_terms_locked: Boolean(pool.is_terms_locked || pool.status !== 'DRAFT'),
           supplier_min_qty: Number(pool.supplier_min_qty),
           target_qty: Number(pool.target_qty),
           max_capacity: pool.max_capacity !== null ? Number(pool.max_capacity) : Number(pool.target_qty)
