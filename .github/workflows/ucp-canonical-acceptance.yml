@@ -191,6 +191,9 @@ jobs:
           B6_B5_INVENTORY_RECONCILED: 'true'
           B6_TAX_POLICY_APPROVED: 'true'
         run: cd backend && node tests/demo_real_b6_award_paid_fulfillment_mysql_gate.js
+      - name: Real JWT admin supplier verification, denial and audit on disposable MySQL
+        timeout-minutes: 5
+        run: cd backend && node tests/demo_admin_real_mysql_verification_gate.js
 
   real-chromium-buyer-supplier:
     name: Real Chromium buyer/supplier auth, retry and offline journey
