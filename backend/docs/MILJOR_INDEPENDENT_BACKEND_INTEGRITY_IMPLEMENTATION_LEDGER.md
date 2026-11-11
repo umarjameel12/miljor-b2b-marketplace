@@ -60,3 +60,30 @@ Status: IMPLEMENTED, NOT TESTED, NOT VERIFIED.
 - Existing subscription paid-plan Safepay gate preserved. Do not enable unpaid GROWTH/BUSINESS plans and do not silently change tariffs.
 - Final gate must also verify legacy/current fee parity, missing supplier rejection, concurrent family publishing, downgrade preservation, cross-supplier isolation, paid upgrade rejection and financial transaction snapshots on `miljor_test_db`.
 - Business contract pending explicit reconciliation: plan family limits (4/13/25), no effective maximum SKU per family, buyer processing fee rules and historical onboarding discounts. Do not apply invented pricing rates to real orders.
+
+## Batch 4 — Payment, refund and settlement integrity (2026-11-11)
+Status: IMPLEMENTED (targeted fixes); NOT TESTED / NOT VERIFIED.
+Branch isolation: `fix/independent-backend-integrity`; no main/B6 merge or database writes.
+
+### Payment authorization boundary
+- Legacy `POST /payments/initiate`, `POST /payments/verify`, `GET /payments/my` now use `authorizeStrict('BUYER')`. The broad authorize helper previously allowed SUPER_ADMIN to assume BUYER-only routes.
+- Canonical order-first checkout, Safepay webhook confirmation and financial-escrow ledger remain unchanged.
+
+### Refund financial conservation
+- Under the locked PAID order, cumulative refund claim balance includes REQUESTED, UNDER_REVIEW, APPROVED, CONFIRMED and in-flight external statuses.
+- Multiple pending refund claims cannot individually pass based on the same refundable amount.
+- Refund assessment rejects a supplier payable hold which would exceed its remaining entitlement instead of creating unbacked balances. This conservative rule means certain full refunds need an explicit platform-funded component/policy before they can be approved. No false claim that the full policy is implemented.
+- Refund approval selects only the exact matching `HOLD-RFND-<refundId>-%` ACTIVE hold, validates amount and held balance, and fails closed if the hold is missing or inconsistent.
+- Hold and refund accounting comparisons use exact decimals, not floating-point Number comparisons.
+- Financial settlement controller uses generic 5xx errors rather than exposing SQL/internals.
+
+### Deferred final acceptance
+- New `backend/tests/phase4_refund_integrity_gate.js`: isolated transaction mocks for pending refund overbooking and exact refund-hold matching. Committed only; not executed.
+- On `miljor_test_db` verify signed and forged Safepay webhooks, double webhook, checkout idempotency, PAID-only payable accrual, refund requests vs captured amount, simultaneous refund claims, multiple distinct holds, refund approval, manual reconciliation evidence, hold release, payout preparation after buyer confirmation, supplier KYC, seller/buyer ownership, permissions and transfer-disabled contract.
+- No real funds were moved; no external refund execution or payout implementation was enabled.
+
+### Explicit incomplete business-plan items
+- Full refunds exceeding supplier net payable need a separately audited platform-fee/delivery-fee funding and reserve allocation model. Do not fake financial conservation by over-holding supplier money.
+- Payment rail decision: code and authoritative business invariants specify Safepay-only, whereas older business plan called for JazzCash sandbox. Do not silently enable JazzCash until signed callback verification, reconciliation and refund handling are implemented end-to-end.
+- Refund state/payment status across repeated partial refunds and accounting allocation need final integrated DB proof.
+- Await final test evidence and branch reconciliation before any production approval.
