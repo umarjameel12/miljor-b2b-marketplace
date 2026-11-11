@@ -35,7 +35,15 @@ class FeeService {
     const [profiles]=await connection.query(
       'SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id=?',[id]
     );
-    const percent=exact.toCanonical(profiles[0]?.transaction_fee_percent??'2.50',2);
+    // Never compute a supplier payout for a missing supplier profile.
+    // A silent fallback here could award or settle money for an invalid supplier.
+    if (profiles.length !== 1) {
+      const err = new Error('Supplier profile is missing or ambiguous');
+      err.code = 'SUPPLIER_PROFILE_REQUIRED';
+      err.statusCode = 422;
+      throw err;
+    }
+    const percent=exact.toCanonical(profiles[0].transaction_fee_percent??'2.50',2);
     if(!exact.exactDecimalGte(percent,'0.00',2)||
        !exact.exactDecimalGte('100.00',percent,2))throw new Error('Supplier fee percent invalid');
     const cents=BigInt(subtotal.replace('.',''));
@@ -51,6 +59,8 @@ class FeeService {
   async calculateBuyerFee(subtotalAmount) {
     const result = await this.calculateBuyerFeeExact(subtotalAmount);
     return {
+      // Legacy API keeps the displayed percentage at zero where the flat
+      // minimum applies; the authoritative fee amount remains decimal-exact.
       percentage: exact.exactDecimalGte(subtotalAmount, '1000.00', 2) ? Number(result.percentage) : 0,
       buyer_fee: result.buyer_fee
     };
