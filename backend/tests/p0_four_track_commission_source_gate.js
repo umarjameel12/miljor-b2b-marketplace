@@ -30,7 +30,7 @@ assert.match(settlement,/order\.supplier_commission_percent/);
 assert.match(settlement,/COMMISSION_SNAPSHOT_REQUIRED/);
 assert.doesNotMatch(settlement,/commissionPercent\s*=\s*2\.50/);
 assert.doesNotMatch(settlement,/order\.transaction_fee_percent/);
-const files=fs.readdirSync(path.join(root,'database/migrations')).filter(f=>/^[0-9]{3}_.*\.sql$/.test(f));
+const files=require('../database/migrationManifest').scanMigrations().map(item=>item.filename);
 const versions=files.map(x=>x.slice(0,3));
 assert.equal(versions.length,new Set(versions).size,'No two canonical migrations may share version');
 assert.equal(files.filter(x=>x.startsWith('054_')).length,1);
