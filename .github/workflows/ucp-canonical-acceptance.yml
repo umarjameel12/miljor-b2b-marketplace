@@ -139,6 +139,10 @@ jobs:
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
       - name: Verify finance 054 installed schema and exact checksum (read only)
         run: cd backend && node tests/p0_finance_054_installed_gate.js
+      - name: Synthetic signed Safepay HTTP/escrow/replay acceptance (no provider calls)
+        env:
+          SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+        run: cd backend && node tests/p0_safepay_signed_http_acceptance.js
       # The B6 Package E2 foundation tests assert EXACT historical 16-spec data.
       # B5 integration gates create additional synthetic supplier specifications.
       # Run the historical baseline checks first, never against B5-contaminated DB.
