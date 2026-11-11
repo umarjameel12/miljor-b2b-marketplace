@@ -1478,7 +1478,7 @@ class FinancialSettlementService {
     batchReference, grossAmount, providerFee, netAmount, settlementDate,
     matchedTrackerTokens = [], rawMetadata = null, actor
   }) {
-    if (!actor || !actor.id || !isAdminRole(actor.role)) {
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
       const err = new Error('Provider settlement reconciliation requires an authorized administrator');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
