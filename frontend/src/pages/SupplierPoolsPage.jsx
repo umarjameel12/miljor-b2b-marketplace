@@ -136,6 +136,19 @@ export function SupplierPoolsPage(){
     finally{setLoading(false);}
   },[]);
   useEffect(()=>{if(isAuthenticated&&user?.role==='SUPPLIER')load();else setLoading(false)},[load,isAuthenticated,user?.role]);
+  // Deep links from Supplier Catalog preselect the same real commercial offer.
+  useEffect(()=>{
+    if(params.get('create')!=='1'||edit||!listings.length)return;
+    const requestedType=params.get('type')?.toUpperCase();
+    if(['REGULAR','FLASH'].includes(requestedType))setMode(requestedType);
+    const listingId=params.get('listing');
+    if(listingId && listings.some(l=>String(l.id)===listingId)){
+      setForm(previous=>previous.supplier_listing_id===listingId?previous:
+        initialForm(listings.find(l=>String(l.id)===listingId)));
+    }
+  // Only respond to route/data changes, not the supplier's unsaved form edits.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[params.toString(),listings.length,edit]);
   const chosen=useMemo(()=>listings.find(l=>String(l.id)===String(form.supplier_listing_id)),[listings,form.supplier_listing_id]);
   const rows=useMemo(()=>data.pools.filter(p=>filter==='ALL'||p.type===filter||
     (filter==='ACTIVE'&&p.status==='ACTIVE')||(filter==='DRAFT'&&p.status==='DRAFT')), [data.pools,filter]);
