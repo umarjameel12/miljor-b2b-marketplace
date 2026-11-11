@@ -95,8 +95,8 @@ async function run(){
   const file=process.env.GITHUB_ENV;
   if(!file||!process.env.GITHUB_ACTIONS)throw Error('B7_GITHUB_ENV_REQUIRED');
   fs.appendFileSync(file,
-   'B7_BROWSER_COMPLETE_ORDER_CODE='+result[0].order_code+'\\n'+
-   'B7_BROWSER_SHORTAGE_ORDER_CODE='+result[1].order_code+'\\n');
+   'B7_BROWSER_COMPLETE_ORDER_CODE='+result[0].order_code+'\n'+
+   'B7_BROWSER_SHORTAGE_ORDER_CODE='+result[1].order_code+'\n');
   console.log('B7 ephemeral browser fixture order codes exported to job env.');
  }
  await db.end();
