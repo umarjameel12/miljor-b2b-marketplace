@@ -69,8 +69,25 @@ async function main(){
     let offlineError=false;
     try{await b.page.reload({timeout:7000,waitUntil:'domcontentloaded'});}catch{offlineError=true;}
     await b.page.context().setOffline(false);
+    const afterReconnect=[];
+    b.page.on('response',r=>{
+      if(r.url().includes('/api/v1/auth/refresh'))
+        afterReconnect.push({status:r.status(),url:'/auth/refresh'});
+    });
     await b.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
-    await b.page.getByText(/Buyer Account/i).waitFor({timeout:15000});
+    try{
+      await b.page.getByText(/Buyer Account/i).waitFor({timeout:15000});
+    }catch(error){
+      const browserState=await b.page.evaluate(()=>({
+        online:navigator.onLine,
+        pageText:document.body?.innerText?.slice(0,450),
+        currentPath:location.pathname
+      })).catch(e=>({error:e.message}));
+      const cookieNames=(await buyer.cookies()).map(c=>({name:c.name,httpOnly:c.httpOnly}));
+      console.error('OFFLINE_RECOVERY_DIAGNOSTIC',
+        JSON.stringify({browserState,afterReconnect,cookieNames}));
+      throw error;
+    }
     pass('Buyer browser reconnects after offline/online transition (offline_error='+offlineError+')');
     // Enforce tenant/role policy with actual issued JWTs, never exposing tokens to logs.
     const forbidden=await b.page.request.get(base+'/api/v1/supplier/pools/overview',
