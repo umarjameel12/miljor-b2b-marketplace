@@ -1,5 +1,18 @@
 # MilJor — Phase Execution Log
 
+## UCP-3 to UCP-5 Combined Delivery, Marketplace & Operations — 2026-11-11
+
+- **Branch:** `feature/ucp3-5-delivery-marketplace-ops` (derived from UCP-1/2; does not merge B4/B5 state machines or B6 procurements).
+- **Plan:** `backend/docs/MILJOR_UCP3_TO_UCP5_MASTER_IMPLEMENTATION_PLAN.md`.
+- **Implementation report:** `backend/docs/MILJOR_UCP3_TO_UCP5_IMPLEMENTATION_REPORT.md`.
+- **UCP-3:** supplier delivery/cluster and exact supplier inventory read models; Flash verified saved buyer delivery-address eligibility.
+- **UCP-4:** public B4/B5 supplier-owned pool discovery, buyer Regular reservations, Flash holds/Safepay initiation and recovery, search and filters.
+- **UCP-5:** supplier-scoped truthful order/pool analytics and non-financial read-only alerts.
+- **Acceptance gate:** **SOURCE COMMITTED / DB + API + VITE + SAFEPAY E2E + CONCURRENCY + B4/B5/B6 REGRESSION NOT RUN / MERGE BLOCKED**. Final gates deferred per owner instruction; no production DB writes.
+
+---
+
+
 ## Phase B6 Combined Phase 1 (G through M): Acceptance Complete (287/287 PASS)
 
 - **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `669a4b3addb27b531473bfa28f8b40400780933c`).
