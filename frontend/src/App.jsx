@@ -9,6 +9,7 @@ import { Logo } from './components/ui/Logo';
 import { LandingPage } from './pages/LandingPage';
 import { PoolsPage } from './pages/PoolsPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { PostPurchasePage } from './pages/PostPurchasePage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
@@ -41,7 +42,7 @@ function AppContent() {
 
   // Showcase (/), marketplace (/pools), orders (/orders), profile (/profile), supplier (/supplier), and admin (/admin) use the responsive AppShell layout with sidebar.
   // Auth routes (/login, /register, /verify-email, /forgot-password) use the clean standalone Navbar.
-  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
+  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/post-purchase') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
 
   return (
     <div
@@ -58,6 +59,7 @@ function AppContent() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/post-purchase" element={<PostPurchasePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/flash-pools" element={<FlashPoolsPage />} />
           <Route path="/demand-requests" element={<DemandRequestsPage />} />
