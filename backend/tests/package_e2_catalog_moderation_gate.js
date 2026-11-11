@@ -189,112 +189,46 @@ function request(method, path, body = null, token = null) {
       }
     });
 
-    await runTest('Supplier submits NEW_VARIANT request under Gur / Jaggery (family 13, category 5)', async () => {
-      const res = await request(
-        'POST',
-        '/api/v1/catalog/requests',
-        {
-          request_type: 'NEW_VARIANT',
-          category_id: 5,
-          family_id: 13,
-          brand: `Charsadda Kissan ${ts}`,
-          variety: 'Peshawari Chemical-Free Desi Gur',
-          crop_year: '2026',
-          processing_method: 'Traditional Open Pan',
-          quality_grade: 'Grade A Golden',
-          packaging_type: 'PP Woven Bag',
-          pack_size: 25,
-          pack_unit: 'kg',
-          purchasing_unit: 'bag',
-          spec_attributes: { gur_origin: 'Charsadda' },
-          supporting_notes: 'Pure winter jaggery cones in 25kg bags'
-        },
-        verifiedSupplierToken
-      );
-      assert.strictEqual(res.status, 201);
-      assert.strictEqual(res.body.data.request.status, 'SUBMITTED');
-      variantRequestId = res.body.data.request.id;
-      createdRequestIds.push(variantRequestId);
+    await runTest('Supplier cannot submit NEW_VARIANT (supplier-owned SKU is authoritative)', async () => {
+      const res = await request('POST', '/api/v1/catalog/requests', {
+        request_type:'NEW_VARIANT', category_id:5, family_id:13,
+        brand:`Legacy Brand ${ts}`, variety:'Legacy Test', processing_method:'Traditional',
+        quality_grade:'A', packaging_type:'Bag', pack_size:25, pack_unit:'kg'
+      }, verifiedSupplierToken);
+      assert.strictEqual(res.status,409);
+      assert.strictEqual(res.body.error.code,'SUPPLIER_OWNED_VARIANTS');
     });
 
-    await runTest('Pending NEW_VARIANT request does NOT appear in public approved variants before admin approval', async () => {
-      const res = await request('GET', '/api/v1/catalog/families/13/variants');
-      assert.strictEqual(res.status, 200);
-      const found = res.body.data.variants.find(v => v.brand === `Charsadda Kissan ${ts}`);
-      assert.strictEqual(found, undefined, 'Unapproved variant must never pollute public catalog');
+    await runTest('Legacy unowned physical products are not created by rejected requests', async () => {
+      const res=await request('GET','/api/v1/catalog/families/13/variants');
+      assert.strictEqual(res.status,200);
+      assert.strictEqual(res.body.data.variants.find(v=>v.brand===`Legacy Brand ${ts}`),undefined);
     });
 
-    await runTest('Admin approves NEW_VARIANT request, atomically creating APPROVED product_specification under Gur / Jaggery', async () => {
-      const appRes = await request(
-        'POST',
-        `/api/v1/admin/catalog/requests/${variantRequestId}/approve`,
-        { review_notes: 'Verified Charsadda Gur 25kg specification' },
-        adminToken
-      );
-      assert.strictEqual(appRes.status, 200);
-      assert.strictEqual(appRes.body.data.request.status, 'APPROVED');
-      assert.ok(appRes.body.data.approved_variant.id);
-      approvedNewSpecId = appRes.body.data.approved_variant.id;
-      createdSpecIds.push(approvedNewSpecId);
-
-      // Verify base product if newly created for Gur / Jaggery
-      const [famRows] = await db.query('SELECT default_product_id FROM catalog_product_families WHERE id = 13');
-      if (famRows[0]?.default_product_id && famRows[0].default_product_id > 11) {
-        createdProductIds.push(famRows[0].default_product_id);
-      }
-
-      const pubRes = await request('GET', '/api/v1/catalog/families/13/variants');
-      const found = pubRes.body.data.variants.find(v => v.id === approvedNewSpecId);
-      assert.ok(found, 'Newly approved variant must immediately appear under Gur / Jaggery');
+    await runTest('Admin direct variant creation is refused (supplier-controlled identity)', async () => {
+      const response=await request('POST','/api/v1/admin/catalog/variants',
+        {family_id:13,brand:`Admin Brand ${ts}`,pack_size:25,pack_unit:'kg'},adminToken);
+      assert.strictEqual(response.status,409);
+      assert.strictEqual(response.body.error.code,'SUPPLIER_OWNED_VARIANTS');
     });
 
-    await runTest('Verified supplier publishes commercial offer against newly approved variant and E3 family counter updates', async () => {
-      const res = await request(
-        'POST',
-        '/api/v1/listings',
-        {
-          product_spec_id: approvedNewSpecId,
-          base_unit_price: 6850,
-          available_stock: 120,
-          buyer_min_qty: 5,
-          supplier_min_qty: 20,
-          delivery_fee_policy: 'INCLUDED_IN_PRICE',
-          fulfilment_lead_time_days: 2,
-          notes: 'Fresh Charsadda Gur stock'
-        },
-        verifiedSupplierToken
-      );
-      assert.strictEqual(res.status, 201);
-      const listing = res.body.data.listing;
-      createdListingIds.push(listing.id);
-      assert.strictEqual(listing.family_id, 13);
-      assert.strictEqual(listing.family_name, 'Gur / Jaggery');
-      assert.strictEqual(listing.category_id, 5);
-
-      const myRes = await request('GET', '/api/v1/listings/me', null, verifiedSupplierToken);
-      assert.strictEqual(myRes.status, 200);
-      assert.strictEqual(myRes.body.data.catalog_usage.active_distinct_families, 1);
-      assert.strictEqual(myRes.body.data.catalog_usage.active_offers, 1);
+    await runTest('Verified supplier cannot create a new listing against legacy 16 global specs', async () => {
+      const res=await request('POST','/api/v1/listings',{
+        product_spec_id:1,base_unit_price:6850,available_stock:120,
+        buyer_min_qty:5,supplier_min_qty:20,delivery_fee_policy:'INCLUDED_IN_PRICE',
+        fulfilment_lead_time_days:2
+      },verifiedSupplierToken);
+      assert.strictEqual(res.status,409);
+      assert.strictEqual(res.body.error.code,'SUPPLIER_OWNED_SKU_REQUIRED');
     });
 
     await runTest('Rejection workflow: Admin cannot reject without reason; with reason, supplier can edit and resubmit', async () => {
       const subRes = await request(
-        'POST',
-        '/api/v1/catalog/requests',
-        {
-          request_type: 'NEW_VARIANT',
-          category_id: 4,
-          family_id: 9, // Daal Moong
-          brand: `Moong Brand ${ts}`,
-          variety: 'Washed Yellow Moong',
-          processing_method: 'Washed Split',
-          quality_grade: 'Grade B',
-          packaging_type: 'PP Woven Bag',
-          pack_size: 25,
-          pack_unit: 'kg',
-          purchasing_unit: 'bag'
-        },
-        verifiedSupplierToken
+        'POST', '/api/v1/catalog/requests', {
+          request_type:'NEW_FAMILY', category_id:4,
+          proposed_family_name:`Special Lentil Blend ${ts}`,
+          supporting_notes:'Requested as a new canonical commodity family, not a physical variant'
+        }, verifiedSupplierToken
       );
       assert.strictEqual(subRes.status, 201);
       rejectedRequestId = subRes.body.data.request.id;
@@ -325,14 +259,13 @@ function request(method, path, body = null, token = null) {
         'PUT',
         `/api/v1/catalog/requests/${rejectedRequestId}`,
         {
-          variety: 'Daal Moong Dhuli (Washed Split)',
-          quality_grade: 'Grade A Sortexed'
+          proposed_family_name: `Special Lentil Blend Revised ${ts}`
         },
         verifiedSupplierToken
       );
       assert.strictEqual(resub.status, 200);
       assert.strictEqual(resub.body.data.request.status, 'SUBMITTED');
-      assert.strictEqual(resub.body.data.request.quality_grade, 'Grade A Sortexed');
+      assert.strictEqual(resub.body.data.request.proposed_family_name, `Special Lentil Blend Revised ${ts}`);
     });
 
     console.log('\n================================================================================');
