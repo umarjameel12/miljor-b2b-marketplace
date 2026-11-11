@@ -114,3 +114,7 @@ No backend/front-end build or MySQL database operations executed.
 - Supplier listing/pool creation must only reference supplier-owned published SKU, not historical shared variants.
 - Frontend build, buyer family discovery, supplier product/offer UX, and no old 16-staples/Urdu regression.
 - Reconcile latest B6 changes before any merge or production rollout.
+
+### Follow-up business identity enforcement
+- `backend/src/controllers/supplierListingController.js`: new ACTIVE offers now require a supplier-owned published SKU and its linked physical specification. Legacy `product_spec_id` alone cannot generate a new commercial offer. Cross-supplier or mismatched SKU/spec inputs fail closed, while existing historical listings and orders are preserved.
+- The final test gate must verify legacy-global-spec-only rejection, spoofed SKU/spec mismatch rejection, archived/draft SKU rejection, cross-supplier isolation, and legitimate published supplier SKU listing creation.
