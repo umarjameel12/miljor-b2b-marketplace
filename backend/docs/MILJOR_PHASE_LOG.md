@@ -6,14 +6,14 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 ## B7 Post-Purchase Integration (Isolated, NON-UCP)
 
 - **Branch:** `feature/b7-fulfillment-gap-audit-20261111`, based on accepted B6 `6ef03de`.
-- **Business scope:** B6 supplier award -> buyer/supplier PAID fulfillment, physical SKU-line quantity shortage, exact per-supplier multi-item invoice, explicit buyer full-order confirmation, role-based post-purchase UI.
-- **Source implementation:** transactional B6-Q private event outbox bridge for pool-less RFQ orders (avoids legacy `reservation_business_events.pool_id` FK failure), B6 award-line read models, 4-decimal quantity/2-decimal monetary shortage policy, line-scoped dispute persistence and idempotency conflict control; itemized supplier-order invoice with exact totals and payment prerequisite; dispute resolution no longer impersonates buyer receipt; new authenticated buyer/supplier page.
-- **New tests:** 20 planned source assertions (12 exact shortage/invoice + 8 pool-less B6 outbox checks), guarded PAID B6 order HTTP gate, existing fulfillment/dispute serial integration runner with migration identity checks, Playwright read-only buyer/supplier smoke and guarded full-write two-order E2E.
-- **Workstream safety:** UCP, B4/B5 pool engines, finance/settlement, E2 and global migrations untouched. No automatic money/refund/payout creation. Protected DBs untouched by these GitHub-only source changes.
-- **Evidence:** SOURCE COMMITTED; no new B7 test or frontend build successfully executed in this session. Earlier B6 406/406 is historical and does not prove B7.
-- **Status:** **PARTIALLY IMPLEMENTED / ACCEPTANCE BLOCKED** pending actual test outputs, approved disposable B6 paid fixtures, branch-compatible test migration history, financial P0 and full browser regression.
-- **Can merge:** NO before gate evidence and integration review. **Can deploy:** NO. **Start another phase:** NO.
-
+- **Feature work:** B6 supplier-specific award-line fulfillment, 100kg->80kg physical shortage claim policy, correct itemized paid invoice, private pool-less order notifications, independent buyer receipt, buyer/supplier Post-Purchase UI, supplier invoice/dispute contact privacy.
+- **Actual automated acceptance:** GitHub Actions run [43082349074](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43082349074) tested source SHA `9d3f872adb924adee12b500aae6529881782b3da`. **48/48 B7 Node source/real-service-mock assertions + 24/24 existing frontend unit/parser assertions + 9/9 real Chromium UI with mocked HTTP = 81/81 PASS.** Backend syntax, npm frontend build (2,220 modules) PASS.
+- **Test-driven fixes:** CI exposed unsafe notification event key; corrected. Supplier dispute and invoice contact leakage redacted. Direct award no longer writes fake `pool_id=0` to FK-backed legacy events. Dispute closure no longer auto-confirms buyer receipt.
+- **Security advisory:** Backend install reports 8 vulnerabilities (7 moderate, 1 high); delegated dependency triage, no forced cross-workstream upgrade.
+- **Not executed:** Real MySQL/HTTP, actual Safepay verified-paid fixtures, live-role browser write E2E, finance reconciliation. Old B6 406/406 is unrelated historical B6 acceptance.
+- **Workstream isolation:** UCP, B4/B5 engines, global migrations, protected DB, financial payouts/refunds and unrelated branches untouched.
+- **Verdict:** **PARTIALLY VERIFIED** — isolated automation PASS, release integration BLOCKED. CAN MERGE: NO. CAN DEPLOY: NO. START NEXT PHASE: NO.
+- **Evidence report:** `backend/docs/MILJOR_B7_SELF_EXECUTED_ACCEPTANCE_2026_11_11.md`.
 
 ---
 
