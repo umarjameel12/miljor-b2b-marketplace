@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState,useCallback} from 'react';
+import React,{useEffect,useMemo,useState,useCallback,useRef} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {toast} from 'react-toastify';
 import {Layers,Plus,RefreshCw,Clock,Package,AlertTriangle,Lock} from 'lucide-react';
@@ -129,6 +129,9 @@ export function SupplierPoolsPage(){
   const [form,setForm]=useState(initialForm());
   const [edit,setEdit]=useState(null);
   const [busy,setBusy]=useState(false);
+  const regularDraftIntent=useRef(null);
+  const publishIntentKeys=useRef({});
+  const [creationUncertain,setCreationUncertain]=useState(false);
   const [confirm,setConfirm]=useState(null);
   const editRequest=params.get('edit');
   const creating=params.get('create')==='1'||Boolean(edit);
@@ -177,12 +180,14 @@ export function SupplierPoolsPage(){
   const update=(name,value)=>setForm(old=>({...old,[name]:value}));
   const openCreate=(type='REGULAR',listingId='')=>{
     const listing=listings.find(l=>String(l.id)===String(listingId))||listings[0];
+    regularDraftIntent.current=null;setCreationUncertain(false);
     setMode(type);setEdit(null);setForm(initialForm(listing));
     setParams({create:'1',type:type.toLowerCase()});
   };
   const openEdit=(pool)=>{
     const listing=listings.find(l=>Number(l.id)===Number(pool.supplier_listing_id));
     if(!listing){toast.error('Original supplier SKU listing is no longer eligible for editing.');return;}
+    regularDraftIntent.current=null;setCreationUncertain(false);
     setMode(pool.type);setEdit(pool);
     const base=initialForm(listing);
     if(pool.type==='REGULAR'){
@@ -229,12 +234,22 @@ export function SupplierPoolsPage(){
   // openEdit is intentionally invoked after both catalog and pool data load.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[editRequest,loading,data.pools,listings,edit]);
-  const close=()=>{setEdit(null);setParams({})};
+  const close=()=>{regularDraftIntent.current=null;setCreationUncertain(false);setEdit(null);setParams({})};
   const save=async(e)=>{
     e.preventDefault();
     if(busy)return;
+    let mutationAttempted=false;
     try{
+      if(creationUncertain)
+        throw Error('A previous draft request has an uncertain result. Review the refreshed Pool Management list before starting a new creation.');
       const payload=buildPayload(mode,form,chosen,edit);
+      if(mode==='REGULAR'){
+        const fingerprint=JSON.stringify({id:edit?.id||null,payload});
+        if(!regularDraftIntent.current)
+          regularDraftIntent.current={fingerprint,idempotencyKey:`ucp-b4-draft-${Date.now()}-${Math.random().toString(36).slice(2,12)}`};
+        if(regularDraftIntent.current.fingerprint!==fingerprint)
+          throw Error('A previous Regular draft attempt must be reconciled before changing its fields.');
+      }
       setBusy(true);
       if(!stock||stockError)throw Error('Supplier stock verification is required.');
       if(mode==='REGULAR'){
@@ -247,21 +262,27 @@ export function SupplierPoolsPage(){
           throw Error('Enable standard supplier delivery before publishing doorstep or grouped pools.');
         if(form.delivery_type!=='SUPPLIER_PICKUP'&&!form.delivery_cluster_ids.length)
           throw Error('Choose an authorized Lahore delivery cluster.');
-        const result=await unifiedPoolsApi.saveRegularDraft(payload,edit?.id);
+        mutationAttempted=true;
+        const result=await unifiedPoolsApi.saveRegularDraft(payload,edit?.id,regularDraftIntent.current?.idempotencyKey);
         const poolId=edit?.id||result?.data?.pool?.id;
         if(!poolId)throw Error('Draft may exist but no ID was returned. Refresh Pool Management before retrying.');
         try{await unifiedPoolsApi.updateRegularClusters(poolId,
           form.delivery_type==='SUPPLIER_PICKUP'?[]:form.delivery_cluster_ids);
         }catch(_){
           setEdit(previous=>previous||{id:poolId,type:'REGULAR',status:'DRAFT'});
-          throw Error('Draft #'+poolId+' saved, but cluster assignment failed. Retry updates this existing draft.');
+          throw Object.assign(new Error('Draft #'+poolId+' saved, but cluster assignment failed. Retry updates this existing draft.'),{knownPartial:true});
         }
       }else{
+        mutationAttempted=true;
         await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
       }
       toast.success(mode+' draft saved. Review and publish it from Pool Management.');
       close();await load();
-    }catch(e){toast.error(e.response?.data?.error?.message||e.message||'Unable to save pool draft.');}
+    }catch(e){
+      if(mutationAttempted&&!e.response&&!e.knownPartial) setCreationUncertain(true);
+      if(e.response?.status===400||e.response?.status===422)regularDraftIntent.current=null;
+      toast.error(e.response?.data?.error?.message||e.message||'Unable to save pool draft.');
+    }
     finally{setBusy(false);}
   };
   const runAction=async()=>{
@@ -270,8 +291,13 @@ export function SupplierPoolsPage(){
     try{
       const {pool,action}=confirm;
       if(action==='PUBLISH'){
-        if(pool.type==='REGULAR')await unifiedPoolsApi.publishRegular(pool.id);
-        else await unifiedPoolsApi.publishFlash(pool.id);
+        if(pool.type==='REGULAR'){
+          const key=`REGULAR:${pool.id}`;
+          if(!publishIntentKeys.current[key])
+            publishIntentKeys.current[key]=`ucp-b4-publish-${pool.id}-${Date.now()}-${Math.random().toString(36).slice(2,12)}`;
+          await unifiedPoolsApi.publishRegular(pool.id,publishIntentKeys.current[key]);
+          delete publishIntentKeys.current[key];
+        }else await unifiedPoolsApi.publishFlash(pool.id);
       }else{
         if(pool.type==='REGULAR')await unifiedPoolsApi.cancelRegular(pool.id);
         else await unifiedPoolsApi.cancelFlash(pool.id);
@@ -311,6 +337,9 @@ export function SupplierPoolsPage(){
         </label>
         {chosen&&<p className="text-xs bg-[var(--bg-elevated)] rounded-lg p-3">Reference listing: {chosen.variant_title||chosen.spec_title} · {chosen.available_stock} {chosen.pricing_unit} listed · Rs. {chosen.base_unit_price}/{chosen.pricing_unit}. Inventory allocations are checked on publish.</p>}
         {fulfillmentError&&<p role="alert" className="text-xs text-amber-600">{fulfillmentError}</p>}
+        {creationUncertain&&<p role="alert" className="text-xs text-amber-600">
+          The draft creation response was uncertain. Do not submit another draft; refresh Pool Management and verify whether it already exists.
+        </p>}
         {stockError&&<p role="alert" className="text-xs text-red-600">{stockError}</p>}
         {stock&&<div className="rounded-xl border border-[var(--border-subtle)] p-3 text-xs space-y-1">
           <p className="font-semibold">Physical SKU inventory · read-only snapshot</p>
@@ -382,7 +411,7 @@ export function SupplierPoolsPage(){
         </>}
         <div className="flex flex-wrap gap-2 justify-end pt-2">
           <button type="button" onClick={close} className="px-4 py-2 rounded-xl border text-sm">Cancel</button>
-          <button disabled={busy||!chosen} type="submit" className="px-4 py-2 rounded-xl bg-emerald-700 text-white disabled:opacity-50 text-sm">{busy?'Saving…':'Save Draft'}</button>
+          <button disabled={busy||!chosen||creationUncertain} type="submit" className="px-4 py-2 rounded-xl bg-emerald-700 text-white disabled:opacity-50 text-sm">{busy?'Saving…':'Save Draft'}</button>
         </div>
       </form>}
     </section>:

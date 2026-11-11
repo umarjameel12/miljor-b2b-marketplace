@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useRef,useState} from 'react';
 import apiClient from '../api/client';
 import {CountdownTimer} from './ui/CountdownTimer';
 // B4-only explicit buyer commercial decision and order conversion.
@@ -10,6 +10,8 @@ export function RegularReservationWorkflow({reservation,onRefresh}){
  const [error,setError]=useState(''),[confirmation,setConfirmation]=useState('');
  const [address,setAddress]=useState(''),[createdOrder,setCreatedOrder]=useState(null);
  const [declineReason,setDeclineReason]=useState('NO_LONGER_NEEDED');
+ const decisionIntent=useRef(null),orderIntent=useRef(null);
+ const [uncertain,setUncertain]=useState(false);
  const fetchState=async()=>{
    setLoading(true);setError('');
    try{
@@ -25,11 +27,17 @@ export function RegularReservationWorkflow({reservation,onRefresh}){
    if(busy||confirmation!==action)return;
    setBusy(true);setError('');
    try{
+     const payload={decision:action,...(action==='DECLINE'?{decline_reason_code:declineReason}:{})};
+     if(!decisionIntent.current){
+       decisionIntent.current={payload,idempotencyKey:key('decision',reservation.id)};
+     }else if(JSON.stringify(decisionIntent.current.payload)!==JSON.stringify(payload)){
+       throw Error('Prior buyer decision outcome is uncertain. Refresh final offer before changing your decision.');
+     }
      await apiClient.post(`/reservations/${reservation.id}/final-decision`,
-       {decision:action,...(action==='DECLINE'?{decline_reason_code:declineReason}:{})},
-       {headers:{'X-Idempotency-Key':key('decision',reservation.id)}});
-     setConfirmation('');await fetchState();onRefresh?.();
-   }catch(e){setError(e.response?.data?.error?.message||'Commercial decision rejected by B4 lifecycle rules.');}
+       decisionIntent.current.payload,
+       {headers:{'X-Idempotency-Key':decisionIntent.current.idempotencyKey}});
+     setConfirmation('');setUncertain(false);await fetchState();onRefresh?.();
+   }catch(e){setUncertain(!e.response);setError(e.response?.data?.error?.message||e.message||'Commercial decision may be pending. Check final offer before another attempt.');}
    finally{setBusy(false);}
  };
  const convert=async()=>{
@@ -37,13 +45,18 @@ export function RegularReservationWorkflow({reservation,onRefresh}){
    if(address.trim().length<8){setError('Provide the complete business delivery address.');return;}
    setBusy(true);setError('');
    try{
+     if(!orderIntent.current){
+       orderIntent.current={delivery_address:address.trim(),idempotencyKey:key('order',reservation.id)};
+     }else if(orderIntent.current.delivery_address!==address.trim()){
+       throw Error('Order creation may already be in progress. Check My Orders before changing delivery address.');
+     }
      const r=await apiClient.post(`/reservations/${reservation.id}/order`,
-       {delivery_address:address.trim()},
-       {headers:{'X-Idempotency-Key':key('order',reservation.id)}});
+       {delivery_address:orderIntent.current.delivery_address},
+       {headers:{'X-Idempotency-Key':orderIntent.current.idempotencyKey}});
      const order=r.data?.data?.order;
      if(!order?.id)throw Error('Order status uncertain. Refresh payment history before retrying.');
-     setCreatedOrder(order);onRefresh?.();
-   }catch(e){setError(e.response?.data?.error?.message||e.message||'B4 order conversion rejected.');}
+     setCreatedOrder(order);setUncertain(false);onRefresh?.();
+   }catch(e){setUncertain(!e.response);setError(e.response?.data?.error?.message||e.message||'B4 order conversion status is uncertain; check your Orders before retrying.');}
    finally{setBusy(false);}
  };
  return <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 space-y-3">
@@ -87,6 +100,7 @@ export function RegularReservationWorkflow({reservation,onRefresh}){
    </div>}
    {createdOrder&&<p className="text-xs text-emerald-600">Order {createdOrder.order_code} created. Use the Regular Pool payment-hold card above to initiate Safepay checkout.</p>}
    {error&&<p role="alert" className="text-xs text-red-600">{error}</p>}
+   {uncertain&&<p className="text-xs text-amber-600">A network error does not prove the decision/order failed. Refresh your authoritative status before repeating any action.</p>}
  </div>;
 }
 export default RegularReservationWorkflow;

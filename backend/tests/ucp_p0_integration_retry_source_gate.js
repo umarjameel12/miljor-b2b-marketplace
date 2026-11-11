@@ -1,0 +1,35 @@
+'use strict';
+// Deferred final acceptance source contract for local UCP integration P0.
+// Execute only in the full controlled release testing phase.
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const src=path.resolve(__dirname,'../../frontend/src'),back=path.resolve(__dirname,'..');
+const read=(p)=>fs.readFileSync(path.join(src,p),'utf8');
+const backend=(p)=>fs.readFileSync(path.join(back,p),'utf8');
+let n=0;const check=(ok,m)=>{assert.ok(ok,m);console.log('PASS',++n,m)};
+const reg=read('components/RegularBuyerReservation.jsx');
+const flash=read('components/FlashBuyerPoolCard.jsx');
+const decision=read('components/RegularReservationWorkflow.jsx');
+const rCheckout=read('components/RegularPaymentHoldCard.jsx');
+const fCheckout=read('components/FlashPaymentHoldCard.jsx');
+const supplier=read('pages/SupplierPoolsPage.jsx');
+const api=read('api/unifiedPools.js');
+const stock=backend('src/services/supplierPoolOperationsService.js');
+const controller=backend('src/controllers/procurementController.js');
+check(reg.includes('reservationKey=useRef(null)'),'B4 reservation intent key survives network retries');
+check(reg.includes('reservationKey.current.value'),'B4 reuses original idempotency key');
+check(flash.includes('holdIntent=useRef(null)')&&flash.includes('holdIntent.current.idempotencyKey'),'B5 stock hold intent key stable across retries');
+check(flash.includes('checkoutIntent=useRef(null)')&&flash.includes('checkoutIntent.current.idempotencyKey'),'Flash Safepay checkout key stable');
+check(flash.includes('serverTime={order.server_time}')&&flash.includes('hold_expires_at'),'Flash payment countdown uses authoritative server clock');
+check(controller.includes('server_time:clock.server_time'),'B5 hold API exposes database UTC clock');
+check(decision.includes('decisionIntent=useRef(null)')&&decision.includes('orderIntent=useRef(null)'),'B4 immutable decision/order intent keys stable');
+check(rCheckout.includes('checkoutKey=useRef(null)'),'Regular payment checkout idempotency key stable');
+check(fCheckout.includes('checkoutKey=useRef(null)'),'Recovered Flash checkout idempotency key stable');
+check(supplier.includes('creationUncertain')&&supplier.includes('mutationAttempted'),'Supplier ambiguous draft result cannot silently start a new draft');
+check(supplier.includes('knownPartial')&&supplier.includes('setEdit(previous=>previous'),'Known draft cluster save failure preserves the original entity ID');
+check(supplier.includes('publishIntentKeys=useRef({})')&&api.includes('idempotencyKey||newKey'),'Regular draft and publish keys can be reused');
+check(stock.includes('ps.supplier_id AS spec_supplier_id')&&stock.includes('ps.supplier_sku_id AS spec_sku_id'),'Stock eligibility compares supplier/listing/spec/SKU ownership');
+check(stock.includes("status IN ('PENDING','COMMITTED')"),'Stock snapshot accounts for shared ledger commitments');
+check(!stock.includes('UPDATE supplier_inventory_allocations'),'UCP read-only stock view never changes ledger');
+console.log('Deferred UCP P0 source contract:',n,'assertions; database/browser/payment tests remain required.');

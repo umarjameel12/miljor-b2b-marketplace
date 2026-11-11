@@ -12,11 +12,11 @@ export const unifiedPoolsApi={
   analytics:async()=>(await apiClient.get('/supplier/pools/analytics')).data,
   regularClusters:async id=>(await apiClient.get(`/pools/${id}`)).data,
   listings:async()=>catalogApi.getMyListings(),
-  saveRegularDraft:async(payload,id=null)=>id
-    ?poolsApi.updateDraftPool(id,payload,newKey('regular-update'))
-    :poolsApi.createPool(payload,newKey('regular-create')),
+  saveRegularDraft:async(payload,id=null,idempotencyKey=null)=>id
+    ?poolsApi.updateDraftPool(id,payload,idempotencyKey||newKey('regular-update'))
+    :poolsApi.createPool(payload,idempotencyKey||newKey('regular-create')),
   updateRegularClusters:async(id,clusters)=>poolsApi.updatePoolClusters(id,clusters),
-  publishRegular:async id=>poolsApi.publishPool(id,{},newKey('regular-publish')),
+  publishRegular:async(id,idempotencyKey=null)=>poolsApi.publishPool(id,{},idempotencyKey||newKey('regular-publish')),
   saveFlashDraft:async(payload,id=null)=>(
     await (id?apiClient.put(`/flash-pools/${id}`,payload)
     :apiClient.post('/flash-pools',payload))

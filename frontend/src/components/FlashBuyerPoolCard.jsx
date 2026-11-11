@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {Clock,Package,ShieldCheck,Zap,RefreshCw} from 'lucide-react';
 import apiClient from '../api/client';
 import {CountdownTimer} from './ui/CountdownTimer';
@@ -20,6 +20,9 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
   const [submitting,setSubmitting]=useState(false);
   const [error,setError]=useState('');
   const [order,setOrder]=useState(null);
+  const holdIntent=useRef(null);
+  const checkoutIntent=useRef(null);
+  const [uncertain,setUncertain]=useState(false);
   const [expired,setExpired]=useState(false);
   const remaining=Number(pool.remaining_stock);
   const unit=pool.purchasing_unit||'unit';
@@ -39,18 +42,28 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
        Math.abs((Number(amount)-min)/increment-Math.round((Number(amount)-min)/increment))>0.000001)){
       setError('Quantity must match supplier purchase increments.');return;
     }
+    if(holdIntent.current &&
+       (holdIntent.current.quantity!==amount||holdIntent.current.delivery_address!==deliveryAddress.trim())){
+      setError('A previous stock hold request has an uncertain result. Check Flash Orders before changing its quantity/address.');return;
+    }
+    if(!holdIntent.current){
+      holdIntent.current={quantity:amount,delivery_address:deliveryAddress.trim(),idempotencyKey:key()};
+    }
     setSubmitting(true);setError('');
     try{
       const response=await apiClient.post(`/flash-pools/${pool.id}/hold`,
-        {quantity:amount,delivery_address:deliveryAddress.trim()},{headers:{'X-Idempotency-Key':key()}});
+        {quantity:holdIntent.current.quantity,delivery_address:holdIntent.current.delivery_address},
+        {headers:{'X-Idempotency-Key':holdIntent.current.idempotencyKey}});
       const hold=response.data?.data?.hold;
       if(!hold?.order_id)throw Error('Flash stock hold created but order reference is unavailable. Check your orders before retrying.');
-      setOrder({order_id:hold.order_id,hold_id:hold.id,checkout_endpoint:hold.checkout_endpoint,hold_expires_at:hold.hold_expires_at});
+      setOrder({order_id:hold.order_id,hold_id:hold.id,checkout_endpoint:hold.checkout_endpoint,hold_expires_at:hold.hold_expires_at,server_time:response.data?.data?.server_time||serverTime});
+      setUncertain(false);
       setHoldExpired(false);
       // We do not initiate a financial transaction without buyer's second explicit click.
     }catch(e){
-      setError(e.response?.data?.error?.message||e.message||'Unable to reserve Flash stock.');
-      onRefresh?.();
+      setUncertain(!e.response);
+      setError(e.response?.data?.error?.message||e.message||'Flash hold result may be uncertain. Review Flash Orders before retrying.');
+      if(e.response)onRefresh?.();
     }finally{setSubmitting(false);}
   };
   const checkout=async()=>{
@@ -58,8 +71,12 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     if(!order?.order_id||submitting)return;
     setSubmitting(true);setError('');
     try{
+      if(!checkoutIntent.current){
+        checkoutIntent.current={order_id:order.order_id,
+          idempotencyKey:`b5-checkout-${order.order_id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`};
+      }
       const response=await apiClient.post(`/orders/${order.order_id}/checkout`,{},
-        {headers:{'X-Idempotency-Key':`b5-checkout-${order.order_id}-${Date.now()}`}});
+        {headers:{'X-Idempotency-Key':checkoutIntent.current.idempotencyKey}});
       const url=response.data?.data?.checkout_url;
       if(!url||!/^https:\/\//i.test(url))throw Error('Safepay checkout URL unavailable. Review your order payment status.');
       window.location.assign(url);
@@ -87,7 +104,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     </div>
     {order?<div className="rounded-xl border p-3 space-y-2">
       <p className="text-xs flex items-center gap-1"><ShieldCheck size={14}/> Stock hold created for order #{order.order_id}. Payment is not yet verified.</p>
-      {order.hold_expires_at&&<CountdownTimer deadline={order.hold_expires_at} compact label="Pay within" onExpire={()=>setHoldExpired(true)}/>}
+      {order.hold_expires_at&&<CountdownTimer deadline={order.hold_expires_at} serverTime={order.server_time} compact label="Pay within" onExpire={()=>setHoldExpired(true)}/>}
       <button type="button" disabled={submitting||holdExpired} onClick={checkout} className="bg-emerald-700 text-white rounded-xl px-4 py-2 text-xs disabled:opacity-50">Continue to Safepay</button>
       <p className="text-xs text-[var(--text-muted)]">Use your order payment-status page after returning from provider.</p>
     </div>:<div className="space-y-2">
@@ -107,6 +124,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
       </button>
     </div></div>}
     {error&&<div role="alert" className="text-xs text-red-600 flex items-start gap-2"><Package size={14}/>{error}</div>}
+    {uncertain&&<p className="text-xs text-amber-600">Payment/stock status must be reconciled server-side. Check My Orders before starting another hold.</p>}
   </article>;
 }
 export default FlashBuyerPoolCard;

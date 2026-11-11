@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {Link,useNavigate} from 'react-router-dom';
 import apiClient from '../api/client';
 import {useAuth} from '../context/AuthContext';
@@ -10,6 +10,9 @@ export function RegularBuyerReservation({pool,onClose,onComplete}){
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [reservation,setReservation]=useState(null);
+ // Stable intent across retries. A timeout does not authorize a second reservation.
+ const reservationKey=useRef(null);
+ const [uncertain,setUncertain]=useState(false);
  const min=Number(pool.buyer_min_qty||pool.min_order_qty||1);
  const increment=Number(pool.purchase_increment||1);
  const quantity=Number(qty);
@@ -21,14 +24,23 @@ export function RegularBuyerReservation({pool,onClose,onComplete}){
    if(!eligible){setError('Quantity does not satisfy the supplier minimum and purchasing increment.');return;}
    setBusy(true);setError('');
    try{
-     const key=`b4-reserve-${pool.id}-${Date.now()}-${Math.random().toString(36).slice(2,12)}`;
+     if(!reservationKey.current){
+       reservationKey.current={quantity:qty,
+         value:`b4-reserve-${pool.id}-${Date.now()}-${Math.random().toString(36).slice(2,12)}`};
+     }else if(reservationKey.current.quantity!==qty){
+       throw Error('A previous reservation attempt has an uncertain outcome. Check My Reservations before changing quantity.');
+     }
      const r=await apiClient.post('/reservations',{pool_id:Number(pool.id),quantity:qty},
-       {headers:{'X-Idempotency-Key':key}});
+       {headers:{'X-Idempotency-Key':reservationKey.current.value}});
      const value=r.data?.data?.reservation;
      if(!value?.id)throw Error('Reservation status is uncertain. Refresh My Reservations before trying again.');
      setReservation(value);
+     setUncertain(false);
      onComplete?.();
-   }catch(e){setError(e.response?.data?.error?.message||e.message||'Reservation rejected by the Regular Pool engine.');}
+   }catch(e){
+     setUncertain(!e.response);
+     setError(e.response?.data?.error?.message||e.message||'The reservation result may be uncertain; check My Reservations before retrying.');
+   }
    finally{setBusy(false);}
  };
  return <div role="dialog" aria-modal="true" aria-label="Join Regular Pool" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -52,6 +64,7 @@ export function RegularBuyerReservation({pool,onClose,onComplete}){
       <button onClick={onClose} className="border px-4 py-2 rounded-xl text-xs">Close</button></div>
    </div>}
    {error&&<p role="alert" className="text-xs text-red-600">{error}</p>}
+   {uncertain&&<p className="text-xs text-amber-600">Network result uncertain. Retry only with the original quantity and request key, or review My Orders to verify whether a reservation exists.</p>}
   </div>
  </div>;
 }
