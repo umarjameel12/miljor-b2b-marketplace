@@ -18,6 +18,7 @@
 const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const {buildAwardInvoiceLines}=require('./b7AwardInvoiceProjection');
+const {projectInvoiceForActor}=require('./b7InvoiceAudienceProjection');
 
 class InvoiceService {
 
@@ -82,7 +83,7 @@ class InvoiceService {
     // 3. Fast path: Check if invoice already exists
     const [existing] = await db.query('SELECT * FROM invoices WHERE order_id = ?', [numericOrderId]);
     if (existing.length > 0) {
-      return existing[0];
+      return projectInvoiceForActor(existing[0], callerRole);
     }
 
     // 4. Safe concurrent generation under transaction row lock
@@ -165,7 +166,7 @@ class InvoiceService {
       const [existing] = await conn.query('SELECT * FROM invoices WHERE order_id = ? FOR UPDATE', [numericOrderId]);
       if (existing.length > 0) {
         await conn.commit();
-        return existing[0];
+        return projectInvoiceForActor(existing[0], callerContext.role);
       }
 
       // Collision-Safe Deterministic Invoice Numbering (Repair P1-A)
@@ -250,7 +251,7 @@ class InvoiceService {
 
       const [created] = await conn.query('SELECT * FROM invoices WHERE id = ?', [res.insertId]);
       await conn.commit();
-      return created[0];
+      return projectInvoiceForActor(created[0], callerContext.role);
     } catch (err) {
       await conn.rollback();
       throw err;
