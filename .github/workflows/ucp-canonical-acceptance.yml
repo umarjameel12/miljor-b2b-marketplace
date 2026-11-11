@@ -127,14 +127,16 @@ jobs:
         run: cd backend && node database/runMigrations.js
       - name: Verify installed journal integrity read-only
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
+      # The B6 Package E2 foundation tests assert EXACT historical 16-spec data.
+      # B5 integration gates create additional synthetic supplier specifications.
+      # Run the historical baseline checks first, never against B5-contaminated DB.
+      - name: B6 procurement independent release suite (clean historical fixture)
+        timeout-minutes: 12
+        run: cd backend && node tests/b6_release_gate.js
       - name: B5 Flash + shared inventory concurrency acceptance
         if: ${{ always() }}
         timeout-minutes: 8
         run: cd backend && node tests/part5_flash_pool_gate.js
-      - name: B6 procurement independent release suite
-        if: ${{ always() }}
-        timeout-minutes: 12
-        run: cd backend && node tests/b6_release_gate.js
       - name: B4 Regular pool publication and tier acceptance
         if: ${{ always() }}
         timeout-minutes: 8
