@@ -266,8 +266,8 @@ class ProcurementCollectiveService{
           ...item,scheduled_quantity:ownQuantities.get(Number(item.id)),
           requirements:typeof item.requirements==='string'
             ?item.requirements
-               .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[contact hidden]')
-               .replace(/(?:\\+?92|0)\\s*3\\d{2}[\\s().-]*\\d{3}[\\s().-]*\\d{4}/g,'[contact hidden]')
+               .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
+               .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')
             :null
         }));
         continue;
@@ -276,8 +276,8 @@ class ProcurementCollectiveService{
         ...item,
         requirements:typeof item.requirements==='string'
           ?item.requirements
-             .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[contact hidden]')
-             .replace(/(?:\\+?92|0)\\s*3\\d{2}[\\s().-]*\\d{3}[\\s().-]*\\d{4}/g,'[contact hidden]')
+             .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
+             .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')
           :null
       }));
     }
