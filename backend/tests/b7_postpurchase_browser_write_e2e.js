@@ -100,11 +100,15 @@ async function main(){
     ]){
       const button=supplier.page.getByRole('button',{name:new RegExp('Move to '+to,'i')});
       await button.waitFor({timeout:15000});
+      console.log('B7_BROWSER_SUPPLIER_STEP',code,to,
+        'enabled',await button.isEnabled(),
+        'alerts',await supplier.page.locator('[role=alert]').allTextContents());
       if(to==='Dispatched'){
        await supplier.page.getByRole('combobox',{name:'Actual supplier delivery method'})
          .selectOption('SUPPLIER_FLEET');
       }
-      await button.click();
+      await button.click({timeout:12000});
+      console.log('B7_BROWSER_SUPPLIER_CLICKED',code,to);
       if(to!=='Supplier Delivered'){
        const next=to==='Preparing'?'Ready for Dispatch':
         to==='Ready for Dispatch'?'Dispatched':'Supplier Delivered';
