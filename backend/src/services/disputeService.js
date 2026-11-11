@@ -474,15 +474,17 @@ class DisputeService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Pool-scoped reservation outbox requires an actual parent pool; the
+      // order_dispute_events row persists safely for poolless B6 orders.
+      if (order.pool_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
         ) VALUES (?, ?, ?, ?, 'BUYER', 'ORDER_DISPUTE_CREATED', ?, ?, NOW())`,
         [
           outboxEventId,
-          order.pool_id || 0,
-          order.reservation_id || 0,
+          order.pool_id,
+          order.reservation_id || null,
           actor.id,
           JSON.stringify({
             dispute_id: disputeId,
@@ -707,15 +709,17 @@ class DisputeService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Pool-scoped reservation outbox requires an actual parent pool; the
+      // order_dispute_events row persists safely for poolless B6 orders.
+      if (order.pool_id) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
         ) VALUES (?, ?, ?, ?, 'SUPPLIER', 'ORDER_SUPPLIER_SHORTAGE_DECLARED', ?, ?, NOW())`,
         [
           outboxEventId,
-          order.pool_id || 0,
-          order.reservation_id || 0,
+          order.pool_id,
+          order.reservation_id || null,
           actor.id,
           JSON.stringify({
             dispute_id: disputeId,
@@ -922,7 +926,9 @@ class DisputeService {
         event_sequence: 1
       });
 
-      await connection.query(
+      // Pool-scoped reservation outbox requires an actual parent pool; the
+      // order_dispute_events row persists safely for poolless B6 orders.
+      if (poolId) await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
           event_type, event_payload, idempotency_key, created_at
@@ -930,7 +936,7 @@ class DisputeService {
         [
           outboxEventId,
           poolId,
-          dispute.reservation_id || 0,
+          dispute.reservation_id || null,
           actor.id,
           JSON.stringify({
             dispute_id: dispute.id,
