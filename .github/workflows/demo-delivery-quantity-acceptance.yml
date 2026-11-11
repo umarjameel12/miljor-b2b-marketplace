@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - fix/demo-partial-delivery-quantity-20261112
+      - integration/demo-five-track-verified-safety-20261112
   pull_request:
     branches:
       - integration/demo-all-heads-acceptance-20261112
+      - main
   workflow_dispatch:
 
 permissions:
