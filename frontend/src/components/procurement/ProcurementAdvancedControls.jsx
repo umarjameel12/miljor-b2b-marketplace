@@ -218,7 +218,7 @@ export function ProcurementAdvancedControls({ user, token }) {
           <Truck size={16}/> Paid-Order Delivery Choice
         </h3>
         <p className="text-xs text-[var(--text-muted)]">
-          Delivery grouping happens only after payment. This never changes your locked delivery fee.
+          Delivery grouping happens only after payment. This never changes your locked delivery fee or destination.
         </p>
         <label className="block text-xs font-semibold">Paid order ID
           <input type="number" min="1" className={field} value={delivery.order_id}
@@ -241,8 +241,8 @@ export function ProcurementAdvancedControls({ user, token }) {
             <select className={field} value={delivery.mode}
               onChange={e=>setDelivery(p=>({...p,mode:e.target.value}))}>
               <option value="STANDARD_CLUSTERED">Standard clustered</option>
-              <option value="EXPRESS">Express, if previously accepted</option>
-              <option value="PICKUP">Pickup, if already ordered</option>
+              <option value="EXPRESS" disabled>Express — use original approved order flow</option>
+              <option value="PICKUP" disabled>Pickup — use original pickup fulfillment flow</option>
             </select>
           </label>
         </div>
