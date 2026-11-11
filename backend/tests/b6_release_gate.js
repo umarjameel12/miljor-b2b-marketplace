@@ -62,7 +62,22 @@ const suites=[
   } finally { await connection.end(); }
   console.log('B6 release database identity and migration preflight passed');
   let passed=0;
+  let seededForMatching=false;
   for(const file of [...new Set(suites)]) {
+    // Historical E2 assertions must run against exactly 16 original specs.
+    // B6 supplier matching requires an additional *published supplier-owned*
+    // physical SKU. Seed ONLY after E2/E3 suite completion, never before.
+    if(!seededForMatching && file==='b6_supplier_matching_gate.js' &&
+       process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' &&
+       process.env.DB_NAME===TEST_DB){
+      const fixture=spawnSync(process.execPath,
+        [path.join(root,'database','seed_b6_fixtures.js')],
+        {cwd:root,env:{...process.env,NODE_ENV:'test',TEST_DB_NAME:TEST_DB},
+          stdio:'inherit'});
+      if(fixture.error)throw fixture.error;
+      if(fixture.status!==0)throw Error('B6_TEST_FIXTURE_BOOTSTRAP_FAILED: supplier-owned listing fixture');
+      seededForMatching=true;
+    }
     console.log('Running '+file);
     const result=spawnSync(process.execPath,[path.join(root,'tests',file)],{
       cwd:root,env:{...process.env,NODE_ENV:'test',TEST_DB_NAME:TEST_DB},stdio:'inherit'

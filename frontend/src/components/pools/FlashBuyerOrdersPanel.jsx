@@ -9,9 +9,8 @@ import {toast} from 'react-toastify';
 export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
   const [busy,setBusy]=useState(null);
   const checkoutKeys=useRef({});
-  const [clock,setClock]=useState(new Date().toISOString());
+  const [expiredIds,setExpiredIds]=useState([]);
   const refresh=async()=>{
-    setClock(new Date().toISOString());
     await onRefresh?.();
   };
   const pay=async(hold)=>{
@@ -49,7 +48,11 @@ export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
     {holds.map(h=>{
       const paid=h.status==='PAID'||h.payment_status==='PAID';
       const awaiting=h.status==='PAYMENT_PENDING';
-      const expired=Date.parse(h.hold_expires_at)<=Date.now();
+      // The buyer's local clock cannot authorize checkout. DB clock + timer are
+      // presentation checks; the B5 payment hold endpoint remains authoritative.
+      const expired=expiredIds.includes(h.id)||
+        (Number.isFinite(Date.parse(h.server_time))&&
+         Date.parse(h.hold_expires_at)<=Date.parse(h.server_time));
       const blocked=['EXPIRED','RELEASED','FAILED'].includes(h.status)||(!awaiting&&!paid&&expired);
       return <article key={h.id} className="rounded-2xl border border-[var(--border-subtle)] p-4 bg-[var(--bg-card)] space-y-2">
         <div className="flex justify-between gap-3"><div><p className="text-[11px] text-[var(--text-muted)]">{h.flash_code} · {h.order_code}</p>
@@ -59,7 +62,8 @@ export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
         {paid?<p className="text-xs flex gap-2 items-center text-emerald-600"><ShieldCheck size={15}/>Safepay payment verified</p>:
           awaiting?<p className="text-xs text-amber-600 flex gap-2 items-center"><Clock size={14}/>Provider payment processing; stock is not released merely because the timer ends.</p>:
           blocked?<p className="text-xs text-amber-600 flex gap-2 items-center"><AlertTriangle size={14}/>Hold is no longer payable. Do not start another payment for this order.</p>:
-          <CountdownTimer deadline={h.hold_expires_at} serverTime={clock} compact label="Pay within"/>}
+          <CountdownTimer deadline={h.hold_expires_at} serverTime={h.server_time} compact label="Pay within"
+            onExpire={()=>setExpiredIds(ids=>ids.includes(h.id)?ids:[...ids,h.id])}/>}
         {!paid&&<div className="flex flex-wrap gap-2 mt-2">
           {!awaiting&&!blocked&&<button type="button" disabled={busy===h.id} onClick={()=>pay(h)}
             className="rounded-lg bg-emerald-700 text-white px-3 py-2 text-xs disabled:opacity-50">Pay via Safepay</button>}
