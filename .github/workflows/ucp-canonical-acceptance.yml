@@ -4,6 +4,7 @@ on:
     branches:
       - feature/ucp-canonical-reconciliation-release
       - fix/ucp-final-reconciliation-thischat
+      - fix/p0-provider-browser-stock-finance-acceptance
   pull_request:
     branches:
       - feature/ucp-canonical-reconciliation-release
