@@ -39,6 +39,14 @@ async function main(){
     [code,buyer,pool.supplier_id,pool.id]
   );
   const orderId=insert.insertId;
+  // B6 awarded / Flash orders may have no B4 Regular pool FK.
+  // Still legitimate buyer/supplier orders; they MUST remain tenant scoped.
+  const [nonPoolInsert]=await db.query(
+    `INSERT INTO orders (order_code,buyer_id,supplier_id,total_qty,unit_price,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,order_status)
+     VALUES (?,?,?,10,100,1000,120,25,1145,2.50,'PKR','DOORSTEP','Gulberg Lahore Pakistan','AWAITING_PAYMENT','AWAITING_PAYMENT')`,
+    ['NPO-'+crypto.randomBytes(4).toString('hex'),buyer,pool.supplier_id]
+  );
+  const nonPoolOrderId=nonPoolInsert.insertId;
   const secret=process.env.JWT_SECRET;
   assert.ok(secret&&secret.length>=32,'CI test JWT secret required');
   const token=(id,role)=>jwt.sign({id,role,verification_status:'VERIFIED'},secret,
@@ -59,19 +67,25 @@ async function main(){
     assert.equal(ownerList.status,200,JSON.stringify(ownerList.body));
     assert.ok(ownerList.body.data.orders.some(x=>Number(x.id)===orderId),
       'Buyer cannot see owned unpaid order');
-    pass('Buyer sees own unpaid order in order list');
+    assert.ok(ownerList.body.data.orders.some(x=>Number(x.id)===nonPoolOrderId),
+      'Buyer list silently dropped valid B6/Flash non-Regular-pool order');
+    pass('Buyer sees own unpaid Regular and non-Regular procurement orders');
 
     const supplierList=await req('/orders',pool.supplier_id,'SUPPLIER');
     assert.equal(supplierList.status,200,JSON.stringify(supplierList.body));
     assert.ok(supplierList.body.data.orders.some(x=>Number(x.id)===orderId),
       'Assigned supplier cannot see own order');
-    pass('Assigned supplier sees legitimate unpaid order');
+    assert.ok(supplierList.body.data.orders.some(x=>Number(x.id)===nonPoolOrderId),
+      'Supplier fulfillment list silently dropped valid non-Regular-pool order');
+    pass('Assigned supplier sees Regular and non-Regular procurement orders');
 
     const otherList=await req('/orders',unrelated,'BUYER');
     assert.equal(otherList.status,200,JSON.stringify(otherList.body));
     assert.ok(!otherList.body.data.orders.some(x=>Number(x.id)===orderId),
       'Unrelated buyer leaked another buyer order in list');
-    pass('Unrelated buyer order listing is tenant isolated');
+    assert.ok(!otherList.body.data.orders.some(x=>Number(x.id)===nonPoolOrderId),
+      'Unrelated buyer can list non-Regular-pool order');
+    pass('Unrelated buyer order listing is tenant isolated across order sources');
 
     const ownDetail=await req('/orders/'+orderId,buyer,'BUYER');
     assert.equal(ownDetail.status,200,JSON.stringify(ownDetail.body));
@@ -81,7 +95,12 @@ async function main(){
 
     assert.equal((await req('/orders/'+orderId,pool.supplier_id,'SUPPLIER')).status,200);
     assert.equal((await req('/orders/'+orderId,unrelated,'BUYER')).status,403);
-    pass('Only owner/assigned supplier may read order detail');
+    const nonPoolDetail=await req('/orders/'+nonPoolOrderId,buyer,'BUYER');
+    assert.equal(nonPoolDetail.status,200,JSON.stringify(nonPoolDetail.body));
+    assert.equal(Number(nonPoolDetail.body.data.order.id),nonPoolOrderId);
+    assert.equal((await req('/orders/'+nonPoolOrderId,pool.supplier_id,'SUPPLIER')).status,200);
+    assert.equal((await req('/orders/'+nonPoolOrderId,unrelated,'BUYER')).status,403);
+    pass('Regular and non-Regular order details enforce buyer/supplier tenant scope');
 
     const buyerStatus=await req('/orders/'+orderId+'/payment-status',buyer,'BUYER');
     assert.equal(buyerStatus.status,200,JSON.stringify(buyerStatus.body));
@@ -103,6 +122,9 @@ async function main(){
     assert.equal(Number(after.total_amount),1145);
     const [[attempts]]=await db.query('SELECT COUNT(*) AS total FROM payment_attempts WHERE order_id=?',[orderId]);
     assert.equal(Number(attempts.total),0);
+    const [[otherAfter]]=await db.query('SELECT payment_status,order_status FROM orders WHERE id=?',[nonPoolOrderId]);
+    assert.equal(otherAfter.payment_status,'AWAITING_PAYMENT');
+    assert.equal(otherAfter.order_status,'AWAITING_PAYMENT');
     pass('Cross-role negative tests did not create payment attempts or mutate order');
 
     console.log('PASS P0 REAL EXPRESS ORDER TENANT AUTHORIZATION GATE; provider checkout and fulfillment E2E NOT TESTED');
