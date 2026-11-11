@@ -1533,7 +1533,7 @@ class PoolController {
       }
 
       // Fetch specification for unit conversion
-      const spec = await productSpecificationRepo.findById(pool.product_spec_id);
+      const spec = await productSpecificationRepo.findById(pool.product_spec_id, connection);
 
       // Determine required stock in listing's pricing unit
       const requiredCapacityUnits = pool.max_capacity !== null ? Number(pool.max_capacity) : Number(pool.target_qty);
