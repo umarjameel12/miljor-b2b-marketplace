@@ -130,6 +130,44 @@ jobs:
         run: node backend/tests/b7_ci_seed_award_fixtures.js
       - name: Execute B7 real Express HTTP + MySQL 8 + invoice + physical SKU dispute acceptance
         run: node backend/tests/b7_ci_real_mysql_http_gate.js
+      - name: Prepare disposable supplier/buyer login credentials
+        run: node backend/tests/b7_ci_prepare_browser_accounts.js
+        env:
+          B7_EPHEMERAL_USER_PASSWORD: B7_ci_browser_Only_2026!
+      - name: Create fresh synthetic B6 paid-order fixtures for real browser write tests
+        run: node backend/tests/b7_ci_seed_award_fixtures.js
+        env:
+          B7_CI_EXPORT_BROWSER_FIXTURES: 'YES'
+      - name: Install locked frontend dependencies
+        run: npm --prefix frontend ci --ignore-scripts
+      - name: Install isolated Playwright browser runtime
+        run: |
+          npm --prefix backend install --no-save --ignore-scripts playwright
+          cd backend
+          npx playwright install --with-deps chromium
+      - name: Execute real Chromium against actual Express plus disposable MySQL
+        run: |
+          node backend/start_test_server.js > /tmp/b7-real-backend.log 2>&1 &
+          BACKEND_PID=$!
+          npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173 > /tmp/b7-real-vite.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill $BACKEND_PID $VITE_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:5000/api/v1/health >/dev/null 2>&1 &&
+               curl -fsS http://127.0.0.1:5173/post-purchase >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5173/post-purchase >/dev/null
+          cd backend
+          npm run test:b7:browser:write
+        env:
+          B7_BROWSER_WRITE_ACCEPTANCE: 'YES'
+          B7_BACKEND_TEST_DB_CONFIRMED: 'YES'
+          B7_BROWSER_URL: http://127.0.0.1:5173
+          B7_BUYER_EMAIL: buyer1@miljor.com
+          B7_SUPPLIER_EMAIL: supplier1@miljor.com
+          B7_BUYER_PASSWORD: B7_ci_browser_Only_2026!
+          B7_SUPPLIER_PASSWORD: B7_ci_browser_Only_2026!
       - name: Attempt legacy Part4E4/4E5 regression with protected DB reads denied
         id: legacy_guard
         continue-on-error: true
