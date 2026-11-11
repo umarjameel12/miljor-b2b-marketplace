@@ -1136,18 +1136,23 @@ class DisputeService {
       const hasOtherActive = Number(otherDisputes[0]?.activeCount || 0) > 0;
       let orderResumed = false;
 
-      // If no other blocking disputes, resume order to BUYER_CONFIRMED
+      // Confirming replacement/missing goods is NOT consent to receipt of the whole order.
+      // Return to supplier-delivered only if the original supplier delivery was recorded;
+      // the buyer must separately call the authenticated full-order receipt endpoint.
       if (!hasOtherActive) {
-        await connection.query(
-          `UPDATE orders 
-           SET fulfillment_status = 'BUYER_CONFIRMED',
-               order_status = 'DELIVERED',
-               buyer_confirmed_at = COALESCE(buyer_confirmed_at, NOW()),
-               updated_at = NOW()
-           WHERE id = ?`,
+        const [sourceOrders] = await connection.query(
+          'SELECT supplier_delivered_at, buyer_confirmed_at FROM orders WHERE id = ? FOR UPDATE',
           [dispute.order_id]
         );
-        orderResumed = true;
+        if (sourceOrders[0]?.supplier_delivered_at) {
+          await connection.query(
+            `UPDATE orders SET fulfillment_status = 'SUPPLIER_DELIVERED',
+               order_status = 'OUT_FOR_DELIVERY', updated_at = NOW()
+             WHERE id = ? AND fulfillment_status = 'EXCEPTION'`,
+            [dispute.order_id]
+          );
+          orderResumed = true;
+        }
       }
 
       await connection.commit();
@@ -1316,15 +1321,20 @@ class DisputeService {
         );
 
         if (Number(otherActive[0]?.activeCount || 0) === 0) {
-          await connection.query(
-            `UPDATE orders 
-             SET fulfillment_status = 'BUYER_CONFIRMED',
-                 order_status = 'DELIVERED',
-                 updated_at = NOW()
-             WHERE id = ?`,
+          // Admin may clear a dispute but may not impersonate buyer receipt.
+          const [sourceOrders] = await connection.query(
+            'SELECT supplier_delivered_at FROM orders WHERE id = ? FOR UPDATE',
             [dispute.order_id]
           );
-          orderResumed = true;
+          if (sourceOrders[0]?.supplier_delivered_at) {
+            await connection.query(
+              `UPDATE orders SET fulfillment_status='SUPPLIER_DELIVERED',
+                 order_status='OUT_FOR_DELIVERY', updated_at=NOW()
+               WHERE id=? AND fulfillment_status='EXCEPTION'`,
+              [dispute.order_id]
+            );
+            orderResumed = true;
+          }
         }
       }
 
@@ -1469,11 +1479,11 @@ class DisputeService {
           // If order had reached supplier delivery or confirmation, complete it
           if (orderRows[0].supplier_delivered_at) {
             await connection.query(
-              `UPDATE orders 
-               SET fulfillment_status = 'BUYER_CONFIRMED',
-                   order_status = 'DELIVERED',
+              `UPDATE orders
+               SET fulfillment_status = 'SUPPLIER_DELIVERED',
+                   order_status = 'OUT_FOR_DELIVERY',
                    updated_at = NOW()
-               WHERE id = ?`,
+               WHERE id = ? AND fulfillment_status = 'EXCEPTION'`,
               [dispute.order_id]
             );
             orderResumed = true;
