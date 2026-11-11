@@ -1,3 +1,12 @@
+## P0 Isolated Financial Settlement Hardening — 2026-11-11
+- Branch `fix/p0-financial-settlement-hardening-isolated` derived from independent integrity branch; B4/B5/B6 branches/files untouched.
+- Implemented fail-closed payout preparation: admin-only, mandatory idempotency, per-payable single instruction, conflicting payload rejection, pending refund block, exact payable balance conservation, zero disbursed amount.
+- Implemented approval-time revalidation under payable lock for active holds, refund obligations, amount and status.
+- Added `backend/tests/p0_disbursement_integrity_gate.js` with seven isolated mock scenarios; pool cleanup is explicit.
+- SOURCE INSPECTED ONLY; Node and MySQL tests NOT EXECUTED; no DB write/migration/live payout.
+- Phase gate: PARTIAL / NOT VERIFIED. CAN MERGE OR DEPLOY: NO.
+- See `backend/docs/MILJOR_P0_FINANCIAL_SETTLEMENT_HARDENING_LEDGER.md`.
+
 ## P0 Financial Contract Follow-Up — 2026-11-11
 - Changes: reject missing supplier commission fee snapshots and profile fees; exact BigInt commission; strict refund assessment roles; permit eligible partial-refund assessments; refuse unverified external refund confirmations.
 - Branch: `fix/independent-backend-integrity` only. No pool/timer, B6 branch, migration or DB changes.
