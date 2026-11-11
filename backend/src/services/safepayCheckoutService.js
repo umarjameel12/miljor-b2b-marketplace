@@ -124,6 +124,7 @@ class SafepayCheckoutService {
     // B5 Flash: claim the hold before contacting Safepay. For non-Flash
     // orders this is a no-op; B6's separate award hooks remain untouched.
     await require('./flashPoolService').claimCheckout(orderId,actor.id);
+    await require('./regularPoolPaymentHoldService').claimCheckout(orderId,actor.id);
 
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
@@ -184,6 +185,8 @@ class SafepayCheckoutService {
         .catch(releaseError => {
           console.error('[B5/B6] Flash checkout claim release failed:', releaseError);
         });
+      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[B4] Regular pool payment claim recovery:', error));
       throw trackerError;
     }
 
@@ -512,6 +515,7 @@ class SafepayCheckoutService {
       // For B6 supplier orders, atomically mark the shared ORDER_DIRECT
       // listing allocations COMMITTED only after verified provider payment.
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
+      await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // 8. Record Webhook Event as PROCESSED
       await connection.query(
@@ -661,6 +665,9 @@ class SafepayCheckoutService {
       }
     }
 
+    const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
+      .readForOrder(order.id,actor.id);
+
     return {
       order_id: order.id,
       order_code: order.order_code,
@@ -670,6 +677,7 @@ class SafepayCheckoutService {
       total_amount: Number(order.total_amount),
       currency: order.currency,
       lifecycle_phase: lifecyclePhase,
+      regular_pool_payment_hold: regularPoolPaymentHold,
       latest_attempt: latestAttempt ? {
         attempt_code: latestAttempt.attempt_code,
         status: latestAttempt.status,
@@ -883,6 +891,8 @@ class SafepayCheckoutService {
         `UPDATE orders SET payment_status = 'PAID', order_status = 'PAID', fulfillment_status = 'AWAITING_SUPPLIER_ACKNOWLEDGEMENT', updated_at = NOW() WHERE id = ?`,
         [order.id]
       );
+
+      await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // Insert into payments
       const paymentCode = `PAY-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
