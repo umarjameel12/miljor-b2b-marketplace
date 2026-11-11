@@ -21,6 +21,9 @@ const normalizedDate=x=>{
 };
 const options=x=>{
  const day=normalizedDate(x?.delivery_day);
+ const lahoreToday=new Date(Date.now()+5*3600000).toISOString().slice(0,10);
+ if(day<lahoreToday)
+  throw fail('DELIVERY_DAY_IN_PAST','Buyer cannot authorize a past delivery day.');
  const mode=String(x?.mode||'').toUpperCase();
  const window=String(x?.delivery_window||'').trim();
  const handling=String(x?.handling_class||'AMBIENT').toUpperCase().trim();
@@ -176,6 +179,52 @@ class ProcurementDeliveryGroupingService {
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
     throw fail('DELIVERY_RUN_CONFLICT','An order is already assigned to a delivery run.',409);
    throw e;}finally{conn.release()}
+ }
+ async refreshSupplierRun(supplierId,runId){
+  const supplier=id(supplierId),rid=id(runId),conn=await this.database.getConnection();
+  try{await conn.beginTransaction();
+   const [runs]=await conn.query(
+    'SELECT id,status FROM procurement_delivery_runs WHERE id=? AND supplier_id=? FOR UPDATE',[rid,supplier]);
+   const run=runs[0];
+   if(!run)throw fail('DELIVERY_RUN_NOT_FOUND','Own supplier run not found.',404);
+   if(run.status==='CANCELLED')throw fail('DELIVERY_RUN_CANCELLED','Cancelled run is immutable.',409);
+   const [stops]=await conn.query(
+    "SELECT s.id,s.order_id,s.buyer_id,s.status AS stop_status,o.payment_status,o.fulfillment_status FROM procurement_delivery_stops s JOIN orders o ON o.id=s.order_id AND o.supplier_id=? WHERE s.run_id=? ORDER BY s.order_id FOR UPDATE",
+    [supplier,rid]);
+   if(!stops.length)throw fail('DELIVERY_RUN_EMPTY','No supplier orders attached.',409);
+   const nextStop=x=>{
+    if(x.payment_status!=='PAID'||x.fulfillment_status==='EXCEPTION')return 'EXCEPTION';
+    if(['BUYER_CONFIRMED','COMPLETED'].includes(x.fulfillment_status))return 'BUYER_CONFIRMED';
+    if(x.fulfillment_status==='SUPPLIER_DELIVERED')return 'SUPPLIER_DELIVERED';
+    if(x.fulfillment_status==='DISPATCHED')return 'DISPATCHED';
+    return 'ASSIGNED';
+   };
+   const nextStops=stops.map(x=>({...x,next_status:nextStop(x)}));
+   let nextStatus='PROPOSED';
+   if(nextStops.some(x=>x.next_status==='EXCEPTION'))nextStatus='EXCEPTION';
+   else if(nextStops.every(x=>x.next_status==='BUYER_CONFIRMED'))nextStatus='DELIVERED';
+   else if(nextStops.some(x=>['DISPATCHED','SUPPLIER_DELIVERED','BUYER_CONFIRMED'].includes(x.next_status)))
+    nextStatus='DISPATCHED';
+   else if(stops.every(x=>x.fulfillment_status==='READY_FOR_DISPATCH'))
+    nextStatus='CONFIRMED';
+   const levels={PROPOSED:0,CONFIRMED:1,DISPATCHED:2,DELIVERED:3,EXCEPTION:4};
+   if(nextStatus!=='EXCEPTION'&&levels[nextStatus]<levels[run.status])
+    nextStatus=run.status; // no backwards run status on eventual order reads
+   for(const stop of nextStops){
+    if(stop.stop_status===stop.next_status)continue;
+    await conn.query('UPDATE procurement_delivery_stops SET status=? WHERE id=?',[stop.next_status,stop.id]);
+    await notifications.enqueue(conn,{recipient_id:stop.buyer_id,recipient_role:'BUYER',
+     event_key:'delivery:status:'+stop.order_id+':'+stop.next_status,
+     event_type:'DELIVERY_STATUS_CHANGED',
+     payload:{order_id:stop.order_id,run_id:rid,status_code:stop.next_status}});
+   }
+   if(run.status!==nextStatus){
+    await conn.query('UPDATE procurement_delivery_runs SET status=? WHERE id=?',[nextStatus,rid]);
+   }
+   await conn.commit();return {run_id:rid,status:nextStatus,
+    stop_statuses:nextStops.map(x=>({order_id:x.order_id,status:x.next_status})),
+    fulfillment_source:'AUTHORITATIVE_ORDER_FULFILLMENT',orders_mutated:false};
+  }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
  async supplierRuns(supplierId){
   const supplier=id(supplierId);
