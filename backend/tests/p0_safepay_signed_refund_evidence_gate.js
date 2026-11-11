@@ -152,6 +152,36 @@ async function verify(label,expected,setup=()=>{},raw=goodEvent()){
   assert.equal(queries.some(([sql])=>sql==='AUDIT'),false);
   scenarios++;console.log('PASS: changed payment row rolls back refund event');
 
+  reset();
+  state.existing=[{
+    provider:'SAFEPAY',event_type:'payment.refunded',
+    processed_status:'PROCESSED',order_id:12,
+    provider_tracker_token:'track_abcdefgh1234',
+    // Native mysql2 can return JSON columns as already-parsed objects.
+    raw_payload:JSON.parse(goodEvent().toString('utf8'))
+  }];
+  const jsonReplay=await svc.receive({rawBody:goodEvent(),signature:'signed'});
+  assert.equal(jsonReplay.duplicate,true);
+  assert.equal(queries.some(([sql])=>sql.includes?.('UPDATE refund_obligations')),false);
+  scenarios++;console.log('PASS: JSON-column evidence supports exact replay');
+
+  reset();
+  state.existing=[{
+    provider:'SAFEPAY',event_type:'payment.refunded',
+    processed_status:'PROCESSED',order_id:12,
+    provider_tracker_token:'track_abcdefgh1234',
+    raw_payload:goodEvent().toString('utf8')
+  }];
+  const retryEvent=JSON.parse(goodEvent().toString('utf8'));
+  retryEvent.delivery_attempts=2;
+  retryEvent.next_attempt_at='2026-11-11T22:40:00Z';
+  const changedDeliveryEnvelope=await svc.receive({
+    rawBody:Buffer.from(JSON.stringify(retryEvent)),signature:'signed'
+  });
+  assert.equal(changedDeliveryEnvelope.duplicate,true);
+  assert.equal(queries.some(([sql])=>sql.includes?.('UPDATE refund_obligations')),false);
+  scenarios++;console.log('PASS: legitimate delivery-attempt metadata may change');
+
   await verify('signed full refund exactly exhausts capture','SUCCESS',
     ()=>{state.payment.amount='10.00';},goodEvent({state:'TRACKER_REFUNDED'}));
 
