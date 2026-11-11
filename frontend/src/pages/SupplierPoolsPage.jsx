@@ -252,7 +252,10 @@ export function SupplierPoolsPage(){
         if(!poolId)throw Error('Draft may exist but no ID was returned. Refresh Pool Management before retrying.');
         try{await unifiedPoolsApi.updateRegularClusters(poolId,
           form.delivery_type==='SUPPLIER_PICKUP'?[]:form.delivery_cluster_ids);
-        }catch(_){throw Error('Draft saved, but cluster assignment failed. Edit the existing draft instead of creating a duplicate.');}
+        }catch(_){
+          setEdit(previous=>previous||{id:poolId,type:'REGULAR',status:'DRAFT'});
+          throw Error('Draft #'+poolId+' saved, but cluster assignment failed. Retry updates this existing draft.');
+        }
       }else{
         await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
       }
