@@ -28,6 +28,8 @@ jobs:
           JWT_SECRET: isolated_admin_test_jwt_secret_32_characters
           NODE_ENV: test
         run: node backend/tests/demo_admin_supplier_approval_gate.js
+      - name: Validate offline first-admin bootstrap syntax without executing it
+        run: node --check backend/scripts/bootstrap_first_admin.js
       - name: Build frontend with admin dashboard, navigation and verification queue
         run: |
           cd frontend
