@@ -56,7 +56,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
         {headers:{'X-Idempotency-Key':holdIntent.current.idempotencyKey}});
       const hold=response.data?.data?.hold;
       if(!hold?.order_id)throw Error('Flash stock hold created but order reference is unavailable. Check your orders before retrying.');
-      setOrder({order_id:hold.order_id,hold_id:hold.id,checkout_endpoint:hold.checkout_endpoint,hold_expires_at:hold.hold_expires_at});
+      setOrder({order_id:hold.order_id,hold_id:hold.id,checkout_endpoint:hold.checkout_endpoint,hold_expires_at:hold.hold_expires_at,server_time:response.data?.data?.server_time||serverTime});
       setUncertain(false);
       setHoldExpired(false);
       // We do not initiate a financial transaction without buyer's second explicit click.
@@ -104,7 +104,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     </div>
     {order?<div className="rounded-xl border p-3 space-y-2">
       <p className="text-xs flex items-center gap-1"><ShieldCheck size={14}/> Stock hold created for order #{order.order_id}. Payment is not yet verified.</p>
-      {order.hold_expires_at&&<CountdownTimer deadline={order.hold_expires_at} compact label="Pay within" onExpire={()=>setHoldExpired(true)}/>}
+      {order.hold_expires_at&&<CountdownTimer deadline={order.hold_expires_at} serverTime={order.server_time} compact label="Pay within" onExpire={()=>setHoldExpired(true)}/>}
       <button type="button" disabled={submitting||holdExpired} onClick={checkout} className="bg-emerald-700 text-white rounded-xl px-4 py-2 text-xs disabled:opacity-50">Continue to Safepay</button>
       <p className="text-xs text-[var(--text-muted)]">Use your order payment-status page after returning from provider.</p>
     </div>:<div className="space-y-2">
