@@ -7,6 +7,7 @@ import {Package,Truck,ShieldCheck,FileText,RefreshCw,AlertTriangle} from 'lucide
 const msg=e=>e?.response?.data?.error?.message||e?.message||'Request unsuccessful';
 const newKey=()=> 'b7-'+Date.now()+'-'+Math.random().toString(36).slice(2,14);
 const paidStatus=s=>String(s||'').replaceAll('_',' ');
+const normalizedOrder=o=>({...o,id:o?.order_id??o?.id});
 const nextStatus={AWAITING_SUPPLIER_ACKNOWLEDGEMENT:'PREPARING',
  PREPARING:'READY_FOR_DISPATCH',READY_FOR_DISPATCH:'DISPATCHED',
  DISPATCHED:'SUPPLIER_DELIVERED'};
@@ -40,7 +41,7 @@ export function PostPurchasePage(){
     apiClient.get(buyer?'/disputes/my':'/disputes/supplier/list')
    ]);
    if(ordersResult.status!=='fulfilled')throw ordersResult.reason;
-   setOrders(ordersResult.value.data?.data?.orders||[]);
+   setOrders((ordersResult.value.data?.data?.orders||[]).map(normalizedOrder));
    if(disputesResult.status==='fulfilled')
     setDisputes(disputesResult.value.data?.data?.disputes||[]);
    else{
@@ -55,7 +56,7 @@ export function PostPurchasePage(){
   setError('');if(!preserveNotice)setNotice('');setInvoice(null);
   try{
    const res=await apiClient.get('/fulfillment/'+route+'/orders/'+id);
-   setSelected(res.data?.data?.order||null);
+   setSelected(res.data?.data?.order?normalizedOrder(res.data.data.order):null);
    setTimeline(res.data?.data?.timeline||[]);
    setLines(res.data?.data?.award_lines||[]);
    setReceived({});
