@@ -3,6 +3,10 @@ on:
   push:
     branches:
       - feature/ucp-canonical-reconciliation-release
+      - fix/ucp-final-reconciliation-thischat
+  pull_request:
+    branches:
+      - feature/ucp-canonical-reconciliation-release
   workflow_dispatch:
 
 permissions:
@@ -43,6 +47,7 @@ jobs:
         run: |
           cd backend
           npm run test:ucp
+          node tests/ucp_thischat_reconciliation_gate.js
 
   disposable-mysql-migrations:
     name: Disposable MySQL 8.0 migration installation
@@ -87,6 +92,8 @@ jobs:
         run: cd backend && node tests/canonical_migration_manifest_gate.js
       - name: Reconstruct historical pre-004 reference data in empty disposable DB ONLY
         run: cd backend && node database/bootstrapDisposableMigrationTest.js
+      - name: Verify existing disposable migration history read-only BEFORE applying
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
       - name: Apply migrations to disposable miljor_test_db ONLY
         run: cd backend && node database/runMigrations.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
@@ -112,6 +119,8 @@ jobs:
           JS
       - name: Confirm second migration run is idempotent (same isolated DB)
         run: cd backend && node database/runMigrations.js
+      - name: Verify installed journal integrity read-only
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
       - name: B5 Flash + shared inventory concurrency acceptance
         if: ${{ always() }}
         timeout-minutes: 8
