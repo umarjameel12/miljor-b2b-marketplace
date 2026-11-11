@@ -26,6 +26,8 @@ export const OrdersPage = () => {
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
   const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
+  const activeCommitmentCount=regularOrders.filter(o=>!['PAID','CANCELLED','REFUNDED'].includes(o.payment_status)).length+
+    flashHolds.filter(h=>!['PAID','EXPIRED','RELEASED','FAILED'].includes(h.status)&&h.payment_status!=='PAID').length;
   useEffect(()=>{
     if(!isAuthenticated || user?.role!=='BUYER')return;
     let mounted=true;
@@ -102,7 +104,7 @@ export const OrdersPage = () => {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-sans tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                {realOrders.length}
+                {activeCommitmentCount}
               </span>
               <span className="ml-1 text-xs text-stone-500">orders</span>
             </div>
