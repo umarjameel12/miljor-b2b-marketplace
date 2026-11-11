@@ -333,6 +333,12 @@ class ProcurementRecurringService {
          FROM procurement_recurring_cycles cy
          JOIN procurement_recurring_contracts contract ON contract.id=cy.contract_id
          WHERE cy.status='SCHEDULED' AND contract.status='ACTIVE'
+           AND NOT EXISTS (
+             SELECT 1 FROM procurement_recurring_collective_members member
+             JOIN procurement_recurring_collectives cohort ON cohort.id=member.cohort_id
+             WHERE member.recurring_contract_id=cy.contract_id
+               AND member.status='CONSENTED' AND cohort.status='ACTIVE'
+           )
            AND cy.due_at_utc<=UTC_TIMESTAMP()
            AND (cy.retry_after_utc IS NULL OR cy.retry_after_utc<=UTC_TIMESTAMP())
          ORDER BY cy.due_at_utc,cy.id LIMIT ?`,
