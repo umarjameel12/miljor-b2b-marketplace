@@ -406,8 +406,19 @@ class PaymentController {
         signedEventType = JSON.parse(Buffer.isBuffer(rawBody)
           ? rawBody.toString('utf8') : String(rawBody)).type;
       } catch (_) { /* capture handler rejects malformed JSON */ }
+      if (signedEventType === 'payment.refunded' &&
+          req.rawBody === undefined && !Buffer.isBuffer(req.body)) {
+        const err = new Error('Safepay refund verification requires untouched raw webhook bytes');
+        err.code = 'RAW_WEBHOOK_REQUIRED';
+        err.statusCode = 400;
+        throw err;
+      }
+      const signedRawBody = signedEventType === 'payment.refunded' &&
+        typeof req.rawBody === 'string' ? Buffer.from(req.rawBody, 'utf8') : rawBody;
       const result = signedEventType === 'payment.refunded'
-        ? await safepayRefundWebhookService.receive({rawBody,signature,timestamp})
+        ? await safepayRefundWebhookService.receive({
+            rawBody:signedRawBody,signature,timestamp
+          })
         : await safepayCheckoutService.processWebhookEvent({
             rawBody,signature,timestamp,eventId,eventType
           });
