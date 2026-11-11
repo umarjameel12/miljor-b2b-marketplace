@@ -591,22 +591,27 @@ class FinancialSettlementService {
         throw err;
       }
 
-      // Check existing approved/confirmed refunds to prevent over-refunding
+      // Reserve the captured-payment ceiling across ALL outstanding claims,
+      // not just approved ones. The locked parent order serializes assessments.
+      // A pending request must not allow another pending request to overbook
+      // the same money; rejected/cancelled claims are excluded.
       const [existingRefunds] = await connection.query(
-        `SELECT SUM(total_refund_amount) AS total_refunded
+        `SELECT COALESCE(SUM(total_refund_amount), 0) AS total_refunded
          FROM refund_obligations
-         WHERE order_id = ? AND status IN ('APPROVED', 'CONFIRMED', 'AWAITING_EXTERNAL_EXECUTION', 'EXTERNAL_PROCESSING')`,
+         WHERE order_id = ? AND status IN
+           ('REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'CONFIRMED',
+            'AWAITING_EXTERNAL_EXECUTION', 'EXTERNAL_PROCESSING')`,
         [orderId]
       );
 
-      const alreadyRefunded = existingRefunds[0]?.total_refunded || '0.00';
+      const alreadyRefunded = existingRefunds[0]?.total_refunded ?? '0.00';
       const remainingRefundable = exactSub(
         order.captured_amount.toString(),
         alreadyRefunded.toString(),
         2
       );
 
-      if (Number(remainingRefundable) <= 0) {
+      if (!exactDecimal.exactDecimalGte(remainingRefundable, '0.01', 2)) {
         const err = new Error('Order is already fully refunded; no refundable balance remains');
         err.code = 'ORDER_ALREADY_FULLY_REFUNDED';
         err.statusCode = 422;
@@ -650,7 +655,7 @@ class FinancialSettlementService {
       const totalRefundAmount = exactDecimal.exactDecimalSum([assessedItemAmount, feeRefundAmount], 2);
 
       // Verify not exceeding remaining refundable balance
-      if (Number(totalRefundAmount) > Number(remainingRefundable)) {
+      if (!exactDecimal.exactDecimalGte(remainingRefundable, totalRefundAmount, 2)) {
         const err = new Error(`Assessed refund amount (PKR ${totalRefundAmount}) exceeds remaining refundable balance (PKR ${remainingRefundable})`);
         err.code = 'REFUND_EXCEEDS_CAPTURED_AMOUNT';
         err.statusCode = 422;
@@ -718,9 +723,17 @@ class FinancialSettlementService {
           payable.refund_deduction_amount.toString(),
           2
         );
-        const newAvailable = Number(newHeld) >= Number(maxEntitlement) 
-          ? '0.00' 
-          : exactSub(maxEntitlement, newHeld, 2);
+        // Holds cannot exceed the supplier's remaining entitlement.
+        // If this refund exceeds supplier proceeds, an admin needs a
+        // separate platform-funded refund policy; never manufacture a negative
+        // or unbacked supplier balance.
+        if (!exactDecimal.exactDecimalGte(maxEntitlement, newHeld, 2)) {
+          const err = new Error('Supplier payable cannot cover the requested refund hold');
+          err.code = 'REFUND_HOLD_EXCEEDS_PAYABLE';
+          err.statusCode = 422;
+          throw err;
+        }
+        const newAvailable = exactSub(maxEntitlement, newHeld, 2);
 
         await connection.query(
           `INSERT INTO financial_holds (
@@ -837,31 +850,44 @@ class FinancialSettlementService {
 
         // Forfeit the auto-hold
         const [holds] = await connection.query(
-          `SELECT id FROM financial_holds 
-           WHERE order_id = ? AND supplier_payable_id = ? AND status = 'ACTIVE' LIMIT 1 FOR UPDATE`,
-          [refund.order_id, payable.id]
+          `SELECT id, hold_amount FROM financial_holds
+           WHERE order_id = ? AND supplier_payable_id = ?
+             AND hold_code LIKE ? AND status = 'ACTIVE' FOR UPDATE`,
+          [refund.order_id, payable.id, `HOLD-RFND-${refundId}-%`]
         );
-
-        if (holds.length > 0) {
-          await connection.query(
-            `UPDATE financial_holds SET status = 'FORFEITED_TO_REFUND', updated_at = NOW() WHERE id = ?`,
-            [holds[0].id]
-          );
+        if (holds.length !== 1 ||
+            !exactDecimal.exactDecimalGte(holds[0].hold_amount.toString(), refundItemAmount, 2) ||
+            !exactDecimal.exactDecimalGte(refundItemAmount, holds[0].hold_amount.toString(), 2)) {
+          const err = new Error('Refund-specific financial hold is missing or inconsistent');
+          err.code = 'REFUND_HOLD_MISMATCH';
+          err.statusCode = 409;
+          throw err;
         }
-
         const currentHeld = payable.held_amount.toString();
-        const newHeld = Number(currentHeld) >= Number(refundItemAmount)
-          ? exactSub(currentHeld, refundItemAmount, 2)
-          : '0.00';
+        if (!exactDecimal.exactDecimalGte(currentHeld, refundItemAmount, 2)) {
+          const err = new Error('Supplier held balance is below the refund hold');
+          err.code = 'REFUND_HELD_BALANCE_MISMATCH';
+          err.statusCode = 409;
+          throw err;
+        }
+        await connection.query(
+          `UPDATE financial_holds SET status = 'FORFEITED_TO_REFUND', updated_at = NOW() WHERE id = ?`,
+          [holds[0].id]
+        );
+        const newHeld = exactSub(currentHeld, refundItemAmount, 2);
 
         const maxEntitlement = exactSub(
           payable.net_payable_amount.toString(),
           newDeductions,
           2
         );
-        const newAvailable = Number(newHeld) >= Number(maxEntitlement)
-          ? '0.00'
-          : exactSub(maxEntitlement, newHeld, 2);
+        if (!exactDecimal.exactDecimalGte(maxEntitlement, newHeld, 2)) {
+          const err = new Error('Refund deductions and other financial holds exceed supplier entitlement');
+          err.code = 'REFUND_PAYABLE_BALANCE_MISMATCH';
+          err.statusCode = 409;
+          throw err;
+        }
+        const newAvailable = exactSub(maxEntitlement, newHeld, 2);
 
         await connection.query(
           `UPDATE supplier_payables
