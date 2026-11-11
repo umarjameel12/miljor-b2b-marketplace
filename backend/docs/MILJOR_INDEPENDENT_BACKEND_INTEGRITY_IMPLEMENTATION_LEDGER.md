@@ -118,3 +118,10 @@ No backend/front-end build or MySQL database operations executed.
 ### Follow-up business identity enforcement
 - `backend/src/controllers/supplierListingController.js`: new ACTIVE offers now require a supplier-owned published SKU and its linked physical specification. Legacy `product_spec_id` alone cannot generate a new commercial offer. Cross-supplier or mismatched SKU/spec inputs fail closed, while existing historical listings and orders are preserved.
 - The final test gate must verify legacy-global-spec-only rejection, spoofed SKU/spec mismatch rejection, archived/draft SKU rejection, cross-supplier isolation, and legitimate published supplier SKU listing creation.
+
+## Safe Engineering Step — B6/phase 5 migration collision (2026-11-11)
+- Confirmed two independently active migration version collisions: 046 catalog vs recurring collective; 047 demand requester role vs delivery runs. B6 also has 048 notification outbox.
+- Added `database/migrationCollisionGuard.js`, called in `database/runMigrations.js` before DB connection; it intentionally blocks migrations until collision resolution.
+- Added deferred `tests/migration_collision_preflight_gate.js` and detailed `docs/MILJOR_B6_CATALOG_MIGRATION_COLLISION_GATE.md` reconciliation runbook.
+- No renumbering, migration execution, live/test DB write, force push, B6 branch edit or merge.
+- Status: GUARD IMPLEMENTED / NOT TESTED / MIGRATION RECONCILIATION BLOCKED.
