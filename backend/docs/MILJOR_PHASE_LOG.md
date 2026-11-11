@@ -1,3 +1,11 @@
+## Independent Backend Integrity — Batch 2 (2026-11-11)
+- Branch: `fix/independent-backend-integrity`; independent of B6 Phase 2 and other hardening work.
+- Implementation: restored Express 5-compatible strictly allowlisted recurring action route; prevented internal error disclosures from demand request handlers; added deferred HTTP containment gate.
+- Legacy RFQ/recurring mutations were ALREADY retired by baseline hardening; preserved existing 410 responses and database history.
+- Status: IMPLEMENTED / NOT TESTED / NOT VERIFIED. No database mutation, test execution or merge to main.
+- Detailed record: `backend/docs/MILJOR_INDEPENDENT_BACKEND_INTEGRITY_IMPLEMENTATION_LEDGER.md`.
+- CAN START NEXT PHASE: NO pending integration policy and consolidated acceptance.
+
 # MilJor — Phase Execution Log
 
 This document tracks phase-by-phase execution, gates, and verification status for the MilJor B2B procurement backend.
