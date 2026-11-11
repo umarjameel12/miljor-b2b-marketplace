@@ -41,6 +41,8 @@ jobs:
           cd backend
           npm run migration:preflight
           node tests/canonical_migration_manifest_gate.js
+          node database/financeCompatibilityGate.js
+          node tests/ucp_thischat_reconciliation_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
@@ -88,8 +90,12 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend dependencies
         run: npm --prefix backend ci --no-audit --no-fund
-      - name: Validate canonical SQL names and source blobs without DB mutation
-        run: cd backend && node tests/canonical_migration_manifest_gate.js
+      - name: Validate canonical SQL and finance compatibility without DB mutation
+        run: |
+          cd backend
+          node tests/canonical_migration_manifest_gate.js
+          node database/financeCompatibilityGate.js
+          node tests/ucp_thischat_reconciliation_gate.js
       - name: Reconstruct historical pre-004 reference data in empty disposable DB ONLY
         run: cd backend && node database/bootstrapDisposableMigrationTest.js
       - name: Verify existing disposable migration history read-only BEFORE applying
