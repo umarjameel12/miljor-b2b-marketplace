@@ -115,6 +115,10 @@ router.get('/procurement/notifications',protect,(req,res)=>controller.myProcurem
 router.post('/procurement/notifications/:noticeId/read',protect,(req,res)=>controller.readProcurementNotification(req,res));
 router.get('/procurement/preorder-policy',protect,(req,res)=>controller.procurementPreorderStatus(req,res));
 
+// B6-N read-only adapter; legacy Request a Pool remains its own domain.
+router.get('/procurement/demand-first/mine',protect,authorizeStrict('BUYER'),(req,res)=>controller.listLegacyDemandFirst(req,res));
+router.get('/procurement/demand-first/:demandId/preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewLegacyDemandFirst(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
