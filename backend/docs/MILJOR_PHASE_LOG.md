@@ -1,3 +1,12 @@
+## P0 Financial Contract Follow-Up — 2026-11-11
+- Changes: reject missing supplier commission fee snapshots and profile fees; exact BigInt commission; strict refund assessment roles; permit eligible partial-refund assessments; refuse unverified external refund confirmations.
+- Branch: `fix/independent-backend-integrity` only. No pool/timer, B6 branch, migration or DB changes.
+- Gate: `backend/tests/financial_contract_fail_closed_gate.js` committed but NOT EXECUTED.
+- Blocking integration: order creation currently lacks immutable supplier commission snapshot, migration 046/047 collision unresolved, verified Safepay refund confirmation not yet implemented.
+- Result: TARGETED SOURCE FIXES IMPLEMENTED, NOT VERIFIED; P0 FINANCIAL CONTRACT BLOCKED.
+- Report: `backend/docs/MILJOR_P0_FINANCIAL_CONTRACT_SAFETY_DELTA.md`.
+- CAN START NEXT PHASE: NO.
+
 ## Independent Backend Integrity — Migration Collision Stop Gate (2026-11-11)
 - Status: SAFETY GUARD IMPLEMENTED, NOT TESTED, RECONCILIATION BLOCKED.
 - Concurrent branches assign different SQL migrations to versions 046 and 047; read-only schema history needed before choosing unique sequence.
