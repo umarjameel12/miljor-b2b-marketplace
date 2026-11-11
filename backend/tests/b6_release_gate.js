@@ -55,10 +55,10 @@ const suites=[
       if(!existing.length)throw Error('Migration preflight BLOCKED; table missing: '+table);
     }
     const [migrations]=await connection.query(
-      'SELECT version FROM schema_migrations WHERE version IN (?,?) ORDER BY version',
-      ['051','052']
+      'SELECT version FROM schema_migrations WHERE version IN (?,?,?) ORDER BY version',
+      ['051','052','053']
     );
-    if(migrations.length!==2)throw Error('UCP canonical families/requester migrations 051–052 have not both been applied to test DB');
+    if(migrations.length!==3)throw Error('UCP migrations 051–053 (canonical families, requester role, Regular payment holds) must be applied to test DB');
   } finally { await connection.end(); }
   console.log('B6 release database identity and migration preflight passed');
   let passed=0;
