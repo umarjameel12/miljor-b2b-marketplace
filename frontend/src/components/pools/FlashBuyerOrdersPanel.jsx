@@ -59,7 +59,7 @@ export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
         {!paid&&<div className="flex flex-wrap gap-2 mt-2">
           {!awaiting&&!blocked&&<button type="button" disabled={busy===h.id} onClick={()=>pay(h)}
             className="rounded-lg bg-emerald-700 text-white px-3 py-2 text-xs disabled:opacity-50">Pay via Safepay</button>}
-          {(awaiting||h.payment_status==='AWAITING_PAYMENT')&&<button type="button" disabled={busy===h.id}
+          {awaiting&&<button type="button" disabled={busy===h.id}
             onClick={()=>reconcile(h)} className="rounded-lg border px-3 py-2 text-xs disabled:opacity-50">Check provider status</button>}
         </div>}
       </article>;
