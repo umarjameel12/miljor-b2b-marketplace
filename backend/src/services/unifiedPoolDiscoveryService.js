@@ -72,8 +72,36 @@ class UnifiedPoolDiscoveryService {
      const eligibleMap=new Map(eligible.map(e=>[Number(e.id),e]));
      const authorized=regularRaw.filter(p=>eligibleMap.has(Number(p.id)));
      const enriched=await progress.enrichPoolsList(authorized);
-     regular=enriched.filter(p=>fulfillment==='ALL'||(p.fulfillment_modes_available||[]).includes(
-       fulfillment==='PICKUP'?'SUPPLIER_PICKUP':fulfillment)).map(p=>{
+     let clusterModeIds=null;
+     if(clusterId&&fulfillment!=='ALL'&&enriched.length){
+       const poolIds=enriched.map(x=>Number(x.id));
+       let rows;
+       if(fulfillment==='PICKUP'){
+         [rows]=await db.query(
+           `SELECT DISTINCT p.id AS pool_id FROM pools p
+            JOIN supplier_pickup_points pp ON pp.supplier_id=p.supplier_id
+            JOIN supplier_delivery_configurations c ON c.supplier_id=p.supplier_id
+            WHERE p.id IN (${poolIds.map(()=>'?').join(',')})
+              AND pp.cluster_id=? AND pp.is_active=1 AND c.pickup_enabled=1`,
+           [...poolIds,clusterId]);
+       }else{
+         [rows]=await db.query(
+           `SELECT DISTINCT p.id AS pool_id FROM pools p
+            JOIN pool_delivery_clusters pdc ON pdc.pool_id=p.id
+            JOIN supplier_delivery_cluster_rates r ON r.supplier_id=p.supplier_id
+              AND r.cluster_id=pdc.cluster_id
+            JOIN supplier_delivery_configurations c ON c.supplier_id=p.supplier_id
+            WHERE p.id IN (${poolIds.map(()=>'?').join(',')})
+              AND pdc.cluster_id=? AND r.mode=? AND r.is_eligible=1
+              AND ((r.mode='STANDARD_CLUSTERED' AND c.standard_delivery_enabled=1)
+                OR (r.mode='EXPRESS' AND c.express_enabled=1))`,
+           [...poolIds,clusterId,fulfillment]);
+       }
+       clusterModeIds=new Set(rows.map(x=>Number(x.pool_id)));
+     }
+     regular=enriched.filter(p=>(fulfillment==='ALL'||(p.fulfillment_modes_available||[]).includes(
+       fulfillment==='PICKUP'?'SUPPLIER_PICKUP':fulfillment)) &&
+       (!clusterModeIds||clusterModeIds.has(Number(p.id)))).map(p=>{
        const physical=eligibleMap.get(Number(p.id));
        return {type:'REGULAR',id:p.id,code:p.pool_code,status:p.status,
          product_title:physical.physical_title,supplier_name:p.supplier_name,
@@ -96,15 +124,17 @@ class UnifiedPoolDiscoveryService {
         FROM flash_pools fp JOIN product_specifications ps ON ps.id=fp.product_spec_id
         WHERE fp.id IN (${ids.map(()=>'?').join(',')})`,ids);
      const taxonomy=new Map(tax.map(p=>[Number(p.id),p]));
-     // Buyer cluster discovery for Flash requires an eligible supplier delivery rate
-     // or same-cluster active pickup point; NEVER label unconditional delivery eligible.
+     // B5 checkout is currently DOORSTEP only. Never advertise pickup or
+     // express; Flash's fixed delivery fee is NOT an accepted G2 quote.
      let eligibleSuppliers=null;
-     if(clusterId){
+     if(clusterId||fulfillment==='STANDARD_CLUSTERED'){
        const [rates]=await db.query(
          `SELECT DISTINCT r.supplier_id FROM supplier_delivery_cluster_rates r
             JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
-            WHERE r.cluster_id=? AND r.mode='STANDARD_CLUSTERED'
-              AND r.is_eligible=1 AND c.standard_delivery_enabled=1`,[clusterId]);
+            JOIN geographic_clusters g ON g.id=r.cluster_id
+            WHERE r.mode='STANDARD_CLUSTERED' AND r.is_eligible=1
+              AND c.standard_delivery_enabled=1 AND g.is_active=1 AND g.district='Lahore'
+              AND (? IS NULL OR r.cluster_id=?)`,[clusterId,clusterId]);
        eligibleSuppliers=new Set(rates.map(x=>Number(x.supplier_id)));
      }
      flashes=flashRaw.filter(p=>taxonomy.has(Number(p.id)) &&
@@ -121,7 +151,8 @@ class UnifiedPoolDiscoveryService {
          clearance_reason:p.clearance_reason,condition_notes:p.condition_notes,
          best_before_date:p.best_before_date,
          pool_close_at:p.expiry_at_utc,can_join:Number(p.remaining_stock)>0,
-         delivery_fee_pkr:p.delivery_fee,delivery_quote_required:true};
+         delivery_fee_pkr:p.delivery_fee,delivery_quote_required:false,
+         delivery_fee_source:'B5_FIXED_PUBLISHED_OFFER'};
      });
    }
    const matches=p=>(!categoryId||Number(p.category_id)===categoryId)&&
