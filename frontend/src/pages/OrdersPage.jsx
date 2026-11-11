@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { RegularPaymentHoldCard } from '../components/RegularPaymentHoldCard';
+import {FlashBuyerOrdersPanel} from '../components/pools/FlashBuyerOrdersPanel';
+import {BuyerRegularReservationsPanel} from '../components/pools/BuyerRegularReservationsPanel';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -20,6 +22,7 @@ export const OrdersPage = () => {
   const [activeTab, setActiveTab] = useState('ALL');
   const [showSamplePreview, setShowSamplePreview] = useState(false);
   const [realOrders,setRealOrders]=useState([]);
+  const [flashHolds,setFlashHolds]=useState([]);
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
   const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
@@ -27,8 +30,14 @@ export const OrdersPage = () => {
     if(!isAuthenticated || user?.role!=='BUYER')return;
     let mounted=true;
     setOrdersLoading(true);
-    apiClient.get('/orders',{params:{limit:20}}).then(({data})=>{
-      if(mounted)setRealOrders(data?.data?.orders||[]);
+    Promise.all([
+      apiClient.get('/orders',{params:{limit:100}}),
+      apiClient.get('/flash-pools/holds/mine')
+    ]).then(([orders,flash])=>{
+      if(mounted){
+        setRealOrders(orders?.data?.data?.orders||[]);
+        setFlashHolds(flash?.data?.data?.holds||[]);
+      }
     }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Could not load orders');})
       .finally(()=>{if(mounted)setOrdersLoading(false)});
     return()=>{mounted=false};
@@ -174,6 +183,8 @@ export const OrdersPage = () => {
           ))}
         </div>
 
+        {isAuthenticated&&user?.role==='BUYER'&&<BuyerRegularReservationsPanel/>}
+
         {/* Real B4 orders use authoritative payment hold status, not sample data. */}
         {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
         {ordersError && <p role="alert" className="text-xs text-red-600">{ordersError}</p>}
@@ -185,7 +196,12 @@ export const OrdersPage = () => {
             )}
           </section>
         )}
-        {!ordersLoading && !ordersError && regularOrders.length === 0 && (
+        {!ordersLoading && flashHolds.length>0&&<FlashBuyerOrdersPanel holds={flashHolds}
+          onRefresh={async()=>{
+            const res=await apiClient.get('/flash-pools/holds/mine');
+            if(res?.data?.success)setFlashHolds(res.data.data?.holds||[]);
+          }}/>}
+        {!ordersLoading && !ordersError && regularOrders.length === 0 && flashHolds.length===0 && (
           <>
         {/* Empty State / Truthful Real Data Display */}
         <div

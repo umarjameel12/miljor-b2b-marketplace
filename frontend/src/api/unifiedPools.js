@@ -7,7 +7,14 @@ import catalogApi from './catalog';
 const newKey=(kind)=>`ucp-${kind}-${Date.now()}-${Math.random().toString(36).slice(2,12)}`;
 export const unifiedPoolsApi={
   overview:async()=> (await apiClient.get('/supplier/pools/overview')).data,
+  deliveryContext:async()=> (await apiClient.get('/supplier/pools/delivery-context')).data,
+  inventory:async()=> (await apiClient.get('/supplier/pools/inventory')).data,
+  insights:async()=> (await apiClient.get('/supplier/pools/insights')).data,
+  alerts:async()=> (await apiClient.get('/supplier/pools/alerts')).data,
   listings:async()=>catalogApi.getMyListings(),
+  discover:async(params={})=>(await apiClient.get('/pool-discovery',{params})).data,
+  holdFlash:async(id,payload,key)=>(await apiClient.post(`/flash-pools/${id}/hold`,payload,{headers:{'X-Idempotency-Key':key}})).data,
+  initiateCheckout:async(orderId,key)=>(await apiClient.post(`/orders/${orderId}/checkout`,{}, {headers:{'X-Idempotency-Key':key}})).data,
   saveRegularDraft:async(payload,id=null)=>id
     ?poolsApi.updateDraftPool(id,payload,newKey('regular-update'))
     :poolsApi.createPool(payload,newKey('regular-create')),

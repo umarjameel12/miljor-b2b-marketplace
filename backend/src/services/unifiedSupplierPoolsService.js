@@ -38,6 +38,15 @@ class UnifiedSupplierPoolsService {
          FROM pool_price_tiers WHERE pool_id IN (${poolIds.map(()=>'?').join(',')})
          ORDER BY pool_id,min_qty`,poolIds)
       :[[]];
+    const [clusterRows]=poolIds.length?await db.query(
+      `SELECT pool_id,cluster_id FROM pool_delivery_clusters
+       WHERE pool_id IN (${poolIds.map(()=>'?').join(',')}) ORDER BY pool_id,cluster_id`,poolIds
+    ):[[]];
+    const clusterMap=new Map();
+    for(const c of clusterRows){
+      const ids=clusterMap.get(Number(c.pool_id))||[];
+      ids.push(Number(c.cluster_id));clusterMap.set(Number(c.pool_id),ids);
+    }
     const tierMap=new Map();
     for(const t of tiers){
       const items=tierMap.get(Number(t.pool_id))||[];
@@ -52,6 +61,7 @@ class UnifiedSupplierPoolsService {
       max_capacity:p.max_capacity,purchase_increment:p.purchase_increment,
       promised_delivery_at:p.promised_delivery_at,delivery_type:p.delivery_type,
       price_tiers:tierMap.get(Number(p.id))||[],
+      delivery_clusters:clusterMap.get(Number(p.id))||[],
       quantity_current:p.current_qty,quantity_target:p.target_qty,
       quantity_available:null,unit:p.pool_unit,price:p.current_price_per_unit,
       expires_at:p.scheduled_close_at||p.expires_at,

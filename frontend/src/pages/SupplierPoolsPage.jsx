@@ -6,6 +6,7 @@ import {AppShell} from '../components/layout/AppShell';
 import {useAuth} from '../context/AuthContext';
 import {CountdownTimer} from '../components/ui/CountdownTimer';
 import unifiedPoolsApi from '../api/unifiedPools';
+import {SupplierPoolOperationsPanel} from '../components/supplier/SupplierPoolOperationsPanel';
 
 const localDate=(date)=>{
   const d=new Date(date);
@@ -17,7 +18,7 @@ const initialForm=(listing)=>({
   supplier_min_qty:String(listing?.supplier_min_qty||''),
   buyer_min_qty:String(listing?.buyer_min_qty||''),
   target_qty:'',max_capacity:'',purchase_increment:'1',tier1_price:String(listing?.base_unit_price||''),
-  tier2_price:'',delivery_type:'DOORSTEP',
+  tier2_price:'',delivery_type:'DOORSTEP',delivery_clusters:[],
   scheduled_close_at:localDate(Date.now()+72*3600000),
   promised_delivery_at:localDate(Date.now()+120*3600000),
   total_stock:'',discounted_unit_price:'',min_quantity:'1',
@@ -97,7 +98,13 @@ function buildPayload(mode,form,listing,editing){
   }else{
     tiers.push({min_qty:form.supplier_min_qty,max_qty:form.max_capacity,price_per_unit:form.tier1_price,pricing_unit:unit});
   }
+  if(form.delivery_type==='SUPPLIER_PICKUP'){
+    if(!form.pickup_available)throw Error('Enable an active supplier pickup point before choosing pickup-only.');
+  }else if(!Array.isArray(form.delivery_clusters)||form.delivery_clusters.length===0){
+    throw Error('Choose at least one eligible Lahore delivery cluster for doorstep/grouped delivery.');
+  }
   const payload={
+    delivery_clusters:form.delivery_type==='SUPPLIER_PICKUP'?[]:form.delivery_clusters,
     supplier_min_qty:form.supplier_min_qty,buyer_min_qty:form.buyer_min_qty,
     target_qty:form.target_qty,max_capacity:form.max_capacity,
     purchase_increment:form.purchase_increment,pool_unit:unit,
@@ -118,6 +125,11 @@ export function SupplierPoolsPage(){
   const [listings,setListings]=useState([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
+  const [operations,setOperations]=useState({
+    delivery:null,inventory:null,insights:null,alerts:null
+  });
+  const [operationsError,setOperationsError]=useState('');
+
   const [filter,setFilter]=useState('ALL');
   const [mode,setMode]=useState('REGULAR');
   const [form,setForm]=useState(initialForm());
@@ -132,6 +144,20 @@ export function SupplierPoolsPage(){
       const [overview,listingsResult]=await Promise.all([unifiedPoolsApi.overview(),unifiedPoolsApi.listings()]);
       setData(overview?.data||{pools:[],counts:{total:0,regular:0,flash:0}});
       setListings((listingsResult?.data?.listings||[]).filter(l=>l.status==='ACTIVE'&&l.supplier_sku_id&&l.product_spec_id));
+      // Operational read models may fail independently; creation and existing pool listing
+      // remain available without presenting guessed stock/rates.
+      const jobs=await Promise.allSettled([
+        unifiedPoolsApi.deliveryContext(),unifiedPoolsApi.inventory(),
+        unifiedPoolsApi.insights(),unifiedPoolsApi.alerts()
+      ]);
+      setOperations({
+        delivery:jobs[0].status==='fulfilled'?jobs[0].value?.data:null,
+        inventory:jobs[1].status==='fulfilled'?jobs[1].value?.data:null,
+        insights:jobs[2].status==='fulfilled'?jobs[2].value?.data:null,
+        alerts:jobs[3].status==='fulfilled'?jobs[3].value?.data:null
+      });
+      setOperationsError(jobs.some(j=>j.status==='rejected')?
+        'Some operational data is unavailable; no missing values have been estimated.':'');
     }catch(e){setError(e.response?.data?.error?.message||'Supplier pools are unavailable.');}
     finally{setLoading(false);}
   },[]);
@@ -173,6 +199,7 @@ export function SupplierPoolsPage(){
         scheduled_close_at:localDate(pool.expires_at),
         promised_delivery_at:localDate(pool.promised_delivery_at),
         delivery_type:pool.delivery_type||'DOORSTEP',
+        delivery_clusters:pool.delivery_clusters||[],
         tier1_price:String(tiers[0]?.price_per_unit??pool.price??listing.base_unit_price??''),
         tier2_price:tiers.length>1?String(tiers[1].price_per_unit):''
       });
@@ -211,7 +238,11 @@ export function SupplierPoolsPage(){
     e.preventDefault();
     if(busy)return;
     try{
-      const payload=buildPayload(mode,form,chosen,edit);
+      const validatedForm={...form,
+        pickup_available:Boolean(operations.delivery?.configuration?.pickup_enabled &&
+          operations.delivery?.pickup_points?.some(p=>p.is_active))
+      };
+      const payload=buildPayload(mode,validatedForm,chosen,edit);
       setBusy(true);
       if(mode==='REGULAR')await unifiedPoolsApi.saveRegularDraft(payload,edit?.id);
       else await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
@@ -250,6 +281,8 @@ export function SupplierPoolsPage(){
       </div>
     </header>
     {error&&<div role="alert" className="p-3 rounded-xl border border-red-500 text-red-500 text-sm">{error}</div>}
+    {operationsError&&<p role="status" className="text-xs text-amber-600">{operationsError}</p>}
+    {!loading&&<SupplierPoolOperationsPanel {...operations}/>}
     {creating?<section className="max-w-3xl rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5 space-y-4">
       <div className="flex items-center gap-2"><Layers size={18}/><h2 className="font-semibold text-lg">{edit?'Edit':'Create'} {mode==='REGULAR'?'Regular':'Flash'} Pool Draft</h2></div>
       {!edit&&<div className="grid grid-cols-2 gap-2">
@@ -284,6 +317,27 @@ export function SupplierPoolsPage(){
               <option value="DOORSTEP">Doorstep</option><option value="GROUPED_CLUSTER">Grouped cluster</option><option value="SUPPLIER_PICKUP">Supplier pickup</option>
             </select>
           </label>
+          {form.delivery_type!=='SUPPLIER_PICKUP'&&<fieldset className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+            <legend className="text-xs font-semibold">Eligible Lahore delivery clusters *</legend>
+            <p className="text-[11px] text-[var(--text-muted)]">Select from your active Standard delivery rates. Final delivery fee is quoted to buyers separately.</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {(operations.delivery?.cluster_rates||[]).filter(rate=>rate.is_eligible&&rate.mode==='STANDARD_CLUSTERED'&&operations.delivery?.configuration?.standard_delivery_enabled).map(rate=>{
+                const cluster=operations.delivery?.clusters?.find(c=>Number(c.id)===Number(rate.cluster_id));
+                const checked=form.delivery_clusters.includes(Number(rate.cluster_id));
+                return <label key={rate.cluster_id} className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] p-2 text-xs">
+                  <input type="checkbox" checked={checked} onChange={e=>update('delivery_clusters',e.target.checked?
+                    [...new Set([...form.delivery_clusters,Number(rate.cluster_id)])]:
+                    form.delivery_clusters.filter(id=>id!==Number(rate.cluster_id))}/>
+                  {cluster?.name||'Cluster #'+rate.cluster_id} · Rs. {rate.fee_pkr} configured
+                </label>;
+              })}
+            </div>
+            {!operations.delivery?.cluster_rates?.some(r=>r.is_eligible&&r.mode==='STANDARD_CLUSTERED')&&
+              <p className="text-xs text-amber-600">Configure eligible Standard delivery areas in Supplier Profile before publishing.</p>}
+          </fieldset>}
+          {form.delivery_type==='SUPPLIER_PICKUP'&&<p className="text-xs text-[var(--text-muted)]">
+            Active pickup location required. Available: {(operations.delivery?.pickup_points||[]).filter(p=>p.is_active).map(p=>p.point_name).join(', ')||'None'}.
+          </p>}
           <p className="text-xs text-[var(--text-muted)]">Regular reservations, commercial qualification, delivery clusters and buyer commitments remain governed by B4. Pricing is not guaranteed until terms are locked.</p>
         </>:<>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -307,7 +361,10 @@ export function SupplierPoolsPage(){
           <label className="block text-xs font-semibold space-y-1">Stock condition notes
             <textarea value={form.condition_notes} maxLength={2000} onChange={e=>update('condition_notes',e.target.value)} rows={3} className="w-full rounded-xl border p-3 bg-[var(--bg-elevated)] border-[var(--border-subtle)]"/>
           </label>
-          <p className="text-xs text-[var(--text-muted)]">Flash uses its own instant stock hold and Safepay checkout. No regular volume pricing or buyer commitment states.</p>
+          <p className="text-xs text-[var(--text-muted)]">Flash uses B5 ready-stock allocation and a buyer delivery address, its existing fixed delivery fee, instant stock hold and Safepay checkout. Supplier clustered pricing and pickup are not represented as an accepted B5 delivery quote.</p>
+          {operations.delivery&&<p className="text-xs text-[var(--text-muted)]">
+            Supplier delivery configuration: Standard {operations.delivery.configuration?.standard_delivery_enabled?'enabled':'disabled'}, Pickup {operations.delivery.configuration?.pickup_enabled?'enabled':'disabled'}. Confirm feasible delivery before publishing.
+          </p>}
         </>}
         <div className="flex flex-wrap gap-2 justify-end pt-2">
           <button type="button" onClick={close} className="px-4 py-2 rounded-xl border text-sm">Cancel</button>

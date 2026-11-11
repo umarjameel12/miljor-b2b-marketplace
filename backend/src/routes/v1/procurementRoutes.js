@@ -16,6 +16,7 @@ router.post('/flash-pools/:id/publish', protect, authorizeStrict('SUPPLIER'), (r
 router.put('/flash-pools/:id', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.updateFlashDraft(req, res));
 router.post('/flash-pools/:id/cancel', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.cancelFlashPool(req, res));
 router.post('/flash-pools/:id/hold', protect, authorizeStrict('BUYER'), (req, res) => controller.reserveFlashPool(req, res));
+router.get('/flash-pools/holds/mine', protect, authorizeStrict('BUYER'), (req, res) => controller.getMyFlashHolds(req, res));
 router.get('/flash-pools/holds/:holdId', protect, authorizeStrict('BUYER'), (req, res) => controller.getFlashHold(req, res));
 router.post('/flash-pools/:id/expire', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.expireFlashPool(req, res));
 

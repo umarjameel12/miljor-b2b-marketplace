@@ -171,6 +171,7 @@ app.get('/health/ready', (req, res) => healthController.getReadiness(req, res));
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/pools', poolRoutes);
+app.use('/api/v1', require('./src/routes/v1/unifiedPoolRoutes'));
 app.use('/api/v1/reservations', reservationRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/audit', auditRoutes);

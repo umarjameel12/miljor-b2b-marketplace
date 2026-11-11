@@ -426,6 +426,15 @@ class ProcurementController {
       res.status(200).json({success:true,data:{flash_pool:flash}});
     }catch(e){res.status(e.statusCode||500).json({success:false,error:{code:e.code||'FLASH_CANCEL_FAILED',message:e.statusCode?e.message:'Unable to cancel Flash offer'}});}
   }
+  async getMyFlashHolds(req,res) {
+    try {
+      const holds=await require('../services/flashPoolService').listHoldsForBuyer(req.user.id);
+      res.json({success:true,data:{holds}});
+    }catch(e){res.status(e.statusCode||500).json({success:false,error:{
+      code:e.code||'FLASH_HOLD_LIST_FAILED',
+      message:e.statusCode?e.message:'Unable to list your Flash orders'
+    }});}
+  }
   async getFlashHold(req,res) {
     try {
       const hold=await require('../services/flashPoolService').getHoldForBuyer(req.user.id,Number(req.params.holdId));
