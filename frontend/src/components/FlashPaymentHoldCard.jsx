@@ -1,9 +1,10 @@
-import React,{useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {CountdownTimer} from './ui/CountdownTimer';
 import apiClient from '../api/client';
 // Read-only payment state plus explicit Safepay checkout for an existing B5 Flash order.
 export function FlashPaymentHoldCard({hold,onRefresh}){
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const checkoutKey=useRef(null);
  const [elapsed,setElapsed]=useState(false);
  const paid=hold.verified_paid||hold.payment_status==='PAID';
  const pending=hold.payment_pending||hold.hold_status==='PAYMENT_PENDING';
@@ -11,9 +12,10 @@ export function FlashPaymentHoldCard({hold,onRefresh}){
  const checkout=async()=>{
   if(busy||!canCheckout)return;
   setBusy(true);setError('');
+  if(!checkoutKey.current)checkoutKey.current=`ucp-b5-checkout-${hold.order_id}-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
   try{
    const res=await apiClient.post(`/orders/${hold.order_id}/checkout`,{},
-    {headers:{'X-Idempotency-Key':`ucp-b5-checkout-${hold.order_id}-${Date.now()}`}});
+    {headers:{'X-Idempotency-Key':checkoutKey.current}});
    const url=res.data?.data?.checkout_url;
    if(!url||!/^https:\/\//i.test(url))throw Error('No valid Safepay checkout URL was returned. Check payment status.');
    window.location.assign(url);
