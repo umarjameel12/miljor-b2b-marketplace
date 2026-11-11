@@ -28,11 +28,13 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
   const [holdClockExpired,setHoldClockExpired]=useState(false);
   const [quoteNotice,setQuoteNotice]=useState('');
   const purchaseKey=useRef(null);
+  const purchaseIntent=useRef(null);
+  const [uncertainPurchase,setUncertainPurchase]=useState(false);
   const checkoutKey=useRef(null);
   useEffect(()=>{
     setQuantity(String(flash?
       (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
-    setHold(null);setHoldState(null);setHoldClockExpired(false);purchaseKey.current=null;checkoutKey.current=null;setOpen(false);
+    setHold(null);setHoldState(null);setHoldClockExpired(false);purchaseKey.current=null;purchaseIntent.current=null;setUncertainPurchase(false);checkoutKey.current=null;setOpen(false);
   },[pool.id,pool.type]);
   useEffect(()=>{
     if(!open||!flash||!isAuthenticated||user?.role!=='BUYER')return;
@@ -74,27 +76,35 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       if(flash){
         const saved=savedAddresses.find(a=>String(a.id)===selectedAddress);
         if(!saved)throw Error('Choose your verified saved Lahore business delivery address before reserving Flash stock.');
+        const payload={quantity:String(quantity),delivery_address_id:Number(saved.id),
+          delivery_cluster_id:Number(saved.cluster_id)};
+        const fingerprint=JSON.stringify(payload);
+        if(purchaseIntent.current && purchaseIntent.current.fingerprint!==fingerprint)
+          throw Error('Previous Flash hold outcome is uncertain. Review My Flash Orders before changing quantity or delivery address.');
         if(!purchaseKey.current)purchaseKey.current=key('flash-hold');
-        const result=await unifiedPoolsApi.holdFlash(pool.id,
-          {quantity:String(quantity),delivery_address_id:Number(saved.id),
-           delivery_cluster_id:Number(saved.cluster_id)},purchaseKey.current);
+        if(!purchaseIntent.current)purchaseIntent.current={fingerprint};
+        const result=await unifiedPoolsApi.holdFlash(pool.id,payload,purchaseKey.current);
         const next=result.data?.hold;
         if(!next?.order_id||!next.id)throw Error('The server did not provide a valid Flash purchase hold.');
-        setHold(next);
+        setHold(next);setUncertainPurchase(false);
         // Do NOT refresh the discover list here: a whole-lot hold can remove
         // the offer and unmount this live checkout modal before Safepay starts.
         toast.success('Stock hold created. Pay within the displayed 15-minute window.');
       }else{
+        const payload={pool_id:pool.id,quantity:String(quantity)};
+        const fingerprint=JSON.stringify(payload);
+        if(purchaseIntent.current&&purchaseIntent.current.fingerprint!==fingerprint)
+          throw Error('An earlier Regular reservation could have succeeded. Review your reservations before changing quantity.');
         if(!purchaseKey.current)purchaseKey.current=key('regular-reserve');
-        const result=await apiClient.post('/reservations',
-          {pool_id:pool.id,quantity:String(quantity)},
+        if(!purchaseIntent.current)purchaseIntent.current={fingerprint};
+        const result=await apiClient.post('/reservations',payload,
           {headers:{'X-Idempotency-Key':purchaseKey.current}});
         if(!result?.data?.success)throw Error('Unable to reserve quantity.');
-        purchaseKey.current=null; // New explicit reservation may use a new key.
+        purchaseKey.current=null;purchaseIntent.current=null;setUncertainPurchase(false);
         toast.success('Regular Pool quantity reserved. Final tier and payment follow the B4 commitment workflow.');
         setOpen(false);onChange?.();
       }
-    }catch(e){toast.error(errorMessage(e));}
+    }catch(e){if(!e.response&&purchaseIntent.current)setUncertainPurchase(true);toast.error(errorMessage(e));}
     finally{setSaving(false);}
   };
   const checkout=async()=>{
@@ -161,18 +171,21 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
         {!hold?<><label className="text-xs block space-y-1">Quantity ({pool.unit})
           <input type="number" step={flash?'0.01':'0.0001'} min={flash?pool.min_quantity:pool.buyer_min_qty}
             max={flash?pool.remaining_stock:undefined} disabled={flash&&pool.selling_mode==='WHOLE_LOT'}
-            value={quantity} onChange={e=>{setQuantity(e.target.value);purchaseKey.current=null;}}
+            value={quantity} onChange={e=>setQuantity(e.target.value)}
             className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]" />
         </label>
           {flash&&<div className="space-y-2">
             <label className="text-xs block space-y-1">Verified Lahore delivery address
-              <select required disabled={loadingAddresses} value={selectedAddress} onChange={e=>{setSelectedAddress(e.target.value);purchaseKey.current=null;}}
+              <select required disabled={loadingAddresses} value={selectedAddress} onChange={e=>setSelectedAddress(e.target.value)}
                 className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
                 <option value="">Select verified address</option>
                 {savedAddresses.map(a=><option value={a.id} key={a.id}>{a.society_area} · {a.full_address}</option>)}
               </select>
             </label>
-            {loadingAddresses&&<p className="text-xs text-[var(--text-muted)]">Loading business delivery addresses…</p>}
+            {uncertainPurchase&&<p role="alert" className="text-xs text-amber-600">
+                A previous purchase/reservation request may already exist. Retry only the identical request, or check My Orders before another action.
+              </p>}
+              {loadingAddresses&&<p className="text-xs text-[var(--text-muted)]">Loading business delivery addresses…</p>}
             {!loadingAddresses&&savedAddresses.length===0&&<p className="text-xs text-amber-600">
               No verified delivery address found. <Link className="underline" to="/profile">Save or verify a Lahore delivery address in your profile</Link>.
             </p>}
