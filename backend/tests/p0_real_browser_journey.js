@@ -99,11 +99,19 @@ async function main(){
     assert.ok([401,403].includes(forbidden.status()),
       'Buyer accessed supplier-only pool overview: '+forbidden.status());
     pass('Buyer denied supplier-only endpoint');
-    const response=await s.page.request.get(base+'/api/v1/orders',
+    // GET /orders intentionally supports supplier-owned fulfillment visibility.
+    // Buyer-only checkout remains strictly forbidden to suppliers.
+    const supplierOrders=await s.page.request.get(base+'/api/v1/orders',
       {headers:{Authorization:'Bearer '+s.token}});
-    assert.ok([401,403].includes(response.status()),
-      'Supplier accessed buyer-only orders: '+response.status());
-    pass('Supplier denied buyer-only orders');
+    assert.equal(supplierOrders.status(),200,
+      'Supplier must see own order summary for fulfillment');
+    pass('Supplier can access role-scoped order list for fulfillment');
+    const buyerCheckout=await s.page.request.post(base+'/api/v1/orders/1/checkout',
+      {headers:{Authorization:'Bearer '+s.token,'X-Idempotency-Key':'p0-supplier-denied-checkout'},
+       data:{}});
+    assert.equal(buyerCheckout.status(),403,
+      'Supplier must not initiate buyer-only Safepay checkout');
+    pass('Supplier strictly denied buyer-only payment checkout');
     const cookiesBuyer=await buyer.cookies(),cookiesSupplier=await supplier.cookies();
     assert.notEqual(cookiesBuyer.find(c=>c.name==='miljor_refresh')?.value,
       cookiesSupplier.find(c=>c.name==='miljor_refresh')?.value,
