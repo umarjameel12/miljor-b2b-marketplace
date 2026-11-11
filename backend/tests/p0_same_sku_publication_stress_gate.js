@@ -93,6 +93,9 @@ async function main(){
       assert.equal(new Set(keys).size,keys.length,'Duplicate allocation reference');
       return {quantity:scaled/100,count:rows.length};
     }
+    // Diagnostic only, runs against disposable test DB; no production settings.
+    // Make lock problems fail quickly rather than masking a 50-client pile-up.
+    await db.query('SET GLOBAL innodb_lock_wait_timeout = 8');
     for(const parallel of [2,10,50,100]){
       console.log('START SAME-SKU PUBLICATION WAVE',parallel,'clients');
       const qty=parallel===2?120:parallel===10?25:parallel===50?5:3;
@@ -100,8 +103,27 @@ async function main(){
       // Sequential draft creation avoids conflating draft-rate limits with publication races.
       for(let i=0;i<parallel;i++)drafts.push(await prepare(i%2?'FLASH':'REGULAR',qty,i,parallel));
       console.log('DRAFTS READY',parallel,drafts.length);
-      const results=await Promise.all(drafts.map((x,i)=>req(x.endpoint,{method:'POST',auth,
-        key:'P0-RACE-PUBLISH-'+stamp+'-'+parallel+'-'+i})));
+      const mysql=require('mysql2/promise');
+      const diagnose=parallel<50?null:setTimeout(async()=>{
+        let monitor;
+        try{
+          monitor=await mysql.createConnection({host:process.env.DB_HOST||'127.0.0.1',
+            user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||'',
+            database:'miljor_test_db',connectTimeout:3000});
+          const [waits]=await monitor.query(
+            'SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits');
+          const [trx]=await monitor.query(
+            "SELECT trx_state,COUNT(*) AS n FROM information_schema.innodb_trx GROUP BY trx_state");
+          console.error('P0_LOCK_DIAGNOSTIC',JSON.stringify({wave:parallel,
+            waiting:Number(waits[0]?.waiting||0),states:trx}));
+        }catch(e){console.error('P0_LOCK_DIAGNOSTIC_UNAVAILABLE',e.message)}
+        finally{await monitor?.end().catch(()=>{})}
+      },3000);
+      let results;
+      try{
+        results=await Promise.all(drafts.map((x,i)=>req(x.endpoint,{method:'POST',auth,
+          key:'P0-RACE-PUBLISH-'+stamp+'-'+parallel+'-'+i})));
+      }finally{if(diagnose)clearTimeout(diagnose)}
       const winners=[],losers=[];
       results.forEach((r,i)=>((r.status===200)?winners:losers).push({draft:drafts[i],response:r}));
       assert.ok(winners.length>0,'No publications succeeded in wave '+parallel);
