@@ -172,19 +172,37 @@ class FinancialSettlementService {
       const grossAmount = order.subtotal_amount;
       const deliveryFeeAmount = order.delivery_fee || 0.00;
 
-      // Check supplier fee policy
-      let commissionPercent = order.transaction_fee_percent;
-      let policyStatus = 'APPROVED';
-      let policyNotes = null;
-
-      if (commissionPercent === null || commissionPercent === undefined) {
-        // Fallback to default or flag POLICY_PENDING
-        commissionPercent = 2.50;
+      // A settlement must use the immutable order-time supplier fee,
+      // never silently pick today's profile rate or an invented default.
+      const commissionPercent = order.transaction_fee_percent;
+      if (commissionPercent === null || commissionPercent === undefined ||
+          String(commissionPercent).trim() === '') {
+        const err = new Error('Locked order supplier commission is missing; settlement policy reconciliation required');
+        err.code = 'LOCKED_SUPPLIER_COMMISSION_REQUIRED';
+        err.statusCode = 409;
+        throw err;
       }
+      let percent;
+      try {
+        percent = exactDecimal.toCanonical(commissionPercent, 2);
+      } catch (_) {
+        const err = new Error('Locked supplier commission is invalid');
+        err.code = 'INVALID_LOCKED_SUPPLIER_COMMISSION';
+        err.statusCode = 409;
+        throw err;
+      }
+      if (!exactDecimal.exactDecimalGte(percent, '0.00', 2) ||
+          !exactDecimal.exactDecimalGte('100.00', percent, 2)) {
+        const err = new Error('Locked supplier commission is outside 0-100 percent');
+        err.code = 'INVALID_LOCKED_SUPPLIER_COMMISSION';
+        err.statusCode = 409;
+        throw err;
+      }
+      const policyStatus = 'APPROVED';
+      const policyNotes = null;
 
-      // Exact Decimal Calculations
-      // commission_amount = exactMultiplyRound(grossAmount, commissionPercent / 100, 2)
-      const commissionRateDecimal = (Number(commissionPercent) / 100).toFixed(4);
+      // Exact rate: 2.50 percent -> 0.0250, with no Number conversion.
+      const commissionRateDecimal = '0.' + BigInt(percent.replace('.', '')).toString().padStart(4, '0');
       const commissionAmount = exactDecimal.exactMultiplyRound(grossAmount.toString(), commissionRateDecimal, 2);
 
       // net_payable_amount = gross + deliveryFee - commission
