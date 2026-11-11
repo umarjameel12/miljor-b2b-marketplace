@@ -125,6 +125,7 @@ async function main(){
    await pick(buyer.page,complete.order_code);
    await buyer.page.getByRole('button',{name:'Confirm complete receipt'}).click();
    await buyer.page.getByText('buyer confirmed',{exact:false}).first().waitFor();
+   await buyer.page.getByText('Processing order action…',{exact:true}).waitFor({state:'hidden',timeout:15000});
    await buyer.page.getByRole('button',{name:'View authorized invoice'}).click();
    await buyer.page.locator('pre').waitFor({timeout:15000});
    const [invoiceRows]=await db.query(
@@ -144,7 +145,13 @@ async function main(){
    await pick(buyer.page,shortage.order_code);
    await buyer.page.locator('input[placeholder="Actual received quantity"]').first().fill('80');
    await buyer.page.locator('textarea').first().fill('Only 80 units delivered from 100 units paid and ordered.');
-   await buyer.page.getByRole('button',{name:'Report missing quantity'}).first().click();
+   const claimButton=buyer.page.getByRole('button',{name:'Report missing quantity'}).first();
+   console.log('B7_BROWSER_BUYER_SHORTAGE_PRECHECK',
+    'enabled',await claimButton.isEnabled(),
+    'pending',await buyer.page.getByText('Processing order action…',{exact:true}).count(),
+    'alerts',await buyer.page.locator('[role=alert]').allTextContents());
+   await buyer.page.getByText('Processing order action…',{exact:true}).waitFor({state:'hidden',timeout:15000});
+   await claimButton.click({timeout:15000});
    await buyer.page.getByText('exception',{exact:false}).first().waitFor({timeout:15000});
   }finally{await buyer.context.close()}
   // The short order must NOT be buyer-confirmed merely because the supplier
