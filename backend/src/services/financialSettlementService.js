@@ -1154,7 +1154,7 @@ class FinancialSettlementService {
       }
 
       // Cannot disburse if active holds exist
-      if (Number(payable.held_amount) > 0) {
+      if (!exactDecimal.exactDecimalEquals(payable.held_amount, '0.00', 2)) {
         const err = new Error(`Cannot prepare disbursement while active financial holds exist (Held: PKR ${payable.held_amount})`);
         err.code = 'PAYABLE_HAS_ACTIVE_HOLDS';
         err.statusCode = 422;
@@ -1163,7 +1163,7 @@ class FinancialSettlementService {
 
       // Available amount check
       const availableAmount = payable.available_amount.toString();
-      if (Number(availableAmount) <= 0) {
+      if (!exactDecimal.exactDecimalGte(availableAmount, '0.01', 2)) {
         const err = new Error('No available funds remaining for disbursement on this payable');
         err.code = 'ZERO_AVAILABLE_FUNDS';
         err.statusCode = 422;
@@ -1241,7 +1241,7 @@ class FinancialSettlementService {
    * External execution remains strictly DISABLED.
    */
   async approveSupplierDisbursement({ disbursementId, notes = null, actor }) {
-    if (!isAdminRole(actor.role)) {
+    if (!actor || !actor.id || !isAdminRole(actor.role)) {
       const err = new Error('Disbursement approval is strictly restricted to platform administrators');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
