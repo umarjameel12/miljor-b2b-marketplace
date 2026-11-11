@@ -45,6 +45,13 @@ function parseSignedPayload(rawBody,signature){
 class SafepayRefundWebhookService {
   async receive({rawBody,signature,timestamp=null}){
     const evidence=parseSignedPayload(rawBody,signature); // before DB
+    // Refund event amount units are intentionally NOT inferred from a numeric
+    // sample. Confirm PAISA handling against the merchant's configured
+    // Safepay checkout/webhook contract before allowing state mutation.
+    if(process.env.MILJOR_SAFEPAY_REFUND_UNIT_VERIFIED !== 'PAISA') {
+      throw reject('REFUND_AMOUNT_UNIT_UNVERIFIED',
+        'Safepay refund amount unit must be independently validated before financial confirmation',409);
+    }
     const conn=await db.getConnection();
     try{
       await conn.beginTransaction();
