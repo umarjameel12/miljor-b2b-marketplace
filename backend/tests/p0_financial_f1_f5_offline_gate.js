@@ -127,5 +127,80 @@ const admin={id:17,role:'FINANCE_ADMIN'};
     payableId:7,actor:{id:1,role:'OPERATIONS_ADMIN'}
   }),'UNAUTHORIZED_ROLE');
   pass('F3 operations-admin cannot prepare supplier payout');
+  // F3 refund-specific holds cannot be manually released to create an
+  // unbacked supplier payout, even by an authorized finance administrator.
+  let writes=0,rolledBack=0;
+  factory=async()=>({
+    beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{rolledBack++;},
+    release:()=>{},
+    query:async(sql)=>{
+      if(sql.includes('SELECT supplier_payable_id FROM financial_holds'))
+        return [[{supplier_payable_id:7}]];
+      if(sql.includes('FROM supplier_payables sp'))
+        return [[{id:7,order_id:1}]];
+      if(sql.includes('SELECT * FROM financial_holds'))
+        return [[{id:20,supplier_payable_id:7,status:'ACTIVE',
+          hold_code:'HOLD-RFND-4-1250'}]];
+      if(sql.includes('UPDATE')){writes++;return [{affectedRows:1}];}
+      throw Error('Unexpected hold-release SQL '+sql);
+    }
+  });
+  await rejects(()=>financial.releaseFinancialHold({holdId:20,actor:admin}),
+    'REFUND_HOLD_RELEASE_FORBIDDEN');
+  assert.equal(writes,0);assert.equal(rolledBack,1);
+  pass('F3 refund-specific financial holds cannot be freed by generic release');
+
+  // Four-eyes: the admin who prepared the supplier payout cannot approve it.
+  writes=0;rolledBack=0;
+  factory=async()=>({
+    beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{rolledBack++;},
+    release:()=>{},
+    query:async(sql)=>{
+      if(sql.includes('SELECT supplier_payable_id FROM supplier_disbursement_instructions'))
+        return [[{supplier_payable_id:7}]];
+      if(sql.includes('SELECT * FROM supplier_payables WHERE id'))
+        return [[{id:7}]];
+      if(sql.includes('FROM supplier_disbursement_instructions d'))
+        return [[{id:8,prepared_by:17,status:'PREPARED'}]];
+      if(sql.includes('UPDATE')){writes++;return [{affectedRows:1}];}
+      throw Error('Unexpected approval SQL '+sql);
+    }
+  });
+  await rejects(()=>financial.approveSupplierDisbursement({disbursementId:8,actor:admin}),
+    'DISBURSEMENT_DUAL_CONTROL_REQUIRED');
+  assert.equal(writes,0);assert.equal(rolledBack,1);
+  pass('F3 self-approved supplier payout blocked by dual control');
+
+  // A refund approval may not create a liability without an accrued supplier
+  // payable, and cannot overtake a previously prepared supplier payout.
+  async function refundApprovalScenario(hasPayable,hasPayout){
+    let updates=0,rollbacks=0;
+    factory=async()=>({
+      beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{rollbacks++;},
+      release:()=>{},
+      query:async(sql)=>{
+        if(sql.includes('FROM refund_obligations r'))
+          return [[{id:4,order_id:1,payment_id:5,status:'REQUESTED'}]];
+        if(sql.includes('FROM supplier_payables WHERE order_id'))
+          return [hasPayable?[{id:7}]:[]];
+        if(sql.includes('FROM supplier_disbursement_instructions'))
+          return [hasPayout?[{id:8}]:[]];
+        if(sql.includes('UPDATE')){updates++;return [{affectedRows:1}];}
+        throw Error('Unexpected refund liability SQL '+sql);
+      }
+    });
+    return {getWrites:()=>updates,getRollbacks:()=>rollbacks};
+  }
+  let checks=await refundApprovalScenario(false,false);
+  await rejects(()=>financial.approveRefundObligation({refundId:4,actor:admin}),
+    'REFUND_PAYABLE_RECONCILIATION_REQUIRED');
+  assert.equal(checks.getWrites(),0);assert.equal(checks.getRollbacks(),1);
+  pass('F2 refund approval blocked without funded supplier liability');
+  checks=await refundApprovalScenario(true,true);
+  await rejects(()=>financial.approveRefundObligation({refundId:4,actor:admin}),
+    'REFUND_DISBURSEMENT_CONFLICT');
+  assert.equal(checks.getWrites(),0);assert.equal(checks.getRollbacks(),1);
+  pass('F2 refund approval blocked once supplier payout prepared');
+
   console.log('F1-F5 offline financial acceptance:',count,'PASS');
 })().catch(e=>{console.error(e);process.exitCode=1;});
