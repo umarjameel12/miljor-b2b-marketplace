@@ -1,3 +1,12 @@
+## P0 Safepay Signed Refund Evidence — 2026-11-11
+- Financial-only branch: `fix/p0-safepay-refund-evidence-isolated`.
+- Added signed `payment.refunded` reconciliation, immutable event token and cumulative refund ceiling checks. Payment controller dispatches refund webhook to financial-only handler, leaving original checkout handler unchanged for other event types.
+- Refund completion is **disabled by default** until merchant verifies paisa-vs-PKR refund amount contract and explicitly configures `MILJOR_SAFEPAY_REFUND_UNIT_VERIFIED=PAISA`. Never blindly enable.
+- Manual reference confirmation remains blocked. No refund execution, supplier payout, migration, DB write or other chat feature changes occurred here.
+- Offline committed test gate evaluated with V8 fake-Node/fake-DB: 15/15 scenarios PASS.
+- NATIVE NODE, SAFE TEST DB, REAL SAFEpay SANDBOX and concurrent webhook acceptance still not executed; production merge/deploy BLOCKED.
+- Details: `backend/docs/MILJOR_P0_SAFEPAY_SIGNED_REFUND_EVIDENCE_LEDGER.md`.
+
 ## P0 Financial Steps 1–3 — Isolated Regression, Auto-Fix, Concurrency (2026-11-11)
 - Branch: `fix/p0-financial-settlement-hardening-isolated` exclusively; unrelated active B4/B5/B6 branches untouched.
 - Step 1: fetched actual financial service and tested with mocked database; seven original cases PASS.
