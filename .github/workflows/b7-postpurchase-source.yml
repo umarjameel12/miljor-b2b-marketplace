@@ -84,3 +84,49 @@ jobs:
       - name: Clearly state browser-test scope
         if: always()
         run: echo "Chromium UI uses MOCK HTTP; NOT actual MySQL/real paid Safepay/supplier API acceptance."
+
+  mysql-ephemeral-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: b7_only_ephemeral_root
+          MYSQL_DATABASE: miljor_test_db
+          MYSQL_USER: b7_ci_test
+          MYSQL_PASSWORD: b7_only_ephemeral_user
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u b7_ci_test -pb7_only_ephemeral_user"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      GITHUB_ACTIONS: 'true'
+      NODE_ENV: test
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      DB_HOST: 127.0.0.1
+      DB_USER: b7_ci_test
+      DB_PASSWORD: b7_only_ephemeral_user
+      JWT_SECRET: b7_ephemeral_ci_disposable_only_jwt_secret_never_real
+      B7_CI_EPHEMERAL_DB: 'YES'
+      B7_ALLOW_ISOLATED_POSTPURCHASE_TESTS: 'YES'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install locked backend dependencies
+        run: npm --prefix backend ci --ignore-scripts
+      - name: Bootstrap ONLY fresh temporary miljor_test_db, apply original migrations and verify identity
+        run: node backend/tests/b7_ci_ephemeral_db_bootstrap.js
+      - name: Execute actual MySQL plus HTTP fulfillment and dispute gates
+        run: npm --prefix backend run test:b7:isolated
+      - name: State limitation
+        if: always()
+        run: echo "Ephemeral MySQL suite does not prove provider-verified paid B6 award, live Safepay, global migrations, or actual user browser WRITE E2E."
