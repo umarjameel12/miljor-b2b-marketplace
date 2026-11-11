@@ -124,6 +124,7 @@ class SafepayCheckoutService {
     // B5 Flash: claim the hold before contacting Safepay. For non-Flash
     // orders this is a no-op; B6's separate award hooks remain untouched.
     await require('./flashPoolService').claimCheckout(orderId,actor.id);
+    await require('./regularPoolPaymentHoldService').claimCheckout(orderId,actor.id);
 
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
@@ -168,6 +169,18 @@ class SafepayCheckoutService {
       };
     }
 
+    // A pre-existing Safepay attempt can still be reconciled after deadline.
+    // A NEW attempt cannot be created after the original 15-minute hold ends.
+    try {
+      await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+    } catch (holdError) {
+      // If the deadline elapsed between claim and provider call, do not strand
+      // the order in PAYMENT_PENDING when no checkout was actually created.
+      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[B4] Could not unwind uninitiated checkout:',error));
+      throw holdError;
+    }
+
     // Step 2: Call Safepay API OUTSIDE transaction lock
     let trackerToken, rawResponse;
     try {
@@ -184,6 +197,8 @@ class SafepayCheckoutService {
         .catch(releaseError => {
           console.error('[B5/B6] Flash checkout claim release failed:', releaseError);
         });
+      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[B4] Regular pool payment claim recovery:', error));
       throw trackerError;
     }
 
@@ -512,6 +527,7 @@ class SafepayCheckoutService {
       // For B6 supplier orders, atomically mark the shared ORDER_DIRECT
       // listing allocations COMMITTED only after verified provider payment.
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
+      await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // 8. Record Webhook Event as PROCESSED
       await connection.query(
@@ -630,8 +646,9 @@ class SafepayCheckoutService {
 
     const order = orders[0];
 
-    // Tenancy check: Buyer can only inspect their own orders; Admin can inspect any
-    if (actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+    // Payment and checkout tracker URLs are private to the buyer or finance/admin roles.
+    if (!actor || !(actor.role === 'BUYER' && Number(order.buyer_id) === Number(actor.id)) &&
+        !['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(actor.role)) {
       const err = new Error('You do not have permission to view payment status for this order');
       err.code = 'FORBIDDEN';
       err.statusCode = 403;
@@ -661,6 +678,9 @@ class SafepayCheckoutService {
       }
     }
 
+    const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
+      .readForOrder(order.id,order.buyer_id);
+
     return {
       order_id: order.id,
       order_code: order.order_code,
@@ -670,6 +690,7 @@ class SafepayCheckoutService {
       total_amount: Number(order.total_amount),
       currency: order.currency,
       lifecycle_phase: lifecyclePhase,
+      regular_pool_payment_hold: regularPoolPaymentHold,
       latest_attempt: latestAttempt ? {
         attempt_code: latestAttempt.attempt_code,
         status: latestAttempt.status,
@@ -720,8 +741,10 @@ class SafepayCheckoutService {
 
     const order = orders[0];
 
-    // Tenant check if actor provided
-    if (actor && actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+    // An authenticated caller cannot reconcile somebody else's payment.
+    // Internal trusted provider hooks may call with actor=null.
+    if (actor && !(actor.role === 'BUYER' && Number(order.buyer_id) === Number(actor.id)) &&
+        !['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(actor.role)) {
       const err = new Error('You do not have permission to reconcile this order');
       err.code = 'FORBIDDEN';
       err.statusCode = 403;
@@ -883,6 +906,8 @@ class SafepayCheckoutService {
         `UPDATE orders SET payment_status = 'PAID', order_status = 'PAID', fulfillment_status = 'AWAITING_SUPPLIER_ACKNOWLEDGEMENT', updated_at = NOW() WHERE id = ?`,
         [order.id]
       );
+
+      await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // Insert into payments
       const paymentCode = `PAY-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
