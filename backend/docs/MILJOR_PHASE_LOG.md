@@ -1,3 +1,12 @@
+## Independent Backend Integrity — Batch 3 (2026-11-11)
+- Branch: `fix/independent-backend-integrity`.
+- Fee safety: reject missing supplier profile prior to supplier fee/payout calculation.
+- Entitlements: reject unknown plan codes; normalize and deduplicate active family IDs.
+- Test gate prepared: `backend/tests/financial_entitlement_integrity_gate.js`.
+- Existing monetary percentages and subscription payment authorization remain unchanged.
+- Status: IMPLEMENTED / NOT TESTED / NOT VERIFIED; no MySQL writes performed.
+- CAN START NEXT PHASE: NO pending full financial and business-model verification.
+
 ## Independent Backend Integrity — Batch 2 (2026-11-11)
 - Branch: `fix/independent-backend-integrity`; independent of B6 Phase 2 and other hardening work.
 - Implementation: restored Express 5-compatible strictly allowlisted recurring action route; prevented internal error disclosures from demand request handlers; added deferred HTTP containment gate.
