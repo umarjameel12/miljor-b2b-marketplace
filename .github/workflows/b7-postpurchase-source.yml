@@ -32,6 +32,7 @@ jobs:
           node --check backend/src/services/b7DisputeSupplierPrivacy.js
           node --check backend/tests/b7_dispute_supplier_privacy_gate.js
           node --check backend/tests/b7_invoice_service_mock_gate.js
+          node --check backend/tests/b7_dispute_service_mock_gate.js
           node --check backend/tests/b7_direct_order_event_bridge_gate.js
           node --check backend/tests/b7_postpurchase_business_contract_gate.js
           node --check backend/tests/b7_postpurchase_isolated_acceptance_gate.js
