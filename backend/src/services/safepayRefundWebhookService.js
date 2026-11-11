@@ -3,7 +3,6 @@
 // no payout invocation and no active gateway refund API calls.
 // A refund event is a financial fact ONLY after every stored obligation, payment,
 // tracker, currency and amount invariant matches under MySQL locks.
-const crypto=require('crypto');
 const db=require('../config/db');
 const exact=require('./exactDecimal');
 const safepayAdapter=require('./safepayAdapter');
@@ -120,7 +119,7 @@ class SafepayRefundWebhookService {
         `INSERT INTO payment_webhook_events
          (event_id,provider,event_type,order_id,attempt_id,provider_tracker_token,
           signature,timestamp_header,raw_payload,processed_status)
-         VALUES (?,'SAFEPAY','payment.refunded',?,?,?,?,?,? ,?,'PROCESSED')`,
+         VALUES (?,'SAFEPAY','payment.refunded',?,?,?,?,?,?,'PROCESSED')`,
         [eventId,order.id,attempt.id,tracker,signature,String(timestamp||''),
          JSON.stringify(payload)]
       );
