@@ -47,14 +47,15 @@ export const PoolCard = ({ pool, onSelect }) => {
     Math.max(0, parseFloat(pool.fill_percentage || pool.progress_percentage || 0))
   );
 
-  const isClosed = pool.status === 'CLOSED' || deadlineExpired;
+  const isClosed = pool.status !== 'ACTIVE' || deadlineExpired;
+  const canJoin = pool.can_join === true && !isClosed;
   const estimatedPrice = pool.estimated_unit_price || pool.current_unit_price || pool.current_price_per_unit || pool.base_unit_price;
   const unit = pool.pack_unit || pool.pool_unit || 'kg';
   const buyerMoq = pool.min_order_qty || pool.buyer_min_qty || pool.moq_buyer || 1;
   const grade = pool.quality_spec_grade || pool.quality_grade || pool.grade || null;
   const brandLabel = pool.brand ? pool.brand : (pool.is_unbranded ? 'Unbranded' : null);
-  const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : Math.round((progressPercent / 100) * (pool.target_quantity || pool.target_qty || 1000)));
-  const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
+  const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : 0);
+  const targetQty = Number(pool.target_quantity || pool.target_qty || 0);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
   const promisedDeliveryFormatted = formatLahoreTimestamp(pool.promised_delivery_at);
 
@@ -189,7 +190,7 @@ export const PoolCard = ({ pool, onSelect }) => {
           {/* Supplier Info & Grade Line */}
           <div className="flex items-center justify-between text-[11px] font-sans text-stone-500 dark:text-stone-400 mt-0.5">
             <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
-              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Verified Lahore Mill'}
+              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Supplier details unavailable'}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
               {brandLabel && (
@@ -358,7 +359,7 @@ export const PoolCard = ({ pool, onSelect }) => {
           <button
             type="button"
             onClick={() => onSelect && onSelect(pool)}
-            disabled={isClosed}
+            disabled={!canJoin}
             className="w-full py-2 px-3 rounded-xl font-sans font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
             style={{
               backgroundColor: 'var(--brand-primary)',
@@ -366,7 +367,7 @@ export const PoolCard = ({ pool, onSelect }) => {
               border: '1px solid var(--border-subtle)',
             }}
           >
-            <span>{isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
+            <span>{isClosed ? 'Pool Concluded' : canJoin ? 'Join Wholesale Pool' : 'Not accepting reservations'}</span>
           </button>
         </div>
       </div>
