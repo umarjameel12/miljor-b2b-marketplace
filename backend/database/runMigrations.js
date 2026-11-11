@@ -46,8 +46,22 @@ async function runMigrations(targetDb) {
         failure_message VARCHAR(1000) NULL
       )
     `);
-    const [appliedRows] = await connection.query('SELECT version FROM schema_migrations');
+    const [appliedRows] = await connection.query('SELECT version,name FROM schema_migrations');
     const appliedVersions = new Set(appliedRows.map(row => row.version));
+    // UCP migration numbers were moved from 046–048 to 051–053 before
+    // integration with B6 Phase 2. A DB that already applied the old UCP
+    // filename MUST be manually reconciled, not silently re-applied.
+    const oldUcpNames = new Map([
+      ['046','046_expand_canonical_product_families.sql'],
+      ['047','047_demand_requester_role.sql'],
+      ['048','048_regular_pool_payment_hold_deadlines.sql']
+    ]);
+    for(const row of appliedRows){
+      if(row.name===oldUcpNames.get(String(row.version)))
+        throw new Error('MIGRATION_RENUMBERED_HISTORY_REQUIRES_RECONCILIATION: '+row.name+
+          ' already applied as '+row.version+'. Do not reapply 051–053 automatically.');
+    }
+
     const migrationsDir = path.join(__dirname, 'migrations');
     if (!fs.existsSync(migrationsDir)) return;
     const files = fs.readdirSync(migrationsDir)
