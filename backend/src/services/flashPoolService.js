@@ -379,6 +379,41 @@ class FlashPoolService {
       const [[openClock]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
       if(offer.status!=='ACTIVE'||!openClock.is_open)
         throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
+      // UCP-3: optional verified address binding for unified buyer checkout.
+      // Existing B5 callers using the earlier explicit delivery_address contract
+      // remain compatible; unified UI always supplies an owned saved address ID.
+      let verifiedDeliveryAddress=null;
+      if(payload.delivery_address_id!=null){
+        const addressId=Number(payload.delivery_address_id);
+        if(!Number.isSafeInteger(addressId)||addressId<1)
+          throw fail('INVALID_DELIVERY_ADDRESS','Choose a saved verified Lahore business address.',422);
+        const [addresses]=await conn.query(
+          `SELECT id,cluster_id,city,full_address,geographic_match_status,
+                  user_confirmation_status,manual_review_required
+           FROM buyer_delivery_addresses WHERE id=? AND user_id=?`,
+          [addressId,buyerId]
+        );
+        const address=addresses[0];
+        if(!address||String(address.city).toLowerCase()!=='lahore'||
+           address.geographic_match_status!=='VERIFIED'||
+           address.user_confirmation_status!=='CONFIRMED'||address.manual_review_required)
+          throw fail('BUYER_ADDRESS_NOT_VERIFIED','Use a confirmed, verified Lahore delivery address.',422);
+        if(payload.delivery_cluster_id!=null &&
+          Number(payload.delivery_cluster_id)!==Number(address.cluster_id))
+          throw fail('DELIVERY_CLUSTER_MISMATCH','Selected delivery area does not match the saved address.',409);
+        const [coverage]=await conn.query(
+          `SELECT r.cluster_id FROM supplier_delivery_cluster_rates r
+           JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
+           JOIN geographic_clusters g ON g.id=r.cluster_id
+           WHERE r.supplier_id=? AND r.cluster_id=? AND r.mode='STANDARD_CLUSTERED'
+             AND r.is_eligible=1 AND c.standard_delivery_enabled=1
+             AND g.is_active=1 AND g.district='Lahore'`,
+          [offer.supplier_id,address.cluster_id]
+        );
+        if(!coverage.length)
+          throw fail('FLASH_DELIVERY_AREA_UNAVAILABLE','Supplier cannot deliver this Flash offer to your verified Lahore cluster.',409);
+        verifiedDeliveryAddress=String(address.full_address).trim();
+      }
       const quantity=dec(payload.quantity);
       // Physical purchasing packs are indivisible; mass/volume listings can use
       // their explicitly configured valid fractional increments.
@@ -422,7 +457,7 @@ class FlashPoolService {
       const deliveryFee = dec(offer.delivery_fee||'0',{positive:false});
       const amount = money.exactDecimalSum([subtotal,buyerFee,deliveryFee],2);
       const orderCode='FL'+crypto.randomBytes(9).toString('hex');
-      const address=typeof payload.delivery_address==='string'?payload.delivery_address.trim():'';
+      const address=verifiedDeliveryAddress||(typeof payload.delivery_address==='string'?payload.delivery_address.trim():'');
       if(address.length<8||address.length>1000)throw fail('DELIVERY_ADDRESS_REQUIRED','Provide a valid buyer delivery address.');
       // Order is persisted BEFORE the existing Safepay checkout endpoint can be called.
       const [order]=await conn.query(
