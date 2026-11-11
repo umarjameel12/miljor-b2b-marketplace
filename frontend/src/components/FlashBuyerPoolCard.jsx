@@ -15,6 +15,8 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
   const whole=pool.selling_mode==='WHOLE_LOT';
   const min=Number(pool.min_quantity||1),max=Number(pool.max_quantity_per_buyer||pool.remaining_stock||0);
   const [quantity,setQuantity]=useState(String(whole?pool.total_stock:min));
+  const [deliveryAddress,setDeliveryAddress]=useState('');
+  const [holdExpired,setHoldExpired]=useState(false);
   const [submitting,setSubmitting]=useState(false);
   const [error,setError]=useState('');
   const [order,setOrder]=useState(null);
@@ -28,6 +30,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     if(!isAuthenticated){navigate('/login?redirect=/pools');return;}
     if(user?.role!=='BUYER'){setError('Only verified buyer accounts can reserve Flash stock.');return;}
     const amount=whole?String(pool.total_stock):quantity.trim();
+    if(deliveryAddress.trim().length<8||deliveryAddress.trim().length>1000){setError('Enter a complete Lahore delivery address.');return;}
     if(!positive(amount)||Number(amount)<min||Number(amount)>max||
        Number(amount)>remaining){setError('Choose a quantity within available stock and buyer limits.');return;}
     if(whole&&Number(amount)!==Number(pool.total_stock)){setError('Whole-lot offer must be purchased in full.');return;}
@@ -39,10 +42,11 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     setSubmitting(true);setError('');
     try{
       const response=await apiClient.post(`/flash-pools/${pool.id}/hold`,
-        {quantity:amount},{headers:{'X-Idempotency-Key':key()}});
+        {quantity:amount,delivery_address:deliveryAddress.trim()},{headers:{'X-Idempotency-Key':key()}});
       const hold=response.data?.data?.hold;
       if(!hold?.order_id)throw Error('Flash stock hold created but order reference is unavailable. Check your orders before retrying.');
-      setOrder({order_id:hold.order_id,hold_id:hold.id,checkout_endpoint:hold.checkout_endpoint});
+      setOrder({order_id:hold.order_id,hold_id:hold.id,checkout_endpoint:hold.checkout_endpoint,hold_expires_at:hold.hold_expires_at});
+      setHoldExpired(false);
       // We do not initiate a financial transaction without buyer's second explicit click.
     }catch(e){
       setError(e.response?.data?.error?.message||e.message||'Unable to reserve Flash stock.');
@@ -50,6 +54,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     }finally{setSubmitting(false);}
   };
   const checkout=async()=>{
+    if(holdExpired){setError('Payment hold expired. Verify order status before retrying.');return;}
     if(!order?.order_id||submitting)return;
     setSubmitting(true);setError('');
     try{
@@ -82,9 +87,15 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
     </div>
     {order?<div className="rounded-xl border p-3 space-y-2">
       <p className="text-xs flex items-center gap-1"><ShieldCheck size={14}/> Stock hold created for order #{order.order_id}. Payment is not yet verified.</p>
-      <button type="button" disabled={submitting} onClick={checkout} className="bg-emerald-700 text-white rounded-xl px-4 py-2 text-xs disabled:opacity-50">Continue to Safepay</button>
+      {order.hold_expires_at&&<CountdownTimer deadline={order.hold_expires_at} compact label="Pay within" onExpire={()=>setHoldExpired(true)}/>}
+      <button type="button" disabled={submitting||holdExpired} onClick={checkout} className="bg-emerald-700 text-white rounded-xl px-4 py-2 text-xs disabled:opacity-50">Continue to Safepay</button>
       <p className="text-xs text-[var(--text-muted)]">Use your order payment-status page after returning from provider.</p>
-    </div>:<div className="flex items-end gap-2">
+    </div>:<div className="space-y-2">
+      <label className="block text-xs space-y-1"><span>Delivery address (required at hold creation)</span>
+        <textarea value={deliveryAddress} onChange={e=>setDeliveryAddress(e.target.value)} rows={2}
+          maxLength={1000} placeholder="Business name, street, area, Lahore"
+          className="w-full rounded-xl border p-2 bg-[var(--bg-elevated)] border-[var(--border-subtle)]"/>
+      </label><div className="flex items-end gap-2">
       {!whole&&<label className="text-xs flex-1 space-y-1"><span>Quantity ({unit})</span>
         <input type="number" min={min} max={Math.min(max,remaining)} step={pool.purchase_increment||1} value={quantity}
           onChange={e=>setQuantity(e.target.value)}
@@ -94,7 +105,7 @@ export function FlashBuyerPoolCard({pool,serverTime,onRefresh}){
         className="bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-semibold flex gap-2 items-center">
         {submitting?'Reserving…':whole?'Reserve Whole Lot':'Reserve Stock'}
       </button>
-    </div>}
+    </div></div>}
     {error&&<div role="alert" className="text-xs text-red-600 flex items-start gap-2"><Package size={14}/>{error}</div>}
   </article>;
 }
