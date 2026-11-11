@@ -340,10 +340,9 @@ class DisputeService {
           String(order.total_qty), reportedQuantity
         );
         if (disputedQuantity !== null && disputedQuantity !== undefined) {
-          const supplied = require('./deliveryQuantityPolicy').calculateShortage(
-            String(order.total_qty), disputedQuantity
-          );
-          if (supplied.received_quantity !== evidence.short_quantity) {
+          if (!exactDecimal.exactDecimalEquals(
+            String(disputedQuantity), evidence.short_quantity, 2
+          )) {
             const err = new Error('Disputed quantity must equal ordered minus received quantity');
             err.code = 'DISPUTED_QUANTITY_MISMATCH';
             err.statusCode = 422;
