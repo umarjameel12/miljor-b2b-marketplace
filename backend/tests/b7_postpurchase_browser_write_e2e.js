@@ -70,8 +70,19 @@ async function main(){
    await page.locator('input[type=password]').fill(process.env['B7_'+role+'_PASSWORD']);
    await page.locator('button[type=submit]').click();
    await page.waitForURL(url=>!url.pathname.includes('/login'),{timeout:20000});
-   await page.goto(site+'/post-purchase');
-   await page.getByText('Paid orders',{exact:true}).waitFor();
+   // Stay within the authenticated SPA: existing AuthContext stores access JWT
+   // in memory. Hard-page-refresh cookie recovery is a SEPARATE auth gate.
+   await page.evaluate(()=>{
+    window.history.pushState({},'','/post-purchase');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+   });
+   try{await page.getByText('Paid orders',{exact:true}).waitFor({timeout:12000})}
+   catch(e){
+    console.error('B7_BROWSER_POSTLOGIN_ROUTE_FAILED',role,'url',page.url(),
+     'alerts',await page.locator('[role=alert]').allTextContents(),
+     'body',String(await page.locator('body').innerText()).slice(-1600));
+    throw e;
+   }
    return {context,page};
   };
   const pick=async(page,code)=>{
