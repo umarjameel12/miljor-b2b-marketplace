@@ -47,7 +47,8 @@ async function main(){
       method,headers:{
         Authorization:'Bearer '+token(id,role),
         'Content-Type':'application/json',
-        'X-Idempotency-Key':'TEST-HTTP-'+nonce+'-'+role+'-'+id+'-'+method
+        'X-Idempotency-Key':'TEST-HTTP-'+nonce+'-'+role+'-'+id+'-'+method+
+          '-'+Buffer.from(url).toString('hex').slice(-12)
       },
       body:body==null?undefined:JSON.stringify(body),
       signal:AbortSignal.timeout(15000)
@@ -154,7 +155,8 @@ async function main(){
     orderId,actor:buyer,disputeId:claim.dispute_id,
     disputedQuantity:'20.00',refundType:'PARTIAL',
     reason:'Twenty kilograms missing on a 100kg paid test-only contract',
-    idempotencyKey:'TEST-HTTP-'+nonce+'-BUYER-5-POST'
+    idempotencyKey:'TEST-HTTP-'+nonce+'-BUYER-5-POST-'+
+      Buffer.from('/settlements/refunds/assess').toString('hex').slice(-12)
   });
   assert.equal(Number(replay.data.refund.id),Number(assessment.data.refund.id));
   pass('Dispute-scoped PKR200 refund obligation is non-executable and idempotent');
