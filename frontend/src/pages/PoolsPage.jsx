@@ -11,6 +11,7 @@ import { geoApi } from '../api/geo';
 import { useAuth } from '../context/AuthContext';
 import { PoolCard } from '../components/PoolCard';
 import { FlashBuyerPoolCard } from '../components/FlashBuyerPoolCard';
+import { RegularBuyerReservation } from '../components/RegularBuyerReservation';
 import apiClient from '../api/client';
 import { Skeleton } from '../components/ui/Skeleton';
 import { AppShell } from '../components/layout/AppShell';
@@ -54,6 +55,7 @@ export const PoolsPage = () => {
   const [flashServerTime,setFlashServerTime]=useState(null);
   const [poolType,setPoolType]=useState('ALL');
   const [flashError,setFlashError]=useState('');
+  const [joiningRegular,setJoiningRegular]=useState(null);
   const [families, setFamilies] = useState([]);
   const [catalogCategories, setCatalogCategories] = useState([]);
   const [clusters, setClusters] = useState([]);
@@ -485,7 +487,7 @@ export const PoolsPage = () => {
           visibleCount > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleRegular.map((pool) => (
-                <PoolCard key={`REGULAR-${pool.id}`} pool={pool} />
+                <PoolCard key={`REGULAR-${pool.id}`} pool={pool} onSelect={setJoiningRegular}/>
               ))}
               {visibleFlash.map(pool=>(
                 <FlashBuyerPoolCard key={`FLASH-${pool.id}`} pool={pool}
@@ -586,6 +588,7 @@ export const PoolsPage = () => {
           )
         )}
       </div>
+      {joiningRegular&&<RegularBuyerReservation pool={joiningRegular} onClose={()=>setJoiningRegular(null)} onComplete={fetchData}/>}
     </AppShell>
   );
 };
