@@ -45,7 +45,10 @@ class SupplierPoolOperationsService {
     db.query(`SELECT id,name,cluster_code,district FROM geographic_clusters
       WHERE is_active=1 AND LOWER(district)='lahore' ORDER BY name`)
   ]);
-  const eligible=new Set((settings.cluster_rates||[]).filter(x=>x.mode==='STANDARD_CLUSTERED'&&Boolean(x.is_eligible)).map(x=>Number(x.cluster_id)));
+  const standardEnabled=Boolean(settings.configuration?.standard_delivery_enabled);
+  const eligible=new Set(standardEnabled?(settings.cluster_rates||[])
+    .filter(x=>x.mode==='STANDARD_CLUSTERED'&&Number(x.is_eligible)===1)
+    .map(x=>Number(x.cluster_id)):[]);
   return {configuration:settings.configuration,cluster_rates:settings.cluster_rates,
     pickup_points:settings.pickup_points,
     regular_eligible_clusters:clusters.filter(c=>eligible.has(Number(c.id))),
