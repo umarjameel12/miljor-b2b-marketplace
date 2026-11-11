@@ -46,7 +46,7 @@ function planSupplierDeliveryGroups(orders,{maxStops=12}={}){
    throw fail('INVALID_DELIVERY_WINDOW','Only canonical delivery window and handling identifiers.');
   const price=money(raw.locked_delivery_fee);
   if(raw.delivery_authorized!==true)
-   throw fail('DELIVERY_NOT_APPROVED','Buyer must accept supplier's exact delivery fee.');
+   throw fail('DELIVERY_NOT_APPROVED','Buyer must approve the locked supplier delivery fee.');
   if(mode==='EXPRESS'&&raw.supplier_express_enabled!==true)
    throw fail('EXPRESS_NOT_CONFIGURED','Fast delivery must be enabled by supplier.');
   if(mode==='PICKUP'&&raw.supplier_pickup_enabled!==true)
