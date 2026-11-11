@@ -31,6 +31,7 @@ vm.runInNewContext(source, {
   }
 }, {filename:'financialSettlementService.js',timeout:5000});
 const svc = moduleRef.exports;
+const actualAuditEvent = svc._logAuditEvent.bind(svc);
 svc._logAuditEvent = async () => 'TEST-AUDIT-ONLY';
 
 const payable = {
@@ -145,6 +146,16 @@ async function basicCases(){
   pass('external execution cannot be enabled by approval');
   await rejects(()=>svc.approveSupplierDisbursement({disbursementId:99,actor:null}),'UNAUTHORIZED_ROLE');
   pass('invalid approval actor rejected');
+  // Authoritative audit records store exact decimals, including fractional
+  // PKR, without binary floating-point conversion.
+  let loggedParams;
+  await actualAuditEvent({query:async(_sql,params)=>{loggedParams=params;return [{}];}},{
+    orderId:12,paymentId:14,entityType:'DISBURSEMENT',entityId:99,
+    eventType:'FINANCIAL_AMOUNT_VERIFIED',actorRole:'FINANCE_ADMIN',
+    actorId:args.actor.id,toStatus:'APPROVED',amountDelta:'0.29'
+  });
+  assert.equal(loggedParams[10],'0.29');
+  pass('financial audit money uses exact canonical decimal');
 }
 
 // Simulate lock ordering (SELECT payable FOR UPDATE), two transactions and a
