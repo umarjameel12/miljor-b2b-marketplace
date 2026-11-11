@@ -105,6 +105,16 @@ router.get('/procurement/orders/:orderId/delivery',protect,authorizeStrict('BUYE
 router.post('/procurement/supplier/delivery-runs',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.createSupplierDeliveryRun(req,res));
 router.get('/procurement/supplier/delivery-runs',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierDeliveryRuns(req,res));
 
+// B6-N opt-out and organizer state; never affects already paid cycle orders.
+router.post('/procurement/recurring-cohorts/:cohortId/leave',protect,authorizeStrict('BUYER'),(req,res)=>controller.leaveRecurringCohort(req,res));
+router.post('/procurement/recurring-cohorts/:cohortId/status',protect,authorizeStrict('BUYER'),(req,res)=>controller.changeRecurringCohortStatus(req,res));
+// B6-O reads actual fulfillment milestones, no standalone PAID/DELIVERED mutation.
+router.post('/procurement/supplier/delivery-runs/:runId/refresh',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.refreshDeliveryRun(req,res));
+// B6-Q private notifications and B6-P explicitly deferred pre-orders.
+router.get('/procurement/notifications',protect,(req,res)=>controller.myProcurementNotifications(req,res));
+router.post('/procurement/notifications/:noticeId/read',protect,(req,res)=>controller.readProcurementNotification(req,res));
+router.get('/procurement/preorder-policy',protect,(req,res)=>controller.procurementPreorderStatus(req,res));
+
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
 router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
