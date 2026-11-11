@@ -13,7 +13,7 @@ assert.match(pools, /catalogApi\.getFamilies\(\)/);
 assert.match(pools, /catalogApi\.getCategories\(\)/);
 assert.match(pools, /filteredFamilies\.map/);
 assert.doesNotMatch(pools, /16 Staple Specifications|16 Authoritative|productsApi|filteredProducts|prod\.brand|prod\.moq_buyer/);
-assert.match(pools, /family\.urdu_name/); // Optional display alias, not separate product.
+assert.doesNotMatch(pools, /family\.urdu_name|English or Urdu|lang=\"ur\"/); // Buyer family UI is English only.
 assert.match(pools, /family\.category_id/);
 assert.match(pools, /family\.aliases/);
 assert.match(catalog, /\/catalog\/families/);
