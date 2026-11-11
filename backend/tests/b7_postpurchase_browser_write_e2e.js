@@ -188,6 +188,15 @@ async function main(){
    await remedySupplier.page.getByRole('textbox',{name:'Remediation delivery reference / notes'})
      .fill('B7-TEST-REMEDY-DELIVERY');
    await remedySupplier.page.getByRole('button',{name:'Declare remediation dispatched'}).click();
+   // The HTTP transaction must commit before switching identities.
+   await remedySupplier.page.getByText('Processing order action…',{exact:true})
+     .waitFor({state:'hidden',timeout:20000});
+   const [actualRemedy]=await db.query(
+     'SELECT status,remediation_status FROM order_disputes WHERE order_id=? ORDER BY id DESC LIMIT 1',
+     [shortage.id]);
+   assert.equal(actualRemedy[0]?.remediation_status,'IN_PROGRESS',
+     'Supplier dispatch must be durably committed before buyer remediation receipt.');
+   console.log('B7_BROWSER_SUPPLIER_REMEDY_DB_COMMITTED',JSON.stringify(actualRemedy[0]));
   }finally{await remedySupplier.context.close()}
 
   // Buyer acknowledges remediation goods, then separately confirms the
