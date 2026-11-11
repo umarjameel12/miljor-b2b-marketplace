@@ -110,6 +110,20 @@ async function main(){
    await buyer.page.getByText('buyer confirmed',{exact:false}).first().waitFor();
    await buyer.page.getByRole('button',{name:'View authorized invoice'}).click();
    await buyer.page.locator('pre').waitFor({timeout:15000});
+   const [invoiceRows]=await db.query(
+    'SELECT invoice_snapshot_json,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount FROM invoices WHERE order_id=?',
+    [complete.id]);
+   assert.equal(invoiceRows.length,1);
+   let invoiceSnapshot=invoiceRows[0].invoice_snapshot_json;
+   if(typeof invoiceSnapshot==='string')invoiceSnapshot=JSON.parse(invoiceSnapshot);
+   const [actualLines]=await db.query(
+    `SELECT l.id FROM procurement_award_orders ao
+       JOIN procurement_award_lines l ON l.award_order_id=ao.id
+       WHERE ao.order_id=?`,[complete.id]);
+   assert.equal(invoiceSnapshot.items.length,actualLines.length,
+    'B6 invoice must contain each immutable physical supplier SKU line');
+   assert.equal(String(invoiceSnapshot.pricing.total_amount),String(Number(complete.total_amount)),
+    'Final invoiced order total must equal the accepted paid order total');
    await pick(buyer.page,shortage.order_code);
    await buyer.page.locator('input[placeholder="Actual received quantity"]').first().fill('80');
    await buyer.page.locator('textarea').first().fill('Only 80 units delivered from 100 units paid and ordered.');
