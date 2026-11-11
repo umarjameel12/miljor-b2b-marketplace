@@ -34,7 +34,9 @@ const args={
 };
 const prepared={id:99,supplier_payable_id:11,idempotency_key:args.idempotencyKey,
   beneficiary_title:args.beneficiaryTitle,beneficiary_iban:args.beneficiaryIban,
-  beneficiary_bank_code:null,amount:'100.00',status:'PREPARED'};
+  beneficiary_bank_code:null,amount:'100.00',status:'PREPARED',
+  external_execution_status:'DISABLED',supplier_user_verified:1,
+  supplier_profile_status:'VERIFIED',fulfillment_status:'BUYER_CONFIRMED'};
 (async()=>{
   // 1. Missing financial authority must reject without requesting DB connection.
   await assert.rejects(svc.prepareSupplierDisbursement({...args,actor:{id:1,role:'BUYER'}}),
@@ -95,8 +97,24 @@ const prepared={id:99,supplier_payable_id:11,idempotency_key:args.idempotencyKey
     await assert.rejects(svc.approveSupplierDisbursement({disbursementId:99,actor:args.actor}),
       bad('DISBURSEMENT_REAPPROVAL_REQUIRED'));
   });
+  // 8. Approval requires current supplier verification and receipt, not just
+  // historical preparation eligibility. External execution remains disabled.
+  await withFake(async sql=>{
+    if(sql.includes('SELECT supplier_payable_id FROM'))return [[{supplier_payable_id:11}]];
+    if(sql.includes('FROM supplier_payables'))return [[{...payable,status:'DISBURSEMENT_PREPARED'}]];
+    if(sql.includes('FROM supplier_disbursement_instructions d'))
+      return [[{...prepared,supplier_user_verified:0,order_id:12,payment_id:14}]];
+    throw Error('unexpected query '+sql);
+  },async()=>{
+    await assert.rejects(svc.approveSupplierDisbursement({disbursementId:99,actor:args.actor}),
+      bad('DISBURSEMENT_ELIGIBILITY_REVOKED'));
+  });
+  // 9. Invalid or missing approval identity must fail closed.
+  await assert.rejects(svc.approveSupplierDisbursement({
+    disbursementId:99,actor:null
+  }),bad('UNAUTHORIZED_ROLE'));
   assert.equal(money.exactDecimalEquals('100.00','100.00',2),true);
-  console.log('PASS: 7 isolated disbursement hardening scenarios; no DB writes');
+  console.log('PASS: 9 isolated disbursement hardening scenarios; no DB writes');
 })()
   .catch(e=>{console.error(e);process.exitCode=1;})
   .finally(async()=>{
