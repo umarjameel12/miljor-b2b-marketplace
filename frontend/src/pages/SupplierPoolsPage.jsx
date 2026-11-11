@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState,useCallback} from 'react';
+import React,{useEffect,useMemo,useState,useCallback,useRef} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {toast} from 'react-toastify';
 import {Layers,Plus,RefreshCw,Clock,Package,AlertTriangle,Lock} from 'lucide-react';
@@ -135,6 +135,10 @@ export function SupplierPoolsPage(){
   const [form,setForm]=useState(initialForm());
   const [edit,setEdit]=useState(null);
   const [busy,setBusy]=useState(false);
+  const regularDraftIntent=useRef(null);
+  const regularPublishIntents=useRef({});
+  const [uncertainDraft,setUncertainDraft]=useState(false);
+
   const [confirm,setConfirm]=useState(null);
   const editRequest=params.get('edit');
   const creating=params.get('create')==='1'||Boolean(edit);
@@ -181,12 +185,14 @@ export function SupplierPoolsPage(){
   const update=(name,value)=>setForm(old=>({...old,[name]:value}));
   const openCreate=(type='REGULAR',listingId='')=>{
     const listing=listings.find(l=>String(l.id)===String(listingId))||listings[0];
+    regularDraftIntent.current=null;setUncertainDraft(false);
     setMode(type);setEdit(null);setForm(initialForm(listing));
     setParams({create:'1',type:type.toLowerCase()});
   };
   const openEdit=(pool)=>{
     const listing=listings.find(l=>Number(l.id)===Number(pool.supplier_listing_id));
     if(!listing){toast.error('Original supplier SKU listing is no longer eligible for editing.');return;}
+    regularDraftIntent.current=null;setUncertainDraft(false);
     setMode(pool.type);setEdit(pool);
     const base=initialForm(listing);
     if(pool.type==='REGULAR'){
@@ -233,22 +239,38 @@ export function SupplierPoolsPage(){
   // openEdit is intentionally invoked after both catalog and pool data load.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[editRequest,loading,data.pools,listings,edit]);
-  const close=()=>{setEdit(null);setParams({})};
+  const close=()=>{regularDraftIntent.current=null;setUncertainDraft(false);setEdit(null);setParams({})};
   const save=async(e)=>{
     e.preventDefault();
     if(busy)return;
+    let networkMutationStarted=false;
     try{
+      if(uncertainDraft)
+        throw Error('Draft creation result is uncertain. Refresh Pool Management and verify whether it already exists before another submission.');
       const validatedForm={...form,
         pickup_available:Boolean(operations.delivery?.configuration?.pickup_enabled &&
           operations.delivery?.pickup_points?.some(p=>p.is_active))
       };
       const payload=buildPayload(mode,validatedForm,chosen,edit);
+      if(mode==='REGULAR'){
+        const fingerprint=JSON.stringify({id:edit?.id||null,payload});
+        if(!regularDraftIntent.current)regularDraftIntent.current={
+          fingerprint,idempotencyKey:'ucp-regular-draft-'+Date.now()+'-'+Math.random().toString(36).slice(2,12)
+        };
+        if(regularDraftIntent.current.fingerprint!==fingerprint)
+          throw Error('An earlier Regular draft attempt has an uncertain outcome. Reconcile it before editing draft terms.');
+      }
       setBusy(true);
-      if(mode==='REGULAR')await unifiedPoolsApi.saveRegularDraft(payload,edit?.id);
+      networkMutationStarted=true;
+      if(mode==='REGULAR')
+        await unifiedPoolsApi.saveRegularDraft(payload,edit?.id,regularDraftIntent.current.idempotencyKey);
       else await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
       toast.success(mode+' draft saved. Review and publish it from Pool Management.');
       close();await load();
-    }catch(e){toast.error(e.response?.data?.error?.message||e.message||'Unable to save pool draft.');}
+    }catch(e){
+      if(networkMutationStarted&&!e.response)setUncertainDraft(true);
+      toast.error(e.response?.data?.error?.message||e.message||'Unable to save pool draft.');
+    }
     finally{setBusy(false);}
   };
   const runAction=async()=>{
@@ -257,7 +279,13 @@ export function SupplierPoolsPage(){
     try{
       const {pool,action}=confirm;
       if(action==='PUBLISH'){
-        if(pool.type==='REGULAR')await unifiedPoolsApi.publishRegular(pool.id);
+        if(pool.type==='REGULAR'){
+          const intentKey='REGULAR:'+pool.id;
+          if(!regularPublishIntents.current[intentKey])
+            regularPublishIntents.current[intentKey]='ucp-publish-'+pool.id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,12);
+          await unifiedPoolsApi.publishRegular(pool.id,regularPublishIntents.current[intentKey]);
+          delete regularPublishIntents.current[intentKey];
+        }
         else await unifiedPoolsApi.publishFlash(pool.id);
       }else{
         if(pool.type==='REGULAR')await unifiedPoolsApi.cancelRegular(pool.id);
@@ -281,6 +309,9 @@ export function SupplierPoolsPage(){
       </div>
     </header>
     {error&&<div role="alert" className="p-3 rounded-xl border border-red-500 text-red-500 text-sm">{error}</div>}
+    {uncertainDraft&&<p role="alert" className="text-amber-600 text-xs">
+      A draft operation may have succeeded despite a network error. Refresh Pool Management and check existing drafts; do not create another until reconciled.
+    </p>}
     {operationsError&&<p role="status" className="text-xs text-amber-600">{operationsError}</p>}
     {!loading&&<SupplierPoolOperationsPanel {...operations}/>}
     {creating?<section className="max-w-3xl rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5 space-y-4">
@@ -368,7 +399,7 @@ export function SupplierPoolsPage(){
         </>}
         <div className="flex flex-wrap gap-2 justify-end pt-2">
           <button type="button" onClick={close} className="px-4 py-2 rounded-xl border text-sm">Cancel</button>
-          <button disabled={busy||!chosen} type="submit" className="px-4 py-2 rounded-xl bg-emerald-700 text-white disabled:opacity-50 text-sm">{busy?'Saving…':'Save Draft'}</button>
+          <button disabled={busy||!chosen||uncertainDraft} type="submit" className="px-4 py-2 rounded-xl bg-emerald-700 text-white disabled:opacity-50 text-sm">{busy?'Saving…':'Save Draft'}</button>
         </div>
       </form>}
     </section>:
