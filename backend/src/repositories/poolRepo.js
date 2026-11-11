@@ -213,8 +213,13 @@ class PoolRepository {
     const params = [];
 
     if (category) {
-      where += ' AND pr.category = ?';
-      params.push(category);
+      where += ` AND (pr.category = ? OR EXISTS (
+        SELECT 1 FROM catalog_categories category_filter
+        WHERE category_filter.id=ps.category_id
+          AND (category_filter.name=? OR category_filter.slug=?
+               OR CAST(category_filter.id AS CHAR)=?)
+      ))`;
+      params.push(category,category,category,category);
     }
     if (min_price) {
       where += ' AND p.current_price_per_unit >= ?';
