@@ -86,6 +86,7 @@ async function main(){
    return {context,page};
   };
   const pick=async(page,code)=>{
+   await page.getByText('Processing order action…',{exact:true}).waitFor({state:'hidden',timeout:20000});
    const row=page.locator('button').filter({hasText:code}).first();
    await row.waitFor({timeout:15000});
    await row.click();
@@ -128,6 +129,8 @@ async function main(){
       }else{
        await supplier.page.getByText('supplier delivered',{exact:false}).first().waitFor();
       }
+      await supplier.page.getByText('Processing order action…',{exact:true})
+       .waitFor({state:'hidden',timeout:20000});
     }
    }
   }finally{await supplier.context.close()}
