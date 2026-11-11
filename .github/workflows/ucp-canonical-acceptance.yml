@@ -166,6 +166,10 @@ jobs:
         if: ${{ always() }}
         timeout-minutes: 12
         run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
+      - name: Real Express buyer supplier order isolation and unpaid finance boundary
+        if: ${{ always() }}
+        timeout-minutes: 5
+        run: cd backend && node tests/p0_order_ownership_http_gate.js
 
   real-chromium-buyer-supplier:
     name: Real Chromium buyer/supplier auth, retry and offline journey
