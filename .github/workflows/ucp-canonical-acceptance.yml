@@ -51,6 +51,8 @@ jobs:
           node tests/ucp_thischat_reconciliation_gate.js
       - name: New commission migration and Regular order/settlement source contract
         run: cd backend && node tests/p0_four_track_commission_source_gate.js
+      - name: Buyer/supplier order source isolation and all order-origin coverage
+        run: cd backend && node tests/p0_all_order_origins_source_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
@@ -166,6 +168,10 @@ jobs:
         if: ${{ always() }}
         timeout-minutes: 12
         run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
+      - name: Real Express buyer supplier order isolation and unpaid finance boundary
+        if: ${{ always() }}
+        timeout-minutes: 5
+        run: cd backend && node tests/p0_order_ownership_http_gate.js
 
   real-chromium-buyer-supplier:
     name: Real Chromium buyer/supplier auth, retry and offline journey
