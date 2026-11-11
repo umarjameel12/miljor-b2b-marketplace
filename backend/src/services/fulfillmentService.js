@@ -436,6 +436,9 @@ class FulfillmentService {
       );
 
       // Emit transactional outbox business event to reservation_business_events
+      // The legacy reservation outbox has real pool/reservation FKs. B5/B6 orders
+      // have independent order_fulfillment_events and MUST NOT emit zero FK values.
+      if (order.pool_id && order.reservation_id) {
       const outboxEventId = reservationEventService.generateEventId({
         event_type: `ORDER_${toStatus}`,
         pool_id: order.pool_id || 0,
@@ -469,6 +472,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -627,6 +631,9 @@ class FulfillmentService {
       );
 
       // Outbox business event
+      // The legacy reservation outbox has real pool/reservation FKs. B5/B6 orders
+      // have independent order_fulfillment_events and MUST NOT emit zero FK values.
+      if (order.pool_id && order.reservation_id) {
       const outboxEventId = reservationEventService.generateEventId({
         event_type: 'ORDER_FULFILLMENT_EXCEPTION',
         pool_id: order.pool_id || 0,
@@ -658,6 +665,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -974,6 +982,9 @@ class FulfillmentService {
       );
 
       // Emit transactional outbox business event
+      // The legacy reservation outbox has real pool/reservation FKs. B5/B6 orders
+      // have independent order_fulfillment_events and MUST NOT emit zero FK values.
+      if (order.pool_id && order.reservation_id) {
       const outboxEventId = reservationEventService.generateEventId({
         event_type: 'ORDER_BUYER_RECEIPT_CONFIRMED',
         pool_id: order.pool_id || 0,
@@ -1004,6 +1015,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -1206,6 +1218,9 @@ class FulfillmentService {
       );
 
       // Outbox business event
+      // The legacy reservation outbox has real pool/reservation FKs. B5/B6 orders
+      // have independent order_fulfillment_events and MUST NOT emit zero FK values.
+      if (order.pool_id && order.reservation_id) {
       const outboxEventId = reservationEventService.generateEventId({
         event_type: 'ORDER_FULFILLMENT_EXCEPTION',
         pool_id: order.pool_id || 0,
@@ -1240,6 +1255,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
