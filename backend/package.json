@@ -13,6 +13,7 @@
     "test:ucp": "npm run test:ucp:audit && node tests/b4_regular_dual_timer_source_gate.js && node tests/ucp_unified_supplier_pools_source_gate.js && node tests/ucp_3_to_5_source_gate.js",
     "test:ucp:audit": "node tests/ucp_independent_audit_source_gate.js",
     "migration:preflight": "node database/migrationManifest.js",
+    "test:p0:commission:source": "node tests/p0_four_track_commission_source_gate.js",
     "test:canonical:preflight": "node tests/canonical_migration_manifest_gate.js && npm run test:ucp",
     "test:canonical:release": "npm run test:canonical:preflight && npm run test:b6 && npm --prefix ../frontend run build",
     "test:ucp:reconciliation": "node database/financeCompatibilityGate.js && node tests/ucp_thischat_reconciliation_gate.js",
