@@ -16,6 +16,7 @@ const procurementAwardService = require('../services/procurementAwardService');
 const procurementCollectiveBidService = require('../services/procurementCollectiveBidService');
 const procurementCollectiveApprovalService = require('../services/procurementCollectiveApprovalService');
 const procurementCollectiveRecurringService = require('../services/procurementCollectiveRecurringService');
+const procurementDeliveryGroupingService = require('../services/procurementDeliveryGroupingService');
 
 class ProcurementController {
 
@@ -506,6 +507,35 @@ class ProcurementController {
       const result=await procurementCollectiveRecurringService.cycleForBuyer(
         req.user.id,req.params.cohortId,req.params.cycleId);
       res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+
+  // B6-O — paid-order, buyer-authorized delivery; supplier-owned run planning.
+  async acceptDeliveryChoice(req,res){
+    try{
+      const result=await procurementDeliveryGroupingService.acceptBuyerDelivery(
+        req.user.id,req.params.orderId,req.body,req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async createSupplierDeliveryRun(req,res){
+    try{
+      const result=await procurementDeliveryGroupingService.planSupplierRun(
+        req.user.id,req.body?.order_ids,req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async listSupplierDeliveryRuns(req,res){
+    try{
+      const runs=await procurementDeliveryGroupingService.supplierRuns(req.user.id);
+      res.json({success:true,data:{runs}});
+    }catch(e){this._smartError(res,e);}
+  }
+  async buyerProcurementDelivery(req,res){
+    try{
+      const delivery=await procurementDeliveryGroupingService.buyerDelivery(
+        req.user.id,req.params.orderId);
+      res.json({success:true,data:{delivery}});
     }catch(e){this._smartError(res,e);}
   }
 
