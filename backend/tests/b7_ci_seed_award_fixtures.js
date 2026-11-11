@@ -2,6 +2,7 @@
 // Dedicated CI only: synthetic paid-status fixtures in ephemeral miljor_test_db.
 // No provider verified payment assertion. No protected database accesses.
 const crypto=require('node:crypto');
+const fs=require('node:fs');
 const db=require('../src/config/db');
 async function run(){
  const expected={B7_CI_EPHEMERAL_DB:'YES',NODE_ENV:'test',TEST_DB_NAME:'miljor_test_db',DB_NAME:'miljor_test_db'};
@@ -90,6 +91,14 @@ async function run(){
  console.log('B7_CI_SYNTHETIC_ORDER_IDS='+result.map(x=>x.order_id).join(','));
  console.log('B7_CI_SYNTHETIC_AWARD_LINE_IDS='+result.map(x=>x.award_line_id).join(','));
  console.log('B7_CI_FIXTURE_ONLY: MOCK_GATEWAY paid-state fixtures, not Safepay-verified.');
+ if(process.env.B7_CI_EXPORT_BROWSER_FIXTURES==='YES'){
+  const file=process.env.GITHUB_ENV;
+  if(!file||!process.env.GITHUB_ACTIONS)throw Error('B7_GITHUB_ENV_REQUIRED');
+  fs.appendFileSync(file,
+   'B7_BROWSER_COMPLETE_ORDER_CODE='+result[0].order_code+'\\n'+
+   'B7_BROWSER_SHORTAGE_ORDER_CODE='+result[1].order_code+'\\n');
+  console.log('B7 ephemeral browser fixture order codes exported to job env.');
+ }
  await db.end();
 }
 run().catch(async e=>{console.error('B7_CI_FIXTURE_FAILED',e.stack||e.message);process.exitCode=1;await db.end().catch(()=>{});});
