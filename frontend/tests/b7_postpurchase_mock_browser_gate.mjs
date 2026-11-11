@@ -128,7 +128,7 @@ try{
  try{
   await supplier.page.getByText('Post-Purchase Operations',{exact:true}).waitFor();
   await supplier.page.getByRole('button',{name:/MJQ-TEST-PREPARING/}).click();
-  await supplier.page.getByRole('button',{name:'Move to Preparing'}).click();
+  await supplier.page.getByRole('button',{name:/Move to preparing/i}).click();
   await supplier.page.getByText('Fulfillment advanced').waitFor();
   const action=actions.find(a=>a.type==='transition');
   assert.equal(action.body.to_status,'PREPARING');
