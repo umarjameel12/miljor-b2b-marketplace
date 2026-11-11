@@ -116,11 +116,47 @@ async function main(){
    await buyer.page.getByRole('button',{name:'Report missing quantity'}).first().click();
    await buyer.page.getByText('exception',{exact:false}).first().waitFor({timeout:15000});
   }finally{await buyer.context.close()}
+  // The short order must NOT be buyer-confirmed merely because the supplier
+  // marked delivery or the buyer filed a claim.
+  const [[priorRemedy]]=await db.query(
+    'SELECT fulfillment_status FROM orders WHERE id=?',[shortage.id]);
+  assert.equal(priorRemedy.fulfillment_status,'EXCEPTION');
+
+  // Supplier explicitly proposes and dispatches missing goods.
+  const remedySupplier=await logIn('SUPPLIER');
+  try{
+   await pick(remedySupplier.page,shortage.order_code);
+   await remedySupplier.page.getByRole('textbox',{name:'Supplier response (minimum 5 characters)'})
+     .fill('The missing 20 units will be delivered as a separate remediation.');
+   await remedySupplier.page.getByRole('combobox',{name:'Your documented remediation proposal'})
+     .selectOption('DELIVER_MISSING_QUANTITY');
+   await remedySupplier.page.getByRole('button',{name:'Submit supplier response'}).click();
+   await remedySupplier.page.getByRole('button',{name:'Declare remediation dispatched'})
+     .waitFor({timeout:15000});
+   await remedySupplier.page.getByRole('textbox',{name:'Remediation delivery reference / notes'})
+     .fill('B7-TEST-REMEDY-DELIVERY');
+   await remedySupplier.page.getByRole('button',{name:'Declare remediation dispatched'}).click();
+  }finally{await remedySupplier.context.close()}
+
+  // Buyer acknowledges remediation goods, then separately confirms the
+  // original full order; these are two distinct authoritative actions.
+  const remedyBuyer=await logIn('BUYER');
+  try{
+   await pick(remedyBuyer.page,shortage.order_code);
+   await remedyBuyer.page.getByRole('button',{name:'Confirm remediation goods received'})
+     .click();
+   await remedyBuyer.page.getByRole('button',{name:'Confirm complete receipt'})
+     .waitFor({timeout:15000});
+   const [[notAutoConfirmed]]=await db.query(
+     'SELECT fulfillment_status FROM orders WHERE id=?',[shortage.id]);
+   assert.equal(notAutoConfirmed.fulfillment_status,'SUPPLIER_DELIVERED');
+   await remedyBuyer.page.getByRole('button',{name:'Confirm complete receipt'}).click();
+  }finally{await remedyBuyer.context.close()}
   const [final]=await db.query(
    'SELECT order_code,fulfillment_status FROM orders WHERE id IN (?,?)',
    [complete.id,shortage.id]);
   assert.equal(final.find(o=>o.order_code===complete.order_code).fulfillment_status,'BUYER_CONFIRMED');
-  assert.equal(final.find(o=>o.order_code===shortage.order_code).fulfillment_status,'EXCEPTION');
+  assert.equal(final.find(o=>o.order_code===shortage.order_code).fulfillment_status,'BUYER_CONFIRMED');
   const [claims]=await db.query(
    'SELECT disputed_quantity,claimed_amount,evidence_metadata FROM order_disputes WHERE order_id=? ORDER BY id DESC LIMIT 1',
    [shortage.id]);
@@ -133,7 +169,7 @@ async function main(){
     'SELECT id,escrow_status FROM payments WHERE order_id IN (?,?) ORDER BY id',
     [complete.id,shortage.id]);
   assert.deepEqual(afterPayment,beforePayment,'Browser delivery/dispute journey must not mutate payments.');
-  console.log('B7 BROWSER WRITE E2E PASS: Supplier delivery; buyer full confirmation; 100->80 shortage; immutable SKU; zero payment mutation.');
+  console.log('B7 BROWSER WRITE E2E PASS: Supplier dispatch; 100->80 shortage; supplier remediation; separate buyer confirmation; immutable SKU; zero payment mutation.');
  }finally{
   if(browser)await browser.close();
   await db.end();
