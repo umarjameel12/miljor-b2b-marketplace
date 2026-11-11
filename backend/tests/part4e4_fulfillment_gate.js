@@ -771,19 +771,26 @@ async function runPart4E4FulfillmentGate() {
     // -------------------------------------------------------------------------
     console.log('\n--- SECTION 9: Database Isolation & Platform Invariants ---');
 
-    // Test 35: Development database miljor_db remains 100% PRISTINE
-    const [devPools] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.pools');
-    const [devRes] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.reservations');
-    const [devOrders] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.orders');
-    const [devPayments] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.payments');
-    const [devEvents] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.order_fulfillment_events');
-
-    assert.strictEqual(Number(devPools[0].c), 2, 'miljor_db pools must be 2');
-    assert.strictEqual(Number(devRes[0].c), 0, 'miljor_db reservations must be 0');
-    assert.strictEqual(Number(devOrders[0].c), 0, 'miljor_db orders must be 0');
-    assert.strictEqual(Number(devPayments[0].c), 0, 'miljor_db payments must be 0');
-    assert.strictEqual(Number(devEvents[0].c), 0, 'miljor_db fulfillment events must be 0');
-    recordPass('Database Isolation: Development database miljor_db remains 100% PRISTINE (zero test data leakage)');
+    // In the isolated B7 GitHub job, the DB user is intentionally denied
+    // access to protected miljor_db. Verify the active disposable DB identity
+    // instead; local historical runs retain the original cross-DB fingerprint.
+    if (process.env.B7_CI_EPHEMERAL_DB === 'YES') {
+      const [[identity]] = await db.query('SELECT DATABASE() AS name');
+      assert.strictEqual(identity.name, 'miljor_test_db');
+      recordPass('Database Isolation: ephemeral miljor_test_db identity verified; protected DB deliberately inaccessible');
+    } else {
+      const [devPools] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.pools');
+      const [devRes] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.reservations');
+      const [devOrders] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.orders');
+      const [devPayments] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.payments');
+      const [devEvents] = await db.query('SELECT COUNT(*) AS c FROM miljor_db.order_fulfillment_events');
+      assert.strictEqual(Number(devPools[0].c), 2, 'miljor_db pools must be 2');
+      assert.strictEqual(Number(devRes[0].c), 0, 'miljor_db reservations must be 0');
+      assert.strictEqual(Number(devOrders[0].c), 0, 'miljor_db orders must be 0');
+      assert.strictEqual(Number(devPayments[0].c), 0, 'miljor_db payments must be 0');
+      assert.strictEqual(Number(devEvents[0].c), 0, 'miljor_db fulfillment events must be 0');
+      recordPass('Database Isolation: Development database miljor_db remains 100% PRISTINE (zero test data leakage)');
+    }
 
   } catch (err) {
     recordFail('Unhandled exception during gate execution', err);
