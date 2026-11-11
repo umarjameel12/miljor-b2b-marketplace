@@ -1252,6 +1252,29 @@ class FinancialSettlementService {
     await connection.beginTransaction();
 
     try {
+      // Serialize approval against any hold/refund/disbursement preparation:
+      // acquire payable lock BEFORE instruction lock (shared lock ordering).
+      const [links] = await connection.query(
+        'SELECT supplier_payable_id FROM supplier_disbursement_instructions WHERE id = ?',
+        [disbursementId]
+      );
+      if (links.length === 0) {
+        const err = new Error('Disbursement instruction record not found');
+        err.code = 'DISBURSEMENT_NOT_FOUND';
+        err.statusCode = 404;
+        throw err;
+      }
+      const [payables] = await connection.query(
+        'SELECT * FROM supplier_payables WHERE id = ? FOR UPDATE',
+        [links[0].supplier_payable_id]
+      );
+      if (payables.length !== 1) {
+        const err = new Error('Supplier payable is missing');
+        err.code = 'PAYABLE_NOT_FOUND';
+        err.statusCode = 409;
+        throw err;
+      }
+      const payable = payables[0];
       const [disbursements] = await connection.query(
         `SELECT d.*, sp.order_id, sp.payment_id
          FROM supplier_disbursement_instructions d
@@ -1273,6 +1296,31 @@ class FinancialSettlementService {
         const err = new Error(`Cannot approve disbursement in status '${disb.status}'. Expected PREPARED.`);
         err.code = 'DISBURSEMENT_NOT_PREPARED';
         err.statusCode = 422;
+        throw err;
+      }
+
+      const [pendingClaims] = await connection.query(
+        `SELECT id FROM refund_obligations
+         WHERE order_id = ? AND status IN
+           ('REQUESTED','UNDER_REVIEW','APPROVED',
+            'AWAITING_EXTERNAL_EXECUTION','EXTERNAL_PROCESSING')
+         LIMIT 1 FOR UPDATE`,
+        [payable.order_id]
+      );
+      const [activeHolds] = await connection.query(
+        `SELECT id FROM financial_holds
+         WHERE supplier_payable_id = ? AND status = 'ACTIVE'
+         LIMIT 1 FOR UPDATE`,
+        [payable.id]
+      );
+      if (pendingClaims.length || activeHolds.length ||
+          !exactDecimal.exactDecimalEquals(payable.held_amount, '0.00', 2) ||
+          !exactDecimal.exactDecimalEquals(payable.disbursed_amount || '0.00', '0.00', 2) ||
+          !exactDecimal.exactDecimalEquals(payable.available_amount, disb.amount, 2) ||
+          payable.status !== 'DISBURSEMENT_PREPARED') {
+        const err = new Error('Disbursement financial conditions changed after preparation');
+        err.code = 'DISBURSEMENT_REAPPROVAL_REQUIRED';
+        err.statusCode = 409;
         throw err;
       }
 
