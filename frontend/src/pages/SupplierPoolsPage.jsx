@@ -180,8 +180,7 @@ export function SupplierPoolsPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[params.toString(),listings.length,edit]);
   const chosen=useMemo(()=>listings.find(l=>String(l.id)===String(form.supplier_listing_id)),[listings,form.supplier_listing_id]);
-  const rows=useMemo(()=>data.pools.filter(p=>filter==='ALL'||p.type===filter||
-    (filter==='ACTIVE'&&p.status==='ACTIVE')||(filter==='DRAFT'&&p.status==='DRAFT')), [data.pools,filter]);
+  const rows=useMemo(()=>data.pools.filter(p=>filter==='ALL'||p.status===filter), [data.pools,filter]);
   const update=(name,value)=>setForm(old=>({...old,[name]:value}));
   const openCreate=(type='REGULAR',listingId='')=>{
     const listing=listings.find(l=>String(l.id)===String(listingId))||listings[0];
@@ -404,11 +403,11 @@ export function SupplierPoolsPage(){
       </form>}
     </section>:
     <>
-      <div className="grid grid-cols-3 gap-2">
-        {[[data.counts.total,'All Pools'],[data.counts.regular,'Regular'],[data.counts.flash,'Flash']].map(([count,label])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]"><div className="text-2xl font-bold tabular-nums">{count||0}</div><div className="text-xs text-[var(--text-muted)]">{label}</div></div>)}
+      <div className="grid grid-cols-3 gap-2" aria-label="Supplier pool overview">
+        {[[data.pools.length,'All Pools'],[data.pools.filter(p=>p.status==='ACTIVE').length,'Active'],[data.pools.filter(p=>p.status==='DRAFT').length,'Drafts']].map(([count,label])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]"><div className="text-2xl font-bold tabular-nums">{count}</div><div className="text-xs text-[var(--text-muted)]">{label}</div></div>)}
       </div>
-      <div className="flex gap-2 flex-wrap">
-        {['ALL','REGULAR','FLASH','DRAFT','ACTIVE'].map(t=><button key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${filter===t?'border-emerald-600 text-emerald-600':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'All':t[0]+t.slice(1).toLowerCase()}</button>)}
+      <div className="flex gap-2 flex-wrap" aria-label="Supplier pool status filters">
+        {['ALL','DRAFT','ACTIVE'].map(t=><button key={t} type="button" onClick={()=>setFilter(t)} aria-pressed={filter===t} className={`px-3 py-2 border rounded-xl text-xs ${filter===t?'border-emerald-600 text-emerald-600':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'All':t==='DRAFT'?'Drafts':'Active'}</button>)}
       </div>
       {loading?<p className="text-sm text-[var(--text-muted)]">Loading supplier pools…</p>:rows.length===0?
         <div className="p-8 text-center rounded-xl border border-[var(--border-subtle)]"><Package className="mx-auto mb-2 text-[var(--text-muted)]"/><p className="font-semibold">No matching pools</p><p className="text-xs text-[var(--text-muted)]">Create a pool from a published supplier listing.</p></div>:
