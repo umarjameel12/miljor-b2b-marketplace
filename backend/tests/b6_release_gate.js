@@ -17,7 +17,7 @@ const suites=[
   'b6_procurement_award_policy_gate.js',
   'b6_procurement_collective_policy_gate.js',
   'b6_collective_bid_policy_gate.js',
-  // Database integration, after migrations 033–047 & B6 fixtures.
+  // Database integration, after reconciled B6+UCP migrations and fixtures.
   'package_e2_catalog_foundation_gate.js',
   'package_e2_catalog_moderation_gate.js',
   'package_e2_catalog_security_gate.js',
@@ -56,9 +56,9 @@ const suites=[
     }
     const [migrations]=await connection.query(
       'SELECT version FROM schema_migrations WHERE version IN (?,?) ORDER BY version',
-      ['046','047']
+      ['051','052']
     );
-    if(migrations.length!==2)throw Error('Migrations 046–047 have not both been applied to test DB');
+    if(migrations.length!==2)throw Error('UCP canonical families/requester migrations 051–052 have not both been applied to test DB');
   } finally { await connection.end(); }
   console.log('B6 release database identity and migration preflight passed');
   let passed=0;
