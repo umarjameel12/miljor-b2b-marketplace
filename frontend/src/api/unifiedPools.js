@@ -15,10 +15,11 @@ export const unifiedPoolsApi={
   discover:async(params={})=>(await apiClient.get('/pool-discovery',{params})).data,
   holdFlash:async(id,payload,key)=>(await apiClient.post(`/flash-pools/${id}/hold`,payload,{headers:{'X-Idempotency-Key':key}})).data,
   initiateCheckout:async(orderId,key)=>(await apiClient.post(`/orders/${orderId}/checkout`,{}, {headers:{'X-Idempotency-Key':key}})).data,
-  saveRegularDraft:async(payload,id=null)=>id
-    ?poolsApi.updateDraftPool(id,payload,newKey('regular-update'))
-    :poolsApi.createPool(payload,newKey('regular-create')),
-  publishRegular:async id=>poolsApi.publishPool(id,{},newKey('regular-publish')),
+  saveRegularDraft:async(payload,id=null,idempotencyKey=null)=>id
+    ?poolsApi.updateDraftPool(id,payload,idempotencyKey||newKey('regular-update'))
+    :poolsApi.createPool(payload,idempotencyKey||newKey('regular-create')),
+  publishRegular:async(id,idempotencyKey=null)=>
+    poolsApi.publishPool(id,{},idempotencyKey||newKey('regular-publish')),
   saveFlashDraft:async(payload,id=null)=>(
     await (id?apiClient.put(`/flash-pools/${id}`,payload)
     :apiClient.post('/flash-pools',payload))
