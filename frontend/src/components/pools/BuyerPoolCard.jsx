@@ -111,7 +111,8 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     if(!isAuthenticated||user?.role!=='BUYER'){toast.error('Sign in as a verified B2B buyer to purchase.');return;}
     setOpen(true);
   };
-  const holdExpired=holdState?.status==='EXPIRED'||holdState?.status==='RELEASED'||holdState?.status==='FAILED';
+  const holdExpired=['EXPIRED','RELEASED','FAILED'].includes(holdState?.status) ||
+    (!holdState?.status && hold?.hold_expires_at && Date.parse(hold.hold_expires_at)<=Date.now());
   const pending=holdState?.status==='PAYMENT_PENDING';
   const paid=holdState?.status==='PAID';
   const ends=pool.pool_close_at;
@@ -189,8 +190,8 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
           </div></>:
           <div className="space-y-3">
             <div className="text-sm flex gap-2 items-center"><ShieldCheck size={16} className="text-emerald-600"/>Order {hold.order_code||'#'+hold.order_id} · Hold #{hold.id}</div>
-            {holdState?.expires_at||hold.hold_expires_at?
-              <CountdownTimer deadline={holdState?.expires_at||hold.hold_expires_at} serverTime={serverTime} compact label="Pay within"/>:
+            {holdState?.hold_expires_at||hold.hold_expires_at?
+              <CountdownTimer deadline={holdState?.hold_expires_at||hold.hold_expires_at} serverTime={serverTime} compact label="Pay within"/>:
               <p className="text-xs text-[var(--text-muted)]">Confirm the deadline from your payment status.</p>}
             <p className="text-sm">Amount: {fmt(hold.total_amount)} (backend-verified total, if provided)</p>
             {paid?<p className="text-emerald-600 text-sm">Payment verified.</p>:
