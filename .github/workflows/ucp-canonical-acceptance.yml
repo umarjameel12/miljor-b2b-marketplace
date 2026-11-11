@@ -209,7 +209,7 @@ jobs:
         run: cd backend && node tests/p0_browser_fixture_seed.js
       - name: Install Chromium automation only inside CI
         run: |
-          npm --prefix backend install --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          npm --prefix backend install --no-save --no-package-lock --no-audit --no-fund playwright@1.65.0
           cd backend && npx playwright install --with-deps chromium
       - name: Launch real Express and Vite
         run: |
