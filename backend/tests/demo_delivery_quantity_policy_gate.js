@@ -23,7 +23,10 @@ verify('zero received allowed as documented non-delivery',()=>{
 verify('over-received rejected',()=>rejects('100','100.01','RECEIVED_QUANTITY_EXCEEDS_ORDER'));
 verify('no shortage cannot be reported',()=>rejects('100','100','NO_QUANTITY_SHORTAGE'));
 verify('negative input rejected',()=>rejects('100','-1','INVALID_DELIVERY_QUANTITY'));
-verify('precision overflow rejected',()=>rejects('100','80.001','INVALID_DELIVERY_QUANTITY'));
+verify('MySQL four-decimal quantities are exact',()=>{
+  assert.equal(calculateShortage('100.0000','80.0001').short_quantity,'19.9999');
+});
+verify('precision overflow rejected',()=>rejects('100','80.00001','INVALID_DELIVERY_QUANTITY'));
 verify('scientific notation rejected',()=>rejects('100','8e1','INVALID_DELIVERY_QUANTITY'));
 verify('non-numeric input rejected',()=>rejects('100','NaN','INVALID_DELIVERY_QUANTITY'));
 verify('empty input rejected',()=>rejects('100','','INVALID_DELIVERY_QUANTITY'));
