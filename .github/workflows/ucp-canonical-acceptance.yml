@@ -148,3 +148,7 @@ jobs:
         timeout-minutes: 8
         run: cd backend && node tests/part4b3_pool_publishing_gate.js
 
+      - name: B4 and B5 same-SKU simultaneous publication 2/10/50/100 clients
+        if: ${{ always() }}
+        timeout-minutes: 12
+        run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
