@@ -941,6 +941,10 @@ export const AppShell = ({ children }) => {
                               <Building2 className="w-4 h-4 text-[var(--brand-accent)]" />
                               <span>Supplier Portal</span>
                             </Link>
+                            <Link to="/supplier/pools" onClick={() => setAccountMenuOpen(false)}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20">
+                              <Layers className="w-4 h-4 text-emerald-600"/> <span>Pool Management</span>
+                            </Link>
                             <Link
                               to="/supplier/catalog"
                               onClick={() => setAccountMenuOpen(false)}

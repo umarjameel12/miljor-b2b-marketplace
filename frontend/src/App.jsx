@@ -20,6 +20,7 @@ import { SupplierCatalogPage } from './pages/SupplierCatalogPage';
 import { AdminVerificationPage } from './pages/AdminVerificationPage';
 import { AdminCatalogPage } from './pages/AdminCatalogPage';
 import { SupplierDashboardPage } from './pages/SupplierDashboardPage';
+import { SupplierPoolsPage } from './pages/SupplierPoolsPage';
 import { SupplierSubscriptionPage } from './pages/SupplierSubscriptionPage';
 import { FlashPoolsPage } from './pages/FlashPoolsPage';
 import { DemandRequestsPage } from './pages/DemandRequestsPage';
@@ -63,6 +64,7 @@ function AppContent() {
           <Route path="/demand-requests" element={<DemandRequestsPage />} />
           <Route path="/rfqs" element={<RfqPage />} />
           <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
+          <Route path="/supplier/pools" element={<SupplierPoolsPage />} />
           <Route path="/supplier/subscription" element={<SupplierSubscriptionPage />} />
           <Route path="/supplier/profile" element={<SupplierProfilePage />} />
           <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />

@@ -13,6 +13,20 @@ const { protect, authorize, authorizeStrict } = require('../../middlewares/authG
 // All supplier portal routes require authenticated session
 router.use(protect);
 
+// Unified supplier management READ MODEL only. Mutations stay on B4/B5 routes.
+router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{
+  try {
+    const data=await require('../../services/unifiedSupplierPoolsService').list(req.user.id);
+    return res.json({success:true,data});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({success:false,error:{
+      code:error.statusCode?error.code:'POOL_OVERVIEW_UNAVAILABLE',
+      message:error.statusCode?error.message:'Unable to load your pools'
+    }});
+  }
+});
+
+
 // ---------------------------------------------------------------------------
 // 1. Supplier Business Profile & Onboarding (Package E1)
 // ---------------------------------------------------------------------------
