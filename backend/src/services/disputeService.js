@@ -35,6 +35,7 @@ const {shortageForAwardLine}=require('./b7LineDeliveryPolicy');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
 const b7PostpurchaseOutbox = require('./b7PostpurchaseEventBridge');
+const b7DisputePrivacy = require('./b7DisputeSupplierPrivacy');
 
 const DISPUTE_CATEGORIES = [
   'SHORT_QUANTITY',
@@ -1682,7 +1683,10 @@ class DisputeService {
         [disputeId]
       );
 
-      return {
+      return isAssignedSupplier ? {
+        dispute: b7DisputePrivacy.supplierDisputeRow(dispute),
+        timeline: b7DisputePrivacy.supplierDisputeTimeline(events)
+      } : {
         dispute,
         timeline: events
       };
@@ -1771,7 +1775,7 @@ class DisputeService {
       );
 
       return {
-        disputes: rows,
+        disputes: rows.map(b7DisputePrivacy.supplierDisputeRow),
         pagination: {
           page: parsedPage,
           limit: parsedLimit,
