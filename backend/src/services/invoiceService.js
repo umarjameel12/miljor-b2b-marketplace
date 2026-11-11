@@ -152,6 +152,15 @@ class InvoiceService {
         throw err;
       }
 
+      // A tax/commercial invoice is issued only after provider-verified payment.
+      // Unpaid RFQ awards remain order/quote confirmations, not paid receipts.
+      if (o.payment_status !== 'PAID') {
+        const err = new Error('Cannot issue an invoice before payment is verified.');
+        err.code = 'INVOICE_ORDER_NOT_PAID';
+        err.statusCode = 409;
+        throw err;
+      }
+
       // Check again inside transaction: if another worker generated it concurrently, return existing
       const [existing] = await conn.query('SELECT * FROM invoices WHERE order_id = ? FOR UPDATE', [numericOrderId]);
       if (existing.length > 0) {
