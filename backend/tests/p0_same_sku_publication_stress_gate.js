@@ -25,7 +25,7 @@ async function main(){
     const headers={'Content-Type':'application/json'};
     if(auth)headers.Authorization='Bearer '+auth;
     if(key)headers['X-Idempotency-Key']=key;
-    const res=await fetch(base+url,{method,headers,body:body?JSON.stringify(body):undefined});
+    const res=await fetch(base+url,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(45000)});
     let json;try{json=await res.json()}catch{json={}};
     return {status:res.status,body:json};
   }
@@ -94,10 +94,12 @@ async function main(){
       return {quantity:scaled/100,count:rows.length};
     }
     for(const parallel of [2,10,50,100]){
+      console.log('START SAME-SKU PUBLICATION WAVE',parallel,'clients');
       const qty=parallel===2?120:parallel===10?25:parallel===50?5:3;
       const drafts=[];
       // Sequential draft creation avoids conflating draft-rate limits with publication races.
       for(let i=0;i<parallel;i++)drafts.push(await prepare(i%2?'FLASH':'REGULAR',qty,i,parallel));
+      console.log('DRAFTS READY',parallel,drafts.length);
       const results=await Promise.all(drafts.map((x,i)=>req(x.endpoint,{method:'POST',auth,
         key:'P0-RACE-PUBLISH-'+stamp+'-'+parallel+'-'+i})));
       const winners=[],losers=[];
