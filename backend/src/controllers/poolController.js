@@ -1736,6 +1736,15 @@ class PoolController {
         try { await connection.rollback(); } catch (rbErr) {}
         connection.release();
       }
+      const busy=['ER_LOCK_WAIT_TIMEOUT','ER_LOCK_DEADLOCK'].includes(error.code);
+      if (busy) {
+        res.set('Retry-After','2');
+        return res.status(409).json({
+          success:false,
+          error:{code:'POOL_PUBLICATION_RETRYABLE_CONFLICT',
+            message:'Inventory is busy; check pool status before retrying.'}
+        });
+      }
       console.error('Publish Pool Error:', error);
       return res.status(500).json({
         success: false,
