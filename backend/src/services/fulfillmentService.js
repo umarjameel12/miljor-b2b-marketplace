@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const b7PostpurchaseOutbox = require('./b7PostpurchaseEventBridge');
 
 const ALLOWED_SUPPLIER_TRANSITIONS = {
   'AWAITING_SUPPLIER_ACKNOWLEDGEMENT': ['PREPARING'],
@@ -461,6 +462,9 @@ class FulfillmentService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order,eventId:outboxEventId,statusCode:`ORDER_${toStatus}`
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -484,6 +488,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -652,6 +657,9 @@ class FulfillmentService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order,eventId:outboxEventId,statusCode:'ORDER_FULFILLMENT_EXCEPTION'
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -673,6 +681,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -1014,6 +1023,9 @@ class FulfillmentService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order,eventId:outboxEventId,statusCode:'ORDER_BUYER_RECEIPT_CONFIRMED'
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -1034,6 +1046,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -1233,6 +1246,9 @@ class FulfillmentService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order,eventId:outboxEventId,statusCode:'ORDER_FULFILLMENT_EXCEPTION'
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -1256,6 +1272,7 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
