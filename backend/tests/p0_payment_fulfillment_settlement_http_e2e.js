@@ -113,7 +113,7 @@ async function main(){
    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
      key:confirmKey,body:{notes:'Ten units received'}});eq(r,200);
    assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
-   r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{key:confirmKey});
+   r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{key:confirmKey,body:{notes:'Ten units received'}});
    eq(r,200);assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
    console.log('PASS G7 independent buyer-only receipt and idempotency');
    r=await prepare();eq(r,201);
