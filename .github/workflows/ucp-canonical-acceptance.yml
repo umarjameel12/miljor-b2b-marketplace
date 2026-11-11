@@ -131,6 +131,8 @@ jobs:
         run: cd backend && node database/runMigrations.js
       - name: Verify installed journal integrity read-only
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
+      - name: Verify finance 054 installed schema and exact checksum (read only)
+        run: cd backend && node tests/p0_finance_054_installed_gate.js
       # The B6 Package E2 foundation tests assert EXACT historical 16-spec data.
       # B5 integration gates create additional synthetic supplier specifications.
       # Run the historical baseline checks first, never against B5-contaminated DB.
