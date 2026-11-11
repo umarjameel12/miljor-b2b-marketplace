@@ -149,11 +149,11 @@ jobs:
         run: |
           node backend/start_test_server.js > /tmp/b7-real-backend.log 2>&1 &
           BACKEND_PID=$!
-          npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173 > /tmp/b7-real-vite.log 2>&1 &
+          NODE_OPTIONS=--dns-result-order=ipv4first npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173 > /tmp/b7-real-vite.log 2>&1 &
           VITE_PID=$!
           trap 'kill $BACKEND_PID $VITE_PID 2>/dev/null || true' EXIT
           for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:5000/api/v1/health >/dev/null 2>&1 &&
+            if curl -fsS http://127.0.0.1:5000/health/live >/dev/null 2>&1 &&
                curl -fsS http://127.0.0.1:5173/post-purchase >/dev/null 2>&1; then break; fi
             sleep 1
           done
