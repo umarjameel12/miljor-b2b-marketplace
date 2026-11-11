@@ -29,13 +29,14 @@ async function main(){
     );
     if(admins.length)throw new Error('SUPER_ADMIN_ALREADY_EXISTS: use existing super-admin; this is not a password reset');
     const [users]=await connection.query(
-      "SELECT id,email,role,is_verified,verification_status FROM users WHERE LOWER(email)=? FOR UPDATE",
+      "SELECT id,email,role,is_verified,verification_status,buyer_trust_status FROM users WHERE LOWER(email)=? FOR UPDATE",
       [email]
     );
     if(users.length!==1)throw new Error('EXISTING_VERIFIED_NON_SUPPLIER_ACCOUNT_REQUIRED');
     const account=users[0];
     if(account.role!=='BUYER' || Number(account.is_verified)!==1 ||
-       account.verification_status==='BLOCKED' || account.verification_status==='PENDING_SUPPLIER_VERIFICATION'){
+       account.verification_status==='BLOCKED' || account.verification_status==='PENDING_SUPPLIER_VERIFICATION' ||
+       account.buyer_trust_status==='SUSPENDED'){
       throw new Error('ACCOUNT_NOT_ELIGIBLE: use a separate verified BUYER account, never your SUPPLIER account');
     }
     const [profiles]=await connection.query('SELECT supplier_id FROM supplier_profiles WHERE supplier_id=? FOR UPDATE',[account.id]);
