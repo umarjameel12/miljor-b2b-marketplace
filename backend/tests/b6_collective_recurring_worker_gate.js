@@ -51,4 +51,4 @@ async function main(){
  pass('Unbounded worker request rejected',true);
  console.log('B6-N WORKER: '+count+'/'+count+' PASS');
 }
-main().catch(e=>{console.error('B6-N WORKER FAIL',e);process.exitCode=1});
+main().then(()=>process.exit(0)).catch(e=>{console.error('B6-N WORKER FAIL',e);process.exitCode=1});

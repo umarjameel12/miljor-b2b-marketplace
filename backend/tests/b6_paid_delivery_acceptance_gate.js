@@ -95,4 +95,4 @@ async function main(){
   console.log('B6-O PAID DELIVERY ACCEPTANCE: '+passCount+'/'+passCount+' PASS');
  }finally{notifications.enqueue=original}
 }
-main().catch(e=>{console.error('B6-O DELIVERY ACCEPTANCE FAIL',e);process.exitCode=1});
+main().then(()=>process.exit(0)).catch(e=>{console.error('B6-O DELIVERY ACCEPTANCE FAIL',e);process.exitCode=1});

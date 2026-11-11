@@ -39,4 +39,4 @@ async function main(){
    lastQuery.params[0]===1&&lastQuery.params[1]===31&&lastQuery.params[2]==='BUYER');
  console.log('B6-P/Q POLICY: '+count+'/'+count+' PASS');
 }
-main().catch(e=>{console.error('B6-P/Q GATE FAIL',e);process.exitCode=1});
+main().then(()=>process.exit(0)).catch(e=>{console.error('B6-P/Q GATE FAIL',e);process.exitCode=1});

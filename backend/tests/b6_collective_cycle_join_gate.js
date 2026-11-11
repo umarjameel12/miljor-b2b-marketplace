@@ -92,4 +92,4 @@ async function main(){
   console.log('B6-N CYCLE JOIN PRIVACY: '+passed+'/'+passed+' PASS');
  }finally{notifications.enqueue=old}
 }
-main().catch(error=>{console.error('B6-N CYCLE JOIN GATE FAIL',error);process.exitCode=1});
+main().then(()=>process.exit(0)).catch(error=>{console.error('B6-N CYCLE JOIN GATE FAIL',error);process.exitCode=1});

@@ -32,7 +32,7 @@ for(const [file,expected] of suites){
   });
   if(child.stdout)process.stdout.write(child.stdout);
   if(child.stderr)process.stderr.write(child.stderr);
-  const actual=(child.stdout||'').split(/\r?\n/).filter(line=>/^PASS\s+\d+\s/.test(line)).length;
+  const actual=(child.stdout||'').split(/\r?\n/).filter(line=>/^PASS\s+\d+[:\s]/.test(line)).length;
   actualTotal+=actual;
   const ok=!child.error&&!child.signal&&child.status===0&&actual===expected;
   if(!ok){
