@@ -113,7 +113,7 @@ class FinancialSettlementService {
     try {
       // 1. Lock and fetch order
       const [orders] = await connection.query(
-        `SELECT o.*, u.is_verified AS supplier_user_verified, sp.verification_status AS supplier_profile_status, sp.transaction_fee_percent
+        `SELECT o.*, u.is_verified AS supplier_user_verified, sp.verification_status AS supplier_profile_status
          FROM orders o
          JOIN users u ON o.supplier_id = u.id
          LEFT JOIN supplier_profiles sp ON sp.supplier_id = o.supplier_id
@@ -172,15 +172,19 @@ class FinancialSettlementService {
       const grossAmount = order.subtotal_amount;
       const deliveryFeeAmount = order.delivery_fee || 0.00;
 
-      // Check supplier fee policy
-      let commissionPercent = order.transaction_fee_percent;
-      let policyStatus = 'APPROVED';
-      let policyNotes = null;
-
-      if (commissionPercent === null || commissionPercent === undefined) {
-        // Fallback to default or flag POLICY_PENDING
-        commissionPercent = 2.50;
+      // Settlement must only use the immutable order-time contract.
+      // Never infer historical rates from a mutable supplier profile or 2.50% fallback.
+      const commissionPercent = order.supplier_commission_percent;
+      if (commissionPercent === null || commissionPercent === undefined ||
+          !/^(?:\\d{1,3})(?:\\.\\d{1,2})?$/.test(String(commissionPercent)) ||
+          Number(commissionPercent) < 0 || Number(commissionPercent) > 100) {
+        const err = new Error('Immutable order-time supplier commission is missing; historical order requires documented financial reconciliation');
+        err.code = 'COMMISSION_SNAPSHOT_REQUIRED';
+        err.statusCode = 409;
+        throw err;
       }
+      const policyStatus = 'APPROVED';
+      const policyNotes = null;
 
       // Exact Decimal Calculations
       // commission_amount = exactMultiplyRound(grossAmount, commissionPercent / 100, 2)
