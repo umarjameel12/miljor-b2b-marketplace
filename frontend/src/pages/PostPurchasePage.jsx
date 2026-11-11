@@ -115,7 +115,8 @@ export function PostPurchasePage(){
   setError('');
   try{
    const res=await apiClient.get('/invoices/'+selected.id);
-   const data=res.data?.data||res.data;
+   const data=res.data?.data?.invoice;
+   if(!data?.id)throw Error('Invoice not returned by the authorized order endpoint.');
    setInvoice(data);
   }catch(e){setError(msg(e))}
  };
@@ -211,7 +212,9 @@ export function PostPurchasePage(){
       <button onClick={loadInvoice} className="border rounded-lg px-4 py-2 text-sm flex gap-2 items-center">
        <FileText size={16}/>View authorized invoice</button>
       {invoice&&<pre className="overflow-auto p-3 text-xs rounded-lg bg-[var(--bg-elevated)]">
-       {JSON.stringify(invoice.invoice_snapshot_json||invoice,null,2)}</pre>}
+       {JSON.stringify(typeof invoice.invoice_snapshot_json==='string'?
+        JSON.parse(invoice.invoice_snapshot_json):
+        invoice.invoice_snapshot_json||invoice,null,2)}</pre>}
       <div className="space-y-3">
        <h3 className="font-semibold text-sm">Delivery disputes and remediation</h3>
        {!disputes.filter(d=>Number(d.order_id)===Number(selected.id)).length&&
