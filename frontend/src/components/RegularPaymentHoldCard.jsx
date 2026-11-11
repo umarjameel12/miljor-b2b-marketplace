@@ -61,7 +61,7 @@ export function RegularPaymentHoldCard({order}) {
       :<div className="rounded-xl border p-3 flex flex-wrap items-center justify-between gap-3" style={{borderColor:'var(--border-subtle)'}}>
           <div>
             <div className="text-[11px] text-[var(--text-muted)] flex gap-1 items-center"><Clock size={13}/> Payment hold deadline</div>
-            <CountdownTimer deadline={hold.expires_at} serverTime={hold.server_time} label="Pay within"/>
+            <CountdownTimer deadline={hold.expires_at} serverTime={hold.server_time} label="Pay within" onExpire={fetchStatus}/>
           </div>
           <button type="button" disabled={!canCheckout||busy} onClick={checkout}
             className="px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 bg-emerald-700 text-white flex gap-2 items-center">
