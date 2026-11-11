@@ -22,4 +22,13 @@ assert.match(supplier,/Ready-stock terms/);
 assert.match(supplier,/saveRegularDraft/);
 assert.match(supplier,/saveFlashDraft/);
 assert.doesNotMatch(supplier,/two independent supplier-owned pool engines/);
+const orders=read('pages/OrdersPage.jsx');
+const readyOrders=read('components/pools/FlashBuyerOrdersPanel.jsx');
+const supplierDashboard=read('pages/SupplierDashboardPage.jsx');
+const supplierOperations=read('components/supplier/SupplierPoolOperationsPanel.jsx');
+assert.doesNotMatch(orders,/Your Regular Pool Payments|No Regular Pool Orders Yet/);
+assert.doesNotMatch(readyOrders,/Flash Pool Orders/);
+assert.doesNotMatch(supplierDashboard,/Manage Regular & Flash Pools/);
+assert.doesNotMatch(supplierOperations,/>Regular Pools<|>Flash Pools</);
+
 console.log('PASS unified buyer/supplier pool UX source contract; no separate public discovery route, backend-specific financial invariants preserved');
