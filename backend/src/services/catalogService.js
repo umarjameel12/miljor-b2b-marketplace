@@ -721,6 +721,15 @@ class CatalogService {
         return { request: reqRow, alreadyApproved: true };
       }
 
+      // B1 ownership invariant: a historic NEW_VARIANT request is readable
+      // but cannot be used to create a new admin-owned physical SKU.
+      if (reqRow.request_type === 'NEW_VARIANT') {
+        const err = new Error('New physical variants belong to verified suppliers. Create a supplier-owned SKU under the approved family.');
+        err.code = 'SUPPLIER_OWNED_VARIANTS';
+        err.status = 409;
+        throw err;
+      }
+
       if (!['SUBMITTED', 'UNDER_REVIEW'].includes(reqRow.status)) {
         const err = new Error(`Cannot approve catalog request in status '${reqRow.status}'.`);
         err.status = 409;
