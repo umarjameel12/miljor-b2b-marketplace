@@ -27,6 +27,27 @@ router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{
 });
 
 
+// UCP-3/UCP-5: read-only supplier-owned pool operations.
+for (const [route,action] of [
+  ['/pools/delivery-context','deliveryContext'],
+  ['/pools/inventory','inventory'],
+  ['/pools/insights','insights'],
+  ['/pools/alerts','alerts']
+]) {
+  router.get(route,authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try {
+      const data=await require('../../services/poolOperationsService')[action](req.user.id);
+      res.json({success:true,data});
+    }catch(error){
+      const code=error.statusCode||500;
+      res.status(code).json({success:false,error:{
+        code:code<500?error.code:'POOL_OPERATION_UNAVAILABLE',
+        message:code<500?error.message:'Unable to retrieve supplier pool operations'
+      }});
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 1. Supplier Business Profile & Onboarding (Package E1)
 // ---------------------------------------------------------------------------
