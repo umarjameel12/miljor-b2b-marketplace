@@ -1,31 +1,26 @@
 'use strict';
-// Deferred final acceptance: no database operations.
-const assert = require('node:assert/strict');
-const { assertNoUnresolvedBranchCollisions, COLLISIONS } =
+// Source-only migration reconciliation acceptance; no DB connection.
+const assert=require('node:assert/strict');
+const {assertNoUnresolvedBranchCollisions,COLLISIONS,EXPECTED}=
   require('../database/migrationCollisionGuard');
-const { migrationManifest } = require('../database/runMigrations');
-
-assert.equal(COLLISIONS.length, 2);
-for (const entry of COLLISIONS) {
-  assert.throws(
-    () => assertNoUnresolvedBranchCollisions([
-      { version: entry.version, file: entry.independent }
-    ]),
-    /MIGRATION_BRANCH_COLLISION_UNRESOLVED/
-  );
-  assert.throws(
-    () => assertNoUnresolvedBranchCollisions([
-      { version: entry.version, file: entry.concurrent }
-    ]),
-    /MIGRATION_BRANCH_COLLISION_UNRESOLVED/
-  );
+const {migrationManifest}=require('../database/runMigrations');
+assert.equal(COLLISIONS.length,3);
+assert.equal(Object.keys(EXPECTED).length,7);
+const liveManifest=migrationManifest();
+assert.equal(assertNoUnresolvedBranchCollisions(liveManifest),true);
+for(const c of COLLISIONS){
+  const swapped=liveManifest.map(x=>String(x.version)===c.version?
+    {...x,file:c.independent}:x);
+  assert.throws(()=>assertNoUnresolvedBranchCollisions(swapped),
+    /MIGRATION_BRANCH_COLLISION_UNRESOLVED/);
 }
-assert.doesNotThrow(() => assertNoUnresolvedBranchCollisions([
-  { version: '045', file: '045_safe.sql' }
-]));
-const liveManifest = migrationManifest();
-assert.throws(
-  () => assertNoUnresolvedBranchCollisions(liveManifest),
-  /MIGRATION_BRANCH_COLLISION_UNRESOLVED/
-);
-console.log('PASS: collision preflight blocks divergent B6/catalog versions before DB connection.');
+for(const version of Object.keys(EXPECTED)){
+  const omitted=liveManifest.filter(x=>String(x.version)!==version);
+  assert.throws(()=>assertNoUnresolvedBranchCollisions(omitted),
+    /MIGRATION_BRANCH_COLLISION_UNRESOLVED/);
+}
+const versions=liveManifest.map(x=>x.version);
+assert.equal(new Set(versions).size,versions.length);
+assert.deepEqual(Object.keys(EXPECTED),
+  ['046','047','048','049','050','051','052']);
+console.log('PASS: reconciled 046-052 manifest maps every unique version and rejects 3 stale collisions.');
