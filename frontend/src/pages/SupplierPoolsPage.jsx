@@ -125,6 +125,7 @@ export function SupplierPoolsPage(){
   const [edit,setEdit]=useState(null);
   const [busy,setBusy]=useState(false);
   const [confirm,setConfirm]=useState(null);
+  const editRequest=params.get('edit');
   const creating=params.get('create')==='1'||Boolean(edit);
   const load=useCallback(async()=>{
     setLoading(true);setError('');
@@ -181,6 +182,18 @@ export function SupplierPoolsPage(){
     }
     setForm(base);setParams({create:'1',type:pool.type.toLowerCase()});
   };
+  useEffect(()=>{
+    if(!editRequest||loading||edit||!data.pools.length)return;
+    const [type,id]=editRequest.split(':');
+    const selected=data.pools.find(p=>p.type===type&&String(p.id)===id);
+    if(selected&&selected.can_edit)openEdit(selected);
+    else {
+      toast.error('That pool draft is no longer editable.');
+      setParams({});
+    }
+  // openEdit is intentionally invoked after both catalog and pool data load.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[editRequest,loading,data.pools,listings,edit]);
   const close=()=>{setEdit(null);setParams({})};
   const save=async(e)=>{
     e.preventDefault();
