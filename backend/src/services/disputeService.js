@@ -261,6 +261,30 @@ class DisputeService {
 
       if (existingByKey.length > 0) {
         const existingDispute = existingByKey[0];
+        let replayConflict = existingDispute.dispute_category !== category;
+        if (order.notes === 'SMART_PROCUREMENT_BASKET') {
+          let previousEvidence = {};
+          try {
+            previousEvidence = typeof existingDispute.evidence_metadata === 'string' ?
+              JSON.parse(existingDispute.evidence_metadata) : existingDispute.evidence_metadata || {};
+          } catch { replayConflict = true; }
+          replayConflict = replayConflict ||
+            Number(previousEvidence.award_line_id) !== Number(evidenceMetadata?.award_line_id) ||
+            !exactDecimal.exactDecimalEquals(
+              previousEvidence.received_quantity, evidenceMetadata?.received_quantity, 4
+            );
+        } else if (disputedQuantity != null) {
+          replayConflict = replayConflict ||
+            !exactDecimal.exactDecimalEquals(
+              existingDispute.disputed_quantity, disputedQuantity, 4
+            );
+        }
+        if (replayConflict) {
+          const err = new Error('This idempotency key has already been used for a different dispute payload.');
+          err.code = 'IDEMPOTENCY_PAYLOAD_CONFLICT';
+          err.statusCode = 409;
+          throw err;
+        }
         await connection.commit();
         return {
           is_replay: true,
@@ -391,7 +415,7 @@ class DisputeService {
         exactDecimal.exactMultiplyRound(String(parsedDisputedQty),unitPriceStr,2);
 
       // Generate deterministic dispute code
-      const disputeCode = `DSP-ORD-${orderId}-${Date.now().toString().slice(-6)}`;
+      const disputeCode = `DSP-ORD-${orderId}-${crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,16)}`;
 
       // Insert order_disputes row
       // Map reason column for legacy compatibility
