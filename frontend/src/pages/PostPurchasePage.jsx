@@ -142,8 +142,8 @@ export function PostPurchasePage(){
      <h2 className="font-semibold">Paid orders</h2>
      {loading&&<p className="text-sm">Loading orders…</p>}
      {!loading&&!orders.length&&<p className="text-sm text-[var(--text-muted)]">No eligible paid orders found.</p>}
-     {orders.map(o=><button type="button" key={o.id}
-      onClick={()=>details(o.id)} className="block w-full text-left rounded-xl border border-[var(--border-subtle)] p-3 hover:opacity-80">
+     {orders.map(o=><button type="button" key={o.id} disabled={busy}
+      onClick={()=>details(o.id)} className="block w-full text-left rounded-xl border border-[var(--border-subtle)] p-3 hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50">
       <div className="font-semibold">{o.order_code||'#'+o.id}</div>
       <div className="text-xs mt-1">{paidStatus(o.fulfillment_status)} · PKR {o.total_amount}</div>
      </button>)}
