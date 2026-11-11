@@ -599,6 +599,62 @@ class FinancialSettlementService {
         throw err;
       }
 
+      // A buyer must not invent a partial monetary refund independent of a
+      // real owned delivery dispute. The discrepancy service records evidence;
+      // refund entitlement is separately assessed and remains non-executable.
+      if (refundType === 'PARTIAL' && actor.role === 'BUYER') {
+        if (!Number.isSafeInteger(Number(disputeId)) || Number(disputeId) <= 0) {
+          const err = new Error('A linked dispute is mandatory for buyer partial refunds');
+          err.code = 'PARTIAL_REFUND_DISPUTE_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+      if (refundType === 'PARTIAL' && disputeId !== null && disputeId !== undefined) {
+        const [linkedDisputes] = await connection.query(
+          `SELECT id, order_id, buyer_id, disputed_quantity, status
+           FROM order_disputes WHERE id=? AND order_id=? FOR UPDATE`,
+          [disputeId, orderId]
+        );
+        if (linkedDisputes.length !== 1 ||
+            Number(linkedDisputes[0].buyer_id) !== Number(order.buyer_id)) {
+          const err = new Error('Refund references an invalid or unrelated buyer dispute');
+          err.code = 'REFUND_DISPUTE_MISMATCH';
+          err.statusCode = 403;
+          throw err;
+        }
+        const linked = linkedDisputes[0];
+        if (['RESOLVED_REJECTED', 'CLOSED'].includes(linked.status)) {
+          const err = new Error('Refund is not allowed for a closed/rejected dispute');
+          err.code = 'REFUND_DISPUTE_NOT_ELIGIBLE';
+          err.statusCode = 409;
+          throw err;
+        }
+        if (disputedQuantity === null || disputedQuantity === undefined ||
+            !exactDecimal.exactDecimalGte(
+              String(linked.disputed_quantity), String(disputedQuantity), 2
+            ) || !exactDecimal.exactDecimalGte(String(disputedQuantity), '0.01', 2)) {
+          const err = new Error('Refund quantity must be positive and no more than linked disputed quantity');
+          err.code = 'REFUND_QUANTITY_EXCEEDS_DISPUTE';
+          err.statusCode = 422;
+          throw err;
+        }
+        const [pendingSameDispute] = await connection.query(
+          `SELECT id FROM refund_obligations
+           WHERE order_id=? AND dispute_id=?
+             AND status IN ('REQUESTED','UNDER_REVIEW','APPROVED',
+               'AWAITING_EXTERNAL_EXECUTION','EXTERNAL_PROCESSING','CONFIRMED')
+           LIMIT 1 FOR UPDATE`,
+          [orderId, disputeId]
+        );
+        if (pendingSameDispute.length) {
+          const err = new Error('A refund obligation already exists for this dispute; reconcile it before further assessments');
+          err.code = 'REFUND_ALREADY_ASSESSED_FOR_DISPUTE';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+
       // Check existing approved/confirmed refunds to prevent over-refunding
       const [existingRefunds] = await connection.query(
         `SELECT SUM(total_refund_amount) AS total_refunded
