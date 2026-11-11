@@ -162,7 +162,7 @@ class SupplierListingRepository {
       // B3: Buyer discovery must never expose stale or unverified supplier offers.
       sql += ` AND sl.status = 'ACTIVE'
         AND sl.available_stock > 0 AND sl.available_stock >= sl.buyer_min_qty
-        AND u.role = 'SUPPLIER' AND u.verification_status = 'VERIFIED'
+        AND u.role = 'SUPPLIER' AND u.is_verified = 1 AND u.verification_status = 'VERIFIED'
         AND sp.verification_status = 'VERIFIED'
         AND ps.is_active = 1 AND ps.approval_status = 'APPROVED'
         AND ps.lifecycle_status = 'PUBLISHED'
