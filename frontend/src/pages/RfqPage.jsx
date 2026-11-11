@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { ProcurementAdvancedControls } from '../components/procurement/ProcurementAdvancedControls';
+import { CountdownTimer } from '../components/ui/CountdownTimer';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
@@ -90,6 +91,15 @@ export const RfqPage = () => {
     const listed = [...(family.allowed_pack_units || []), ...(family.allowed_purchasing_units || [])]
       .filter(x => typeof x === 'string').map(x => x.toLowerCase().trim());
     return [...new Set(listed)].filter(x => ['kg','g','l','ml','bag','tin','carton','sack','pack'].includes(x));
+  };
+  // MySQL UTC DATETIME is timezone-less; the display timer must never
+  // interpret it as the browser's local timezone.
+  const utcDeadline = value => {
+    if(!value)return null;
+    const t=String(value).trim();
+    if(/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:\.\d+)?$/.test(t))
+      return t.replace(' ','T')+'Z';
+    return /(?:Z|[+-]\d\d:\d\d)$/i.test(t)?t:null;
   };
   const newRequestKey = () => `buyer-${crypto.randomUUID()}`;
   const toLocalInput = value => {
@@ -999,7 +1009,11 @@ export const RfqPage = () => {
                 <div className="space-y-2">
                   {savedRequests.map(request=>(
                     <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <span>{request.request_code} · {request.status} · {request.delivery_area}</span>
+                      <span>{request.request_code} · {request.status} · {request.delivery_area}
+                        {request.quote_deadline && <span className="block">
+                          <CountdownTimer compact deadline={utcDeadline(request.quote_deadline)} label="Quote closes"/>
+                        </span>}
+                      </span>
                       <div className="flex gap-3">
                         {request.status==='DRAFT' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
@@ -1074,8 +1088,10 @@ export const RfqPage = () => {
                 {myCollectiveInvites.map(invite=>(
                   <div key={invite.participant_id} className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
                     <p className="text-xs font-semibold">
-                      Group #{invite.group_id} · {invite.status} · Join by {String(invite.join_deadline)}
+                      Group #{invite.group_id} · {invite.status}
                     </p>
+                    {invite.join_deadline &&
+                      <CountdownTimer compact deadline={utcDeadline(invite.join_deadline)} label="Join closes"/>}
                     {invite.status==='JOINED'&&invite.group_status==='QUOTING' &&
                       <button type="button" disabled={shoppingBusy}
                         onClick={()=>showCollectiveBids(invite.group_id)}
@@ -1222,7 +1238,7 @@ export const RfqPage = () => {
                       <div key={cycle.id} className="flex flex-wrap justify-between gap-2 border-t border-[var(--border-subtle)] pt-2">
                         <div>
                           <p className="text-xs font-semibold">{cycle.cycle_key} · {cycle.status}</p>
-                          <p className="text-xs text-[var(--text-muted)]">Due: {String(cycle.due_at_utc)}</p>
+                          <CountdownTimer compact deadline={utcDeadline(cycle.due_at_utc)} label="Cycle due"/>
                           {cycle.generated_request_id &&
                             <p className="text-xs">Generated buyer draft #{cycle.generated_request_id}</p>}
                         </div>
@@ -1413,7 +1429,8 @@ export const RfqPage = () => {
                       Items Rs. {quote.items_total} + Delivery Rs. {quote.delivery_fee}
                       = Rs. {quote.quoted_total}
                     </p>
-                    <p className="text-xs text-[var(--text-muted)]">Valid until {String(quote.valid_until)}. Supplier quotation excludes MilJor processing fees; final payable amount is calculated only at order acceptance.</p>
+                    <p className="text-xs text-[var(--text-muted)]">Supplier quotation excludes MilJor processing fees; final payable amount is calculated only at order acceptance.</p>
+                    <CountdownTimer compact deadline={utcDeadline(quote.valid_until)} label="Quote valid"/>
                     <button type="button" className="text-xs underline mt-1" disabled={quoteBusy}
                       onClick={()=>viewQuoteHistory(selectedQuotesRequest,quote.id)}>View version history</button>
                   </article>
