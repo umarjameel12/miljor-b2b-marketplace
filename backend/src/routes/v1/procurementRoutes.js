@@ -16,6 +16,17 @@ router.post('/flash-pools/:id/publish', protect, authorizeStrict('SUPPLIER'), (r
 router.put('/flash-pools/:id', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.updateFlashDraft(req, res));
 router.post('/flash-pools/:id/cancel', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.cancelFlashPool(req, res));
 router.post('/flash-pools/:id/hold', protect, authorizeStrict('BUYER'), (req, res) => controller.reserveFlashPool(req, res));
+router.get('/flash-pools/holds/mine',protect,authorizeStrict('BUYER'),async(req,res)=>{
+  try {
+    const data=await require('../../services/buyerFlashHoldReadService').listFlashHolds(req.user.id);
+    res.json({success:true,data});
+  }catch(error){
+    res.status(error.statusCode||500).json({success:false,error:{
+      code:error.statusCode?error.code:'FLASH_HOLDS_UNAVAILABLE',
+      message:error.statusCode?error.message:'Unable to load Flash payment holds'
+    }});
+  }
+});
 router.get('/flash-pools/holds/:holdId', protect, authorizeStrict('BUYER'), (req, res) => controller.getFlashHold(req, res));
 router.post('/flash-pools/:id/expire', protect, authorizeStrict('SUPPLIER'), (req, res) => controller.expireFlashPool(req, res));
 
