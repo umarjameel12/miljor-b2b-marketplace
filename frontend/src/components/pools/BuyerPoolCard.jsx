@@ -75,12 +75,12 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     try{
       if(flash){
         const saved=savedAddresses.find(a=>String(a.id)===selectedAddress);
-        if(!saved)throw Error('Choose your verified saved Lahore business delivery address before reserving Flash stock.');
+        if(!saved)throw Error('Choose your verified saved Lahore business delivery address before holding ready stock.');
         const payload={quantity:String(quantity),delivery_address_id:Number(saved.id),
           delivery_cluster_id:Number(saved.cluster_id)};
         const fingerprint=JSON.stringify(payload);
         if(purchaseIntent.current && purchaseIntent.current.fingerprint!==fingerprint)
-          throw Error('Previous Flash hold outcome is uncertain. Review My Flash Orders before changing quantity or delivery address.');
+          throw Error('Previous stock-hold outcome is uncertain. Review My Orders before changing quantity or delivery address.');
         if(!purchaseKey.current)purchaseKey.current=key('flash-hold');
         if(!purchaseIntent.current)purchaseIntent.current={fingerprint};
         const result=await unifiedPoolsApi.holdFlash(pool.id,payload,purchaseKey.current);
@@ -94,14 +94,14 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
         const payload={pool_id:pool.id,quantity:String(quantity)};
         const fingerprint=JSON.stringify(payload);
         if(purchaseIntent.current&&purchaseIntent.current.fingerprint!==fingerprint)
-          throw Error('An earlier Regular reservation could have succeeded. Review your reservations before changing quantity.');
+          throw Error('An earlier pool reservation could have succeeded. Review My Orders before changing quantity.');
         if(!purchaseKey.current)purchaseKey.current=key('regular-reserve');
         if(!purchaseIntent.current)purchaseIntent.current={fingerprint};
         const result=await apiClient.post('/reservations',payload,
           {headers:{'X-Idempotency-Key':purchaseKey.current}});
         if(!result?.data?.success)throw Error('Unable to reserve quantity.');
         purchaseKey.current=null;purchaseIntent.current=null;setUncertainPurchase(false);
-        toast.success('Regular Pool quantity reserved. Final tier and payment follow the B4 commitment workflow.');
+        toast.success('Pool quantity reserved. Final tier and payment require separate buyer confirmation.');
         setOpen(false);onChange?.();
       }
     }catch(e){if(!e.response&&purchaseIntent.current)setUncertainPurchase(true);toast.error(errorMessage(e));}
@@ -129,7 +129,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
   const ends=pool.pool_close_at;
   return <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 space-y-3 flex flex-col" aria-label={pool.type+' supplier pool'}>
     <div className="flex justify-between gap-2 items-center">
-      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${flash?'text-amber-600 bg-amber-500/10':'text-emerald-600 bg-emerald-500/10'}`}>{flash?'Flash Pool':'Regular Pool'}</span>
+      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${flash?'text-amber-600 bg-amber-500/10':'text-emerald-600 bg-emerald-500/10'}`}>Pool</span>
       <span className="text-xs text-[var(--text-muted)]">{pool.code}</span>
     </div>
     <div>
@@ -139,7 +139,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1">
       {flash?<><div className="text-lg font-bold">{fmt(pool.discounted_unit_price)} <span className="text-xs font-normal">/ {pool.unit}</span></div>
         {pool.original_unit_price&&Number(pool.original_unit_price)>Number(pool.discounted_unit_price)&&
-          <p className="text-xs text-[var(--text-muted)]">Reference listing price when Flash was published: <s>{fmt(pool.original_unit_price)}</s></p>}
+          <p className="text-xs text-[var(--text-muted)]">Reference listing price when this offer was published: <s>{fmt(pool.original_unit_price)}</s></p>}
         <p className="text-xs">Remaining: <b>{pool.remaining_stock} / {pool.total_stock} {pool.unit}</b></p>
         <p className="text-xs">{pool.selling_mode==='WHOLE_LOT'?'Whole lot purchase only':
           'Buyer limit: '+pool.min_quantity+'–'+pool.max_quantity_per_buyer+' '+pool.unit}</p>
@@ -147,7 +147,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
         <p className="text-xs">Pooled: <b>{pool.current_qty} / {pool.target_qty} {pool.unit}</b> · Minimum {pool.minimum_qty}</p>
         {pool.additional_quantity_for_next_tier!=null&&Number(pool.additional_quantity_for_next_tier)>0&&
           <p className="text-xs text-emerald-700 dark:text-emerald-400">{pool.additional_quantity_for_next_tier} {pool.unit} more towards next tier</p>}
-        <p className="text-xs text-[var(--text-muted)]">Price finalized by the Regular Pool commercial commitment lifecycle.</p>
+        <p className="text-xs text-[var(--text-muted)]">Final price requires the supplier offer and buyer commercial confirmation.</p>
       </>}
     </div>
     <div className="text-xs flex items-center gap-2"><Clock size={14}/>
@@ -162,11 +162,11 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     </div>:<p className="text-xs text-[var(--text-muted)]"><Truck size={13} className="inline mr-1"/>Delivery options: {pool.delivery_modes?.join(', ')||'Buyer eligibility to be verified'}.</p>}
     <button type="button" onClick={openForBuyer} disabled={!pool.can_join}
       className="mt-auto rounded-xl px-3 py-2.5 bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
-      <ShoppingCart size={14}/>{pool.can_join?(flash?'Reserve stock for checkout':'Join Regular Pool'):'Unavailable'}
+      <ShoppingCart size={14}/>{pool.can_join?(flash?'Reserve stock for checkout':'Join pool'):'Unavailable'}
     </button>
     {open&&<div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Confirm supplier pool purchase">
       <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border-subtle)] p-5 max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="font-semibold text-lg">{flash?'Flash Stock Hold':'Regular Pool Reservation'}</h3>
+        <h3 className="font-semibold text-lg">Pool participation</h3>
         <p className="text-sm">{pool.product_title} · {pool.code}</p>
         {!hold?<><label className="text-xs block space-y-1">Quantity ({pool.unit})
           <input type="number" step={flash?'0.01':'0.0001'} min={flash?pool.min_quantity:pool.buyer_min_qty}
@@ -195,7 +195,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
           </div>}
           <p className="text-xs text-[var(--text-muted)]">{flash?
             'A 15-minute stock hold starts when the backend accepts your request. Safepay payment is a separate explicit action.':
-            'Joining a Regular Pool does not lock a guaranteed final price or immediately charge your account.'}</p>
+            'Joining a pool does not guarantee final tier pricing or charge you; the supplier offer and payment are separate steps.'}</p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={()=>setOpen(false)} className="border rounded-lg px-3 py-2 text-xs">Back</button>
             <button disabled={saving} type="button" onClick={submit} className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs">

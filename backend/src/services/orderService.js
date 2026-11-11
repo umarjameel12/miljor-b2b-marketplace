@@ -632,7 +632,7 @@ class OrderService {
     const [rows] = await db.query(
       `SELECT o.*, p.pool_code, ps.title AS product_title, ps.purchasing_unit, r.reservation_code 
        FROM orders o
-       JOIN pools p ON o.pool_id = p.id
+       LEFT JOIN pools p ON o.pool_id = p.id
        LEFT JOIN product_specifications ps ON p.product_spec_id = ps.id
        LEFT JOIN reservations r ON o.reservation_id = r.id
        ${whereSql}
@@ -648,7 +648,7 @@ class OrderService {
       reservation_code: order.reservation_code,
       pool_id: order.pool_id,
       pool_code: order.pool_code,
-      product_title: order.product_title || 'Commodity Batch',
+      product_title: order.product_title || 'Procurement Order',
       purchasing_unit: order.purchasing_unit || 'BAG',
       buyer_id: order.buyer_id,
       supplier_id: order.supplier_id,
@@ -690,7 +690,7 @@ class OrderService {
     const [rows] = await db.query(
       `SELECT o.*, p.pool_code, ps.title AS product_title, ps.purchasing_unit, r.reservation_code 
        FROM orders o
-       JOIN pools p ON o.pool_id = p.id
+       LEFT JOIN pools p ON o.pool_id = p.id
        LEFT JOIN product_specifications ps ON p.product_spec_id = ps.id
        LEFT JOIN reservations r ON o.reservation_id = r.id
        WHERE o.id = ?`,
