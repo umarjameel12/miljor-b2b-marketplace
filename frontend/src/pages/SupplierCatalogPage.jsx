@@ -297,25 +297,9 @@ export const SupplierCatalogPage = () => {
     loadPortalData();
   }, [isAuthenticated, user, navigate]);
 
-  // Fetch approved variants whenever selectedFamilyId changes
-  useEffect(() => {
-    if (!selectedFamilyId) {
-      setVariants([]);
-      return;
-    }
-    let active = true;
-    (async () => {
-      try {
-        const res = await catalogApi.getFamilyVariants(Number(selectedFamilyId));
-        if (active) {
-          setVariants(res.data?.variants || []);
-        }
-      } catch (err) {
-        console.error('Error loading variants for family:', err);
-      }
-    })();
-    return () => { active = false; };
-  }, [selectedFamilyId]);
+  // Supplier-defined specifications are authoritative. Do not load or present
+  // historical global variants as available products in the supplier portal.
+  useEffect(() => { setVariants([]); }, [selectedFamilyId]);
 
   // Dependent Reset Rule: Changing Category resets Family & Variant selection
   const handleSelectCategory = (catIdStr) => {
@@ -1043,7 +1027,7 @@ export const SupplierCatalogPage = () => {
               }`}
             >
               <Layers className="w-4 h-4" />
-              1. Canonical Catalog ({variants.length})
+              1. Product Families ({families.length})
             </button>
             <button
               type="button"
@@ -1188,72 +1172,24 @@ export const SupplierCatalogPage = () => {
 
             <div className="lg:col-span-8 space-y-4">
               <Card className="p-5 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-4">
-                  <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                      Step 3 • Approved Specifications & Supplier Product Creation
-                    </span>
-                    <h2 className="text-lg font-bold text-[var(--text-primary)]">
-                      {currentFamily ? `${currentFamily.name} Specifications` : 'Select a Product Family'}
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={openCreateSupplierProductModal} className="text-xs">
-                      + Define My Supplier Product
-                    </Button>
-                  </div>
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 3 • Supplier-Owned Product Specifications
+                  </span>
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">
+                    {currentFamily ? currentFamily.name : 'Select a Product Family'}
+                  </h2>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    MilJor approves product families, not fixed brands or pack sizes.
+                    You define the product variety, brand, grade, processing method and
+                    physical packaging. Published physical SKUs are immutable; create
+                    a new SKU if the specifications change.
+                  </p>
                 </div>
-
-                <div className="relative">
-                  <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={variantSearch}
-                    onChange={(e) => setVariantSearch(e.target.value)}
-                    placeholder="Filter specifications by brand, variety, grade, or pack size..."
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  {filteredVariants.map((variant) => {
-                    const myExistingOffer = myListings.find(l => Number(l.product_spec_id) === Number(variant.id));
-                    return (
-                      <div
-                        key={variant.id}
-                        className="p-4 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                      >
-                        <div className="space-y-1.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-muted)]">
-                              {variant.spec_code}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                              {variant.lifecycle_status === 'PUBLISHED' ? 'SUPPLIER SKU' : 'LEGACY GLOBAL SPEC'}
-                            </span>
-                          </div>
-                          <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                            {variant.variant_title || variant.title}
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]">
-                            <span><strong>Brand:</strong> {variant.brand || 'Unbranded'}</span>
-                            <span><strong>Variety:</strong> {variant.variety}</span>
-                            {variant.quality_grade && <span><strong>Grade:</strong> {variant.quality_grade}</span>}
-                            <span><strong>Pack:</strong> {variant.pack_size}{variant.pack_unit} ({variant.packaging_type})</span>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant={myExistingOffer ? 'outline' : 'primary'}
-                          onClick={() => openCreateOfferModal(variant)}
-                          className="text-xs shrink-0"
-                        >
-                          {myExistingOffer ? 'Edit My Offer' : 'Publish Offer'}
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
+                <Button size="sm" onClick={openCreateSupplierProductModal}
+                  disabled={!currentFamily} className="text-xs">
+                  + Define My Supplier Product
+                </Button>
               </Card>
             </div>
           </div>
