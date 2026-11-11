@@ -10,7 +10,6 @@ import {
   ClipboardList,
   Users,
   Tag,
-  Headphones,
   Search,
   Bell,
   User,
@@ -146,28 +145,6 @@ export const AppShell = ({ children }) => {
     setCollapsedPanelOpen(false);
   };
 
-  // Outside click listener: Close sidebar when clicking anywhere outside it
-  useEffect(() => {
-    if (collapsed) return;
-
-    const handleOutsideSidebarClick = (event) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
-        setCollapsed(true);
-        try {
-          localStorage.setItem('miljor_sidebar_collapsed', 'true');
-        } catch {}
-      }
-    };
-
-    document.addEventListener('mousedown', handleOutsideSidebarClick);
-    document.addEventListener('touchstart', handleOutsideSidebarClick);
-
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideSidebarClick);
-      document.removeEventListener('touchstart', handleOutsideSidebarClick);
-    };
-  }, [collapsed]);
-
   // Outside click listener: Close account dropdown when clicking anywhere outside it
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -195,15 +172,36 @@ export const AppShell = ({ children }) => {
   // Primary Navigation items matching the reference and functional routes
   const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
   const isAdmin = isAuthenticated && adminRoles.includes(user?.role);
-  const navItems = [
-    ...(isAdmin ? [{ label: 'Admin Console', path: '/admin', icon: ShieldCheck, active: location.pathname.startsWith('/admin') }] : []),
-    { label: 'Home', path: '/', icon: Home, active: location.pathname === '/' },
-    { label: 'Explore Pools', path: '/pools', icon: Layers, active: location.pathname === '/pools' },
-    { label: 'Orders', path: '/orders', icon: ClipboardList, active: location.pathname === '/orders' },
-    { label: 'Suppliers', path: '/suppliers', icon: Users, disabled: true, tooltip: 'Suppliers Directory (Coming Soon)' },
-    { label: 'Pricing', path: '/pricing', icon: Tag, disabled: true, tooltip: 'Volume Pricing Tiers (Coming Soon)' },
-    { label: 'Support', path: '/support', icon: Headphones, disabled: true, tooltip: 'Procurement Concierge (Coming Soon)' },
-  ];
+  const role = user?.role;
+  const isSupplier = isAuthenticated && role === 'SUPPLIER';
+  const path = location.pathname;
+  const is = (p) => path === p || path.startsWith(p + '/');
+  const navItems = isAdmin
+    ? [
+        { label: 'Admin Console', path: '/admin', icon: ShieldCheck, active: path === '/admin' || path === '/admin/dashboard' },
+        { label: 'Supplier Verification', path: '/admin/verifications', icon: Users, active: is('/admin/verifications') || is('/admin/suppliers') },
+        { label: 'Catalog Governance', path: '/admin/catalog', icon: Layers, active: is('/admin/catalog') },
+      ]
+    : isSupplier
+    ? [
+        { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
+        { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
+        { label: 'Pool Management', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
+        { label: 'Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Subscription', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
+        { label: 'Business Profile', path: '/supplier/profile', icon: User, active: is('/supplier/profile') || is('/supplier/onboarding') },
+      ]
+    : [
+        { label: 'Home', path: '/', icon: Home, active: path === '/' },
+        { label: 'Explore Pools', path: '/pools', icon: Layers, active: is('/pools') },
+        ...(isAuthenticated
+          ? [
+              { label: 'Orders', path: '/orders', icon: ClipboardList, active: is('/orders') },
+              { label: 'Procurement', path: '/rfqs', icon: Tag, active: is('/rfqs') },
+              { label: 'Demand Requests', path: '/demand-requests', icon: Users, active: is('/demand-requests') },
+            ]
+          : []),
+      ];
 
   // Mobile bottom bar items matching reference phone mockup
   const mobileBottomItems = [
@@ -450,26 +448,6 @@ export const AppShell = ({ children }) => {
                     </span>
                   </div>
                 );
-
-                if (item.disabled) {
-                  return (
-                    <div
-                      key={item.label}
-                      className="relative cursor-default"
-                      onMouseEnter={() => collapsed && setHoveredNav(item.label)}
-                      onMouseLeave={() => collapsed && setHoveredNav(null)}
-                      title={!FLAGS.customTooltips ? (item.tooltip || (collapsed ? `${item.label} (Coming Soon)` : undefined)) : undefined}
-                      aria-disabled="true"
-                    >
-                      {content}
-                      {FLAGS.customTooltips && collapsed && hoveredNav === item.label && (
-                        <div className="luxury-tooltip" role="tooltip">
-                          {item.label} <span className="opacity-70 text-[10px] ml-1">(Coming Soon)</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
 
                 return (
                   <div

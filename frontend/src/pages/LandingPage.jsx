@@ -15,54 +15,12 @@ import {
   Zap,
 } from 'lucide-react';
 
-// Reference fallback items matching the master showcase
 const CURRENT_YEAR = new Date().getFullYear();
-const REFERENCE_FEATURED_POOLS = [
-  {
-    id: 'ref-pool-1',
-    product_name: 'Fresh Tomatoes',
-    grade: 'A',
-    min_order_qty: 20,
-    pack_unit: 'kg',
-    estimated_unit_price: 118,
-    fill_percentage: 62,
-    committed_quantity: 620,
-    target_quantity: 1000,
-    status: 'ACTIVE',
-    image_url: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=500&q=80',
-  },
-  {
-    id: 'ref-pool-2',
-    product_name: 'Basmati Rice',
-    grade: 'Premium',
-    min_order_qty: 100,
-    pack_unit: 'kg',
-    estimated_unit_price: 310,
-    fill_percentage: 40,
-    committed_quantity: 2000,
-    target_quantity: 5000,
-    status: 'ACTIVE',
-    image_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=500&q=80',
-  },
-  {
-    id: 'ref-pool-3',
-    product_name: 'Masoor Dal',
-    grade: 'A',
-    min_order_qty: 50,
-    pack_unit: 'kg',
-    estimated_unit_price: 165,
-    fill_percentage: 78,
-    committed_quantity: 1560,
-    target_quantity: 2000,
-    status: 'ACTIVE',
-    image_url: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=500&q=80',
-  },
-];
 
 export const LandingPage = () => {
   const { isDark } = useTheme();
-  const [featuredPools, setFeaturedPools] = useState(REFERENCE_FEATURED_POOLS);
-  const [_loading, setLoading] = useState(true);
+  const [featuredPools, setFeaturedPools] = useState([]);
+  const [loadingPools, setLoadingPools] = useState(true);
 
   // Preload both dark and light hero images to prevent flash or flicker during theme switches
   useEffect(() => {
@@ -82,9 +40,9 @@ export const LandingPage = () => {
           setFeaturedPools(res.data.pools.slice(0, 3));
         }
       } catch (err) {
-        console.warn('Could not load backend featured pools, utilizing reference showcase:', err.message);
+        console.warn('Could not load featured pools:', err.message);
       } finally {
-        setLoading(false);
+        setLoadingPools(false);
       }
     }
     loadFeatured();
@@ -374,6 +332,18 @@ export const LandingPage = () => {
             {featuredPools.map((pool) => (
               <PoolCard key={pool.id} pool={pool} />
             ))}
+            {!loadingPools && featuredPools.length === 0 && (
+              <p
+                className="col-span-full text-sm py-8 text-center rounded-2xl border"
+                style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }}
+              >
+                No pools are open right now.{' '}
+                <Link to="/pools" className="underline" style={{ color: 'var(--brand-accent)' }}>
+                  Browse the marketplace
+                </Link>{' '}
+                to see the latest offers.
+              </p>
+            )}
           </div>
         </section>
 

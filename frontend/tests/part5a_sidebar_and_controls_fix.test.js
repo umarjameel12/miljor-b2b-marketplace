@@ -23,9 +23,11 @@ export async function runSidebarAndControlsTests() {
   const shellCode = fs.readFileSync(shellPath, 'utf8');
 
   // 1. Sidebar outside-click handling
-  assert.ok(shellCode.includes('handleOutsideSidebarClick'), 'AppShell must implement handleOutsideSidebarClick for auto-closing');
-  assert.ok(shellCode.includes('sidebarRef.current.contains'), 'Sidebar click detection must check container boundary');
-  pass('Outside click listener automatically collapses expanded sidebar');
+  // Redesign requirement (2026-11-12): the desktop sidebar keeps the state the user chose.
+  // Outside clicks inside page content must NOT collapse it (accidental collapse / layout shift).
+  assert.ok(!shellCode.includes('handleOutsideSidebarClick'), 'Desktop sidebar must not auto-collapse on outside click');
+  assert.ok(shellCode.includes('miljor_sidebar_collapsed'), 'Sidebar state must still persist the user choice');
+  pass('Desktop sidebar stays in the state chosen by the user (no outside-click collapse)');
 
   // 2. Smooth sidebar animation
   assert.ok(shellCode.includes('transition-all duration-300 ease-in-out'), 'Sidebar must specify smooth ease-in-out transition');
