@@ -74,6 +74,11 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
           <div>Active <b className="block">{insights?.by_type?.[type]?.active??'—'}</b></div>
           <div>Closed <b className="block">{insights?.by_type?.[type]?.closed??'—'}</b></div>
         </div>
+        <div className="grid grid-cols-3 gap-2 text-xs mt-3 pt-3 border-t border-[var(--border-subtle)]">
+          <div>Orders <b className="block">{insights?.by_type_orders?.[type]?.total??'—'}</b></div>
+          <div>Verified paid <b className="block text-emerald-600">{insights?.by_type_orders?.[type]?.paid??'—'}</b></div>
+          <div>Unpaid <b className="block">{insights?.by_type_orders?.[type]?.unpaid??'—'}</b></div>
+        </div>
       </div>)}
       <p className="text-xs flex items-start gap-2 text-[var(--text-muted)]"><Info size={14}/>{insights?.unavailable_reason||'Settlement metrics unavailable.'}</p>
     </div>}
