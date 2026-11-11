@@ -1001,6 +1001,19 @@ class FinancialSettlementService {
     actor,
     idempotencyKey = null
   }) {
+    if (!actor || !actor.id || !isAdminRole(actor.role)) {
+      const err = new Error('Only authorized administrators may prepare supplier disbursements');
+      err.code = 'UNAUTHORIZED_ROLE';
+      err.statusCode = 403;
+      throw err;
+    }
+    if (!idempotencyKey || typeof idempotencyKey !== 'string' ||
+        idempotencyKey.trim().length < 8 || idempotencyKey.length > 120) {
+      const err = new Error('Valid idempotency key is mandatory for disbursement preparation');
+      err.code = 'IDEMPOTENCY_KEY_REQUIRED';
+      err.statusCode = 400;
+      throw err;
+    }
     if (!beneficiaryTitle || String(beneficiaryTitle).trim().length < 3) {
       const err = new Error('Beneficiary title is required (minimum 3 characters)');
       err.code = 'INVALID_BENEFICIARY_TITLE';
@@ -1042,6 +1055,46 @@ class FinancialSettlementService {
 
       const payable = payables[0];
 
+      // Existing instruction check is serialized by the locked payable row.
+      // Never create a second payout intent for the same payable, even when
+      // a caller supplies a different idempotency key or changes IBAN.
+      const [existingInstructions] = await connection.query(
+        `SELECT * FROM supplier_disbursement_instructions
+         WHERE supplier_payable_id = ? ORDER BY id ASC FOR UPDATE`,
+        [payable.id]
+      );
+      const [globalReplays] = await connection.query(
+        `SELECT * FROM supplier_disbursement_instructions
+         WHERE idempotency_key = ? FOR UPDATE`,
+        [idempotencyKey.trim()]
+      );
+      const replay = existingInstructions.find(x => x.idempotency_key === idempotencyKey.trim());
+      if (globalReplays.length &&
+          (!replay || Number(globalReplays[0].id) !== Number(replay.id))) {
+        const err = new Error('Idempotency key belongs to a different disbursement');
+        err.code = 'DISBURSEMENT_IDEMPOTENCY_CONFLICT';
+        err.statusCode = 409;
+        throw err;
+      }
+      if (replay &&
+          replay.beneficiary_iban === cleanIban &&
+          replay.beneficiary_title === beneficiaryTitle.trim() &&
+          String(replay.beneficiary_bank_code || '') === String(beneficiaryBankCode || '') &&
+          exactDecimal.exactDecimalEquals(replay.amount, payable.available_amount, 2)) {
+        await connection.commit();
+        return {
+          success: true,
+          message: 'Idempotent replay: disbursement instruction already recorded',
+          data: { disbursement: replay }
+        };
+      }
+      if (existingInstructions.length > 0 || globalReplays.length > 0) {
+        const err = new Error('Disbursement already prepared or idempotency payload differs; reconciliation required');
+        err.code = 'DISBURSEMENT_ALREADY_EXISTS';
+        err.statusCode = 409;
+        throw err;
+      }
+
       // Supplier Affirmative Verification Invariant
       if (!payable.supplier_user_verified || payable.supplier_profile_status !== 'VERIFIED') {
         const err = new Error('Supplier must be affirmatively verified before preparing disbursement');
@@ -1055,6 +1108,48 @@ class FinancialSettlementService {
         const err = new Error(`Order fulfillment is '${payable.fulfillment_status}'. Disbursement requires BUYER_CONFIRMED or COMPLETED.`);
         err.code = 'ORDER_NOT_BUYER_CONFIRMED';
         err.statusCode = 422;
+        throw err;
+      }
+
+      // A pending or approved refund is a live claim even before gateway
+      // execution. It must not be paid away to the supplier.
+      const [refundClaims] = await connection.query(
+        `SELECT id FROM refund_obligations
+         WHERE order_id = ? AND status IN
+           ('REQUESTED','UNDER_REVIEW','APPROVED',
+            'AWAITING_EXTERNAL_EXECUTION','EXTERNAL_PROCESSING')
+         LIMIT 1 FOR UPDATE`,
+        [payable.order_id]
+      );
+      if (refundClaims.length > 0) {
+        const err = new Error('Open refund obligation prevents disbursement preparation');
+        err.code = 'PENDING_REFUND_DISBURSEMENT_BLOCKED';
+        err.statusCode = 409;
+        throw err;
+      }
+
+      // Validate the full payable conservation equation before creating a
+      // durable instruction. Never use floating point for money comparisons.
+      const netAfterRefund = exactSub(
+        payable.net_payable_amount.toString(),
+        payable.refund_deduction_amount.toString(), 2
+      );
+      const expectedAvailable = exactSub(
+        netAfterRefund, payable.held_amount.toString(), 2
+      );
+      if (!exactDecimal.exactDecimalEquals(
+            expectedAvailable, payable.available_amount.toString(), 2) ||
+          !exactDecimal.exactDecimalGte(expectedAvailable, '0.00', 2) ||
+          !exactDecimal.exactDecimalEquals(payable.disbursed_amount || '0.00', '0.00', 2)) {
+        const err = new Error('Supplier payable balances require reconciliation');
+        err.code = 'PAYABLE_ACCOUNTING_MISMATCH';
+        err.statusCode = 409;
+        throw err;
+      }
+      if (!['ACCRUED', 'PARTIALLY_HELD', 'ON_HOLD'].includes(payable.status)) {
+        const err = new Error('Supplier payable status does not permit a new disbursement');
+        err.code = 'PAYABLE_DISBURSEMENT_STATE_CONFLICT';
+        err.statusCode = 409;
         throw err;
       }
 
@@ -1075,22 +1170,6 @@ class FinancialSettlementService {
         throw err;
       }
 
-      // Check idempotency if key provided
-      if (idempotencyKey) {
-        const [existingIdem] = await connection.query(
-          `SELECT * FROM supplier_disbursement_instructions WHERE idempotency_key = ?`,
-          [idempotencyKey]
-        );
-        if (existingIdem.length > 0) {
-          await connection.commit();
-          return {
-            success: true,
-            message: 'Idempotent replay: Disbursement instruction already prepared',
-            data: { disbursement: existingIdem[0] }
-          };
-        }
-      }
-
       const disbursementCode = `DISB-${payable.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
 
       const [disbInsert] = await connection.query(
@@ -1109,7 +1188,7 @@ class FinancialSettlementService {
           cleanIban,
           beneficiaryBankCode,
           availableAmount,
-          idempotencyKey,
+          idempotencyKey.trim(),
           actor.id
         ]
       );
