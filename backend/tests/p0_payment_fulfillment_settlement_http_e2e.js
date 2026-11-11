@@ -76,11 +76,11 @@ async function main(){
    const payable=payables[0];assert.equal(exact(payable.commission_amount),'25.00');
    assert.equal(exact(payable.net_payable_amount),'1095.00');
    console.log('PASS G4 exact commission, delivery, supplier payable conservation');
-   const prepare=()=>post('/settlements/disbursements/prepare',{
-     role:'SUPER_ADMIN',id:1,key:'e2e-disburse-'+orderId,
+   const prepare=(attemptKey='e2e-disburse-'+orderId)=>post('/settlements/disbursements/prepare',{
+     role:'SUPER_ADMIN',id:1,key:attemptKey,
      body:{payable_id:payable.id,beneficiary_title:'Synthetic Supplier Business',
        beneficiary_iban:'PK00TEST0000000000000000'}});
-   r=await prepare();eq(r,422);assert.equal(r.body.error.code,'ORDER_NOT_BUYER_CONFIRMED');
+   r=await prepare('e2e-preconfirm-'+random());eq(r,422);assert.equal(r.body.error.code,'ORDER_NOT_BUYER_CONFIRMED');
    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
      key:'e2e-early-'+random()});eq(r,422);
    console.log('PASS G5 no settlement or buyer receipt before supplier delivery');
@@ -103,7 +103,7 @@ async function main(){
    const [[delivered]]=await db.query('SELECT fulfillment_status,buyer_confirmed_at FROM orders WHERE id=?',[orderId]);
    assert.equal(delivered.fulfillment_status,'SUPPLIER_DELIVERED');
    assert.equal(delivered.buyer_confirmed_at,null);
-   r=await prepare();eq(r,422);
+   r=await prepare('e2e-supplier-delivered-'+random());eq(r,422);
    console.log('PASS G6 four verified supplier milestones, delivery NOT buyer confirmation');
    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
      role:'SUPPLIER',id:2,key:'e2e-fraud-'+random()});eq(r,403);
