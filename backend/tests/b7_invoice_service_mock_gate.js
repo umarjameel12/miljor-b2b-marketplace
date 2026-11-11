@@ -64,7 +64,7 @@ async function run(){
  assert.equal(mock.state.commits,1);
  assert.equal(mock.state.rollbacks,0);
  pass('Actual invoiceService persists and commits owned PAID B6 supplier order');
- const snapshot=JSON.parse(mock.state.inserts[0][10]);
+ const snapshot=JSON.parse(mock.state.inserts[0][9]);
  assert.equal(snapshot.items.length,2);
  assert.equal(snapshot.items[0].quantity,'100.0000');
  assert.equal(snapshot.items[1].unit,'tin');
