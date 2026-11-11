@@ -1,0 +1,45 @@
+name: B7 isolated postpurchase source acceptance
+on:
+  push:
+    branches:
+      - feature/b7-fulfillment-gap-audit-20261111
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install locked backend dependencies
+        run: npm --prefix backend ci --ignore-scripts
+      - name: Check postpurchase service/controller syntax
+        run: |
+          node --check backend/src/services/disputeService.js
+          node --check backend/src/services/fulfillmentService.js
+          node --check backend/src/services/invoiceService.js
+          node --check backend/src/services/b7AwardInvoiceProjection.js
+          node --check backend/src/services/b7LineDeliveryPolicy.js
+          node --check backend/tests/b7_postpurchase_business_contract_gate.js
+          node --check backend/tests/b7_postpurchase_isolated_acceptance_gate.js
+          node --check backend/tests/b7_b6_award_fulfillment_readonly_gate.js
+      - name: Run actual isolated B7 business contract assertions
+        run: npm --prefix backend run test:b7:source
+        env:
+          NODE_ENV: test
+      - name: Install locked frontend dependencies
+        run: npm --prefix frontend ci --ignore-scripts
+      - name: Run existing frontend parser/design tests
+        run: npm --prefix frontend test
+      - name: Build B7 buyer/supplier frontend
+        run: npm --prefix frontend run build
+      - name: State test limitations
+        run: echo "Source/build only; real MySQL, authenticated B6 fixture, dispute lifecycle and browser write E2E require separate isolated acceptance."
