@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - test/payment-fulfillment-settlement-e2e-20261112
+      - test/b6-fulfillment-dispute-mysql-e2e-20261112
   pull_request:
     branches:
       - main
