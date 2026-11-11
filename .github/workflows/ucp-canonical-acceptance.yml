@@ -10,6 +10,7 @@ on:
       - integration/remaining-ucp-b7-finance-demo-20261112
   pull_request:
     branches:
+      - integration/demo-five-track-verified-safety-20261112
       - main
       - fix/p0-provider-browser-stock-finance-acceptance
       - feature/ucp-canonical-reconciliation-release
@@ -179,6 +180,9 @@ jobs:
         if: ${{ always() }}
         timeout-minutes: 12
         run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
+      - name: Real MySQL paid supplier to 100-80-20 buyer dispute, refund hold and invoice
+        timeout-minutes: 8
+        run: cd backend && node tests/demo_real_mysql_postpurchase_100_80_20_gate.js
 
   real-chromium-buyer-supplier:
     name: Real Chromium buyer/supplier auth, retry and offline journey

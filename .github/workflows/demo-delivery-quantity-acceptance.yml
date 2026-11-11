@@ -6,6 +6,7 @@ on:
       - integration/demo-five-track-verified-safety-20261112
   pull_request:
     branches:
+      - integration/demo-five-track-verified-safety-20261112
       - integration/demo-all-heads-acceptance-20261112
       - main
   workflow_dispatch:
@@ -23,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Exact quantity arithmetic (13 cases)
+      - name: Exact quantity arithmetic (14 cases)
         run: node backend/tests/demo_delivery_quantity_policy_gate.js
       - name: Fulfillment service transaction and role behavior (4 cases)
         run: node backend/tests/demo_fulfillment_discrepancy_service_gate.js
