@@ -230,9 +230,24 @@ class FulfillmentService {
         [orderId]
       );
 
+      // Expose immutable SKU quantities only after order tenant and PAID checks.
+      // B6 basket total_qty=1 is an order marker, not a physical quantity.
+      let awardLines=[];
+      if (order.notes === 'SMART_PROCUREMENT_BASKET') {
+        const [rows]=await connection.query(
+          `SELECT l.id AS award_line_id,l.supplier_sku_id,l.quantity,
+                  l.purchasing_unit,l.unit_price,l.subtotal
+             FROM procurement_award_orders ao
+             JOIN procurement_award_lines l ON l.award_order_id=ao.id
+             WHERE ao.order_id=? ORDER BY l.id`,
+          [orderId]
+        );
+        awardLines=rows;
+      }
       return {
         order: this._formatOrderDetails(order),
-        timeline: events
+        timeline: events,
+        award_lines: awardLines
       };
     } finally {
       connection.release();
@@ -819,9 +834,24 @@ class FulfillmentService {
         [orderId]
       );
 
+      // Expose immutable SKU quantities only after order tenant and PAID checks.
+      // B6 basket total_qty=1 is an order marker, not a physical quantity.
+      let awardLines=[];
+      if (order.notes === 'SMART_PROCUREMENT_BASKET') {
+        const [rows]=await connection.query(
+          `SELECT l.id AS award_line_id,l.supplier_sku_id,l.quantity,
+                  l.purchasing_unit,l.unit_price,l.subtotal
+             FROM procurement_award_orders ao
+             JOIN procurement_award_lines l ON l.award_order_id=ao.id
+             WHERE ao.order_id=? ORDER BY l.id`,
+          [orderId]
+        );
+        awardLines=rows;
+      }
       return {
         order: this._formatOrderDetails(order),
-        timeline: events
+        timeline: events,
+        award_lines: awardLines
       };
     } finally {
       connection.release();
