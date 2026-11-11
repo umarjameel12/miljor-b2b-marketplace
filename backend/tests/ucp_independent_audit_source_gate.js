@@ -21,9 +21,13 @@ for(const n of ['051_expand_canonical_product_families.sql','052_demand_requeste
 for(const n of ['046_expand_canonical_product_families.sql','047_demand_requester_role.sql','048_regular_pool_payment_hold_deadlines.sql'])
   check(!migrationFiles.includes(n),'Old colliding UCP filename retired: '+n);
 const runner=file('database/runMigrations.js');
-check(runner.includes('DUPLICATE_MIGRATION_VERSION')&&runner.includes('versionMap'),
-  'Global duplicate-prefix preflight before any DDL');
-check(runner.includes('MIGRATION_RENUMBERED_HISTORY_REQUIRES_RECONCILIATION'),
+const manifest=file('database/migrationManifest.js');
+check(manifest.includes('DUPLICATE_MIGRATION_VERSION')&&
+      runner.includes('const manifest = scanMigrations()')&&
+      runner.indexOf('const manifest = scanMigrations()') < runner.indexOf('mysql.createConnection'),
+  'Global duplicate-prefix preflight BEFORE MySQL connection or DDL');
+check(manifest.includes('MIGRATION_RENUMBERED_HISTORY_REQUIRES_RECONCILIATION')&&
+      runner.includes('checkAppliedHistory(manifest,appliedRows,attemptRows)'),
   'Previously applied old UCP migrations cannot replay silently');
 const flash=file('src/services/flashPoolService.js');
 check(flash.includes(String.raw`/^\d{4}-\d{2}-\d{2}$/`),
