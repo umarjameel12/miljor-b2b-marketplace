@@ -124,22 +124,20 @@ class ProcurementService {
   }
 
   async getDemandRequests(filter = {}) {
+    // Public demand board: never expose buyer identity, contact, notes or user-supplied specs.
+    // Verified private RFQs have their own buyer-scoped B6 APIs.
     let query = `
-      SELECT dpr.*, c.name as category_name, f.name as family_name,
-             u.business_name as buyer_business_name, lc.name as cluster_name
+      SELECT dpr.request_code, dpr.category_id, dpr.family_id, dpr.commodity_name,
+             dpr.target_quantity, dpr.target_unit, dpr.cluster_id,
+             dpr.needed_by_date, dpr.status, dpr.created_at,
+             c.name AS category_name, f.name AS family_name, lc.name AS cluster_name
       FROM demand_pool_requests dpr
       JOIN catalog_categories c ON dpr.category_id = c.id
       JOIN catalog_product_families f ON dpr.family_id = f.id
-      JOIN users u ON dpr.buyer_id = u.id
       LEFT JOIN geographic_clusters lc ON dpr.cluster_id = lc.id
-      WHERE 1=1
+      WHERE dpr.status = 'OPEN'
     `;
     const params = [];
-
-    if (filter.status) {
-      query += ' AND dpr.status = ?';
-      params.push(filter.status);
-    }
     if (filter.family_id) {
       query += ' AND dpr.family_id = ?';
       params.push(filter.family_id);
@@ -148,8 +146,7 @@ class ProcurementService {
       query += ' AND dpr.cluster_id = ?';
       params.push(filter.cluster_id);
     }
-
-    query += ' ORDER BY dpr.created_at DESC';
+    query += ' ORDER BY dpr.created_at DESC LIMIT 100';
     const [rows] = await db.query(query, params);
     return rows;
   }
