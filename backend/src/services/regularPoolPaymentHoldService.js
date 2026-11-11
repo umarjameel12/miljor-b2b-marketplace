@@ -53,6 +53,19 @@ class RegularPoolPaymentHoldService {
       return {regular_pool_order:true,pending:true};
     } catch(error){await conn.rollback().catch(()=>{});throw error;} finally{conn.release();}
   }
+  async assertCanCreateFreshCheckout(orderId,buyerId) {
+    const [rows]=await db.query(
+      `SELECT status,(expires_at>UTC_TIMESTAMP()) AS is_open
+       FROM regular_pool_payment_holds WHERE order_id=? AND buyer_id=?`,
+      [orderId,buyerId]
+    );
+    if(!rows.length)return; // Existing historical orders predate this migration.
+    const hold=rows[0];
+    if(hold.status!=='HELD' && hold.status!=='PAYMENT_PENDING')
+      throw fail('REGULAR_PAYMENT_HOLD_CLOSED','Payment hold is closed. Do not create a new Safepay session.');
+    if(!hold.is_open)
+      throw fail('REGULAR_PAYMENT_HOLD_EXPIRED','The payment hold has expired. Provider reconciliation remains available.');
+  }
   async releaseCheckoutClaim(orderId,buyerId) {
     const conn=await db.getConnection();
     try {
