@@ -113,7 +113,9 @@ class FinancialSettlementService {
     try {
       // 1. Lock and fetch order
       const [orders] = await connection.query(
-        `SELECT o.*, u.is_verified AS supplier_user_verified, sp.verification_status AS supplier_profile_status, sp.transaction_fee_percent
+        `SELECT o.*, o.supplier_commission_percent AS locked_supplier_commission_percent,
+                u.is_verified AS supplier_user_verified, sp.verification_status AS supplier_profile_status,
+                sp.transaction_fee_percent AS current_supplier_commission_percent
          FROM orders o
          JOIN users u ON o.supplier_id = u.id
          LEFT JOIN supplier_profiles sp ON sp.supplier_id = o.supplier_id
@@ -174,7 +176,7 @@ class FinancialSettlementService {
 
       // A settlement must use the immutable order-time supplier fee,
       // never silently pick today's profile rate or an invented default.
-      const commissionPercent = order.transaction_fee_percent;
+      const commissionPercent = order.locked_supplier_commission_percent;
       if (commissionPercent === null || commissionPercent === undefined ||
           String(commissionPercent).trim() === '') {
         const err = new Error('Locked order supplier commission is missing; settlement policy reconciliation required');
