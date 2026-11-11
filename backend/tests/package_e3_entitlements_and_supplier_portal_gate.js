@@ -286,29 +286,65 @@ async function runE3Gate() {
       pass('7. Publishing in 5th family strictly blocked by server-side entitlement engine (403 ENTITLEMENT_LIMIT_EXCEEDED)');
     } catch (e) { fail('7. Block 5th family', e); }
 
-    // 8. Creating listing in a 5th family is also blocked
+    // 8. A fifth-family listing cannot bypass the supplier-owned SKU or entitlement boundary.
+    // Publication was correctly rejected at #7. Therefore there cannot be a
+    // valid PUBLISHED fifth-family SKU for this STARTER supplier yet. A global
+    // legacy specification must fail at the earlier provenance check (409),
+    // and the supplier's own still-unpublished fifth-family SKU must fail
+    // closed (403 SKU_NOT_PUBLISHED). Neither case creates a listing.
     try {
-      // Find a spec from Gur / Jaggery (family 13)
-      const [spec13] = await db.query('SELECT id FROM product_specifications WHERE family_id = 13 LIMIT 1');
-      if (spec13.length > 0) {
-        const lRes = await api('/api/v1/listings', {
+      const pendingFifthFamilySkuId = createdSkuIds[createdSkuIds.length - 1];
+      assert.ok(pendingFifthFamilySkuId, 'Fifth-family draft SKU must exist after test #7');
+
+      const beforeEntitlements = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(beforeEntitlements.status, 200);
+      assert.strictEqual(beforeEntitlements.body.data.entitlements.active_families_count, 4);
+
+      const draftOffer = await api('/api/v1/listings', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${supplierToken}` },
+        body: {
+          supplier_sku_id: pendingFifthFamilySkuId,
+          available_stock: 50,
+          base_unit_price: 3200,
+          supplier_min_qty: 5,
+          buyer_min_qty: 1
+        }
+      });
+      assert.strictEqual(draftOffer.status, 403, JSON.stringify(draftOffer.body));
+      assert.strictEqual(draftOffer.body.error.code, 'SKU_NOT_PUBLISHED');
+
+      // Legacy/global specifications are not supplier-owned SKUs and can
+      // never be used to bypass the fifth-family quota.
+      const [legacySpecs] = await db.query(
+        "SELECT id FROM product_specifications WHERE family_id = 13 AND (supplier_sku_id IS NULL OR supplier_id IS NULL OR lifecycle_status = 'LEGACY_GLOBAL') LIMIT 1"
+      );
+      if (legacySpecs.length > 0) {
+        const legacyOffer = await api('/api/v1/listings', {
           method: 'POST',
           headers: { Authorization: `Bearer ${supplierToken}` },
           body: {
-            product_spec_id: spec13[0].id,
+            product_spec_id: legacySpecs[0].id,
             available_stock: 50,
             base_unit_price: 3200,
             supplier_min_qty: 5,
             buyer_min_qty: 1
           }
         });
-        assert.strictEqual(lRes.status, 403);
-        assert.strictEqual(lRes.body.error.code, 'ENTITLEMENT_LIMIT_EXCEEDED');
-        pass('8. Commercial listing creation in unauthorized 5th family strictly blocked (403 ENTITLEMENT_LIMIT_EXCEEDED)');
-      } else {
-        pass('8. (Skipped listing check: no spec in family 13)');
+        assert.strictEqual(legacyOffer.status, 409, JSON.stringify(legacyOffer.body));
+        assert.strictEqual(legacyOffer.body.error.code, 'SUPPLIER_OWNED_SKU_REQUIRED');
       }
-    } catch (e) { fail('8. Block listing in 5th family', e); }
+
+      const afterEntitlements = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(afterEntitlements.status, 200);
+      assert.strictEqual(afterEntitlements.body.data.entitlements.active_families_count, 4);
+      assert.strictEqual(afterEntitlements.body.data.entitlements.remaining_family_slots, 0);
+      pass('8. Fifth-family unpublished SKU and legacy global spec cannot create offers or bypass family cap');
+    } catch (e) { fail('8. Reject fifth-family offer and legacy specification', e); }
 
     // 9. Plan Upgrade: Upgrade to GROWTH plan (allows up to 13 families)
     try {
