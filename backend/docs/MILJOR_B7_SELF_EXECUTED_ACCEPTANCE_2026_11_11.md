@@ -55,10 +55,20 @@ GitHub Actions run: https://github.com/umarjameel12/miljor-b2b-marketplace/actio
 
 ## Executive result
 
-**81/81 actually executed CI assertions PASS** across **two successful independent jobs**:
-- 48 B7 Node service/source assertions: real source logic with standalone test inputs or deterministic MOCK DB transaction adapter
-- 24 existing frontend assertions: 10 design system + 14 deadline parser
-- 9 browser assertions: headless **real Chromium** running the actual React UI, with MOCK HTTP endpoints and synthetic test data
+Latest full isolated integration workflow: [GitHub Actions run 43090960956](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43090960956), commit `21969f42ba17c3fcf86434750f92c259848a9d3d`. All three jobs SUCCESS.
+
+The earlier source/mock suite was 81/81. The expanded real-MySQL run additionally completed:
+- Safepay sandbox checkout + signed-webhook regression: 28/28 assertions PASS (provider HTTP mocked; cryptographic HMAC, webhook replay and payment state tested).
+- B7 actual Express + MySQL 8 integration: 31/31 assertions PASS on synthetic paid-state B6 supplier orders.
+- Existing Part 4E.4 fulfillment regression: 36/36 PASS.
+- Existing Part 4E.5 dispute regression: 41/41 PASS.
+- Actual Chromium buyer/supplier write journey against real Express + disposable MySQL: PASS.
+- Earlier browser mock HTTP journey: 9/9 PASS.
+- Earlier B7 source/service suite: 48/48 PASS; existing frontend design/parser: 24/24 PASS.
+- Backend syntax and frontend production build: PASS.
+
+These are separate test scopes; do not sum all assertion counts into one unique assertion total because the same gates ran on multiple commits.
+
 
 Backend syntax checks and Vite production build also passed; 2,220 modules transformed.
 
@@ -129,8 +139,13 @@ Backend `npm ci` reported 1 high / 7 moderate advisories. Perform separate owner
 | Existing frontend unit/parser | PASS (24/24) |
 | B7 real Chromium mock-HTTP UI | PASS (9/9) |
 | Backend syntax / frontend production build | PASS |
-| B7 real database and real HTTP integration | BLOCKED / NOT EXECUTED |
-| B7 real buyer/supplier WRITE browser E2E | BLOCKED / NOT EXECUTED |
-| Global reconciliation, finance, release | BLOCKED / EXTERNAL |
+| B7 real MySQL 8 + Express HTTP (synthetic paid-state) | PASS 31/31 |
+| Part 4E.4 real MySQL regression | PASS 36/36 |
+| Part 4E.5 real MySQL regression | PASS 41/41 |
+| B7 real buyer/supplier Chromium WRITE E2E | PASS |
+| Safepay signed-webhook regression (provider mocked) | PASS 28/28 |
+| Live Safepay provider callback/credentials | NOT VERIFIED |
+| B6 refund/settlement/payout finance acceptance | BLOCKED / EXTERNAL |
+| Global migration reconciliation beyond 048 | BLOCKED / EXTERNAL |
 
-**Overall: PARTIALLY VERIFIED. CAN MERGE: NO (integration gates remain). CAN DEPLOY: NO. CAN START NEXT PHASE: NO.**
+**Overall: B7 isolated integration and browser acceptance PASS. Production financial/provider/global-migration certification remains BLOCKED. CAN DEPLOY: NO. CAN START NEXT PHASE: NO. Merge remains subject to the parent branch's migration/finance reconciliation gate.**
