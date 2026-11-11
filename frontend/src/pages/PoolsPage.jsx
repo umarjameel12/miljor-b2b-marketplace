@@ -109,7 +109,7 @@ export const PoolsPage = () => {
         }),
         catalogApi.getFamilies(),
         catalogApi.getCategories(),
-        apiClient.get('/flash-pools').then(r=>r.data).catch(e=>({
+        apiClient.get('/flash-pools',{params:categoryParam?{category:categoryParam}:{}}).then(r=>r.data).catch(e=>({
           success:false,error:{message:e.response?.data?.error?.message||'Flash offers unavailable'}
         })),
       ]);
@@ -150,8 +150,7 @@ export const PoolsPage = () => {
 
   // B5 does not expose B4 G2 cluster/fulfillment quotes. Never silently claim
   // a Flash offer meets an active Regular Pool cluster filter.
-  const flashFilterCompatible=selectedCategory==='All Commodities' &&
-    !selectedClusterId && selectedFulfillmentMode==='ALL';
+  const flashFilterCompatible=selectedFulfillmentMode==='ALL';
   const filteredFlash=flashPools.filter(p=>{
     const query=searchQuery.toLowerCase();
     return [p.sku_title,p.supplier_name,p.flash_code,p.category,p.listing_code]
@@ -405,7 +404,10 @@ export const PoolsPage = () => {
             {type==='ALL'?'All Pools':type==='REGULAR'?'Regular Pools':'Flash Pools'}
           </button>)}
           {!flashFilterCompatible&&poolType!=='REGULAR'&&<span className="text-xs text-amber-600">
-            Flash location/fulfillment filters are unavailable until B5 delivery eligibility is verified. Clear those filters to view Flash.
+            Flash supports its existing fixed-fee doorstep checkout, not Regular clustered/pickup/express eligibility. Clear fulfillment mode filters to see Flash.
+          </span>}
+          {selectedClusterId&&poolType!=='REGULAR'&&<span className="text-xs text-amber-600">
+            Regular Pools are filtered to the selected cluster. Flash offers are not cluster-filtered; verify delivery availability before purchase.
           </span>}
           {flashError&&<span role="alert" className="text-xs text-amber-600">{flashError}</span>}
         </div>}
@@ -436,7 +438,7 @@ export const PoolsPage = () => {
             </div>
 
             <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-              {viewMode === 'pools' ? '● Real-Time Volume Pooling' : '✓ MilJor-governed product families'}
+              {viewMode === 'pools' ? 'Live supplier-created Regular & Flash offers' : 'MilJor-approved product families'}
             </span>
           </div>
         )}
