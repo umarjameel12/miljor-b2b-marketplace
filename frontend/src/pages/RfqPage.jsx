@@ -510,7 +510,7 @@ export const RfqPage = () => {
     setShoppingBusy(true);setShoppingError('');
     try{
       const lines=(invite.items||[]).flatMap(item=>{
-        const qty=joinQuantities[`${invite.group_id}:${item.id}`];
+        const qty=invite.recurring_cycle ? item.scheduled_quantity : joinQuantities[`${invite.group_id}:${item.id}`];
         return qty?[{request_item_id:item.id,quantity:qty}]:[];
       });
       if(!lines.length)throw Error('Choose quantities for at least one requested item.');
@@ -1097,15 +1097,19 @@ export const RfqPage = () => {
                         onClick={()=>showCollectiveBids(invite.group_id)}
                         className="text-xs underline">View private bids</button>}
                     {invite.status==='INVITED'&&invite.group_status==='FORMING' && <>
+                      {invite.recurring_cycle && <p className="text-xs text-[var(--text-muted)]">Review your frozen weekly/monthly cycle quantities below. This is a new invitation, not automatic consent or payment.</p>}
                       {(invite.items||[]).map(item=>(
                         <label key={item.id} className="block text-xs">
                           Product family #{item.family_id} · {item.unit}
                           {item.requirements?' · '+item.requirements:''}
-                          <input inputMode="decimal" placeholder="Your own quantity"
-                            value={joinQuantities[`${invite.group_id}:${item.id}`]||''}
-                            onChange={e=>setJoinQuantities(old=>({
+                          <input inputMode="decimal"
+                            aria-label={invite.recurring_cycle?'Your scheduled cycle quantity':'Your own quantity'}
+                            placeholder={invite.recurring_cycle?'Agreed recurring quantity':'Your own quantity'}
+                            readOnly={Boolean(invite.recurring_cycle)}
+                            value={invite.recurring_cycle?(item.scheduled_quantity||''):joinQuantities[`${invite.group_id}:${item.id}`]||''}
+                            onChange={e=>{if(!invite.recurring_cycle)setJoinQuantities(old=>({
                               ...old,[`${invite.group_id}:${item.id}`]:e.target.value
-                            }))}
+                            }));}}
                             className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
                         </label>
                       ))}
