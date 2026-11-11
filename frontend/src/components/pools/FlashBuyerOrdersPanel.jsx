@@ -42,8 +42,8 @@ export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
     finally{setBusy(null);}
   };
   if(!holds.length)return null;
-  return <section className="space-y-3" aria-label="Your Flash Pool purchases">
-    <div className="flex items-center justify-between gap-3"><h2 className="font-semibold text-lg">Flash Pool Orders</h2>
+  return <section className="space-y-3" aria-label="Your pool ready-stock purchases">
+    <div className="flex items-center justify-between gap-3"><h2 className="font-semibold text-lg">Ready-stock Purchases</h2>
       <button type="button" onClick={refresh} className="text-xs flex gap-1 items-center underline"><RefreshCw size={13}/>Refresh</button></div>
     {holds.map(h=>{
       const paid=h.status==='PAID'||h.payment_status==='PAID';
