@@ -75,7 +75,7 @@ class ProcurementDeliveryGroupingService {
   try{
    await conn.beginTransaction();
    const [orders]=await conn.query(
-    "SELECT id,buyer_id,supplier_id,delivery_type,payment_status,fulfillment_status,delivery_fee FROM orders WHERE id=? AND buyer_id=? FOR UPDATE",
+    "SELECT id,buyer_id,supplier_id,delivery_type,delivery_address,cluster_zone,payment_status,fulfillment_status,delivery_fee FROM orders WHERE id=? AND buyer_id=? FOR UPDATE",
     [oid,buyer]);
    const order=orders[0];
    if(!order)throw fail('ORDER_NOT_FOUND','Buyer-owned order not found.',404);
@@ -92,13 +92,27 @@ class ProcurementDeliveryGroupingService {
       o.mode!=='PICKUP'&&order.delivery_type==='SUPPLIER_PICKUP')
     throw fail('DELIVERY_MODE_CHANGED','Pickup cannot replace paid doorstep terms without reapproval.',409);
    const [addresses]=await conn.query(
-    "SELECT a.id,a.user_id,a.cluster_id,a.revision,a.city,a.user_confirmation_status,a.geographic_match_status,c.is_active AS cluster_active FROM buyer_delivery_addresses a JOIN geographic_clusters c ON c.id=a.cluster_id WHERE a.id=? AND a.user_id=? FOR UPDATE",
+    "SELECT a.id,a.user_id,a.cluster_id,a.revision,a.city,a.full_address,a.user_confirmation_status,a.geographic_match_status,c.is_active AS cluster_active FROM buyer_delivery_addresses a JOIN geographic_clusters c ON c.id=a.cluster_id WHERE a.id=? AND a.user_id=? FOR UPDATE",
     [addressId,buyer]);
    const address=addresses[0];
    if(!address||address.user_confirmation_status!=='CONFIRMED'||
      !Boolean(address.cluster_active)||
      String(address.city).toLowerCase()!=='lahore')
     throw fail('DELIVERY_ADDRESS_INVALID','Buyer-confirmed supported Lahore destination is required.',409);
+   // Paid order destination is immutable. The standalone delivery scheduler
+   // cannot authorize an address change or an unrelated express quote.
+   // Buyer must go through the original order's authorized delivery workflow.
+   if(o.mode==='PICKUP')
+    throw fail('PICKUP_USE_EXISTING_FULFILLMENT',
+      'Supplier pickup is handled by the original paid order pickup workflow.',409);
+   const canonical=x=>String(x||'').trim().toLowerCase().replace(/\\s+/g,' ');
+   if(!order.delivery_address || !address.full_address ||
+      canonical(order.delivery_address)!==canonical(address.full_address))
+    throw fail('PAID_DESTINATION_BINDING_REQUIRED',
+      'Selected destination does not exactly match the paid order delivery address.',409);
+   if(o.mode==='EXPRESS')
+    throw fail('EXPRESS_ORDER_BINDING_REQUIRED',
+      'Express scheduling needs a delivery quote cryptographically bound to this paid order.',409);
    const [settings]=await conn.query(
     'SELECT supplier_id,standard_delivery_enabled,pickup_enabled,express_enabled,version FROM supplier_delivery_configurations WHERE supplier_id=?',[order.supplier_id]);
    const setting=settings[0];
