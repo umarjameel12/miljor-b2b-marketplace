@@ -27,10 +27,11 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
   const [holdState,setHoldState]=useState(null);
   const [quoteNotice,setQuoteNotice]=useState('');
   const purchaseKey=useRef(null);
+  const checkoutKey=useRef(null);
   useEffect(()=>{
     setQuantity(String(flash?
       (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
-    setHold(null);setHoldState(null);purchaseKey.current=null;setOpen(false);
+    setHold(null);setHoldState(null);purchaseKey.current=null;checkoutKey.current=null;setOpen(false);
   },[pool.id,pool.type]);
   useEffect(()=>{
     if(!open||!flash||!isAuthenticated||user?.role!=='BUYER')return;
@@ -83,10 +84,12 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
         // the offer and unmount this live checkout modal before Safepay starts.
         toast.success('Stock hold created. Pay within the displayed 15-minute window.');
       }else{
+        if(!purchaseKey.current)purchaseKey.current=key('regular-reserve');
         const result=await apiClient.post('/reservations',
           {pool_id:pool.id,quantity:String(quantity)},
-          {headers:{'X-Idempotency-Key':key('regular-reserve')}});
+          {headers:{'X-Idempotency-Key':purchaseKey.current}});
         if(!result?.data?.success)throw Error('Unable to reserve quantity.');
+        purchaseKey.current=null; // New explicit reservation may use a new key.
         toast.success('Regular Pool quantity reserved. Final tier and payment follow the B4 commitment workflow.');
         setOpen(false);onChange?.();
       }
@@ -97,7 +100,8 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     if(!hold?.order_id||saving)return;
     setSaving(true);
     try{
-      const response=await unifiedPoolsApi.initiateCheckout(hold.order_id,key('flash-pay'));
+      if(!checkoutKey.current)checkoutKey.current=key('flash-pay');
+      const response=await unifiedPoolsApi.initiateCheckout(hold.order_id,checkoutKey.current);
       const url=response.data?.checkout_url;
       if(typeof url!=='string'||!/^https:\/\//i.test(url))throw Error('Safepay checkout is unavailable. Payment remains unconfirmed.');
       window.location.assign(url);
