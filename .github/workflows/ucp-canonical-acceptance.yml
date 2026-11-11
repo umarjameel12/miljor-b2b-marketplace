@@ -58,6 +58,8 @@ jobs:
           node tests/p0_unified_pool_ui_source_gate.js
           node tests/b7_postpurchase_readonly_contract_gate.js
           node tests/p0_finance_readonly_integrity_gate.js
+      - name: Unified buyer/supplier and finance source contracts
+        run: cd backend && node tests/p0_unified_pool_finance_source_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
@@ -150,6 +152,8 @@ jobs:
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
       - name: Verify finance 054 installed schema and exact checksum (read only)
         run: cd backend && node tests/p0_finance_054_installed_gate.js
+      - name: Finance read-only HTTP and real MySQL authorization gate
+        run: cd backend && node tests/p0_finance_readonly_http_gate.js
       - name: Synthetic signed Safepay HTTP/escrow/replay acceptance (no provider calls)
         env:
           SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
