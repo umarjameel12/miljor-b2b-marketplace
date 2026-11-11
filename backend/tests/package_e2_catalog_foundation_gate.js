@@ -182,6 +182,17 @@ function request(method, path, body = null, token = null) {
     });
 
     await runTest('Development database miljor_db remains 100% PRISTINE (0 test-fixture mutations)', async () => {
+      // Disposable CI intentionally contains ONLY miljor_test_db. In that mode
+      // isolation is proven by protected schema absence, never by fabricating
+      // a miljor_db database or connecting to production business tables.
+      if(process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1'){
+        const [schemas]=await db.query(
+          "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME IN ('miljor_db','miljor_sandbox_db')"
+        );
+        assert.strictEqual(schemas.length,0,
+          'Protected DB names must not be provisioned in disposable CI MySQL');
+        return;
+      }
       const devConn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'root',
