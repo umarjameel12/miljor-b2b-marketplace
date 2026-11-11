@@ -182,6 +182,30 @@ class ProcurementCollectiveService{
           unit:item.unit,quantity:positiveQty(line.quantity,item.unit),
           requirements:item.requirements,allow_substitutions:Number(item.allow_substitutions)===1};
       });
+      // B6-N: active recurring-cycle joining must match THIS buyer's own
+      // immutable, consented schedule snapshot; one-time collectives unchanged.
+      const [linkedCycles]=await conn.query(
+        "SELECT status,qualification_snapshot FROM procurement_recurring_collective_cycles WHERE group_id=? FOR UPDATE",
+        [gid]
+      );
+      if(linkedCycles.length){
+        if(linkedCycles[0].status!=='INVITING')
+          throw fail('RECURRING_CYCLE_NOT_INVITING','This recurring collective cycle cannot accept joins.',409);
+        const evidence=typeof linkedCycles[0].qualification_snapshot==='string'
+          ?JSON.parse(linkedCycles[0].qualification_snapshot)
+          :linkedCycles[0].qualification_snapshot;
+        const own=(evidence?.private_join_mapping||[]).find(x=>Number(x.buyer_id)===buyer);
+        if(!own||!Array.isArray(own.planned_lines)||!own.planned_lines.length)
+          throw fail('RECURRING_CYCLE_BUYER_NOT_ELIGIBLE','Your contract was not eligible for this cycle.',403);
+        const planned=new Map(own.planned_lines.map(x=>[
+          Number(x.request_item_id),String(x.quantity)]));
+        if(planned.size!==normalized.length||normalized.some(line=>
+            !planned.has(Number(line.request_item_id))||
+            !exact.exactDecimalEquals(
+              line.quantity,planned.get(Number(line.request_item_id)),4)))
+          throw fail('RECURRING_CYCLE_QUANTITY_MISMATCH',
+            'Confirm the exact scheduled product lines and quantities for this cycle.',409);
+      }
       const consent={group_id:gid,buyer_id:buyer,items:normalized,
         explicit_join:true,creates_payment:false,authorizes_any_price:false};
       for(const line of normalized){
