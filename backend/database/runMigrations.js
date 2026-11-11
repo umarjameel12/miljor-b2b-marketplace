@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const mysql = require('mysql2/promise');
+const { assertNoUnresolvedBranchCollisions } = require('./migrationCollisionGuard');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const migrationsDir = path.join(__dirname, 'migrations');
@@ -41,6 +42,9 @@ async function runMigrations(targetDb) {
   }
   // Read and check the entire migration set before touching the database.
   const manifest = migrationManifest();
+  // Never connect to or modify a database while migration version 046/047
+  // means different SQL across concurrent B6 and catalog branches.
+  assertNoUnresolvedBranchCollisions(manifest);
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
