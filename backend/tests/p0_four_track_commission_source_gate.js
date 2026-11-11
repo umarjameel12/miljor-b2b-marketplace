@@ -8,6 +8,7 @@ const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const migration=read('database/migrations/054_order_supplier_commission_snapshot.sql');
 const order=read('src/services/orderService.js');
 const settlement=read('src/services/financialSettlementService.js');
+const flash=read('src/services/flashPoolService.js');
 const finance=require('../database/financeCompatibilityGate');
 assert.equal(finance.checkFinanceCompatibility().compatibility,'FINANCE_INTEGRATION_BLOCKED');
 assert.match(migration,/ADD COLUMN supplier_commission_percent DECIMAL\(5,2\) NULL/i);
@@ -16,6 +17,9 @@ assert.match(order,/SELECT transaction_fee_percent FROM supplier_profiles WHERE 
 assert.match(order,/supplier_commission_percent, currency/);
 assert.match(order,/supplierCommissionSnapshot,/);
 assert.match(order,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
+assert.match(flash,/supplier_commission_percent,currency/);
+assert.match(flash,/commissionSnapshot,address/);
+assert.match(flash,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
 assert.match(settlement,/order\.supplier_commission_percent/);
 assert.match(settlement,/COMMISSION_SNAPSHOT_REQUIRED/);
 assert.doesNotMatch(settlement,/commissionPercent\s*=\s*2\.50/);
