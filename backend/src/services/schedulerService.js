@@ -70,6 +70,30 @@ function startScheduler() {
     console.log('[Scheduler] B6 recurring draft worker enabled (no automatic payments)');
   }
 
+  // B6-N collective recurring scheduler: opt-in, never authorizes a charge.
+  if(process.env.B6_COLLECTIVE_RECURRING_WORKER_ENABLED==='true' &&
+     process.env.B6_COLLECTIVE_RECURRING_RUNTIME_APPROVED==='true'){
+    let collectiveRunning=false;
+    const collectiveTask=cron.schedule('*/5 * * * *',async()=>{
+      if(collectiveRunning)return;
+      collectiveRunning=true;
+      try{
+        const result=await require('./procurementCollectiveRecurringService')
+          .runDueCollectiveBatch({limit:20});
+        if(result.checked||result.failed){
+          console.log('[Scheduler] Collective recurring invitations:',{
+            checked:result.checked,prepared:result.prepared,
+            unqualified:result.unqualified,retried:result.retried,failed:result.failed
+          });
+        }
+      }catch(error){
+        console.error('[Scheduler] Collective recurring cycle failure:',error.code||error.message);
+      }finally{collectiveRunning=false;}
+    });
+    activeTasks.push(collectiveTask);
+    console.log('[Scheduler] B6 collective recurring invitations worker active (no payments)');
+  }
+
   console.log('✅ Scheduler active: Pool expiry every 10 min | Cleanup every hour');
 }
 
