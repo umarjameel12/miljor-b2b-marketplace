@@ -1,0 +1,34 @@
+name: MilJor Demo Delivery Quantity Safety
+on:
+  push:
+    branches:
+      - fix/demo-partial-delivery-quantity-20261112
+  pull_request:
+    branches:
+      - integration/demo-all-heads-acceptance-20261112
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-quantity-and-discrepancy-service:
+    name: Pure delivery quantity and in-memory fulfillment acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact quantity arithmetic (13 cases)
+        run: node backend/tests/demo_delivery_quantity_policy_gate.js
+      - name: Fulfillment service transaction and role behavior (4 cases)
+        run: node backend/tests/demo_fulfillment_discrepancy_service_gate.js
+      - name: B6 paid fulfillment and immutable invoice source contract (9 cases)
+        run: node backend/tests/demo_b6_fulfillment_invoice_source_gate.js
+      - name: Dispute and refund safety service behaviors (11 cases)
+        run: node backend/tests/demo_dispute_refund_safety_gate.js
+      - name: Confirm zero external money movement
+        run: |
+          echo "Pure/source tests only. No MySQL, credentials, Safepay, refunds or provider calls."
