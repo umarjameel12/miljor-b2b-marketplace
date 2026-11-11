@@ -27,6 +27,8 @@ jobs:
         run: node backend/tests/demo_fulfillment_discrepancy_service_gate.js
       - name: B6 paid fulfillment and immutable invoice source contract (9 cases)
         run: node backend/tests/demo_b6_fulfillment_invoice_source_gate.js
+      - name: Dispute and refund safety service behaviors (11 cases)
+        run: node backend/tests/demo_dispute_refund_safety_gate.js
       - name: Confirm zero external money movement
         run: |
           echo "Pure/source tests only. No MySQL, credentials, Safepay, refunds or provider calls."
