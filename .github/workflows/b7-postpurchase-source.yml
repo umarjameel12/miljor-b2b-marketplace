@@ -104,7 +104,6 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     env:
-      GITHUB_ACTIONS: 'true'
       NODE_ENV: test
       DB_NAME: miljor_test_db
       TEST_DB_NAME: miljor_test_db
