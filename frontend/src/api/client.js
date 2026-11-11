@@ -44,6 +44,19 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+// One refresh request per browser JavaScript realm. A refresh rotates an
+// HttpOnly cookie: two overlapping rotations can invalidate an otherwise valid
+// session (TOKEN_ALREADY_ROTATED). All hydration and interceptor users share it.
+let refreshPromise = null;
+export const refreshSession = () => {
+  if (!refreshPromise) {
+    refreshPromise = axios.post('/api/v1/auth/refresh', {}, { withCredentials: true })
+      .then(response => response.data)
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+};
+
 // Response interceptor: automatically refresh on 401 and retry once
 apiClient.interceptors.response.use(
   (response) => response,
@@ -89,10 +102,10 @@ apiClient.interceptors.response.use(
 
     try {
       // Call refresh endpoint with HttpOnly cookie
-      const refreshRes = await axios.post('/api/v1/auth/refresh', {}, { withCredentials: true });
+      const refreshData = await refreshSession();
 
-      if (refreshRes.data?.success && refreshRes.data?.data?.token) {
-        const newToken = refreshRes.data.data.token;
+      if (refreshData?.success && refreshData?.data?.token) {
+        const newToken = refreshData.data.token;
         setAccessToken(newToken);
 
         // Clean up legacy localStorage storage
