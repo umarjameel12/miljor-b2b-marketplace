@@ -19,6 +19,7 @@ const procurementCollectiveRecurringService = require('../services/procurementCo
 const procurementDeliveryGroupingService = require('../services/procurementDeliveryGroupingService');
 const procurementNotificationService = require('../services/procurementNotificationService');
 const procurementPreorderPolicy = require('../services/procurementPreorderPolicy');
+const procurementDemandFirstAdapter = require('../services/procurementDemandFirstAdapter');
 
 class ProcurementController {
 
@@ -580,6 +581,21 @@ class ProcurementController {
   }
   async procurementPreorderStatus(req,res){
     res.json({success:true,data:procurementPreorderPolicy.getPreorderPolicy()});
+  }
+
+  // B6-N read-only compatibility for existing demand-first Request a Pool.
+  async listLegacyDemandFirst(req,res){
+    try{
+      const demands=await procurementDemandFirstAdapter.buyerList(req.user.id);
+      res.json({success:true,data:{demands}});
+    }catch(e){this._smartError(res,e);}
+  }
+  async previewLegacyDemandFirst(req,res){
+    try{
+      const preview=await procurementDemandFirstAdapter.buyerPreview(
+        req.user.id,req.params.demandId);
+      res.json({success:true,data:{preview}});
+    }catch(e){this._smartError(res,e);}
   }
 
   // RFQs & Quotes
