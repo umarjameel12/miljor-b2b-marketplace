@@ -277,8 +277,8 @@ class FlashPoolService {
       await entitlement.assertCanPublishInFamily(supplierId,Number(spec.family_id),conn);
       // The shared inventory allocation ledger serializes regular and flash promises.
       const [allocations]=await conn.query(
-        `SELECT unit,SUM(allocated_qty) AS qty FROM supplier_inventory_allocations
-         WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED') GROUP BY unit`,
+        `SELECT unit,allocated_qty AS qty FROM supplier_inventory_allocations
+         WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED') FOR UPDATE`,
          [listing.id]);
       const unit=spec.purchasing_unit || listing.pricing_unit;
       if(allocations.some(a=>String(a.unit).toLowerCase()!==String(unit).toLowerCase()))
