@@ -111,18 +111,19 @@ class ProcurementAwardService{
     });
     return {request,preview};
   }
-  async _money(conn,preview){
+  async _money(conn,preview,lockSupplierRates=false){
     const fee=await feeService.calculateBuyerFeeExact(preview.item_subtotal,conn);
     const shares=feeDistribution(preview.groups,fee.buyer_fee);
     const groups=[];
     for(const group of preview.groups){
       const supplierFee=await feeService.calculateSupplierFeeExact(
-        group.supplier_id,group.item_subtotal,conn
+        group.supplier_id,group.item_subtotal,conn,{lockProfile:lockSupplierRates}
       );
       const buyerFee=shares.get(group.supplier_id);
       const total=exact.exactDecimalSum([group.item_subtotal,group.delivery_fee,buyerFee],2);
       groups.push({...group,buyer_platform_fee:buyerFee,total_amount:total,
         supplier_transaction_fee:supplierFee.supplier_fee,
+        supplier_commission_percent:supplierFee.fee_percent,
         supplier_net_payout:supplierFee.supplier_net_payout});
     }
     const accepted=exact.exactDecimalSum(
@@ -288,7 +289,7 @@ class ProcurementAwardService{
           throw fail('SHARED_INVENTORY_EXHAUSTED',
             'B4/B5 pools or another buyer already allocated this supplier stock.',409);
       }
-      const calculated=await this._money(conn,preview);
+      const calculated=await this._money(conn,preview,true);
       if(!exact.exactDecimalEquals(calculated.total_payable,expected,2))
         throw fail('BUYER_REAPPROVAL_REQUIRED',
           'Basket price or fees changed. Review the new checkout total.',409);
@@ -311,13 +312,13 @@ class ProcurementAwardService{
           `INSERT INTO orders
           (order_code,buyer_id,supplier_id,total_qty,unit_price,
            subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,
-           currency,delivery_type,delivery_address,payment_status,
+           supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,
            order_status,notes)
-          VALUES (?,?,?,1.0000,?,?,?,?,?,'PKR','DOORSTEP',?,
+          VALUES (?,?,?,1.0000,?,?,?,?,?,?,'PKR','DOORSTEP',?,
                   'AWAITING_PAYMENT','AWAITING_PAYMENT','SMART_PROCUREMENT_BASKET')`,
           [code,buyer,group.supplier_id,group.item_subtotal,
            group.item_subtotal,group.delivery_fee,group.buyer_platform_fee,
-           group.total_amount,address]
+           group.total_amount,group.supplier_commission_percent,address]
         );
         const orderId=createdOrder.insertId;
         const [link]=await conn.query(
