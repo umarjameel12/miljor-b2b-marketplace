@@ -176,7 +176,7 @@ class FinancialSettlementService {
       // Never infer historical rates from a mutable supplier profile or 2.50% fallback.
       const commissionPercent = order.supplier_commission_percent;
       if (commissionPercent === null || commissionPercent === undefined ||
-          !/^(?:\\d{1,3})(?:\\.\\d{1,2})?$/.test(String(commissionPercent)) ||
+          !/^[0-9]{1,3}(?:[.][0-9]{1,2})?$/.test(String(commissionPercent)) ||
           Number(commissionPercent) < 0 || Number(commissionPercent) > 100) {
         const err = new Error('Immutable order-time supplier commission is missing; historical order requires documented financial reconciliation');
         err.code = 'COMMISSION_SNAPSHOT_REQUIRED';
