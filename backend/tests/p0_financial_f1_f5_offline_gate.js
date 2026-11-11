@@ -34,7 +34,7 @@ let count=0;
 function pass(name){count++;console.log('PASS',name);}
 async function rejects(fn,code){await assert.rejects(fn,x=>x.code===code);}
 const order={id:1,order_code:'ORD-1',total_amount:'113.00',subtotal_amount:'100.00',
-  delivery_fee:'10.00',buyer_platform_fee:'3.00',
+  supplier_commission_percent:'2.50',delivery_fee:'10.00',buyer_platform_fee:'3.00',
   payment_status:'PAID',fulfillment_status:'BUYER_CONFIRMED'};
 const payment={id:5,amount:'113.00',status:'PAID',transaction_ref:'track_123'};
 const payable={id:7,order_id:1,payment_id:5,gross_amount:'100.00',
@@ -85,6 +85,14 @@ const admin={id:17,role:'FINANCE_ADMIN'};
   assert.equal(x.status,'RECONCILIATION_REQUIRED');
   assert.equal(x.checks.find(c=>c.name==='BUYER_ORDER_COMPONENTS').passed,false);
   pass('F4 incorrect buyer fee is detected');
+  reset();fixture.orders[0].supplier_commission_percent=null;
+  x=await ledger.getOrderIntegrity({orderId:1,actor:admin});
+  assert.equal(x.checks.find(c=>c.name==='IMMUTABLE_SUPPLIER_COMMISSION').passed,false);
+  pass('F4 missing order-time supplier commission is a reconciliation blocker');
+  reset();fixture.payables[0].commission_rate_percent='3.00';
+  x=await ledger.getOrderIntegrity({orderId:1,actor:admin});
+  assert.equal(x.checks.find(c=>c.name==='IMMUTABLE_SUPPLIER_COMMISSION').passed,false);
+  pass('F4 mutable profile-based payable commission cannot overwrite order snapshot');
   reset();fixture.payables[0].commission_amount='3.50';
   x=await ledger.getOrderIntegrity({orderId:1,actor:admin});
   assert.equal(x.checks.find(c=>c.name==='COMMISSION_EXACT').passed,false);
