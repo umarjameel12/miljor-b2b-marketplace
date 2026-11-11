@@ -681,7 +681,7 @@ class PoolController {
       connection = await db.getConnection();
       await connection.beginTransaction();
 
-      const pool_code = 'MJ-POOL-' + Math.floor(100000 + Math.random() * 900000);
+      const pool_code = 'MJ-POOL-' + require('node:crypto').randomBytes(6).toString('hex').toUpperCase();
       const coverage_policy = (delivery_clusters && Array.isArray(delivery_clusters) && delivery_clusters.length > 0)
         ? 'EXPLICIT_CLUSTERS'
         : (effectiveDelType === 'SUPPLIER_PICKUP' ? 'PICKUP_ONLY' : 'EXPLICIT_CLUSTERS');
