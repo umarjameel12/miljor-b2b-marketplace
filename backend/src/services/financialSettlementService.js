@@ -1276,9 +1276,15 @@ class FinancialSettlementService {
       }
       const payable = payables[0];
       const [disbursements] = await connection.query(
-        `SELECT d.*, sp.order_id, sp.payment_id
+        `SELECT d.*, sp.order_id, sp.payment_id,
+                o.fulfillment_status,
+                u.is_verified AS supplier_user_verified,
+                prof.verification_status AS supplier_profile_status
          FROM supplier_disbursement_instructions d
          JOIN supplier_payables sp ON d.supplier_payable_id = sp.id
+         JOIN orders o ON o.id = sp.order_id
+         JOIN users u ON u.id = sp.supplier_id
+         LEFT JOIN supplier_profiles prof ON prof.supplier_id = sp.supplier_id
          WHERE d.id = ? FOR UPDATE`,
         [disbursementId]
       );
@@ -1299,6 +1305,17 @@ class FinancialSettlementService {
         throw err;
       }
 
+      // Financial approval is not a stale approval of eligibility at prepare
+      // time. Check current supplier verification and buyer receipt again.
+      if (!disb.supplier_user_verified || disb.supplier_profile_status !== 'VERIFIED' ||
+          !['BUYER_CONFIRMED', 'COMPLETED'].includes(disb.fulfillment_status) ||
+          disb.external_execution_status !== 'DISABLED') {
+        const err = new Error('Supplier, delivery or external execution state changed; payout approval blocked');
+        err.code = 'DISBURSEMENT_ELIGIBILITY_REVOKED';
+        err.statusCode = 409;
+        throw err;
+      }
+
       const [pendingClaims] = await connection.query(
         `SELECT id FROM refund_obligations
          WHERE order_id = ? AND status IN
@@ -1316,6 +1333,12 @@ class FinancialSettlementService {
       if (pendingClaims.length || activeHolds.length ||
           !exactDecimal.exactDecimalEquals(payable.held_amount, '0.00', 2) ||
           !exactDecimal.exactDecimalEquals(payable.disbursed_amount || '0.00', '0.00', 2) ||
+          !exactDecimal.exactDecimalEquals(
+            exactSub(
+              exactSub(payable.net_payable_amount, payable.refund_deduction_amount, 2),
+              payable.held_amount, 2
+            ), payable.available_amount, 2
+          ) ||
           !exactDecimal.exactDecimalEquals(payable.available_amount, disb.amount, 2) ||
           payable.status !== 'DISBURSEMENT_PREPARED') {
         const err = new Error('Disbursement financial conditions changed after preparation');
