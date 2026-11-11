@@ -93,7 +93,7 @@ class FlashPoolService {
     const deliveryFee = dec(payload.delivery_fee ?? '0', {positive:false});
     const condition=payload.condition_notes == null?'':String(payload.condition_notes).trim();
     const bestBefore=payload.best_before_date==null||payload.best_before_date===''?null:String(payload.best_before_date);
-    if(bestBefore && (!/^\\d{4}-\\d{2}-\\d{2}$/.test(bestBefore) ||
+    if(bestBefore && (!/^\d{4}-\d{2}-\d{2}$/.test(bestBefore) ||
         Number.isNaN(Date.parse(bestBefore)) || Date.parse(bestBefore+'T23:59:59Z')<=Date.now()))
       throw fail('INVALID_BEST_BEFORE','Best-before date must be a valid future date; expired food cannot be listed.');
     if(/near[- ]?expir|best.before/i.test(reason) && !bestBefore)
