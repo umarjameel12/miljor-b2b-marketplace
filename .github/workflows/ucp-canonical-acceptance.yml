@@ -112,3 +112,16 @@ jobs:
           JS
       - name: Confirm second migration run is idempotent (same isolated DB)
         run: cd backend && node database/runMigrations.js
+      - name: B5 Flash + shared inventory concurrency acceptance
+        if: ${{ always() }}
+        timeout-minutes: 8
+        run: cd backend && node tests/part5_flash_pool_gate.js
+      - name: B6 procurement independent release suite
+        if: ${{ always() }}
+        timeout-minutes: 12
+        run: cd backend && node tests/b6_release_gate.js
+      - name: B4 Regular pool publication and tier acceptance
+        if: ${{ always() }}
+        timeout-minutes: 8
+        run: cd backend && node tests/part4b3_pool_publishing_gate.js
+
