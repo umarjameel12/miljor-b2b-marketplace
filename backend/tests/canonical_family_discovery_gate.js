@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const pools = read('frontend/src/pages/PoolsPage.jsx');
-const migration = read('backend/database/migrations/046_expand_canonical_product_families.sql');
+const migration = read('backend/database/migrations/051_expand_canonical_product_families.sql');
 const legacy = read('backend/database/migrations/033_canonical_catalog_and_moderation.sql');
 const catalog = read('frontend/src/api/catalog.js');
 assert.match(pools, /catalogApi\.getFamilies\(\)/);
