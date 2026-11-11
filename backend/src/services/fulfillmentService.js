@@ -1196,10 +1196,10 @@ class FulfillmentService {
           description.trim(),
           JSON.stringify({
             reason,
+            ...(metadata || {}),
             reported_quantity: parsedReportedQty,
             expected_quantity: shortageEvidence?.ordered_quantity || String(order.total_qty),
-            ...(shortageEvidence ? {short_quantity: shortageEvidence.short_quantity} : {}),
-            ...(metadata || {})
+            ...(shortageEvidence ? {short_quantity: shortageEvidence.short_quantity} : {})
           }),
           trimmedKey
         ]
