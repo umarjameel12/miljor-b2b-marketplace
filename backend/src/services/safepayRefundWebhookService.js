@@ -78,7 +78,10 @@ class SafepayRefundWebhookService {
            previous[0].event_type==='payment.refunded' &&
            previous[0].processed_status==='PROCESSED' &&
            Number(previous[0].order_id)===Number(order.id) &&
-           previous[0].provider_tracker_token===tracker){
+           previous[0].provider_tracker_token===tracker &&
+           // An event ID with different signed monetary evidence is a conflict,
+           // never a harmless replay, even when order/tracker are identical.
+           previous[0].raw_payload === JSON.stringify(payload)){
           await conn.commit();
           return {success:true,duplicate:true,status:'PROCESSED'};
         }
@@ -130,16 +133,27 @@ class SafepayRefundWebhookService {
         [eventId,order.id,attempt.id,tracker,signature,String(timestamp||''),
          JSON.stringify(payload)]
       );
-      await conn.query(
+      const [refundUpdate]=await conn.query(
         `UPDATE refund_obligations
          SET status='CONFIRMED',external_reference=?,confirmed_at=NOW(),
              updated_at=NOW()
-         WHERE id=? AND status='APPROVED'`,[eventId,refund.id]
+         WHERE id=? AND status='APPROVED' AND payment_id=?
+           AND total_refund_amount=? AND currency='PKR'`,
+        [eventId,refund.id,payment.id,amount]
       );
-      await conn.query(
-        "UPDATE payments SET status=?,updated_at=NOW() WHERE id=?",
-        [fullyRefunded?'REFUNDED':'PARTIALLY_REFUNDED',payment.id]
+      if(refundUpdate.affectedRows!==1)
+        throw reject('REFUND_ATOMIC_UPDATE_CONFLICT',
+          'Refund approval changed before signed provider confirmation; rollback required',409);
+      const [paymentUpdate]=await conn.query(
+        `UPDATE payments SET status=?,updated_at=NOW()
+         WHERE id=? AND order_id=? AND transaction_ref=?
+           AND status IN ('PAID','PARTIALLY_REFUNDED')`,
+        [fullyRefunded?'REFUNDED':'PARTIALLY_REFUNDED',
+         payment.id,order.id,tracker]
       );
+      if(paymentUpdate.affectedRows!==1)
+        throw reject('PAYMENT_ATOMIC_UPDATE_CONFLICT',
+          'Captured payment state changed before refund confirmation; rollback required',409);
       await financialSettlement._logAuditEvent(conn,{
         orderId:order.id,paymentId:payment.id,
         entityType:'REFUND_OBLIGATION',entityId:refund.id,
