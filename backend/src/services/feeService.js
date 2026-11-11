@@ -43,7 +43,15 @@ class FeeService {
       err.statusCode = 422;
       throw err;
     }
-    const percent=exact.toCanonical(profiles[0].transaction_fee_percent??'2.50',2);
+    if (profiles[0].transaction_fee_percent === null ||
+        profiles[0].transaction_fee_percent === undefined ||
+        String(profiles[0].transaction_fee_percent).trim() === '') {
+      const err = new Error('Supplier commission percentage is not configured');
+      err.code = 'SUPPLIER_COMMISSION_UNCONFIGURED';
+      err.statusCode = 409;
+      throw err;
+    }
+    const percent=exact.toCanonical(profiles[0].transaction_fee_percent,2);
     if(!exact.exactDecimalGte(percent,'0.00',2)||
        !exact.exactDecimalGte('100.00',percent,2))throw new Error('Supplier fee percent invalid');
     const cents=BigInt(subtotal.replace('.',''));
