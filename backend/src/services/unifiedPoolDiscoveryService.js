@@ -18,6 +18,9 @@ class UnifiedPoolDiscoveryService {
    const categoryId=parseId(raw.category_id,'category_id');
    const familyId=parseId(raw.family_id,'family_id');
    const clusterId=parseId(raw.cluster_id,'cluster_id');
+   const fulfillment=String(raw.fulfillment_mode||'ALL').toUpperCase();
+   if(!['ALL','STANDARD_CLUSTERED','EXPRESS','PICKUP'].includes(fulfillment))
+     throw reject('INVALID_FULFILLMENT_MODE','Invalid delivery mode filter');
    const search=String(raw.search||'').trim().toLowerCase();
    if(search.length>120)throw reject('INVALID_SEARCH','Search exceeds 120 characters');
    const limit=raw.limit==null?60:Number(raw.limit);
@@ -25,7 +28,9 @@ class UnifiedPoolDiscoveryService {
    const includeRegular=type!=='FLASH',includeFlash=type!=='REGULAR';
    // B4's cluster filter has authoritative area + supplier-rate + pickup logic.
    const [regularRaw,flashRaw]=await Promise.all([
-     includeRegular?poolRepo.findAllActive({cluster_id:clusterId||undefined}):[],
+     includeRegular?poolRepo.findAllActive({cluster_id:clusterId||undefined,
+       fulfillment_mode:fulfillment==='ALL'?undefined:fulfillment,
+       include_all_pickup:raw.include_all_pickup==='true'}):[],
      includeFlash?flash.getActive({}):[]
    ]);
    let regular=[];
@@ -69,7 +74,7 @@ class UnifiedPoolDiscoveryService {
      });
    }
    let flashes=[];
-   if(flashRaw.length){
+   if(flashRaw.length && ['ALL','STANDARD_CLUSTERED'].includes(fulfillment)){
      const ids=flashRaw.map(p=>Number(p.id)).filter(Number.isSafeInteger);
      const [tax]=await db.query(
        `SELECT fp.id,ps.family_id,ps.category_id
@@ -81,17 +86,10 @@ class UnifiedPoolDiscoveryService {
      let eligibleSuppliers=null;
      if(clusterId){
        const [rates]=await db.query(
-         `SELECT DISTINCT x.supplier_id FROM (
-           SELECT r.supplier_id FROM supplier_delivery_cluster_rates r
-             JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
-           WHERE r.cluster_id=? AND r.is_eligible=1
-             AND ((r.mode='STANDARD_CLUSTERED' AND c.standard_delivery_enabled=1)
-               OR (r.mode='EXPRESS' AND c.express_enabled=1))
-           UNION
-           SELECT pp.supplier_id FROM supplier_pickup_points pp
-             JOIN supplier_delivery_configurations c ON c.supplier_id=pp.supplier_id
-           WHERE pp.cluster_id=? AND pp.is_active=1 AND c.pickup_enabled=1
-         ) x`,[clusterId,clusterId]);
+         `SELECT DISTINCT r.supplier_id FROM supplier_delivery_cluster_rates r
+            JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
+            WHERE r.cluster_id=? AND r.mode='STANDARD_CLUSTERED'
+              AND r.is_eligible=1 AND c.standard_delivery_enabled=1`,[clusterId]);
        eligibleSuppliers=new Set(rates.map(x=>Number(x.supplier_id)));
      }
      flashes=flashRaw.filter(p=>taxonomy.has(Number(p.id)) &&
