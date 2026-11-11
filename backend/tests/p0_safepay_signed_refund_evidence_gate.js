@@ -28,7 +28,8 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,
     throw Error('Forbidden module '+name);
   },
   module:moduleRef,exports:moduleRef.exports,
-  Buffer,console
+  Buffer,console,
+  process:{env:{MILJOR_SAFEPAY_REFUND_UNIT_VERIFIED:'PAISA'}}
 },{timeout:5000});
 const svc=moduleRef.exports;
 const goodEvent=(data={})=>Buffer.from(JSON.stringify({
@@ -77,6 +78,8 @@ async function verify(label,expected,setup=()=>{},raw=goodEvent()){
   scenarios++;console.log('PASS:',label);
 }
 (async()=>{
+  // This test harness explicitly confirms the amount-unit contract only for
+  // offline fake Safepay evidence. Production defaults to disabled.
   await verify('signed uniquely matched approved refund','SUCCESS');
   await verify('forged signature','INVALID_WEBHOOK_SIGNATURE',()=>{signatureValid=false});
   await verify('unverified tracker','REFUND_TRACKER_UNVERIFIED',()=>{state.attempt.status='INITIATED'});
