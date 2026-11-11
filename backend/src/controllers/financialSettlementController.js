@@ -24,7 +24,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -47,7 +47,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -71,7 +71,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -93,7 +93,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -119,7 +119,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -141,7 +141,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -164,7 +164,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -187,7 +187,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -212,7 +212,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -234,7 +234,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -268,7 +268,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -289,7 +289,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
@@ -312,7 +312,7 @@ class FinancialSettlementController {
       const status = err.statusCode || 500;
       return res.status(status).json({
         success: false,
-        error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+        error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
     }
   }
