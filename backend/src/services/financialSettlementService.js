@@ -599,6 +599,91 @@ class FinancialSettlementService {
         throw err;
       }
 
+      // Idempotency lookup comes before duplicate-dispute rejection, so an
+      // identical network retry returns the original obligation instead of 409.
+      if (idempotencyKey) {
+        const [previous] = await connection.query(
+          'SELECT * FROM refund_obligations WHERE idempotency_key=? FOR UPDATE',
+          [idempotencyKey]
+        );
+        if (previous.length) {
+          if (Number(previous[0].order_id)!==Number(orderId) ||
+              Number(previous[0].buyer_id)!==Number(order.buyer_id) ||
+              (previous[0].dispute_id == null ? null : Number(previous[0].dispute_id)) !==
+                (disputeId == null ? null : Number(disputeId)) ||
+              previous[0].refund_type !== refundType ||
+              ((previous[0].disputed_quantity == null || disputedQuantity == null)
+                ? previous[0].disputed_quantity != disputedQuantity
+                : !exactDecimal.exactDecimalEquals(
+                    String(previous[0].disputed_quantity), String(disputedQuantity), 2
+                  ))) {
+            const err = new Error('Idempotency key was already used for a different refund request');
+            err.code = 'REFUND_IDEMPOTENCY_CONFLICT';
+            err.statusCode = 409;
+            throw err;
+          }
+          await connection.commit();
+          return {success:true,message:'Idempotent replay: Refund assessment already recorded',
+            data:{refund:previous[0]}};
+        }
+      }
+
+      // A buyer must not invent a partial monetary refund independent of a
+      // real owned delivery dispute. The discrepancy service records evidence;
+      // refund entitlement is separately assessed and remains non-executable.
+      if (refundType === 'PARTIAL' && actor.role === 'BUYER') {
+        if (!Number.isSafeInteger(Number(disputeId)) || Number(disputeId) <= 0) {
+          const err = new Error('A linked dispute is mandatory for buyer partial refunds');
+          err.code = 'PARTIAL_REFUND_DISPUTE_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+      if (refundType === 'PARTIAL' && disputeId !== null && disputeId !== undefined) {
+        const [linkedDisputes] = await connection.query(
+          `SELECT id, order_id, buyer_id, disputed_quantity, status
+           FROM order_disputes WHERE id=? AND order_id=? FOR UPDATE`,
+          [disputeId, orderId]
+        );
+        if (linkedDisputes.length !== 1 ||
+            Number(linkedDisputes[0].buyer_id) !== Number(order.buyer_id)) {
+          const err = new Error('Refund references an invalid or unrelated buyer dispute');
+          err.code = 'REFUND_DISPUTE_MISMATCH';
+          err.statusCode = 403;
+          throw err;
+        }
+        const linked = linkedDisputes[0];
+        if (['RESOLVED_REJECTED', 'CLOSED'].includes(linked.status)) {
+          const err = new Error('Refund is not allowed for a closed/rejected dispute');
+          err.code = 'REFUND_DISPUTE_NOT_ELIGIBLE';
+          err.statusCode = 409;
+          throw err;
+        }
+        if (disputedQuantity === null || disputedQuantity === undefined ||
+            !exactDecimal.exactDecimalGte(
+              String(linked.disputed_quantity), String(disputedQuantity), 2
+            ) || !exactDecimal.exactDecimalGte(String(disputedQuantity), '0.01', 2)) {
+          const err = new Error('Refund quantity must be positive and no more than linked disputed quantity');
+          err.code = 'REFUND_QUANTITY_EXCEEDS_DISPUTE';
+          err.statusCode = 422;
+          throw err;
+        }
+        const [pendingSameDispute] = await connection.query(
+          `SELECT id FROM refund_obligations
+           WHERE order_id=? AND dispute_id=?
+             AND status IN ('REQUESTED','UNDER_REVIEW','APPROVED',
+               'AWAITING_EXTERNAL_EXECUTION','EXTERNAL_PROCESSING','CONFIRMED')
+           LIMIT 1 FOR UPDATE`,
+          [orderId, disputeId]
+        );
+        if (pendingSameDispute.length) {
+          const err = new Error('A refund obligation already exists for this dispute; reconcile it before further assessments');
+          err.code = 'REFUND_ALREADY_ASSESSED_FOR_DISPUTE';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+
       // Check existing approved/confirmed refunds to prevent over-refunding
       const [existingRefunds] = await connection.query(
         `SELECT SUM(total_refund_amount) AS total_refunded
@@ -632,6 +717,23 @@ class FinancialSettlementService {
           (order.buyer_platform_fee || 0.00).toString()
         ], 2);
       } else {
+        // Procurement awards can contain multiple SKU lines with different
+        // prices/units. An aggregate order.unit_price is NOT a defensible
+        // basis for a partial refund on any B6 award. Fail closed until a
+        // separately approved per-award-line refund allocation exists.
+        const [awardLineCounts] = await connection.query(
+          `SELECT COUNT(*) AS line_count
+           FROM procurement_award_lines al
+           JOIN procurement_award_orders ao ON ao.id=al.award_order_id
+           WHERE ao.order_id=?`,
+          [orderId]
+        );
+        if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
+          const err = new Error('Partial refunds for awarded procurement orders require line-item quantities, verified receipts and itemized contractual prices');
+          err.code = 'LINE_ITEM_REFUND_ALLOCATION_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
         // PARTIAL: based on disputed quantity and locked order.unit_price
         if (!disputedQuantity || Number(disputedQuantity) <= 0) {
           const err = new Error('Valid disputed quantity is required for partial refund assessment');
@@ -663,22 +765,6 @@ class FinancialSettlementService {
         err.code = 'REFUND_EXCEEDS_CAPTURED_AMOUNT';
         err.statusCode = 422;
         throw err;
-      }
-
-      // Idempotency check if key provided
-      if (idempotencyKey) {
-        const [existingIdem] = await connection.query(
-          `SELECT * FROM refund_obligations WHERE idempotency_key = ?`,
-          [idempotencyKey]
-        );
-        if (existingIdem.length > 0) {
-          await connection.commit();
-          return {
-            success: true,
-            message: 'Idempotent replay: Refund assessment already recorded',
-            data: { refund: existingIdem[0] }
-          };
-        }
       }
 
       const refundCode = `RFND-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
