@@ -189,12 +189,37 @@ class PoolRepository {
 
   // All active pools — public listing with optional filters and location discovery (Phase 6D.3 & 6D.3.3)
   async findAllActive({ category, min_price, max_price, cluster_id, fulfillment_mode, include_all_pickup } = {}) {
-    let where = "WHERE p.status = 'ACTIVE' AND p.expires_at > NOW()";
+    let where = `WHERE p.status = 'ACTIVE' AND p.expires_at > UTC_TIMESTAMP()
+      AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED'
+      AND EXISTS(SELECT 1 FROM supplier_profiles profile
+        WHERE profile.supplier_id=p.supplier_id AND profile.verification_status='VERIFIED')
+      AND EXISTS (
+        SELECT 1 FROM supplier_listings sl
+        JOIN product_specifications spec ON spec.id=sl.product_spec_id
+        JOIN supplier_skus sku ON sku.id=spec.supplier_sku_id
+        JOIN supplier_products prod ON prod.id=sku.supplier_product_id
+        JOIN catalog_product_families fam ON fam.id=spec.family_id
+        JOIN catalog_categories cat ON cat.id=spec.category_id
+        WHERE sl.id=p.supplier_listing_id AND sl.supplier_id=p.supplier_id
+          AND sl.status='ACTIVE' AND sl.supplier_sku_id=p.supplier_sku_id
+          AND spec.id=p.product_spec_id AND spec.supplier_id=p.supplier_id
+          AND spec.is_active=1 AND spec.approval_status='APPROVED'
+          AND spec.lifecycle_status='PUBLISHED'
+          AND sku.supplier_id=p.supplier_id AND sku.status='PUBLISHED'
+          AND prod.supplier_id=p.supplier_id AND prod.status='PUBLISHED'
+          AND fam.is_active=1 AND fam.approval_status='APPROVED'
+          AND cat.is_active=1 AND cat.approval_status='APPROVED'
+      )`;
     const params = [];
 
     if (category) {
-      where += ' AND pr.category = ?';
-      params.push(category);
+      where += ` AND (pr.category = ? OR EXISTS (
+        SELECT 1 FROM catalog_categories category_filter
+        WHERE category_filter.id=ps.category_id
+          AND (category_filter.name=? OR category_filter.slug=?
+               OR CAST(category_filter.id AS CHAR)=?)
+      ))`;
+      params.push(category,category,category,category);
     }
     if (min_price) {
       where += ' AND p.current_price_per_unit >= ?';
@@ -275,7 +300,9 @@ class PoolRepository {
     const [rows] = await db.query(`
       SELECT
         p.*,
-        pr.title AS product_title, pr.category, pr.brand, pr.variety, pr.pack_size, pr.unit,
+        pr.title AS product_title, pr.category, ps.title AS product_name,
+        ps.brand AS brand, ps.variety AS variety, ps.pack_size AS pack_size,
+        ps.purchasing_unit AS pack_unit, pr.unit,
         u.business_name AS supplier_name, u.area AS supplier_area,
         (p.target_qty - p.current_qty) AS remaining_qty,
         ROUND((p.current_qty / p.target_qty) * 100, 1) AS fill_percentage,
@@ -284,6 +311,7 @@ class PoolRepository {
       FROM pools p
       JOIN products pr ON p.product_id = pr.id
       JOIN users u ON p.supplier_id = u.id
+      JOIN product_specifications ps ON ps.id=p.product_spec_id
       ${where}
       ORDER BY p.id DESC
     `, params);

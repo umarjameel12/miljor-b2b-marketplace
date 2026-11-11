@@ -23,7 +23,7 @@ const initialForm=(listing)=>({
   total_stock:'',discounted_unit_price:'',min_quantity:'1',
   max_quantity_per_buyer:'',selling_mode:'MULTI_BUYER',
   duration_minutes:'720',clearance_reason:'',condition_notes:'',
-  best_before_date:'',delivery_fee:'0'
+  best_before_date:'',delivery_fee:'0',delivery_cluster_ids:[]
 });
 const positive=v=>/^\d+(?:\.\d{1,4})?$/.test(String(v||'')) && Number(v)>0;
 const money=v=>/^\d+(?:\.\d{1,2})?$/.test(String(v||'')) && Number(v)>0;
@@ -116,6 +116,12 @@ export function SupplierPoolsPage(){
   const [params,setParams]=useSearchParams();
   const [data,setData]=useState({pools:[],counts:{total:0,regular:0,flash:0},server_time:null});
   const [listings,setListings]=useState([]);
+  const [fulfillment,setFulfillment]=useState(null);
+  const [fulfillmentError,setFulfillmentError]=useState('');
+  const [analytics,setAnalytics]=useState(null);
+  const [analyticsError,setAnalyticsError]=useState('');
+  const [stock,setStock]=useState(null);
+  const [stockError,setStockError]=useState('');
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [filter,setFilter]=useState('ALL');
@@ -129,7 +135,15 @@ export function SupplierPoolsPage(){
   const load=useCallback(async()=>{
     setLoading(true);setError('');
     try{
-      const [overview,listingsResult]=await Promise.all([unifiedPoolsApi.overview(),unifiedPoolsApi.listings()]);
+      const [overview,listingsResult,deliveryResult,analyticsResult]=await Promise.all([
+        unifiedPoolsApi.overview(),unifiedPoolsApi.listings(),
+        unifiedPoolsApi.fulfillment().catch(e=>({success:false,error:{message:e.response?.data?.error?.message||'Delivery configuration unavailable'}})),
+        unifiedPoolsApi.analytics().catch(e=>({success:false,error:{message:e.response?.data?.error?.message||'Analytics unavailable'}}))
+      ]);
+      if(analyticsResult.success){setAnalytics(analyticsResult.data);setAnalyticsError('');}
+      else{setAnalytics(null);setAnalyticsError(analyticsResult.error?.message||'Analytics unavailable');}
+      if(deliveryResult.success){setFulfillment(deliveryResult.data);setFulfillmentError('');}
+      else{setFulfillment(null);setFulfillmentError(deliveryResult.error?.message||'Delivery configuration unavailable');}
       setData(overview?.data||{pools:[],counts:{total:0,regular:0,flash:0}});
       setListings((listingsResult?.data?.listings||[]).filter(l=>l.status==='ACTIVE'&&l.supplier_sku_id&&l.product_spec_id));
     }catch(e){setError(e.response?.data?.error?.message||'Supplier pools are unavailable.');}
@@ -150,6 +164,14 @@ export function SupplierPoolsPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[params.toString(),listings.length,edit]);
   const chosen=useMemo(()=>listings.find(l=>String(l.id)===String(form.supplier_listing_id)),[listings,form.supplier_listing_id]);
+  useEffect(()=>{
+    if(!creating||!chosen?.id){setStock(null);setStockError('');return;}
+    let alive=true;setStock(null);setStockError('');
+    unifiedPoolsApi.stock(chosen.id).then(r=>{if(alive)setStock(r.data);})
+      .catch(e=>{if(alive)setStockError(e.response?.data?.error?.message||'Cannot verify available inventory.');});
+    return()=>{alive=false};
+  },[creating,chosen?.id]);
+
   const rows=useMemo(()=>data.pools.filter(p=>filter==='ALL'||p.type===filter||
     (filter==='ACTIVE'&&p.status==='ACTIVE')||(filter==='DRAFT'&&p.status==='DRAFT')), [data.pools,filter]);
   const update=(name,value)=>setForm(old=>({...old,[name]:value}));
@@ -173,6 +195,7 @@ export function SupplierPoolsPage(){
         scheduled_close_at:localDate(pool.expires_at),
         promised_delivery_at:localDate(pool.promised_delivery_at),
         delivery_type:pool.delivery_type||'DOORSTEP',
+        delivery_cluster_ids:pool.delivery_cluster_ids||[],
         tier1_price:String(tiers[0]?.price_per_unit??pool.price??listing.base_unit_price??''),
         tier2_price:tiers.length>1?String(tiers[1].price_per_unit):''
       });
@@ -213,8 +236,29 @@ export function SupplierPoolsPage(){
     try{
       const payload=buildPayload(mode,form,chosen,edit);
       setBusy(true);
-      if(mode==='REGULAR')await unifiedPoolsApi.saveRegularDraft(payload,edit?.id);
-      else await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
+      if(!stock||stockError)throw Error('Supplier stock verification is required.');
+      if(mode==='REGULAR'){
+        if(form.delivery_type==='SUPPLIER_PICKUP'&&
+          (!fulfillment?.configuration?.pickup_enabled||
+           !(fulfillment?.pickup_points||[]).some(point=>Number(point.is_active)===1)))
+          throw Error('Activate an authorized supplier pickup point before selecting pickup-only delivery.');
+        if(form.delivery_type!=='SUPPLIER_PICKUP'&&
+           !fulfillment?.configuration?.standard_delivery_enabled)
+          throw Error('Enable standard supplier delivery before publishing doorstep or grouped pools.');
+        if(form.delivery_type!=='SUPPLIER_PICKUP'&&!form.delivery_cluster_ids.length)
+          throw Error('Choose an authorized Lahore delivery cluster.');
+        const result=await unifiedPoolsApi.saveRegularDraft(payload,edit?.id);
+        const poolId=edit?.id||result?.data?.pool?.id;
+        if(!poolId)throw Error('Draft may exist but no ID was returned. Refresh Pool Management before retrying.');
+        try{await unifiedPoolsApi.updateRegularClusters(poolId,
+          form.delivery_type==='SUPPLIER_PICKUP'?[]:form.delivery_cluster_ids);
+        }catch(_){
+          setEdit(previous=>previous||{id:poolId,type:'REGULAR',status:'DRAFT'});
+          throw Error('Draft #'+poolId+' saved, but cluster assignment failed. Retry updates this existing draft.');
+        }
+      }else{
+        await unifiedPoolsApi.saveFlashDraft(payload,edit?.id);
+      }
       toast.success(mode+' draft saved. Review and publish it from Pool Management.');
       close();await load();
     }catch(e){toast.error(e.response?.data?.error?.message||e.message||'Unable to save pool draft.');}
@@ -266,6 +310,14 @@ export function SupplierPoolsPage(){
           </select>
         </label>
         {chosen&&<p className="text-xs bg-[var(--bg-elevated)] rounded-lg p-3">Reference listing: {chosen.variant_title||chosen.spec_title} · {chosen.available_stock} {chosen.pricing_unit} listed · Rs. {chosen.base_unit_price}/{chosen.pricing_unit}. Inventory allocations are checked on publish.</p>}
+        {fulfillmentError&&<p role="alert" className="text-xs text-amber-600">{fulfillmentError}</p>}
+        {stockError&&<p role="alert" className="text-xs text-red-600">{stockError}</p>}
+        {stock&&<div className="rounded-xl border border-[var(--border-subtle)] p-3 text-xs space-y-1">
+          <p className="font-semibold">Physical SKU inventory · read-only snapshot</p>
+          <p>Listed: {stock.listed_stock} {stock.unit} · Allocated: {stock.allocated_stock} {stock.unit}</p>
+          <p className="font-semibold">Estimated free: {stock.available_to_allocate} {stock.unit}</p>
+          <p className="text-[var(--text-muted)]">Publication rechecks stock atomically. This is not a guarantee.</p>
+        </div>}
         {mode==='REGULAR'?<>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {['supplier_min_qty','target_qty','max_capacity','buyer_min_qty'].map(k=><Field key={k} label={k.replaceAll('_',' ')} value={form[k]} onChange={v=>update(k,v)} step="0.0001" min="0.0001"/>)}
@@ -284,6 +336,24 @@ export function SupplierPoolsPage(){
               <option value="DOORSTEP">Doorstep</option><option value="GROUPED_CLUSTER">Grouped cluster</option><option value="SUPPLIER_PICKUP">Supplier pickup</option>
             </select>
           </label>
+          {form.delivery_type!=='SUPPLIER_PICKUP'&&<div className="border border-[var(--border-subtle)] rounded-xl p-3 space-y-2">
+            <p className="text-xs font-semibold">Authorized Lahore delivery clusters</p>
+            {!(fulfillment?.regular_eligible_clusters||[]).length?
+              <p className="text-xs text-amber-600">No eligible standard clusters. Configure supplier delivery rates first.</p>:
+              <div className="grid sm:grid-cols-2 gap-2">{fulfillment.regular_eligible_clusters.map(c=>
+                <label key={c.id} className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={form.delivery_cluster_ids.includes(Number(c.id))}
+                    onChange={e=>update('delivery_cluster_ids',e.target.checked?
+                      [...form.delivery_cluster_ids,Number(c.id)]:form.delivery_cluster_ids.filter(x=>x!==Number(c.id)))}/>
+                  {c.name} · {c.cluster_code}
+                  {(() => {
+                    const rate=(fulfillment.cluster_rates||[]).find(r=>
+                      Number(r.cluster_id)===Number(c.id)&&r.mode==='STANDARD_CLUSTERED');
+                    return rate?<span className="text-[var(--text-muted)]"> · Rs. {Number(rate.fee_pkr).toLocaleString('en-PK')} base cluster fee</span>:null;
+                  })()}
+                </label>
+              )}</div>}
+          </div>}
           <p className="text-xs text-[var(--text-muted)]">Regular reservations, commercial qualification, delivery clusters and buyer commitments remain governed by B4. Pricing is not guaranteed until terms are locked.</p>
         </>:<>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -307,6 +377,7 @@ export function SupplierPoolsPage(){
           <label className="block text-xs font-semibold space-y-1">Stock condition notes
             <textarea value={form.condition_notes} maxLength={2000} onChange={e=>update('condition_notes',e.target.value)} rows={3} className="w-full rounded-xl border p-3 bg-[var(--bg-elevated)] border-[var(--border-subtle)]"/>
           </label>
+          <p className="text-xs text-amber-700">Flash delivery uses B5 fixed-fee checkout. Regular clusters do not automatically apply to Flash.</p>
           <p className="text-xs text-[var(--text-muted)]">Flash uses its own instant stock hold and Safepay checkout. No regular volume pricing or buyer commitment states.</p>
         </>}
         <div className="flex flex-wrap gap-2 justify-end pt-2">
@@ -319,6 +390,29 @@ export function SupplierPoolsPage(){
       <div className="grid grid-cols-3 gap-2">
         {[[data.counts.total,'All Pools'],[data.counts.regular,'Regular'],[data.counts.flash,'Flash']].map(([count,label])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]"><div className="text-2xl font-bold tabular-nums">{count||0}</div><div className="text-xs text-[var(--text-muted)]">{label}</div></div>)}
       </div>
+      {analytics&&<section className="space-y-3" aria-label="Verified Pool Analytics">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            ['Verified Regular orders',analytics.regular.paid_order_count],
+            ['Regular paid goods',`Rs. ${Number(analytics.regular.paid_goods_pkr).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+            ['Verified Flash orders',analytics.flash.paid_order_count],
+            ['Flash paid goods',`Rs. ${Number(analytics.flash.paid_goods_pkr).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+          ].map(([label,value])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]">
+            <div className="text-xs text-[var(--text-muted)]">{label}</div>
+            <strong className="text-lg tabular-nums">{value}</strong>
+          </div>)}
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">Amounts are verified PAID order goods subtotals, not supplier net payout or projected revenue. Regular active reservations: {analytics.regular.active_reservation_count}. Flash open payment holds: {analytics.flash.open_holds} (provider pending: {analytics.flash.provider_pending_holds}).</p>
+        {analytics.alerts.length>0&&<div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-2">
+          <h2 className="font-semibold text-sm">Pool action center · Live lifecycle signals</h2>
+          {analytics.alerts.map(a=><div key={a.key} className="text-xs flex flex-wrap gap-2 items-start border-b border-[var(--border-subtle)] pb-2">
+            <span className="font-bold">{a.pool_type} · {a.pool_code}</span>
+            <span>{a.message}</span>
+          </div>)}
+          <p className="text-[11px] text-[var(--text-muted)]">These are read-only in-app alerts, not emails/SMS or automatic payment/stock changes.</p>
+        </div>}
+      </section>}
+      {analyticsError&&<p role="alert" className="text-xs text-amber-600">{analyticsError}</p>}
       <div className="flex gap-2 flex-wrap">
         {['ALL','REGULAR','FLASH','DRAFT','ACTIVE'].map(t=><button key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${filter===t?'border-emerald-600 text-emerald-600':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'All':t[0]+t.slice(1).toLowerCase()}</button>)}
       </div>
@@ -330,6 +424,11 @@ export function SupplierPoolsPage(){
         <p className="text-xs text-[var(--text-muted)]">{pool.code} · {pool.type==='REGULAR'?
           `${pool.quantity_current||0} / ${pool.quantity_target||0} ${pool.unit||''} committed`:
           `${pool.quantity_available??0} / ${pool.quantity_target||0} ${pool.unit||''} available`}</p>
+        {analytics?.performance?.some(x=>x.type===pool.type&&Number(x.pool_id)===Number(pool.id))&&
+          <div className="rounded-lg p-2 bg-[var(--bg-elevated)] text-xs">
+            {analytics.performance.filter(x=>x.type===pool.type&&Number(x.pool_id)===Number(pool.id))
+              .map(x=><span key={pool.code}>Verified orders: {x.paid_orders} · Paid goods: Rs. {Number(x.paid_goods_pkr).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})} · Paid quantity: {x.paid_quantity} {pool.unit}</span>)}
+          </div>}
         <div className="flex items-center gap-2 text-xs"><Clock size={14}/>{pool.status==='DRAFT'&&pool.type==='FLASH'?
           'Flash duration starts on publication':pool.expires_at?
           <CountdownTimer deadline={pool.expires_at} serverTime={data.server_time} compact label="Closes in"/>:

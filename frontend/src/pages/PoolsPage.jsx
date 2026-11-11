@@ -10,6 +10,9 @@ import catalogApi from '../api/catalog';
 import { geoApi } from '../api/geo';
 import { useAuth } from '../context/AuthContext';
 import { PoolCard } from '../components/PoolCard';
+import { FlashBuyerPoolCard } from '../components/FlashBuyerPoolCard';
+import { RegularBuyerReservation } from '../components/RegularBuyerReservation';
+import apiClient from '../api/client';
 import { Skeleton } from '../components/ui/Skeleton';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -28,14 +31,7 @@ import {
 } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
 
-const CATEGORIES = [
-  'All Commodities',
-  'Grains & Rice',
-  'Flour & Grain',
-  'Pulses & Legumes',
-  'Oils & Fats',
-  'Sugar & Sweeteners',
-];
+// Category options are sourced from canonical MilJor catalog (8 categories), never hardcoded.
 
 const FULFILLMENT_MODES = [
   { id: 'ALL', label: 'All Modes' },
@@ -48,6 +44,11 @@ export const PoolsPage = () => {
   const { user } = useAuth();
 
   const [pools, setPools] = useState([]);
+  const [flashPools,setFlashPools]=useState([]);
+  const [flashServerTime,setFlashServerTime]=useState(null);
+  const [poolType,setPoolType]=useState('ALL');
+  const [flashError,setFlashError]=useState('');
+  const [joiningRegular,setJoiningRegular]=useState(null);
   const [families, setFamilies] = useState([]);
   const [catalogCategories, setCatalogCategories] = useState([]);
   const [clusters, setClusters] = useState([]);
@@ -88,11 +89,11 @@ export const PoolsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const categoryParam = viewMode === 'pools' && selectedCategory !== 'All Commodities' ? selectedCategory : undefined;
+      const categoryParam = selectedCategory !== 'All Commodities' ? selectedCategory : undefined;
       const clusterParam = selectedClusterId ? Number(selectedClusterId) : undefined;
       const modeParam = selectedFulfillmentMode === 'ALL' ? undefined : selectedFulfillmentMode;
 
-      const [poolsRes, familiesRes, categoriesRes] = await Promise.all([
+      const [poolsRes, familiesRes, categoriesRes, flashResult] = await Promise.all([
         poolsApi.getActivePools({
           category: categoryParam,
           cluster_id: clusterParam,
@@ -101,7 +102,17 @@ export const PoolsPage = () => {
         }),
         catalogApi.getFamilies(),
         catalogApi.getCategories(),
+        apiClient.get('/flash-pools',{params:categoryParam?{category:categoryParam}:{}}).then(r=>r.data).catch(e=>({
+          success:false,error:{message:e.response?.data?.error?.message||'Flash offers unavailable'}
+        })),
       ]);
+      if(flashResult?.success){
+        setFlashPools(flashResult.data?.flash_pools||[]);
+        setFlashServerTime(flashResult.data?.server_time||null);
+        setFlashError('');
+      }else{
+        setFlashPools([]);setFlashError(flashResult?.error?.message||'Flash offers unavailable');
+      }
 
       if (poolsRes.success && poolsRes.data?.pools) {
         setPools(poolsRes.data.pools);
@@ -130,6 +141,17 @@ export const PoolsPage = () => {
     return titleMatch || varietyMatch || codeMatch;
   });
 
+  // B5 does not expose B4 G2 cluster/fulfillment quotes. Never silently claim
+  // a Flash offer meets an active Regular Pool cluster filter.
+  const flashFilterCompatible=selectedFulfillmentMode==='ALL';
+  const filteredFlash=flashPools.filter(p=>{
+    const query=searchQuery.toLowerCase();
+    return [p.sku_title,p.supplier_name,p.flash_code,p.category,p.listing_code]
+      .some(v=>String(v||'').toLowerCase().includes(query));
+  });
+  const visibleRegular=poolType!=='FLASH'?filteredPools:[];
+  const visibleFlash=poolType!=='REGULAR'&&flashFilterCompatible?filteredFlash:[];
+  const visibleCount=visibleRegular.length+visibleFlash.length;
   const filteredFamilies = families.filter((family) => {
     const query = searchQuery.trim().toLocaleLowerCase();
     const terms = [family.name, family.description, family.family_code,
@@ -137,9 +159,11 @@ export const PoolsPage = () => {
     return (!query || terms.some(term => String(term || '').toLocaleLowerCase().includes(query)))
       && (selectedCategory === 'All Commodities' || String(family.category_id) === selectedCategory);
   });
-  const categoryOptions = viewMode === 'catalog'
-    ? [{ id: 'All Commodities', name: 'All Commodities' }, ...catalogCategories.map(c => ({ id: String(c.id), name: c.name }))]
-    : CATEGORIES.map(name => ({ id: name, name }));
+  const categoryOptions = [
+    {id:'All Commodities',name:'All Commodities'},
+    ...catalogCategories.filter(c=>Number(c.is_active)===1&&c.approval_status==='APPROVED')
+      .map(c=>({id:String(c.id),name:c.name}))
+  ];
   const handleViewChange = (nextView) => {
     setViewMode(nextView);
     setSelectedCategory('All Commodities');
@@ -185,7 +209,7 @@ export const PoolsPage = () => {
                 <span>Live Wholesale Pools</span>
                 {pools.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                    {pools.length}
+                    {pools.length+flashPools.length}
                   </span>
                 )}
               </button>
@@ -203,7 +227,7 @@ export const PoolsPage = () => {
               >
                 <Package className="w-3.5 h-3.5" />
                 <span>Product Families</span>
-                {products.length > 0 && (
+                {families.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
                     {families.length}
                   </span>
@@ -368,6 +392,20 @@ export const PoolsPage = () => {
           </div>
         </div>
 
+        {viewMode==='pools'&&<div className="flex flex-wrap items-center gap-2" role="group" aria-label="Pool type">
+          {['ALL','REGULAR','FLASH'].map(type=><button key={type} type="button"
+            onClick={()=>setPoolType(type)} aria-pressed={poolType===type}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border ${poolType===type?'border-emerald-600 text-emerald-600':'border-[var(--border-subtle)]'}`}>
+            {type==='ALL'?'All Pools':type==='REGULAR'?'Regular Pools':'Flash Pools'}
+          </button>)}
+          {!flashFilterCompatible&&poolType!=='REGULAR'&&<span className="text-xs text-amber-600">
+            Flash supports its existing fixed-fee doorstep checkout, not Regular clustered/pickup/express eligibility. Clear fulfillment mode filters to see Flash.
+          </span>}
+          {selectedClusterId&&poolType!=='REGULAR'&&<span className="text-xs text-amber-600">
+            Regular Pools are filtered to the selected cluster. Flash offers are not cluster-filtered; verify delivery availability before purchase.
+          </span>}
+          {flashError&&<span role="alert" className="text-xs text-amber-600">{flashError}</span>}
+        </div>}
         {/* Results Header Count & Active Filter Indicator */}
         {!loading && (
           <div className="flex flex-wrap items-center justify-between text-xs text-stone-500 font-sans px-1 gap-2">
@@ -375,7 +413,7 @@ export const PoolsPage = () => {
               <span>
                 Showing{' '}
                 <strong className="font-semibold text-stone-700 dark:text-stone-300">
-                  {viewMode === 'pools' ? filteredPools.length : filteredFamilies.length}
+                  {viewMode === 'pools' ? visibleCount : filteredFamilies.length}
                 </strong>{' '}
                 {viewMode === 'pools' ? 'wholesale pools' : 'product families'}
               </span>
@@ -395,7 +433,7 @@ export const PoolsPage = () => {
             </div>
 
             <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-              {viewMode === 'pools' ? '● Real-Time Volume Pooling' : '✓ MilJor-governed product families'}
+              {viewMode === 'pools' ? 'Live supplier-created Regular & Flash offers' : 'MilJor-approved product families'}
             </span>
           </div>
         )}
@@ -443,10 +481,14 @@ export const PoolsPage = () => {
             ))}
           </div>
         ) : viewMode === 'pools' ? (
-          filteredPools.length > 0 ? (
+          visibleCount > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPools.map((pool) => (
-                <PoolCard key={pool.id} pool={pool} />
+              {visibleRegular.map((pool) => (
+                <PoolCard key={`REGULAR-${pool.id}`} pool={pool} onSelect={setJoiningRegular}/>
+              ))}
+              {visibleFlash.map(pool=>(
+                <FlashBuyerPoolCard key={`FLASH-${pool.id}`} pool={pool}
+                  serverTime={flashServerTime} onRefresh={fetchData}/>
               ))}
             </div>
           ) : (
@@ -543,6 +585,7 @@ export const PoolsPage = () => {
           )
         )}
       </div>
+      {joiningRegular&&<RegularBuyerReservation pool={joiningRegular} onClose={()=>setJoiningRegular(null)} onComplete={fetchData}/>}
     </AppShell>
   );
 };

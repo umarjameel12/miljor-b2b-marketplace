@@ -44,6 +44,15 @@ class UnifiedSupplierPoolsService {
       items.push(t);tierMap.set(Number(t.pool_id),items);
     }
 
+    const [poolClusters]=poolIds.length?await db.query(
+      `SELECT pool_id,cluster_id FROM pool_delivery_clusters
+       WHERE pool_id IN (${poolIds.map(()=>'?').join(',')}) ORDER BY cluster_id`,poolIds
+    ):[[]];
+    const clustersByPool=new Map();
+    for(const row of poolClusters){
+      const list=clustersByPool.get(Number(row.pool_id))||[];
+      list.push(Number(row.cluster_id));clustersByPool.set(Number(row.pool_id),list);
+    }
     const regularRows=regular.map(p=>({
       id:p.id,type:'REGULAR',code:p.pool_code,status:p.status,
       supplier_listing_id:p.supplier_listing_id,supplier_sku_id:p.supplier_sku_id,
@@ -52,6 +61,7 @@ class UnifiedSupplierPoolsService {
       max_capacity:p.max_capacity,purchase_increment:p.purchase_increment,
       promised_delivery_at:p.promised_delivery_at,delivery_type:p.delivery_type,
       price_tiers:tierMap.get(Number(p.id))||[],
+      delivery_cluster_ids:clustersByPool.get(Number(p.id))||[],
       quantity_current:p.current_qty,quantity_target:p.target_qty,
       quantity_available:null,unit:p.pool_unit,price:p.current_price_per_unit,
       expires_at:p.scheduled_close_at||p.expires_at,

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { RegularPaymentHoldCard } from '../components/RegularPaymentHoldCard';
+import { FlashPaymentHoldCard } from '../components/FlashPaymentHoldCard';
+import { RegularReservationWorkflow } from '../components/RegularReservationWorkflow';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -22,14 +24,37 @@ export const OrdersPage = () => {
   const [realOrders,setRealOrders]=useState([]);
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
+  const [flashHolds,setFlashHolds]=useState([]);
+  const [myReservations,setMyReservations]=useState([]);
   const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
+  const refreshBuyerOrders=async()=>{
+    if(!isAuthenticated||user?.role!=='BUYER')return;
+    try{
+      const [o,h,r]=await Promise.all([
+        apiClient.get('/orders',{params:{limit:20}}),
+        apiClient.get('/flash-pools/holds/mine'),
+        apiClient.get('/reservations/my')
+      ]);
+      setRealOrders(o.data?.data?.orders||[]);
+      setFlashHolds(h.data?.data?.holds||[]);
+      setMyReservations(r.data?.data?.reservations||[]);
+      setOrdersError('');
+    }catch(e){setOrdersError(e.response?.data?.error?.message||'Could not retrieve your orders, Flash holds or reservations.');}
+  };
   useEffect(()=>{
     if(!isAuthenticated || user?.role!=='BUYER')return;
     let mounted=true;
     setOrdersLoading(true);
-    apiClient.get('/orders',{params:{limit:20}}).then(({data})=>{
-      if(mounted)setRealOrders(data?.data?.orders||[]);
-    }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Could not load orders');})
+    Promise.all([
+      apiClient.get('/orders',{params:{limit:20}}),
+      apiClient.get('/flash-pools/holds/mine'),
+      apiClient.get('/reservations/my')
+    ]).then(([orders,holds,reservations])=>{
+      if(!mounted)return;
+      setRealOrders(orders.data?.data?.orders||[]);
+      setFlashHolds(holds.data?.data?.holds||[]);
+      setMyReservations(reservations.data?.data?.reservations||[]);
+    }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Cannot load buyer procurement history');})
       .finally(()=>{if(mounted)setOrdersLoading(false)});
     return()=>{mounted=false};
   },[isAuthenticated,user?.role]);
@@ -185,7 +210,16 @@ export const OrdersPage = () => {
             )}
           </section>
         )}
-        {!ordersLoading && !ordersError && regularOrders.length === 0 && (
+        {!ordersLoading && !ordersError && flashHolds.length>0&&<section aria-label="Your Flash Pool checkout holds" className="space-y-3">
+          <h2 className="text-lg font-semibold">Flash Pool Payments & Holds</h2>
+          {flashHolds.map(hold=><FlashPaymentHoldCard key={hold.hold_id} hold={hold} onRefresh={refreshBuyerOrders}/>)}
+        </section>}
+        {!ordersLoading && !ordersError && myReservations.length>0&&<section aria-label="Your Regular Pool reservations" className="space-y-3">
+          <h2 className="text-lg font-semibold">Your Regular Pool Reservations</h2>
+          {myReservations.map(r=><RegularReservationWorkflow
+            key={r.id} reservation={r} onRefresh={refreshBuyerOrders}/>)}
+        </section>}
+        {!ordersLoading && !ordersError && regularOrders.length === 0 && flashHolds.length===0 && myReservations.length===0 && (
           <>
         {/* Empty State / Truthful Real Data Display */}
         <div

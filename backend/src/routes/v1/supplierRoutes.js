@@ -13,6 +13,40 @@ const { protect, authorize, authorizeStrict } = require('../../middlewares/authG
 // All supplier portal routes require authenticated session
 router.use(protect);
 
+// UCP-5 read-only, supplier-scoped paid orders and actionable in-app signals.
+router.get('/pools/analytics',authorizeStrict('SUPPLIER'),async(req,res)=>{
+ try{
+   const data=await require('../../services/supplierPoolAnalyticsService').summary(req.user.id);
+   return res.json({success:true,data});
+ }catch(e){
+   return res.status(e.statusCode||500).json({success:false,error:{
+      code:e.statusCode?e.code:'POOL_ANALYTICS_UNAVAILABLE',
+      message:e.statusCode?e.message:'Unable to retrieve verified pool analytics'
+   }});
+ }
+});
+// Supplier-only UCP-3 inventory/fulfillment read models. No mutable stock writes.
+router.get('/pools/stock',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{
+    const data=await require('../../services/supplierPoolOperationsService')
+      .stock(req.user.id,req.query.listing_id);
+    res.json({success:true,data});
+  }catch(error){res.status(error.statusCode||500).json({success:false,error:{
+    code:error.statusCode?error.code:'INVENTORY_UNAVAILABLE',
+    message:error.statusCode?error.message:'Unable to check inventory'
+  }});}
+});
+router.get('/pools/fulfillment',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{
+    const data=await require('../../services/supplierPoolOperationsService')
+      .fulfillment(req.user.id);
+    res.json({success:true,data});
+  }catch(error){res.status(error.statusCode||500).json({success:false,error:{
+    code:error.statusCode?error.code:'FULFILLMENT_UNAVAILABLE',
+    message:error.statusCode?error.message:'Unable to retrieve fulfillment settings'
+  }});}
+});
+
 // Unified supplier management READ MODEL only. Mutations stay on B4/B5 routes.
 router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{
   try {
