@@ -3,6 +3,7 @@
 // No distance-based estimates, order amount changes, payment, refund or fake dispatch.
 const crypto=require('node:crypto');
 const db=require('../config/db');
+const notifications=require('./procurementNotificationService');
 const exact=require('./exactDecimal');
 const {planSupplierDeliveryGroups}=require('./procurementDeliveryGroupPolicy');
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
@@ -89,6 +90,9 @@ class ProcurementDeliveryGroupingService {
     'INSERT INTO procurement_order_delivery_choices(order_id,buyer_id,supplier_id,delivery_address_id,cluster_id,delivery_day,delivery_window,mode,handling_class,locked_delivery_fee,address_version,supplier_config_version,acceptance_key,acceptance_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [oid,buyer,order.supplier_id,addressId,address.cluster_id,o.day,o.window,o.mode,
      o.handling,fee,address.revision,setting.version,idem,requestHash]);
+   await notifications.enqueue(conn,{recipient_id:buyer,recipient_role:'BUYER',
+    event_key:'delivery:choice:'+oid,event_type:'DELIVERY_CHOICE_RECORDED',
+    payload:{order_id:oid,supplier_id:order.supplier_id}});
    await conn.commit();return {order_id:oid,status:'AUTHORIZED',
     mode:o.mode,cluster_id:address.cluster_id,delivery_day:o.day,
     locked_delivery_fee:fee,is_replay:false,creates_payment:false};
@@ -163,6 +167,10 @@ class ProcurementDeliveryGroupingService {
      [created.insertId,stop.order_id,stop.buyer_id,stop.delivery_address_id,
       stop.locked_delivery_fee,JSON.stringify({order_id:stop.order_id,
        fee:stop.locked_delivery_fee,fulfillment_authority:'EXISTING_FULFILLMENT_ENGINE'})]);
+    await notifications.enqueue(conn,{recipient_id:stop.buyer_id,recipient_role:'BUYER',
+     event_key:'delivery:planned:'+stop.order_id+':'+created.insertId,
+     event_type:'DELIVERY_RUN_PLANNED',
+     payload:{order_id:stop.order_id,run_id:created.insertId,supplier_id:supplier}});
    }
    await conn.commit();return {run:{...redacted,id:created.insertId,status:'PROPOSED'},is_replay:false};
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
