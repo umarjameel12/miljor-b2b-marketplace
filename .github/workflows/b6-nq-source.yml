@@ -1,0 +1,41 @@
+name: B6 N-Q isolated source acceptance
+on:
+  push:
+    branches:
+      - feature/b6-nq-complete-reconciliation
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  b6-nq-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout exact B6 branch
+        uses: actions/checkout@v4
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Parse B6 N-Q services and gate
+        run: |
+          node --check tests/b6_nq_complete_source_gate.js
+          node --check tests/b6_nq_guarded_integration_gate.js
+          node --check src/services/procurementCollectiveRecurringService.js
+          node --check src/services/procurementCollectiveService.js
+          node --check src/services/procurementDeliveryGroupingService.js
+          node --check src/services/procurementNotificationService.js
+          node --check src/services/schedulerService.js
+      - name: Run actual 81-assertion isolated gate
+        env:
+          NODE_ENV: test
+        run: npm run test:b6:nq:source
+      - name: Explicit scope notice
+        run: echo "Source-only CI; no database, Safepay, HTTP or production acceptance."
