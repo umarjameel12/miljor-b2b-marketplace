@@ -22,6 +22,7 @@ export const OrdersPage = () => {
   const [realOrders,setRealOrders]=useState([]);
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
+  const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
   useEffect(()=>{
     if(!isAuthenticated || user?.role!=='BUYER')return;
     let mounted=true;
@@ -176,15 +177,15 @@ export const OrdersPage = () => {
         {/* Real B4 orders use authoritative payment hold status, not sample data. */}
         {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
         {ordersError && <p role="alert" className="text-xs text-red-600">{ordersError}</p>}
-        {!ordersLoading && realOrders.length > 0 && (
+        {!ordersLoading && regularOrders.length > 0 && (
           <section className="space-y-3" aria-label="Your regular pool orders">
             <h2 className="font-semibold text-lg">Your Regular Pool Payments</h2>
-            {realOrders.filter(order=>order.pool_id&&order.reservation_id).map(order=>
+            {regularOrders.map(order=>
               <RegularPaymentHoldCard key={order.id} order={order}/>
             )}
           </section>
         )}
-        {!ordersLoading && !ordersError && realOrders.length === 0 && (
+        {!ordersLoading && !ordersError && regularOrders.length === 0 && (
           <>
         {/* Empty State / Truthful Real Data Display */}
         <div
@@ -205,12 +206,12 @@ export const OrdersPage = () => {
           </div>
 
           <h3 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>
-            No Active Procurement Reservations
+            No Regular Pool Orders Yet
           </h3>
 
           <p className="text-xs text-stone-500 mt-2 max-w-sm leading-relaxed">
             {isAuthenticated
-              ? 'You have not reserved quantities in any open pools yet. Browse active commodity pools to group your volume with other buyers and unlock wholesale discounts.'
+              ? 'You do not have any Regular Pool orders requiring payment right now. Browse live Regular Pools to join a supplier offer.'
               : 'Sign in to reserve quantities and aggregate bulk volume for lower wholesale prices with guaranteed escrow delivery.'}
           </p>
 
