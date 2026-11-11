@@ -86,7 +86,7 @@ class PoolOperationsService {
       if(p.status==='DRAFT')t.draft++;
       else if(p.status==='ACTIVE')t.active++;
       else if(['CANCELLED'].includes(p.status))t.cancelled++;
-      else if(['CLOSED','EXPIRED','SOLD_OUT','COMPLETED','CONFIRMED','TARGET_REACHED'].includes(p.status))t.closed++;
+      else if(['CLOSED','EXPIRED','SOLD_OUT','COMPLETED'].includes(p.status))t.closed++;
       else t.other++;
     }
     // Verified event counts only. No guessed sales/revenue/savings from listed offer prices.
@@ -137,8 +137,10 @@ class PoolOperationsService {
       if(listing.allocation_state!=='RECONCILED')add('STOCK_RECONCILIATION_REQUIRED',
         'LISTING:'+listing.supplier_listing_id,listing.allocation_state,
         listing.listing_code+' has incompatible inventory allocations.','warning');
-      else if(listing.status==='ACTIVE'&&Number(listing.listed_stock)>0 &&
-        Number(listing.available_to_allocate)<=Number(listing.listed_stock)*0.1)
+      else if(listing.status==='ACTIVE'&&
+        exact.exactDecimalGte(listing.listed_stock,'0.0001',4)&&
+        exact.exactDecimalGte(listing.listed_stock,
+          exact.exactMultiplyRound(listing.available_to_allocate,'10',4),4))
         add('LOW_UNALLOCATED_STOCK','LISTING:'+listing.supplier_listing_id,'LOW',
           listing.listing_code+' has 10% or less unallocated stock.','warning');
     }
