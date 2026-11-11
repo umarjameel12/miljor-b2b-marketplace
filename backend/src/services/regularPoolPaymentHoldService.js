@@ -76,7 +76,13 @@ class RegularPoolPaymentHoldService {
         "SELECT id FROM regular_pool_payment_holds WHERE order_id=? AND buyer_id=? AND status='PAYMENT_PENDING' FOR UPDATE",
         [orderId,buyerId]
       );
-      if(rows.length) await conn.query(
+      // Never unwind a hold if another concurrent Safepay attempt is already
+      // durably INITIATED. Provider reconciliation owns that pending payment.
+      const [initiated]=await conn.query(
+        "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' LIMIT 1",
+        [orderId]
+      );
+      if(rows.length && !initiated.length) await conn.query(
         `UPDATE regular_pool_payment_holds
          SET status=CASE WHEN expires_at>UTC_TIMESTAMP() THEN 'HELD' ELSE 'EXPIRED' END,
              checkout_started_at=NULL WHERE id=?`,[rows[0].id]
