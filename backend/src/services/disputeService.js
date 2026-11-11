@@ -34,6 +34,7 @@ const exactDecimal = require('./exactDecimal');
 const {shortageForAwardLine}=require('./b7LineDeliveryPolicy');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const b7PostpurchaseOutbox = require('./b7PostpurchaseEventBridge');
 
 const DISPUTE_CATEGORIES = [
   'SHORT_QUANTITY',
@@ -508,6 +509,9 @@ class DisputeService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order:order,eventId:outboxEventId,statusCode:'ORDER_DISPUTE_CREATED'
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -531,6 +535,7 @@ class DisputeService {
           trimmedKey
         ]
       );
+      }
 
       // Audit log
       await connection.query(
@@ -751,6 +756,9 @@ class DisputeService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order:order,eventId:outboxEventId,statusCode:'ORDER_SUPPLIER_SHORTAGE_DECLARED'
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -770,6 +778,7 @@ class DisputeService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
@@ -950,10 +959,11 @@ class DisputeService {
 
       // Fetch order's pool_id for foreign key consistency
       const [orderRows] = await connection.query(
-        `SELECT pool_id FROM orders WHERE id = ?`,
+        `SELECT id,buyer_id,supplier_id,notes,pool_id FROM orders WHERE id = ?`,
         [dispute.order_id]
       );
-      const poolId = orderRows[0]?.pool_id;
+      const sourceOrder=orderRows[0];
+      const poolId = sourceOrder?.pool_id;
 
       // Outbox event
       const outboxEventId = reservationEventService.generateEventId({
@@ -966,6 +976,9 @@ class DisputeService {
         event_sequence: 1
       });
 
+      if (!(await b7PostpurchaseOutbox.appendDirectAwardNotice(connection,{
+        order:sourceOrder,eventId:outboxEventId,statusCode:'ORDER_DISPUTE_SUPPLIER_RESPONDED'
+      }))) {
       await connection.query(
         `INSERT INTO reservation_business_events (
           event_id, pool_id, reservation_id, actor_id, actor_role,
@@ -985,6 +998,7 @@ class DisputeService {
           trimmedKey
         ]
       );
+      }
 
       await connection.commit();
 
