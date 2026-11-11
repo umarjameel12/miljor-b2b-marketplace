@@ -15,6 +15,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { ProcurementAdvancedControls } from '../components/procurement/ProcurementAdvancedControls';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
@@ -850,6 +851,8 @@ export const RfqPage = () => {
             </button>
           </div>
         </div>
+
+        <ProcurementAdvancedControls user={user} token={token} />
 
         {user?.role === 'BUYER' && (
           <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Get Best Quotes">
