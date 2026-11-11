@@ -28,6 +28,8 @@ jobs:
           node --check backend/src/services/invoiceService.js
           node --check backend/src/services/b7AwardInvoiceProjection.js
           node --check backend/src/services/b7LineDeliveryPolicy.js
+          node --check backend/src/services/b7PostpurchaseEventBridge.js
+          node --check backend/tests/b7_direct_order_event_bridge_gate.js
           node --check backend/tests/b7_postpurchase_business_contract_gate.js
           node --check backend/tests/b7_postpurchase_isolated_acceptance_gate.js
           node --check backend/tests/b7_b6_award_fulfillment_readonly_gate.js
