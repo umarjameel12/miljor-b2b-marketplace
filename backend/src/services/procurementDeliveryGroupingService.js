@@ -61,7 +61,7 @@ class ProcurementDeliveryGroupingService {
     [addressId,buyer]);
    const address=addresses[0];
    if(!address||address.user_confirmation_status!=='CONFIRMED'||
-     address.cluster_active!==1&&!Boolean(address.cluster_active)||
+     !Boolean(address.cluster_active)||
      String(address.city).toLowerCase()!=='lahore')
     throw fail('DELIVERY_ADDRESS_INVALID','Buyer-confirmed supported Lahore destination is required.',409);
    const [settings]=await conn.query(
@@ -134,7 +134,7 @@ class ProcurementDeliveryGroupingService {
     if(!exact.exactDecimalEquals(row.delivery_fee,row.locked_delivery_fee,2))
      throw fail('DELIVERY_FEE_CHANGED','Paid order fee differs from accepted delivery choice.',409);
     inputs.push({id:oid,buyer_id:row.buyer_id,supplier_id:row.supplier_id,
-     cluster_id:row.cluster_id,delivery_day:String(row.delivery_day).slice(0,10),
+     cluster_id:row.cluster_id,delivery_day:row.delivery_day instanceof Date?row.delivery_day.toISOString().slice(0,10):String(row.delivery_day).slice(0,10),
      delivery_window:row.delivery_window,handling_class:row.handling_class,
      delivery_address_id:row.delivery_address_id,mode:row.mode,
      payment_status:row.payment_status,fulfillment_status:row.fulfillment_status,
