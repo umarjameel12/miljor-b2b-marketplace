@@ -169,6 +169,10 @@ class SafepayCheckoutService {
       };
     }
 
+    // A pre-existing Safepay attempt can still be reconciled after deadline.
+    // A NEW attempt cannot be created after the original 15-minute hold ends.
+    await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+
     // Step 2: Call Safepay API OUTSIDE transaction lock
     let trackerToken, rawResponse;
     try {
