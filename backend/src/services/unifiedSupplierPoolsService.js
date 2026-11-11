@@ -25,6 +25,13 @@ class UnifiedSupplierPoolsService {
     ]);
     const now=clock[0][0].server_time;
     const poolIds=regular.map(p=>Number(p.id)).filter(Number.isSafeInteger);
+    const [physicalTitles]=poolIds.length?await db.query(
+      `SELECT p.id, ps.title AS sku_title
+       FROM pools p JOIN product_specifications ps ON ps.id=p.product_spec_id
+       WHERE p.supplier_id=? AND p.id IN (${poolIds.map(()=>'?').join(',')})`,
+       [Number(supplierId),...poolIds]
+    ):[[]];
+    const titleMap=new Map(physicalTitles.map(p=>[Number(p.id),p.sku_title]));
     const [tiers]=poolIds.length
       ?await db.query(
         `SELECT pool_id,min_qty,max_qty,price_per_unit,pricing_unit
@@ -40,7 +47,7 @@ class UnifiedSupplierPoolsService {
     const regularRows=regular.map(p=>({
       id:p.id,type:'REGULAR',code:p.pool_code,status:p.status,
       supplier_listing_id:p.supplier_listing_id,supplier_sku_id:p.supplier_sku_id,
-      product_title:p.product_title||null,
+      product_title:titleMap.get(Number(p.id))||p.product_title||null,
       supplier_min_qty:p.supplier_min_qty,buyer_min_qty:p.buyer_min_qty,
       max_capacity:p.max_capacity,purchase_increment:p.purchase_increment,
       promised_delivery_at:p.promised_delivery_at,delivery_type:p.delivery_type,
