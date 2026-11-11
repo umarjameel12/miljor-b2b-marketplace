@@ -238,6 +238,13 @@ export function SupplierPoolsPage(){
       setBusy(true);
       if(!stock||stockError)throw Error('Supplier stock verification is required.');
       if(mode==='REGULAR'){
+        if(form.delivery_type==='SUPPLIER_PICKUP'&&
+          (!fulfillment?.configuration?.pickup_enabled||
+           !(fulfillment?.pickup_points||[]).some(point=>Number(point.is_active)===1)))
+          throw Error('Activate an authorized supplier pickup point before selecting pickup-only delivery.');
+        if(form.delivery_type!=='SUPPLIER_PICKUP'&&
+           !fulfillment?.configuration?.standard_delivery_enabled)
+          throw Error('Enable standard supplier delivery before publishing doorstep or grouped pools.');
         if(form.delivery_type!=='SUPPLIER_PICKUP'&&!form.delivery_cluster_ids.length)
           throw Error('Choose an authorized Lahore delivery cluster.');
         const result=await unifiedPoolsApi.saveRegularDraft(payload,edit?.id);
@@ -336,6 +343,11 @@ export function SupplierPoolsPage(){
                     onChange={e=>update('delivery_cluster_ids',e.target.checked?
                       [...form.delivery_cluster_ids,Number(c.id)]:form.delivery_cluster_ids.filter(x=>x!==Number(c.id)))}/>
                   {c.name} · {c.cluster_code}
+                  {(() => {
+                    const rate=(fulfillment.cluster_rates||[]).find(r=>
+                      Number(r.cluster_id)===Number(c.id)&&r.mode==='STANDARD_CLUSTERED');
+                    return rate?<span className="text-[var(--text-muted)]"> · Rs. {Number(rate.fee_pkr).toLocaleString('en-PK')} base cluster fee</span>:null;
+                  })()}
                 </label>
               )}</div>}
           </div>}
