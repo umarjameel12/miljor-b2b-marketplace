@@ -174,8 +174,8 @@ async function runPart5FlashPoolGate() {
     const supplierToken = generateToken(supplierId, 'SUPPLIER', 'VERIFIED');
 
     await db.query(
-      `INSERT INTO supplier_profiles (supplier_id, business_type, verification_status, subscription_plan, subscription_status, max_active_listings)
-       VALUES (?, 'WHOLESALER', 'VERIFIED', 'STARTER', 'STARTER_ACTIVE', 10)`,
+      `INSERT INTO supplier_profiles (supplier_id, business_type, verification_status, subscription_plan, subscription_status, max_active_listings, transaction_fee_percent)
+       VALUES (?, 'WHOLESALER', 'VERIFIED', 'STARTER', 'STARTER_ACTIVE', 10, 2.50)`,
       [supplierId]
     );
 
