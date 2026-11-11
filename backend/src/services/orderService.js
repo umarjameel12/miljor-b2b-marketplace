@@ -403,7 +403,7 @@ class OrderService {
       );
       const commissionValue = commissionProfiles[0]?.transaction_fee_percent;
       if (commissionValue === null || commissionValue === undefined ||
-          !/^(?:\\d{1,3})(?:\\.\\d{1,2})?$/.test(String(commissionValue)) ||
+          !/^[0-9]{1,3}(?:[.][0-9]{1,2})?$/.test(String(commissionValue)) ||
           Number(commissionValue) < 0 || Number(commissionValue) > 100) {
         const err = new Error('Supplier contractual commission is missing or invalid; order cannot be finalized');
         err.code = 'SUPPLIER_COMMISSION_NOT_CONFIGURED';
