@@ -6,8 +6,10 @@ on:
       - fix/ucp-final-reconciliation-thischat
       - fix/p0-provider-browser-stock-finance-acceptance
       - fix/p0-morning-demo-canonical-gates
+      - integration/ucp-verified-main-handoff-20261112
   pull_request:
     branches:
+      - main
       - fix/p0-provider-browser-stock-finance-acceptance
       - feature/ucp-canonical-reconciliation-release
       - fix/ucp-final-reconciliation-thischat
