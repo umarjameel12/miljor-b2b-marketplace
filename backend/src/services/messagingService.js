@@ -77,7 +77,7 @@ class MessagingService {
     if (existing.length) return existing[0];
     // UUID avoids timestamp-based collisions under concurrent conversation creation.
     const { randomUUID } = require('crypto');
-    const code = 'CONV-' + randomUUID();
+    const code = 'CONV-' + randomUUID().replace(/-/g, '');
     const [inserted] = await db.query(
       `INSERT INTO in_app_conversations (conversation_code,order_id,pool_id,buyer_id,supplier_id)
        VALUES (?,?,?,?,?)`,
