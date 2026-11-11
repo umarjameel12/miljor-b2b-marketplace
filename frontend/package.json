@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "test": "node tests/design_system_tokens.test.js && node tests/parse_deadline.test.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:b7:browser:readonly": "node tests/b7_postpurchase_browser_e2e.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
