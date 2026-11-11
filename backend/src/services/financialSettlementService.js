@@ -922,99 +922,19 @@ class FinancialSettlementService {
    * Confirms a manually executed external refund (e.g. from Safepay dashboard).
    * Requires authoritative external reference and admin role.
    */
-  async recordManualConfirmedRefund({ refundId, externalReference, notes = null, actor }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Only administrators can record confirmed external refunds');
+  async recordManualConfirmedRefund({ actor }) {
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Finance administrator required for refund verification');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
     }
-
-    if (!externalReference || String(externalReference).trim().length < 4) {
-      const err = new Error('Authoritative external reference token/ID is required to confirm external refund');
-      err.code = 'EXTERNAL_REFERENCE_REQUIRED';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      const [refunds] = await connection.query(
-        `SELECT * FROM refund_obligations WHERE id = ? FOR UPDATE`,
-        [refundId]
-      );
-
-      if (refunds.length === 0) {
-        const err = new Error('Refund obligation record not found');
-        err.code = 'REFUND_NOT_FOUND';
-        err.statusCode = 404;
-        throw err;
-      }
-
-      const refund = refunds[0];
-
-      if (refund.status !== 'APPROVED') {
-        const err = new Error(`Cannot confirm refund in status '${refund.status}'. Expected APPROVED.`);
-        err.code = 'REFUND_NOT_APPROVED';
-        err.statusCode = 422;
-        throw err;
-      }
-
-      // Mark Refund CONFIRMED
-      await connection.query(
-        `UPDATE refund_obligations
-         SET status = 'CONFIRMED', external_reference = ?, confirmed_at = NOW(),
-             audit_notes = CONCAT_WS(' | ', audit_notes, ?),
-             updated_at = NOW()
-         WHERE id = ?`,
-        [externalReference.trim(), notes, refundId]
-      );
-
-      // Update payment record status
-      const paymentStatus = refund.refund_type === 'FULL' ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-      await connection.query(
-        `UPDATE payments
-         SET status = ?, updated_at = NOW()
-         WHERE id = ?`,
-        [paymentStatus, refund.payment_id]
-      );
-
-      // Audit
-      await this._logAuditEvent(connection, {
-        orderId: refund.order_id,
-        paymentId: refund.payment_id,
-        entityType: 'REFUND_OBLIGATION',
-        entityId: refundId,
-        eventType: 'REFUND_CONFIRMED',
-        actorRole: actor.role,
-        actorId: actor.id,
-        fromStatus: 'APPROVED',
-        toStatus: 'CONFIRMED',
-        amountDelta: refund.total_refund_amount.toString(),
-        notes: `Confirmed external refund of PKR ${refund.total_refund_amount} with ref: ${externalReference}`
-      });
-
-      await connection.commit();
-
-      return {
-        success: true,
-        message: 'External refund successfully confirmed and recorded',
-        data: {
-          refund_id: refundId,
-          status: 'CONFIRMED',
-          external_reference: externalReference.trim(),
-          payment_status: paymentStatus
-        }
-      };
-
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    // An administrator-provided reference is NOT cryptographic Safepay evidence.
+    // Do not mark payment/refund confirmed without verified provider callback.
+    const err = new Error('Safepay provider refund confirmation is required; manual references cannot confirm refunded money');
+    err.code = 'PROVIDER_REFUND_VERIFICATION_REQUIRED';
+    err.statusCode = 409;
+    throw err;
   }
 
   // ===========================================================================
@@ -1279,125 +1199,20 @@ class FinancialSettlementService {
   /**
    * Reconciles a Safepay provider settlement batch (e.g. from settlement CSV or API).
    */
-  async reconcileProviderSettlementBatch({
-    batchReference,
-    grossAmount,
-    providerFee = 0.00,
-    netAmount,
-    settlementDate,
-    matchedTrackerTokens = [],
-    rawMetadata = null,
-    actor
-  }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Provider settlement reconciliation is restricted to administrators');
+  async reconcileProviderSettlementBatch({ actor }) {
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Only finance administrators may verify provider settlement');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
     }
-
-    if (!batchReference || String(batchReference).trim().length < 3) {
-      const err = new Error('Valid batch reference (e.g. sb_...) is required');
-      err.code = 'INVALID_BATCH_REFERENCE';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const grossStr = exactDecimal.toCanonical(grossAmount, 2);
-    const feeStr = exactDecimal.toCanonical(providerFee || 0.00, 2);
-    const netStr = exactDecimal.toCanonical(netAmount, 2);
-
-    // Verify arithmetic: gross - providerFee = net
-    const expectedNet = exactSub(grossStr, feeStr, 2);
-    let status = 'RECONCILED';
-    if (Number(expectedNet) !== Number(netStr)) {
-      status = 'MISMATCH_DETECTED';
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      // Check existing batch
-      const [existing] = await connection.query(
-        `SELECT * FROM provider_settlement_batches WHERE batch_reference = ? FOR UPDATE`,
-        [batchReference]
-      );
-
-      if (existing.length > 0) {
-        await connection.commit();
-        return {
-          success: true,
-          message: 'Settlement batch already recorded',
-          data: { batch: existing[0] }
-        };
-      }
-
-      // Check matched payments if tokens provided
-      let matchedCount = 0;
-      if (matchedTrackerTokens.length > 0) {
-        const [matchedPayments] = await connection.query(
-          `SELECT COUNT(*) AS c FROM payments WHERE transaction_ref IN (?)`,
-          [matchedTrackerTokens]
-        );
-        matchedCount = matchedPayments[0].c;
-      }
-
-      const [batchInsert] = await connection.query(
-        `INSERT INTO provider_settlement_batches (
-          batch_reference, provider, gross_amount, provider_fee_amount,
-          net_settled_amount, currency, status, settlement_date,
-          raw_metadata, reconciled_at, created_at
-        ) VALUES (?, 'SAFEPAY', ?, ?, ?, 'PKR', ?, ?, ?, NOW(), NOW())`,
-        [
-          batchReference.trim(),
-          grossStr,
-          feeStr,
-          netStr,
-          status,
-          settlementDate || new Date(),
-          rawMetadata ? JSON.stringify(rawMetadata) : null
-        ]
-      );
-
-      const batchId = batchInsert.insertId;
-
-      // Audit
-      await this._logAuditEvent(connection, {
-        orderId: null,
-        paymentId: null,
-        entityType: 'SETTLEMENT',
-        entityId: batchId,
-        eventType: status === 'RECONCILED' ? 'SETTLEMENT_RECONCILED' : 'SETTLEMENT_MISMATCH_DETECTED',
-        actorRole: actor.role,
-        actorId: actor.id,
-        fromStatus: null,
-        toStatus: status,
-        amountDelta: netStr,
-        notes: `Reconciled settlement batch ${batchReference}: Gross ${grossStr}, Fee ${feeStr}, Net ${netStr}. Matched payments: ${matchedCount}`
-      });
-
-      await connection.commit();
-
-      const [createdBatch] = await connection.query('SELECT * FROM provider_settlement_batches WHERE id = ?', [batchId]);
-
-      return {
-        success: true,
-        message: status === 'RECONCILED' 
-          ? 'Settlement batch successfully reconciled' 
-          : 'Settlement batch recorded with arithmetic mismatch flag',
-        data: {
-          batch: createdBatch[0],
-          matched_payments_count: matchedCount
-        }
-      };
-
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    // Matching an admin-supplied gross/fee/net arithmetic statement is NOT
+    // proof of funds received from Safepay. Keep this disabled until there is
+    // a merchant-authenticated provider settlement artifact to reconcile.
+    const err = new Error('Authenticated provider settlement evidence is required');
+    err.code = 'PROVIDER_SETTLEMENT_EVIDENCE_REQUIRED';
+    err.statusCode = 409;
+    throw err;
   }
 
   // ===========================================================================
