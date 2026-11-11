@@ -4,6 +4,25 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 ---
 
+## Phase B6 Combined Phase 2 (N through Q): Acceptance Complete (252/252 PASS)
+
+- **Branch:** `feature/b6-phase2-reconciliation` (tracking `origin/feature/b6-phase2-nq`).
+- **Subphases verified:**
+  - **B6-N:** Recurring Collective Cohorts & Invariant Scheduling Policy (14/14 PASS).
+  - **B6-N:** Recurring Collective Due Batch Worker with Backoff & Retries (8/8 PASS).
+  - **B6-O:** Clustered Delivery Grouping & Destination Choices (16/16 PASS).
+  - **B6-P & B6-Q:** Production Batch Deferral & Private Scoped Notifications (12/12 PASS).
+  - **B6-F HTTP Concurrency & Privacy:** 25/25 PASS.
+  - **B6-G..M Phase 1 Regressions:** 86/86 PASS.
+  - **B5 Flash Pool Shared-Stock Integration:** 39/39 PASS.
+  - **Safepay Sandbox Checkout & Exactly-Once Payment:** 28/28 PASS.
+- **Frontend & Build:** 24/24 unit assertions PASS, Vite production build clean (2,219 modules transformed, 0 errors).
+- **Database isolation:** Migrations 046–048 verified applied on `miljor_test_db`; `miljor_db` verified 100% pristine (users: 8, orders: 0, payments: 0, invoices: 0, pools: 2, reservations: 0).
+- **Authoritative report:** `backend/docs/MILJOR_B6_PHASE2_ACCEPTANCE_REPORT.md`.
+- **State:** **COMPLETE AND VERIFIED (B6 Phase 2 N–Q)**.
+
+---
+
 ## Phase B6 Combined Phase 1 (G through M): Acceptance Complete (287/287 PASS)
 
 - **Branch:** `feature/b6-private-rfq` (Reference Checkpoint `669a4b3addb27b531473bfa28f8b40400780933c`).

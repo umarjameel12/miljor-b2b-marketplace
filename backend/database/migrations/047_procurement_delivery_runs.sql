@@ -65,6 +65,6 @@ CREATE TABLE IF NOT EXISTS procurement_delivery_stops (
  CONSTRAINT fk_proc_o_stop_order FOREIGN KEY (order_id) REFERENCES orders(id),
  CONSTRAINT fk_proc_o_stop_buyer FOREIGN KEY (buyer_id) REFERENCES users(id),
  CONSTRAINT fk_proc_o_stop_address FOREIGN KEY (address_id) REFERENCES buyer_delivery_addresses(id),
- UNIQUE KEY uq_proc_o_stop_order UNIQUE (order_id),
+ UNIQUE KEY uq_proc_o_stop_order (order_id),
  KEY idx_proc_o_stop_run (run_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
