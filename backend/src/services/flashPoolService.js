@@ -46,7 +46,7 @@ class FlashPoolService {
     const [rows] = await conn.query(
       `SELECT u.role, u.verification_status, u.is_verified, sp.verification_status AS profile_verification
        FROM supplier_profiles sp JOIN users u ON u.id = sp.supplier_id
-       WHERE u.id = ? FOR UPDATE`, [supplierId]);
+       WHERE u.id = ? FOR SHARE`, [supplierId]);
     if (!rows.length || rows[0].role !== 'SUPPLIER' ||
         rows[0].verification_status !== 'VERIFIED' ||
         rows[0].profile_verification !== 'VERIFIED' ||
