@@ -35,12 +35,18 @@ export function PostPurchasePage(){
   if(!buyer&&!supplier)return;
   setLoading(true);setError('');
   try{
-   const [res,disputesRes]=await Promise.all([
+   const [ordersResult,disputesResult]=await Promise.allSettled([
     apiClient.get('/fulfillment/'+route+'/orders'),
     apiClient.get(buyer?'/disputes/my':'/disputes/supplier/list')
    ]);
-   setOrders(res.data?.data?.orders||[]);
-   setDisputes(disputesRes.data?.data?.disputes||[]);
+   if(ordersResult.status!=='fulfilled')throw ordersResult.reason;
+   setOrders(ordersResult.value.data?.data?.orders||[]);
+   if(disputesResult.status==='fulfilled')
+    setDisputes(disputesResult.value.data?.data?.disputes||[]);
+   else{
+    setDisputes([]);
+    setError('Disputes are temporarily unavailable. Order actions still require backend safety checks.');
+   }
   }catch(e){setError(msg(e))}
   finally{setLoading(false)}
  },[buyer,supplier,route]);
