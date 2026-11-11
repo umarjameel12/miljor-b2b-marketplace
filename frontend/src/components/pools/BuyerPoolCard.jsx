@@ -19,7 +19,9 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
   const [open,setOpen]=useState(false);
   const [quantity,setQuantity]=useState(String(flash?
     (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
-  const [address,setAddress]=useState('');
+  const [savedAddresses,setSavedAddresses]=useState([]);
+  const [selectedAddress,setSelectedAddress]=useState('');
+  const [loadingAddresses,setLoadingAddresses]=useState(false);
   const [saving,setSaving]=useState(false);
   const [hold,setHold]=useState(null);
   const [holdState,setHoldState]=useState(null);
@@ -30,6 +32,25 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
     setHold(null);setHoldState(null);purchaseKey.current=null;setOpen(false);
   },[pool.id,pool.type]);
+  useEffect(()=>{
+    if(!open||!flash||!isAuthenticated||user?.role!=='BUYER')return;
+    let active=true;
+    setLoadingAddresses(true);
+    apiClient.get('/buyer/addresses').then(({data})=>{
+      const addresses=Array.isArray(data?.data)?data.data:(data?.data?.addresses||[]);
+      const verified=addresses.filter(a=>String(a.city||'').toLowerCase()==='lahore' &&
+        a.geographic_match_status==='VERIFIED'&&a.user_confirmation_status==='CONFIRMED' &&
+        !a.manual_review_required);
+      if(active){
+        setSavedAddresses(verified);
+        setSelectedAddress(prev=>verified.some(a=>String(a.id)===prev)?prev:
+          String(verified.find(a=>a.is_default)?.id||verified[0]?.id||''));
+      }
+    }).catch(e=>{
+      if(active)setQuoteNotice(errorMessage(e));
+    }).finally(()=>{if(active)setLoadingAddresses(false)});
+    return()=>{active=false};
+  },[open,flash,isAuthenticated,user?.role]);
   const refreshHold=useCallback(async()=>{
     if(!hold?.id)return;
     try {
@@ -49,11 +70,12 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     setSaving(true);setQuoteNotice('');
     try{
       if(flash){
-        if(address.trim().length<8||address.trim().length>1000)
-          throw Error('Enter your full Lahore business delivery address (8–1000 characters).');
+        const saved=savedAddresses.find(a=>String(a.id)===selectedAddress);
+        if(!saved)throw Error('Choose your verified saved Lahore business delivery address before reserving Flash stock.');
         if(!purchaseKey.current)purchaseKey.current=key('flash-hold');
         const result=await unifiedPoolsApi.holdFlash(pool.id,
-          {quantity:String(quantity),delivery_address:address.trim()},purchaseKey.current);
+          {quantity:String(quantity),delivery_address_id:Number(saved.id),
+           delivery_cluster_id:Number(saved.cluster_id)},purchaseKey.current);
         const next=result.data?.hold;
         if(!next?.order_id||!next.id)throw Error('The server did not provide a valid Flash purchase hold.');
         setHold(next);
@@ -100,7 +122,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1">
       {flash?<><div className="text-lg font-bold">{fmt(pool.discounted_unit_price)} <span className="text-xs font-normal">/ {pool.unit}</span></div>
         {pool.original_unit_price&&Number(pool.original_unit_price)>Number(pool.discounted_unit_price)&&
-          <p className="text-xs text-[var(--text-muted)]">Supplier's normal listing price: <s>{fmt(pool.original_unit_price)}</s></p>}
+          <p className="text-xs text-[var(--text-muted)]">Reference listing price when Flash was published: <s>{fmt(pool.original_unit_price)}</s></p>}
         <p className="text-xs">Remaining: <b>{pool.remaining_stock} / {pool.total_stock} {pool.unit}</b></p>
         <p className="text-xs">{pool.selling_mode==='WHOLE_LOT'?'Whole lot purchase only':
           'Buyer limit: '+pool.min_quantity+'–'+pool.max_quantity_per_buyer+' '+pool.unit}</p>
@@ -130,16 +152,27 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
         <h3 className="font-semibold text-lg">{flash?'Flash Stock Hold':'Regular Pool Reservation'}</h3>
         <p className="text-sm">{pool.product_title} · {pool.code}</p>
         {!hold?<><label className="text-xs block space-y-1">Quantity ({pool.unit})
-          <input type="number" step="0.01" min={flash?pool.min_quantity:pool.buyer_min_qty}
+          <input type="number" step={flash?'0.01':'0.0001'} min={flash?pool.min_quantity:pool.buyer_min_qty}
             max={flash?pool.remaining_stock:undefined} disabled={flash&&pool.selling_mode==='WHOLE_LOT'}
             value={quantity} onChange={e=>{setQuantity(e.target.value);purchaseKey.current=null;}}
             className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]" />
         </label>
-          {flash&&<label className="text-xs block space-y-1">Lahore business delivery address
-            <textarea required rows={3} maxLength={1000} value={address} onChange={e=>{setAddress(e.target.value);purchaseKey.current=null;}}
-              className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
-              placeholder="Business name, street, area, Lahore, Pakistan"/>
-          </label>}
+          {flash&&<div className="space-y-2">
+            <label className="text-xs block space-y-1">Verified Lahore delivery address
+              <select required disabled={loadingAddresses} value={selectedAddress} onChange={e=>{setSelectedAddress(e.target.value);purchaseKey.current=null;}}
+                className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+                <option value="">Select verified address</option>
+                {savedAddresses.map(a=><option value={a.id} key={a.id}>{a.society_area} · {a.full_address}</option>)}
+              </select>
+            </label>
+            {loadingAddresses&&<p className="text-xs text-[var(--text-muted)]">Loading business delivery addresses…</p>}
+            {!loadingAddresses&&savedAddresses.length===0&&<p className="text-xs text-amber-600">
+              No verified delivery address found. <Link className="underline" to="/profile">Save or verify a Lahore delivery address in your profile</Link>.
+            </p>}
+            {savedAddresses.length>0&&<p className="text-xs text-[var(--text-muted)]">
+              Supplier coverage will be checked against the selected address's verified Lahore cluster before stock is held.
+            </p>}
+          </div>}
           <p className="text-xs text-[var(--text-muted)]">{flash?
             'A 15-minute stock hold starts when the backend accepts your request. Safepay payment is a separate explicit action.':
             'Joining a Regular Pool does not lock a guaranteed final price or immediately charge your account.'}</p>
