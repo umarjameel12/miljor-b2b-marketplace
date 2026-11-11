@@ -89,7 +89,7 @@ router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,
 
 // Demand Pool Requests ("Request a Pool")
 router.get('/demand-requests', (req, res) => controller.getDemandRequests(req, res));
-router.post('/demand-requests', protect, authorize('BUYER', 'SUPPLIER', 'ADMIN'), (req, res) => controller.createDemandRequest(req, res));
+router.post('/demand-requests', protect, authorizeStrict('BUYER', 'SUPPLIER'), (req, res) => controller.createDemandRequest(req, res));
 
 // Legacy unverified RFQ/Recurring/Matching write paths are deprecated.
 // Historical database rows remain intact; new business flows use B6 smart procurement.
