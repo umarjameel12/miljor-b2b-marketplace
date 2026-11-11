@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { RegularPaymentHoldCard } from '../components/RegularPaymentHoldCard';
 import { FlashPaymentHoldCard } from '../components/FlashPaymentHoldCard';
+import { RegularReservationWorkflow } from '../components/RegularReservationWorkflow';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -215,12 +216,8 @@ export const OrdersPage = () => {
         </section>}
         {!ordersLoading && !ordersError && myReservations.length>0&&<section aria-label="Your Regular Pool reservations" className="space-y-3">
           <h2 className="text-lg font-semibold">Your Regular Pool Reservations</h2>
-          {myReservations.map(r=><div key={r.id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 space-y-2">
-            <div className="flex justify-between gap-2 text-xs"><strong>{r.specification?.product_title||r.reservation_code}</strong>
-              <span>{r.status}</span></div>
-            <p className="text-xs text-[var(--text-muted)]">Reference: {r.reservation_code} · Reserved quantity: {r.quantity} · Supplier: {r.supplier?.business_name||'Not available'}</p>
-            <p className="text-xs text-[var(--text-muted)]">Reservation is not a paid order. Final price and payment become available only after supplier qualification and your commercial acceptance.</p>
-          </div>)}
+          {myReservations.map(r=><RegularReservationWorkflow
+            key={r.id} reservation={r} onRefresh={refreshBuyerOrders}/>)}
         </section>}
         {!ordersLoading && !ordersError && regularOrders.length === 0 && flashHolds.length===0 && myReservations.length===0 && (
           <>
