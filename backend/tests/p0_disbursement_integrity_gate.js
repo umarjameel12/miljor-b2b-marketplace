@@ -222,7 +222,7 @@ async function concurrentCases(){
     pass('two concurrent keys create exactly one instruction');
     const original=dbState.instructions[0];
     const replay=await svc.prepareSupplierDisbursement({
-      ...args,idempotencyKey:'parallel-first-key'
+      ...args,idempotencyKey:original.idempotency_key
     });
     assert.equal(replay.data.disbursement.id,original.id);
     assert.equal(dbState.insertAttempts,1);
