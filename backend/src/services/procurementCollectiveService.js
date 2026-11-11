@@ -249,6 +249,29 @@ class ProcurementCollectiveService{
            FROM procurement_request_items WHERE request_id=? ORDER BY line_number`,
         [row.request_id]
       );
+      // Private recurring cycle: reveal ONLY this authenticated buyer's
+      // scheduled quantities, never other participants' member snapshots.
+      const [cycles]=await this.database.query(
+        'SELECT qualification_snapshot FROM procurement_recurring_collective_cycles WHERE group_id=?',
+        [row.group_id]
+      );
+      if(cycles.length){
+        const evidence=typeof cycles[0].qualification_snapshot==='string'
+          ?JSON.parse(cycles[0].qualification_snapshot):cycles[0].qualification_snapshot;
+        const own=(evidence?.private_join_mapping||[]).find(m=>Number(m.buyer_id)===buyer);
+        row.recurring_cycle=true;
+        const ownQuantities=new Map((own?.planned_lines||[]).map(x=>[
+          Number(x.request_item_id),x.quantity]));
+        row.items=items.filter(item=>ownQuantities.has(Number(item.id))).map(item=>({
+          ...item,scheduled_quantity:ownQuantities.get(Number(item.id)),
+          requirements:typeof item.requirements==='string'
+            ?item.requirements
+               .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,'[contact hidden]')
+               .replace(/(?:\\+?92|0)\\s*3\\d{2}[\\s().-]*\\d{3}[\\s().-]*\\d{4}/g,'[contact hidden]')
+            :null
+        }));
+        continue;
+      }
       row.items=items.map(item=>({
         ...item,
         requirements:typeof item.requirements==='string'
