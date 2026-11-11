@@ -1,3 +1,8 @@
+## Independent Backend Integrity — Batch 5 Supplier Offer Gate (2026-11-11)
+- New commercial offers require supplier-owned published physical SKUs and a matching linked specification; legacy global-spec-only writes rejected.
+- Historical listings/orders preserved. Regression verification deferred.
+- Branch `fix/independent-backend-integrity`; status IMPLEMENTED, NOT VERIFIED; migration-number collision remains BLOCKED.
+
 ## Independent Backend Integrity — Batch 5 (2026-11-11)
 - Branch: `fix/independent-backend-integrity`.
 - Supplier Catalog: removed historical global variants browse; families lead to supplier-owned products and immutable physical SKUs.
