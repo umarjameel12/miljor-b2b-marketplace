@@ -39,3 +39,14 @@ node tests/migration_manifest_safety_gate.js
 
 Result: PARTIAL — source changes committed, integrated acceptance deferred.
 CAN START NEXT PHASE: NO until branch reconciliation and verification is explicitly recorded.
+
+## Batch 2 — legacy procurement containment and Express 5 route compatibility
+Status: IMPLEMENTED, NOT TESTED; final acceptance deferred as requested.
+- Existing hardening branch already retired legacy `/rfqs`, `/recurring`, and `/match-suppliers` endpoints via explicit HTTP 410; no duplicate replacement introduced.
+- Fixed `backend/src/routes/v1/procurementRoutes.js`: Express 5 incompatible inline route regex changed to supported `/:action` with explicit allowlist `activate,pause,resume,cancel`. Unknown action falls through to 404; caller still passes strict BUYER auth first.
+- Fixed `backend/src/controllers/procurementController.js`: public demand-list failures and create-request internal errors return generic responses instead of leaking SQL/internal details. Controlled 4xx errors preserve validation feedback.
+- Added `backend/tests/legacy_procurement_containment_gate.js` for the final acceptance pass; real HTTP + authenticated B6 recurring lifecycle tests are also mandatory.
+- The `GET /demand-requests` public projection was inspected and already excludes requester names, IDs and raw notes; it was deliberately preserved.
+- No buyer, supplier, pool, order or historical RFQ records modified.
+- The old 410 endpoints must remain read-only/retired until clients switch to B6 and historical data has a supported archival read path.
+- Remaining phase work: reconciliation of payment rails, fees/subscriptions, catalog language and canonical families; do not treat this batch as full-project closure.
