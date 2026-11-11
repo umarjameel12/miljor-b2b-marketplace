@@ -56,6 +56,16 @@ async function main(){
      `INSERT INTO products (id,title,category,brand,variety,processing_type,grade,pack_size,unit)
       VALUES (?,?,?,?,?,?,?,?,?)`,p
    );
+   // Existing historical suppliers also had verified supplier_profiles.
+   // Without these rows B4 authorization tests return 403 before reaching
+   // the intended tier/stock assertions, giving a misleading result.
+   for(const supplierId of [2,3]){
+     await db.query(
+       `INSERT INTO supplier_profiles
+        (supplier_id,verification_level,verification_status,subscription_plan,max_active_listings)
+        VALUES (?,'LEVEL_3_QUALITY','VERIFIED','BUSINESS',25)`,[supplierId]
+     );
+   }
    console.log('TEST_BASELINE_PRE_004_READY:',createStatements.length,'legacy tables,',users.length,'synthetic users +',products.length,'legacy products');
  }finally{await db.end();}
 }
