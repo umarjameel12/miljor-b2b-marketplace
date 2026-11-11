@@ -89,6 +89,9 @@ export const SupplierDashboardPage = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link to="/supplier/pools" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-600 text-emerald-600 text-sm font-semibold">
+              <Layers className="w-4 h-4"/> Pool Management
+            </Link>
             <Link
               to="/supplier/catalog"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--brand-accent)] text-stone-900 text-sm font-semibold hover:opacity-95 shadow-xs transition-opacity"
@@ -175,11 +178,11 @@ export const SupplierDashboardPage = () => {
                   <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 </Link>
                 <Link
-                  to="/flash-pools"
+                  to="/supplier/pools"
                   className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--bg-card)] transition-colors text-xs font-medium text-[var(--text-primary)]"
                 >
                   <span className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" /> Flash Clearance Deals
+                    <Zap className="w-4 h-4 text-amber-500" /> Manage Regular & Flash Pools
                   </span>
                   <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 </Link>
