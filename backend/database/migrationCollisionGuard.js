@@ -1,34 +1,41 @@
 'use strict';
-// Known unresolved *cross-branch* migration-version collisions.
-// This is a deliberate deployment stop, not a repair or migration renumbering.
-// Remove a hold only after both branches and actual schema_migrations histories
-// have been reconciled and a replacement append-only sequence reviewed.
+// Reconciled migration file preflight, NOT proof of applied database history.
+// Abort before DB connection if any conflicting branch's old filename survives.
+// MySQL schema_migrations and schema_migration_attempts must still be checked
+// by runMigrations; never rewrite historical rows or bypass recovery flags.
+const EXPECTED = Object.freeze({
+  '046': '046_recurring_collective_cycles.sql',
+  '047': '047_procurement_delivery_runs.sql',
+  '048': '048_procurement_notification_outbox.sql',
+  '049': '049_regular_pool_payment_hold_deadlines.sql',
+  '050': '050_expand_canonical_product_families.sql',
+  '051': '051_demand_requester_role.sql',
+  '052': '052_order_supplier_commission_snapshot.sql'
+});
 const COLLISIONS = Object.freeze([
-  Object.freeze({
-    version: '046',
-    independent: '046_expand_canonical_product_families.sql',
-    concurrent: '046_recurring_collective_cycles.sql'
-  }),
-  Object.freeze({
-    version: '047',
-    independent: '047_demand_requester_role.sql',
-    concurrent: '047_procurement_delivery_runs.sql'
-  })
+  Object.freeze({version:'046',independent:'046_expand_canonical_product_families.sql',concurrent:EXPECTED['046']}),
+  Object.freeze({version:'047',independent:'047_demand_requester_role.sql',concurrent:EXPECTED['047']}),
+  Object.freeze({version:'048',independent:'048_regular_pool_payment_hold_deadlines.sql',concurrent:EXPECTED['048']})
 ]);
-
 function assertNoUnresolvedBranchCollisions(manifest) {
-  const files = new Map(manifest.map(m => [String(m.version), m.file]));
-  for (const conflict of COLLISIONS) {
-    const filename = files.get(conflict.version);
-    if (filename === conflict.independent || filename === conflict.concurrent) {
-      throw new Error(
-        'MIGRATION_BRANCH_COLLISION_UNRESOLVED: version ' + conflict.version +
-        ' is claimed by ' + conflict.independent + ' and ' + conflict.concurrent +
-        '. Do not run migrations against any database until the active branches, ' +
-        'schema_migrations records and actual tables are reconciled. ' +
-        'Never bypass by renaming or editing an already-applied migration.'
-      );
-    }
+  const files=new Map();
+  const seenNames=new Set();
+  for(const entry of manifest){
+    const version=String(entry.version);
+    if(files.has(version)||seenNames.has(entry.file))
+      throw new Error('MIGRATION_BRANCH_COLLISION_UNRESOLVED: duplicate file or version '+version);
+    files.set(version,entry.file);
+    seenNames.add(entry.file);
   }
+  for(const [version,expectedFile] of Object.entries(EXPECTED)){
+    if(files.get(version)!==expectedFile)
+      throw new Error('MIGRATION_BRANCH_COLLISION_UNRESOLVED: version '+version+
+        ' must be '+expectedFile+', found '+(files.get(version)||'MISSING'));
+  }
+  for(const oldFile of COLLISIONS.map(c=>c.independent)){
+    if(seenNames.has(oldFile))
+      throw new Error('MIGRATION_BRANCH_COLLISION_UNRESOLVED: legacy colliding file '+oldFile);
+  }
+  return true;
 }
-module.exports = { assertNoUnresolvedBranchCollisions, COLLISIONS };
+module.exports={assertNoUnresolvedBranchCollisions,COLLISIONS,EXPECTED};
