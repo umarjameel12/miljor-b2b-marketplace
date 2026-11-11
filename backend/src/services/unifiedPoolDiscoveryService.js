@@ -23,6 +23,20 @@ class UnifiedPoolDiscoveryService {
      throw reject('INVALID_FULFILLMENT_MODE','Invalid delivery mode filter');
    const search=String(raw.search||'').trim().toLowerCase();
    if(search.length>120)throw reject('INVALID_SEARCH','Search exceeds 120 characters');
+   const filterSignature=JSON.stringify({type,categoryId,familyId,clusterId,search,
+     fulfillment,include_all_pickup:raw.include_all_pickup==='true'});
+   let offset=0;
+   if(raw.cursor!=null && raw.cursor!==''){
+     const cursor=String(raw.cursor);
+     if(cursor.length>256 || !/^[A-Za-z0-9_-]+$/.test(cursor))
+       throw reject('INVALID_CURSOR','Invalid pagination cursor.');
+     try{
+       const decoded=JSON.parse(Buffer.from(cursor,'base64url').toString('utf8'));
+       if(decoded.filters!==filterSignature || !Number.isSafeInteger(decoded.offset)||
+         decoded.offset<0||decoded.offset>50000)throw Error('invalid');
+       offset=decoded.offset;
+     }catch{throw reject('INVALID_CURSOR','Cursor is invalid for these filters.');}
+   }
    const limit=raw.limit==null?60:Number(raw.limit);
    if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw reject('INVALID_LIMIT','Limit must be 1–100');
    const includeRegular=type!=='FLASH',includeFlash=type!=='REGULAR';
@@ -58,7 +72,8 @@ class UnifiedPoolDiscoveryService {
      const eligibleMap=new Map(eligible.map(e=>[Number(e.id),e]));
      const authorized=regularRaw.filter(p=>eligibleMap.has(Number(p.id)));
      const enriched=await progress.enrichPoolsList(authorized);
-     regular=enriched.map(p=>{
+     regular=enriched.filter(p=>fulfillment==='ALL'||(p.fulfillment_modes_available||[]).includes(
+       fulfillment==='PICKUP'?'SUPPLIER_PICKUP':fulfillment)).map(p=>{
        const physical=eligibleMap.get(Number(p.id));
        return {type:'REGULAR',id:p.id,code:p.pool_code,status:p.status,
          product_title:physical.physical_title,supplier_name:p.supplier_name,
@@ -115,8 +130,13 @@ class UnifiedPoolDiscoveryService {
    const all=[...regular.filter(matches),...flashes.filter(matches)];
    all.sort((a,b)=>new Date(a.pool_close_at).getTime()-new Date(b.pool_close_at).getTime());
    const [[clock]]=await db.query("SELECT DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS server_time");
-   return {pools:all.slice(0,limit),server_time:clock.server_time,
-     returned:Math.min(all.length,limit),has_more:all.length>limit,requested_type:type,
+   const page=all.slice(offset,offset+limit);
+   const hasMore=all.length>offset+limit;
+   const nextCursor=hasMore?Buffer.from(JSON.stringify({
+     offset:offset+limit,filters:filterSignature
+   })).toString('base64url'):null;
+   return {pools:page,server_time:clock.server_time,
+     returned:page.length,has_more:hasMore,next_cursor:nextCursor,requested_type:type,
      note:'Discovery is an offer preview. Buyer delivery eligibility, unit price and checkout are validated by the original B4/B5 engines.'};
  }
 }
