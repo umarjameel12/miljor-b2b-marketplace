@@ -362,6 +362,16 @@ class OrderService {
         throw err;
       }
 
+      // Lock the supplier's current commission at the precise order-creation
+      // transaction boundary. The accepted fee belongs to this order forever;
+      // later supplier-profile edits cannot alter its settlement entitlement.
+      const supplierFeeQuote = await feeService.calculateSupplierFeeExact(
+        pool.supplier_id, expectedSubtotalStr, connection, { lockProfile: true }
+      );
+      const lockedSupplierCommissionPercent = exactDecimal.toCanonical(
+        supplierFeeQuote.fee_percent, 2
+      );
+
       // Buyer platform fee calculation via approved feeService slabs
       const subtotalNum = Number(expectedSubtotalStr);
       const buyerFeeResult = await feeService.calculateBuyerFee(subtotalNum);
@@ -400,9 +410,10 @@ class OrderService {
           order_code, buyer_id, reservation_id, supplier_id, pool_id,
           snapshot_id, buyer_decision_id, total_qty, unit_price,
           subtotal_amount, delivery_fee, buyer_platform_fee, total_amount,
+          supplier_commission_percent,
           currency, delivery_type, delivery_address, cluster_zone,
           payment_status, order_status, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PKR', ?, ?, ?, 'AWAITING_PAYMENT', 'AWAITING_PAYMENT', ?, NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PKR', ?, ?, ?, 'AWAITING_PAYMENT', 'AWAITING_PAYMENT', ?, NOW(), NOW())`,
         [
           orderCode,
           actor.id,
@@ -417,6 +428,7 @@ class OrderService {
           deliveryFeeStr,
           buyerPlatformFeeStr,
           totalAmountStr,
+          lockedSupplierCommissionPercent,
           deliveryType,
           resolvedDeliveryAddress,
           reservation.cluster_zone || null,
@@ -463,6 +475,7 @@ class OrderService {
             delivery_fee: Number(deliveryFeeStr),
             buyer_platform_fee: Number(buyerPlatformFeeStr),
             total_amount: Number(totalAmountStr),
+            supplier_commission_percent: lockedSupplierCommissionPercent,
             currency: 'PKR',
             order_status: 'AWAITING_PAYMENT',
             payment_status: 'AWAITING_PAYMENT'
