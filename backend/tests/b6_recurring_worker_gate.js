@@ -1,4 +1,6 @@
 'use strict';
+process.env.NODE_ENV = 'test';
+process.env.TEST_DB_NAME = 'miljor_test_db';
 // B6-M worker unit gate: mock DB, NEVER payment or a real database.
 const assert=require('node:assert/strict');
 const {ProcurementRecurringService}=require('../src/services/procurementRecurringService');
@@ -57,5 +59,6 @@ async function main(){
   await assert.rejects(()=>svc.runDueBatch({limit:101}),e=>e.code==='INVALID_WORKER_LIMIT');
   ok('Unbounded worker batch rejected',true);
   console.log('B6 RECURRING WORKER GATE: '+passed+'/'+passed+' PASS');
+  process.exit(0);
 }
-main().catch(e=>{console.error('B6 WORKER GATE FAIL',e);process.exitCode=1});
+main().catch(e=>{console.error('B6 WORKER GATE FAIL',e);process.exit(1)});
