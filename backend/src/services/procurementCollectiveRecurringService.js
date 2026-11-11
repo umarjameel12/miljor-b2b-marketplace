@@ -210,7 +210,7 @@ class ProcurementCollectiveRecurringService{
    const uniqueKey='cohort-cycle-'+gid+'-'+cy.cycle_key;
    const requestHash=hash({gid,cycle_key:cy.cycle_key,products:policy.products});
    const [req]=await conn.query(
-    "INSERT INTO procurement_requests(buyer_id,request_code,ownership,frequency,award_policy,priority,status,delivery_area,notes,quote_deadline,join_deadline,idempotency_key,request_hash) SELECT buyer_id,?,'COLLECTIVE','ONE_TIME',award_policy,priority,'DRAFT',delivery_area,notes,?,?,?,?,? FROM procurement_requests WHERE id=? AND buyer_id=?",
+    "INSERT INTO procurement_requests(buyer_id,request_code,ownership,frequency,award_policy,priority,status,delivery_area,notes,quote_deadline,join_deadline,idempotency_key,request_hash) SELECT buyer_id,?,'COLLECTIVE','ONE_TIME',award_policy,priority,'DRAFT',delivery_area,notes,?,?,?,? FROM procurement_requests WHERE id=? AND buyer_id=?",
     ['MJ-N-'+crypto.randomUUID(),mysqlDate(quoteDeadline),mysqlDate(joinDeadline),
       uniqueKey,requestHash,org.template_request_id,organizer]);
    if(!req.insertId)throw fail('COHORT_REQUEST_CREATE_FAILED','Could not create cycle request.',500);
