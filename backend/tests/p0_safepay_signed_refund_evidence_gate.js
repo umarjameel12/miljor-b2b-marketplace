@@ -101,12 +101,56 @@ async function verify(label,expected,setup=()=>{},raw=goodEvent()){
   state.existing=[{
     provider:'SAFEPAY',event_type:'payment.refunded',
     processed_status:'PROCESSED',order_id:12,
-    provider_tracker_token:'track_abcdefgh1234'
+    provider_tracker_token:'track_abcdefgh1234',
+    raw_payload:goodEvent().toString('utf8')
   }];
   const duplicate=await svc.receive({rawBody:goodEvent(),signature:'signed'});
   assert.equal(duplicate.duplicate,true);
   assert.equal(queries.filter(x=>x[0].includes?.('UPDATE refund_obligations')).length,0);
   scenarios++;console.log('PASS: idempotent signed webhook replay');
+
+  reset();
+  state.existing=[{
+    provider:'SAFEPAY',event_type:'payment.refunded',
+    processed_status:'PROCESSED',order_id:12,
+    provider_tracker_token:'track_abcdefgh1234',
+    raw_payload:goodEvent({refund_amount:2000}).toString('utf8')
+  }];
+  await assert.rejects(
+    ()=>svc.receive({rawBody:goodEvent(),signature:'signed'}),
+    err=>err.code==='REFUND_EVENT_RECONCILIATION_REQUIRED'
+  );
+  assert.equal(queries.some(([sql])=>sql.includes?.('UPDATE refund_obligations')),false);
+  scenarios++;console.log('PASS: replay event ID cannot change signed monetary payload');
+
+  reset();
+  const originalReply=reply;
+  reply=async(sql,params)=>{
+    if(sql.includes('UPDATE refund_obligations'))return [{affectedRows:0}];
+    return originalReply(sql,params);
+  };
+  await assert.rejects(
+    ()=>svc.receive({rawBody:goodEvent(),signature:'signed'}),
+    err=>err.code==='REFUND_ATOMIC_UPDATE_CONFLICT'
+  );
+  assert.equal(queries.filter(([sql])=>sql==='ROLLBACK').length,1);
+  assert.equal(queries.some(([sql])=>sql.includes?.('UPDATE payments')),false);
+  scenarios++;console.log('PASS: changed approved-refund row aborts atomically');
+
+  reset();
+  const originalPaymentReply=reply;
+  reply=async(sql,params)=>{
+    if(sql.includes('UPDATE payments SET status='))return [{affectedRows:0}];
+    return originalPaymentReply(sql,params);
+  };
+  await assert.rejects(
+    ()=>svc.receive({rawBody:goodEvent(),signature:'signed'}),
+    err=>err.code==='PAYMENT_ATOMIC_UPDATE_CONFLICT'
+  );
+  assert.equal(queries.filter(([sql])=>sql==='ROLLBACK').length,1);
+  assert.equal(queries.some(([sql])=>sql==='COMMIT'),false);
+  assert.equal(queries.some(([sql])=>sql==='AUDIT'),false);
+  scenarios++;console.log('PASS: changed payment row rolls back refund event');
 
   await verify('signed full refund exactly exhausts capture','SUCCESS',
     ()=>{state.payment.amount='10.00';},goodEvent({state:'TRACKER_REFUNDED'}));
