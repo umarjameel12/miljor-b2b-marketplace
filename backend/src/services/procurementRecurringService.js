@@ -4,6 +4,7 @@
 // generation. No order, inventory reservation, Safepay or automatic charging.
 const crypto=require('node:crypto');
 const db=require('../config/db');
+const notifications=require('./procurementNotificationService');
 const {normalizeSchedule,nextCycles}=require('./procurementSchedulePolicy');
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=(value,label)=>{
@@ -292,6 +293,12 @@ class ProcurementRecurringService {
         [cyid,JSON.stringify({request_id:request.insertId,creates_payment:false,
           creates_order:false,requires_explicit_buyer_approval:true})]
       );
+      await notifications.enqueue(conn,{
+        recipient_id:buyer,recipient_role:'BUYER',
+        event_key:'recurring:cycle:due:'+cyid,
+        event_type:'RECURRING_CYCLE_DUE',
+        payload:{cycle_id:cyid,request_id:request.insertId}
+      });
       await conn.commit();
       return {cycle_id:cyid,request_id:request.insertId,
         status:'AWAITING_BUYER_APPROVAL',is_replay:false,
