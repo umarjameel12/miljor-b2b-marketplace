@@ -55,7 +55,9 @@ class MarketplaceOperationsController {
         buyerId: req.user.role === 'BUYER' ? req.user.id : req.body.buyer_id,
         supplierId: req.user.role === 'SUPPLIER' ? req.user.id : req.body.supplier_id,
         orderId: req.body.order_id,
-        poolId: req.body.pool_id
+        poolId: req.body.pool_id,
+        callerId: req.user.id,
+        callerRole: req.user.role
       });
       res.status(200).json({ success: true, data: { conversation: conv } });
     } catch (err) {
