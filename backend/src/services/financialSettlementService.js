@@ -1037,8 +1037,10 @@ class FinancialSettlementService {
          WHERE payment_id = ? AND status = 'CONFIRMED'`,
         [refund.payment_id]
       );
-      const totalConfirmed = exactDecimal.exactDecimalSum(
-        [confirmedRows[0]?.confirmed_amount || '0.00', refund.total_refund_amount.toString()], 2
+      // This refund was just changed to CONFIRMED in this same transaction;
+      // the aggregate already includes it. Never add it a second time.
+      const totalConfirmed = exactDecimal.toCanonical(
+        confirmedRows[0]?.confirmed_amount || '0.00', 2
       );
       if (!exactDecimal.exactDecimalGte(capturedAmount, totalConfirmed, 2)) {
         const err = new Error('Confirmed refunds exceed captured payment');
