@@ -92,6 +92,12 @@ class EncryptionService {
       return crypto.createHash('sha256').update('miljor_test_bank_key_32_bytes').digest();
     }
 
+    // In local development, provide a fallback key derived from JWT_SECRET or dev seed so unconfigured dev setups don't crash
+    if (process.env.NODE_ENV === 'development') {
+      const devSeed = process.env.JWT_SECRET || 'miljor_dev_bank_encryption_seed_2026';
+      return crypto.createHash('sha256').update(devSeed).digest();
+    }
+
     return null;
   }
 
@@ -116,6 +122,9 @@ class EncryptionService {
       }
     } else if (process.env.NODE_ENV === 'test') {
       candidates.push(crypto.createHash('sha256').update('miljor_test_bank_key_32_bytes').digest());
+    } else if (process.env.NODE_ENV === 'development') {
+      const devSeed = process.env.JWT_SECRET || 'miljor_dev_bank_encryption_seed_2026';
+      candidates.push(crypto.createHash('sha256').update(devSeed).digest());
     }
 
     // Optional legacy key for non-destructive key rotation reads
