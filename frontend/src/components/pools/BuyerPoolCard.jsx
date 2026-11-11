@@ -79,8 +79,9 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
         const next=result.data?.hold;
         if(!next?.order_id||!next.id)throw Error('The server did not provide a valid Flash purchase hold.');
         setHold(next);
+        // Do NOT refresh the discover list here: a whole-lot hold can remove
+        // the offer and unmount this live checkout modal before Safepay starts.
         toast.success('Stock hold created. Pay within the displayed 15-minute window.');
-        onChange?.();
       }else{
         const result=await apiClient.post('/reservations',
           {pool_id:pool.id,quantity:String(quantity)},
@@ -195,7 +196,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
                 {saving?'Opening…':'Continue to Safepay'}
               </button>}
             <div className="flex justify-between text-xs"><button type="button" onClick={refreshHold} className="underline">Refresh hold status</button>
-              <button type="button" onClick={()=>setOpen(false)} className="underline">Close</button></div>
+              <button type="button" onClick={()=>{setOpen(false);onChange?.();}} className="underline">Close</button></div>
           </div>}
         {quoteNotice&&<p role="alert" className="text-xs text-amber-600">{quoteNotice}</p>}
       </div>
