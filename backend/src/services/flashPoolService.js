@@ -592,6 +592,23 @@ class FlashPoolService {
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
 
+  // UCP-4: buyer-scoped recovery for previously created legitimate Flash orders.
+  // This is read-only; it cannot create a second hold, settle payments or release stock.
+  async listHoldsForBuyer(buyerId) {
+    if(!Number.isSafeInteger(Number(buyerId))||Number(buyerId)<1)
+      throw fail('INVALID_BUYER','Buyer identity required.',400);
+    const [holds]=await db.query(
+      `SELECT h.id,h.flash_pool_id,h.quantity,h.locked_unit_price,h.status,
+           DATE_FORMAT(h.expires_at,'%Y-%m-%dT%H:%i:%sZ') AS hold_expires_at,
+           h.order_id,o.order_code,o.payment_status,o.order_status,
+           o.total_amount,fp.flash_code,ps.title AS sku_title,ps.purchasing_unit
+         FROM flash_purchase_holds h
+         JOIN orders o ON o.id=h.order_id AND o.buyer_id=h.buyer_id
+         JOIN flash_pools fp ON fp.id=h.flash_pool_id
+         JOIN product_specifications ps ON ps.id=fp.product_spec_id
+         WHERE h.buyer_id=? ORDER BY h.id DESC LIMIT 100`,[Number(buyerId)]);
+    return holds;
+  }
   async getHoldForBuyer(buyerId,holdId) {
     const [rows]=await db.query(
       `SELECT h.id,h.flash_pool_id,h.quantity,h.locked_unit_price,h.status,
