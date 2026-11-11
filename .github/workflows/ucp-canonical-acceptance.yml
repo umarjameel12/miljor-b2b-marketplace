@@ -43,6 +43,8 @@ jobs:
           node tests/canonical_migration_manifest_gate.js
           node database/financeCompatibilityGate.js
           node tests/ucp_thischat_reconciliation_gate.js
+      - name: New commission migration and Regular order/settlement source contract
+        run: cd backend && node tests/p0_four_track_commission_source_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
