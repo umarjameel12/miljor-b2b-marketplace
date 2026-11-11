@@ -1,3 +1,13 @@
+## Independent Backend Integrity — Batch 5 (2026-11-11)
+- Branch: `fix/independent-backend-integrity`.
+- Supplier Catalog: removed historical global variants browse; families lead to supplier-owned products and immutable physical SKUs.
+- Public category/family API English-only, catalog 5xx errors redacted, admin Urdu inputs removed.
+- Business requirement updated to 25 approved active families; read-only test gate prepared.
+- CRITICAL BLOCKER: migration 046/047 versions collide with concurrent `feature/b6-phase2-nq`. Do not merge/apply migrations before approved reconciliation.
+- Status: IMPLEMENTED (subset), NOT TESTED, NOT VERIFIED. No DB changes.
+- Details: `backend/docs/MILJOR_INDEPENDENT_BACKEND_INTEGRITY_IMPLEMENTATION_LEDGER.md`.
+- CAN START NEXT PHASE: NO before migration collision reconciliation and final gate.
+
 ## Independent Backend Integrity — Batch 4 (2026-11-11)
 - Branch: `fix/independent-backend-integrity`. Payment BUYER-only strict RBAC; include pending refund claims in captured amount ceiling; refund-specific financial hold selection and exact decimal constraints; redact financial handler 5xx internals.
 - Added isolated final gate: `backend/tests/phase4_refund_integrity_gate.js`.
