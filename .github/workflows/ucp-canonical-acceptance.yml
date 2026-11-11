@@ -51,6 +51,8 @@ jobs:
           node tests/ucp_thischat_reconciliation_gate.js
       - name: New commission migration and Regular order/settlement source contract
         run: cd backend && node tests/p0_four_track_commission_source_gate.js
+      - name: Buyer/supplier order source isolation and all order-origin coverage
+        run: cd backend && node tests/p0_all_order_origins_source_gate.js
       - name: Build actual frontend Vite bundle
         run: npm --prefix frontend run build
       - name: Existing UCP and B4/B5/B6 source checks
