@@ -50,6 +50,18 @@ async function main(){
     pass('Supplier pool dashboard session survives full reload');
     await b.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
     await b.page.getByRole('heading',{name:'Procurement Orders & Reservations'}).waitFor({timeout:15000});
+    // Real order row from isolated MySQL, rendered through actual backend GET /orders.
+    // This test does NOT falsely label an unpaid fixture as Safepay-funded.
+    await b.page.getByText('P0-BROWSER-B6-ORDER').waitFor({timeout:15000});
+    await b.page.getByRole('heading',{name:'Your Procurement Orders'}).waitFor({timeout:15000});
+    assert.ok(await b.page.getByText('AWAITING_PAYMENT',{exact:true}).count()>0,
+      'Poolless B6 order payment status must remain truthfully unpaid');
+    assert.ok(await b.page.getByText('Total: PKR 1,145.00').count()>0,
+      'Poolless real order total must come from backend without fabricated prices');
+    assert.equal(await b.page.getByText('100% Safepay Protected').count(),0,
+      'Browser must not claim merchant custody without provider-origin verification');
+    pass('Buyer sees genuine poolless B6 order in UI with exact unpaid amount');
+
     await b.page.reload({waitUntil:'domcontentloaded'});
     await b.page.getByText(/Buyer Account/i).waitFor({timeout:15000});
     pass('Buyer Orders page survives reload and HttpOnly session recovery');

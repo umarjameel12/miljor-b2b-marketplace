@@ -1,0 +1,62 @@
+name: MilJor E3 Disposable Entitlement Acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/tests/package_e3_entitlements_and_supplier_portal_gate.js'
+      - '.github/workflows/e3-disposable-entitlement-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e3-entitlements:
+    name: E3 supplier family and SKU real MySQL 8 acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      SAFEPAY_ENV: sandbox
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Verify isolated test-only database and canonical migrations
+        run: |
+          cd backend
+          node database/financeCompatibilityGate.js
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node tests/p0_finance_054_installed_gate.js
+      - name: Run E3 entitlement and supplier SKU acceptance against disposable MySQL
+        timeout-minutes: 10
+        run: cd backend && node tests/package_e3_entitlements_and_supplier_portal_gate.js

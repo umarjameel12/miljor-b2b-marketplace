@@ -4,6 +4,7 @@
 // =============================================================================
 
 const financialSettlementService = require('../services/financialSettlementService');
+const financialConservationService = require('../services/financialConservationService');
 
 class FinancialSettlementController {
 
@@ -269,6 +270,22 @@ class FinancialSettlementController {
       return res.status(status).json({
         success: false,
         error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+      });
+    }
+  }
+
+  // GET /api/v1/settlements/admin/orders/:id/integrity
+  async getOrderIntegrity(req,res) {
+    try {
+      const data=await financialConservationService.getOrderIntegrity({
+        orderId:req.params.id,actor:req.user
+      });
+      return res.status(200).json({success:true,data});
+    } catch(err) {
+      return res.status(err.statusCode||500).json({
+        success:false,error:{code:err.code||'FINANCIAL_INTEGRITY_AUDIT_FAILED',
+          message:process.env.NODE_ENV==='production'&&(!err.statusCode||err.statusCode>=500)
+            ?'Unable to complete financial integrity audit':err.message}
       });
     }
   }

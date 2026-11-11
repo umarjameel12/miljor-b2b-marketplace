@@ -26,6 +26,9 @@ export const OrdersPage = () => {
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
   const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
+  // Flash/B6 procurement orders can be legitimate without a legacy pool/reservation.
+  // Never silently hide these server-owned orders from the buyer.
+  const procurementOrders=realOrders.filter(order=>!(order.pool_id&&order.reservation_id));
   const activeCommitmentCount=regularOrders.filter(o=>!['PAID','CANCELLED','REFUNDED'].includes(o.payment_status)).length+
     flashHolds.filter(h=>!['PAID','EXPIRED','RELEASED','FAILED'].includes(h.status)&&h.payment_status!=='PAID').length;
   useEffect(()=>{
@@ -126,9 +129,9 @@ export const OrdersPage = () => {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-sans tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                Rs. 0
+                {realOrders.filter(o=>o.fulfillment_status==='BUYER_CONFIRMED').length}
               </span>
-              <span className="ml-1 text-xs text-stone-500">settled volume</span>
+              <span className="ml-1 text-xs text-stone-500">buyer-confirmed orders (not payouts)</span>
             </div>
           </div>
 
@@ -148,10 +151,10 @@ export const OrdersPage = () => {
             </div>
             <div className="mt-3">
               <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                100% Safepay Protected
+                Payment verification required
               </span>
               <p className="text-[11px] text-stone-500 mt-0.5">
-                Funds released upon physical batch inspection
+                Provider custody and payouts are verified separately; buyer receipt alone is not a bank transfer.
               </p>
             </div>
           </div>
@@ -191,11 +194,33 @@ export const OrdersPage = () => {
         {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
         {ordersError && <p role="alert" className="text-xs text-red-600">{ordersError}</p>}
         {!ordersLoading && regularOrders.length > 0 && (
-          <section className="space-y-3" aria-label="Your regular pool orders">
-            <h2 className="font-semibold text-lg">Your Regular Pool Payments</h2>
+          <section className="space-y-3" aria-label="Your pool orders">
+            <h2 className="font-semibold text-lg">Your Pool Payments</h2>
             {regularOrders.map(order=>
               <RegularPaymentHoldCard key={order.id} order={order}/>
             )}
+          </section>
+        )}
+        {/* Real poolless Flash/B6 awards are first-class orders. Display only server
+            authorized order data, not preview records or fabricated payment status. */}
+        {!ordersLoading && procurementOrders.length > 0 && (
+          <section className="space-y-3" aria-label="Your procurement orders">
+            <h2 className="font-semibold text-lg">Your Procurement Orders</h2>
+            {procurementOrders.map(order => (
+              <article key={order.id} className="rounded-xl border p-4 space-y-2"
+                style={{backgroundColor:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
+                <div className="flex flex-wrap gap-2 justify-between items-center">
+                  <span className="font-semibold text-sm">{order.order_code}</span>
+                  <span className="text-xs font-medium">{order.payment_status || 'AWAITING_PAYMENT'}</span>
+                </div>
+                <p className="text-sm">{order.product_title || 'Procurement Order'}</p>
+                <div className="flex flex-wrap gap-3 text-xs" style={{color:'var(--text-muted)'}}>
+                  <span>Order status: {order.order_status || 'PENDING'}</span>
+                  <span>Fulfillment: {order.fulfillment_status || 'NOT_STARTED'}</span>
+                  <span>Total: PKR {Number(order.total_amount || 0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                </div>
+              </article>
+            ))}
           </section>
         )}
         {!ordersLoading && flashHolds.length>0&&<FlashBuyerOrdersPanel holds={flashHolds}
@@ -203,7 +228,7 @@ export const OrdersPage = () => {
             const res=await apiClient.get('/flash-pools/holds/mine');
             if(res?.data?.success)setFlashHolds(res.data.data?.holds||[]);
           }}/>}
-        {!ordersLoading && !ordersError && regularOrders.length === 0 && flashHolds.length===0 && (
+        {!ordersLoading && !ordersError && regularOrders.length === 0 && procurementOrders.length===0 && flashHolds.length===0 && (
           <>
         {/* Empty State / Truthful Real Data Display */}
         <div
@@ -224,13 +249,13 @@ export const OrdersPage = () => {
           </div>
 
           <h3 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>
-            No Regular Pool Orders Yet
+            No Pool Orders Yet
           </h3>
 
           <p className="text-xs text-stone-500 mt-2 max-w-sm leading-relaxed">
             {isAuthenticated
-              ? 'You do not have any Regular Pool orders requiring payment right now. Browse live Regular Pools to join a supplier offer.'
-              : 'Sign in to reserve quantities and aggregate bulk volume for lower wholesale prices with guaranteed escrow delivery.'}
+              ? 'You do not have any pool orders requiring payment right now. Browse the supplier marketplace to join an eligible offer.'
+              : 'Sign in to reserve quantities and aggregate bulk volume for lower wholesale prices with verified payment status and tracked delivery.'}
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">

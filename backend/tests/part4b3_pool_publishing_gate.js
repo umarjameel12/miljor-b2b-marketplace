@@ -466,14 +466,45 @@ async function runPart4B3GateTests() {
       pass('20. Supplier successfully publishes DRAFT pool to ACTIVE with committed inventory allocation');
     } catch (e) { fail('20. Supplier publishes DRAFT to ACTIVE', e); }
 
-    // 21. Published pool now appears in public active pools listing
+    // 21. Publication and buyer eligibility are deliberately different:
+    // old historical/legacy fixtures can remain ACTIVE for accounting but
+    // must never bypass supplier-owned physical SKU marketplace safeguards.
     try {
       const res = await api('/api/v1/pools');
       assert.strictEqual(res.status, 200);
-      const poolIds = res.body.data.pools.map(p => p.id);
-      assert.ok(poolIds.includes(testDraftPoolId), 'Published ACTIVE pool must appear in public listing');
-      pass('21. Newly published ACTIVE pool immediately appears in public active pools listing');
-    } catch (e) { fail('21. Published pool appears in public listing', e); }
+      const poolIds = res.body.data.pools.map(p => Number(p.id));
+      const [[row]] = await db.query(`
+        SELECT EXISTS (
+          SELECT 1 FROM pools p
+          JOIN users u ON u.id=p.supplier_id
+          JOIN supplier_profiles profile ON profile.supplier_id=p.supplier_id
+          JOIN supplier_listings sl ON sl.id=p.supplier_listing_id AND sl.supplier_id=p.supplier_id
+          JOIN product_specifications spec ON spec.id=sl.product_spec_id
+          JOIN supplier_skus sku ON sku.id=spec.supplier_sku_id
+          JOIN supplier_products prod ON prod.id=sku.supplier_product_id
+          JOIN catalog_product_families fam ON fam.id=spec.family_id
+          JOIN catalog_categories cat ON cat.id=spec.category_id
+          WHERE p.id=? AND p.status='ACTIVE' AND p.expires_at>UTC_TIMESTAMP()
+            AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED'
+            AND profile.verification_status='VERIFIED'
+            AND sl.status='ACTIVE' AND sl.supplier_sku_id=p.supplier_sku_id
+            AND spec.id=p.product_spec_id AND spec.supplier_id=p.supplier_id
+            AND spec.is_active=1 AND spec.approval_status='APPROVED'
+            AND spec.lifecycle_status='PUBLISHED'
+            AND sku.supplier_id=p.supplier_id AND sku.status='PUBLISHED'
+            AND prod.supplier_id=p.supplier_id AND prod.status='PUBLISHED'
+            AND fam.is_active=1 AND fam.approval_status='APPROVED'
+            AND cat.is_active=1 AND cat.approval_status='APPROVED'
+        ) AS eligible`, [testDraftPoolId]);
+      if (Number(row.eligible) === 1) {
+        assert.ok(poolIds.includes(Number(testDraftPoolId)),
+          'Eligible published supplier-owned pool must appear in public listing');
+      } else {
+        assert.ok(!poolIds.includes(Number(testDraftPoolId)),
+          'Legacy/ineligible pool must remain hidden despite historical ACTIVE state');
+      }
+      pass('21. Buyer public listing follows supplier/SKU eligibility, not ACTIVE alone');
+    } catch (e) { fail('21. Published pool buyer eligibility', e); }
 
     // 22. Database verifies inventory allocation row created with status COMMITTED
     try {
