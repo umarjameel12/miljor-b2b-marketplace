@@ -632,6 +632,23 @@ class FinancialSettlementService {
           (order.buyer_platform_fee || 0.00).toString()
         ], 2);
       } else {
+        // Procurement awards can contain multiple SKU lines with different
+        // prices/units. An aggregate order.unit_price is NOT a defensible
+        // basis for a partial refund on any B6 award. Fail closed until a
+        // separately approved per-award-line refund allocation exists.
+        const [awardLineCounts] = await connection.query(
+          `SELECT COUNT(*) AS line_count
+           FROM procurement_award_lines al
+           JOIN procurement_award_orders ao ON ao.id=al.award_order_id
+           WHERE ao.order_id=?`,
+          [orderId]
+        );
+        if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
+          const err = new Error('Partial refunds for awarded procurement orders require line-item quantities, verified receipts and itemized contractual prices');
+          err.code = 'LINE_ITEM_REFUND_ALLOCATION_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
         // PARTIAL: based on disputed quantity and locked order.unit_price
         if (!disputedQuantity || Number(disputedQuantity) <= 0) {
           const err = new Error('Valid disputed quantity is required for partial refund assessment');
