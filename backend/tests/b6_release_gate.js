@@ -19,6 +19,7 @@ const suites=[
   'b6_collective_bid_policy_gate.js',
   // Database integration, after migrations 033–047 & B6 fixtures.
   'package_e2_catalog_foundation_gate.js',
+  'package_e2_catalog_moderation_gate.js',
   'package_e2_catalog_security_gate.js',
   'package_e2_product_ownership_and_immutable_pools_gate.js',
   'package_e3_entitlements_and_supplier_portal_gate.js',
