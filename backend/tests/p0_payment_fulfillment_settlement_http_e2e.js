@@ -109,12 +109,22 @@ async function main(){
      role:'SUPPLIER',id:2,key:'e2e-fraud-'+random()});eq(r,403);
    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
      role:'BUYER',id:6,key:'e2e-wrong-buyer-'+random()});eq(r,403);
-   const confirmKey='e2e-confirm-'+orderId;
-   r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
-     key:confirmKey,body:{notes:'Ten units received'}});eq(r,200);
-   assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
-   r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{key:confirmKey,body:{notes:'Ten units received'}});
-   eq(r,200);assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
+    const confirmKey='e2e-confirm-'+orderId;
+    const confirmBody={notes:'Ten units received'};
+    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
+      key:confirmKey,body:confirmBody});eq(r,200);
+    assert.equal(r.body.data.fulfillment_status,'BUYER_CONFIRMED');
+    const originalReceipt=r.body;
+    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
+      key:confirmKey,body:confirmBody});
+    eq(r,200);
+    assert.deepEqual(r.body,originalReceipt,
+      'Identical retry returns exact cached buyer receipt response');
+    const [[receiptCount]]=await db.query(
+      'SELECT COUNT(*) AS count FROM order_fulfillment_events WHERE order_id=? AND idempotency_key=?',
+      [orderId,confirmKey]);
+    assert.equal(Number(receiptCount.count),1,
+      'Buyer confirmation retry must not persist a second event');
    console.log('PASS G7 independent buyer-only receipt and idempotency');
    r=await prepare();eq(r,201);
    const [instructions]=await db.query(
