@@ -27,13 +27,14 @@ class FeeService {
     return {percentage:percent,buyer_fee:buyerFee};
   }
 
-  async calculateSupplierFeeExact(supplierId,subtotalAmount,connection=db) {
+  async calculateSupplierFeeExact(supplierId,subtotalAmount,connection=db,options={}) {
     const id=Number(supplierId);
     if(!Number.isSafeInteger(id)||id<1)throw new Error('Valid supplier required');
     const subtotal=exact.toCanonical(subtotalAmount,2);
     if(!exact.exactDecimalGte(subtotal,'0.01',2))throw new Error('Supplier subtotal must be positive');
     const [profiles]=await connection.query(
-      'SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id=?',[id]
+      'SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id=?' +
+      (options.lockProfile ? ' FOR UPDATE' : ''),[id]
     );
     // Never compute a supplier payout for a missing supplier profile.
     // A silent fallback here could award or settle money for an invalid supplier.
