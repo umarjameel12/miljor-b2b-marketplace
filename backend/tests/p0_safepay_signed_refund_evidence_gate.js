@@ -18,6 +18,7 @@ const db={getConnection:async()=>({
 })};
 const financial={_logAuditEvent:async()=>{queries.push(['AUDIT']);}};
 const moduleRef={exports:{}};
+const testEnv={MILJOR_SAFEPAY_REFUND_UNIT_VERIFIED:'PAISA'};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,
   '../src/services/safepayRefundWebhookService.js'),'utf8'),{
   require(name){
@@ -29,7 +30,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,
   },
   module:moduleRef,exports:moduleRef.exports,
   Buffer,console,
-  process:{env:{MILJOR_SAFEPAY_REFUND_UNIT_VERIFIED:'PAISA'}}
+  process:{env:testEnv}
 },{timeout:5000});
 const svc=moduleRef.exports;
 const goodEvent=(data={})=>Buffer.from(JSON.stringify({
@@ -96,6 +97,29 @@ async function verify(label,expected,setup=()=>{},raw=goodEvent()){
     ()=>{},goodEvent({refund_amount:10.25}));
   await verify('non-PKR currency rejected','INVALID_REFUND_EVIDENCE',
     ()=>{},goodEvent({currency:'USD'}));
+  reset();
+  state.existing=[{
+    provider:'SAFEPAY',event_type:'payment.refunded',
+    processed_status:'PROCESSED',order_id:12,
+    provider_tracker_token:'track_abcdefgh1234'
+  }];
+  const duplicate=await svc.receive({rawBody:goodEvent(),signature:'signed'});
+  assert.equal(duplicate.duplicate,true);
+  assert.equal(queries.filter(x=>x[0].includes?.('UPDATE refund_obligations')).length,0);
+  scenarios++;console.log('PASS: idempotent signed webhook replay');
+
+  await verify('signed full refund exactly exhausts capture','SUCCESS',
+    ()=>{state.payment.amount='10.00';},goodEvent({state:'TRACKER_REFUNDED'}));
+
+  reset();
+  testEnv.MILJOR_SAFEPAY_REFUND_UNIT_VERIFIED='UNVERIFIED';
+  await assert.rejects(
+    ()=>svc.receive({rawBody:goodEvent(),signature:'signed'}),
+    err=>err.code==='REFUND_AMOUNT_UNIT_UNVERIFIED'
+  );
+  assert.equal(queries.length,0);
+  scenarios++;console.log('PASS: unverified amount unit blocks confirmation before DB');
+
   const unit=svc.safeMoneyFromMinorUnits(1025);
   assert.equal(unit,'10.25');scenarios++;
   console.log('PASS: exact integer minor unit conversion');
