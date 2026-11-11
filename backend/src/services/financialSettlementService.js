@@ -582,7 +582,7 @@ class FinancialSettlementService {
         `SELECT o.*, p.id AS payment_row_id, p.amount AS captured_amount, p.status AS payment_row_status
          FROM orders o
          JOIN payments p ON p.order_id = o.id
-         WHERE o.id = ? AND p.status = 'PAID'
+         WHERE o.id = ? AND p.status IN ('PAID', 'PARTIALLY_REFUNDED')
          ORDER BY p.id DESC LIMIT 1 FOR UPDATE`,
         [orderId]
       );
@@ -596,17 +596,19 @@ class FinancialSettlementService {
 
       const order = orders[0];
 
-      // Authorization: Buyer can only assess for own order; Supplier cannot assess refunds
-      if (actor.role === 'BUYER' && order.buyer_id !== actor.id) {
-        const err = new Error('Access denied: You do not own this order');
-        err.code = 'FORBIDDEN';
+      // Only the owning buyer or an explicitly recognized administrator may
+      // assess a refund. Other authenticated roles must never inherit admin
+      // privileges through the absence of a deny condition.
+      if (!actor || !actor.id ||
+          (actor.role !== 'BUYER' && !isAdminRole(actor.role))) {
+        const err = new Error('Only the owning buyer or an authorized administrator may assess refunds');
+        err.code = 'UNAUTHORIZED_ROLE';
         err.statusCode = 403;
         throw err;
       }
-
-      if (actor.role === 'SUPPLIER') {
-        const err = new Error('Suppliers are strictly prohibited from assessing or approving refunds');
-        err.code = 'UNAUTHORIZED_ROLE';
+      if (actor.role === 'BUYER' && Number(order.buyer_id) !== Number(actor.id)) {
+        const err = new Error('Access denied: You do not own this order');
+        err.code = 'FORBIDDEN';
         err.statusCode = 403;
         throw err;
       }
@@ -1014,8 +1016,39 @@ class FinancialSettlementService {
         [externalReference.trim(), notes, refundId]
       );
 
-      // Update payment record status
-      const paymentStatus = refund.refund_type === 'FULL' ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+      // Derive the payment's cumulative refunded state, not merely the
+      // currently confirmed refund_type. Multiple legitimate partial refunds
+      // can together exhaust the captured payment.
+      const [paidRows] = await connection.query(
+        'SELECT amount, status FROM payments WHERE id = ? FOR UPDATE',
+        [refund.payment_id]
+      );
+      if (paidRows.length !== 1 ||
+          !['PAID', 'PARTIALLY_REFUNDED'].includes(paidRows[0].status)) {
+        const err = new Error('Confirmed payment is missing or in an incompatible state');
+        err.code = 'PAYMENT_REFUND_STATE_CONFLICT';
+        err.statusCode = 409;
+        throw err;
+      }
+      const capturedAmount = exactDecimal.toCanonical(paidRows[0].amount, 2);
+      const [confirmedRows] = await connection.query(
+        `SELECT COALESCE(SUM(total_refund_amount), 0) AS confirmed_amount
+         FROM refund_obligations
+         WHERE payment_id = ? AND status = 'CONFIRMED'`,
+        [refund.payment_id]
+      );
+      const totalConfirmed = exactDecimal.exactDecimalSum(
+        [confirmedRows[0]?.confirmed_amount || '0.00', refund.total_refund_amount.toString()], 2
+      );
+      if (!exactDecimal.exactDecimalGte(capturedAmount, totalConfirmed, 2)) {
+        const err = new Error('Confirmed refunds exceed captured payment');
+        err.code = 'REFUND_EXCEEDS_CAPTURED_AMOUNT';
+        err.statusCode = 409;
+        throw err;
+      }
+      const paymentStatus = exactDecimal.exactDecimalEquals(
+        capturedAmount, totalConfirmed, 2
+      ) ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
       await connection.query(
         `UPDATE payments
          SET status = ?, updated_at = NOW()
