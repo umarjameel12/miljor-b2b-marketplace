@@ -45,7 +45,15 @@ class SubscriptionEntitlementService {
 
     const profile = profiles[0];
     const planCode = (profile.subscription_plan || 'STARTER').toUpperCase();
-    const planConfig = PLAN_LIMITS[planCode] || PLAN_LIMITS.STARTER;
+    // Unknown plan data must fail closed; do not silently grant STARTER limits
+    // or misrepresent a supplier's paid commercial entitlements.
+    const planConfig = PLAN_LIMITS[planCode];
+    if (!planConfig) {
+      const err = new Error('Supplier subscription plan requires reconciliation');
+      err.code = 'UNKNOWN_SUBSCRIPTION_PLAN';
+      err.statusCode = 409;
+      throw err;
+    }
     const maxAllowedFamilies = planConfig.maxFamilies;
 
     // 2. Fetch distinct active family IDs currently in use by this supplier across:
@@ -79,7 +87,15 @@ class SubscriptionEntitlementService {
       [supplierId, supplierId, supplierId]
     );
 
-    const activeFamilyIds = familyRows.map(r => r.family_id);
+    // mysql2 may return numeric IDs as numbers or strings depending on configuration.
+    // Normalize before quota membership checks to avoid charging another family slot.
+    const activeFamilyIds = [...new Set(familyRows.map(r => Number(r.family_id)))];
+    if (activeFamilyIds.some(familyId => !Number.isSafeInteger(familyId) || familyId <= 0)) {
+      const err = new Error('Invalid active product family in supplier entitlements');
+      err.code = 'INVALID_ENTITLEMENT_FAMILY';
+      err.statusCode = 409;
+      throw err;
+    }
     const activeFamiliesCount = activeFamilyIds.length;
     const remainingFamilySlots = Math.max(0, maxAllowedFamilies - activeFamiliesCount);
     const isOverLimit = activeFamiliesCount > maxAllowedFamilies;
