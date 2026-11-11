@@ -307,7 +307,7 @@ class ProcurementAwardService{
       );
       const orderSummary=[];
       for(const group of calculated.groups){
-        const code='MJQ-'+crypto.randomBytes(10).toString('hex');
+        const code = 'MJQ-' + crypto.randomBytes(7).toString('hex');
         const [createdOrder]=await conn.query(
           `INSERT INTO orders
           (order_code,buyer_id,supplier_id,total_qty,unit_price,
