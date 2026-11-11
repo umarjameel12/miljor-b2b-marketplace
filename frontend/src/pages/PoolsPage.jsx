@@ -132,7 +132,7 @@ export const PoolsPage = () => {
 
   const filteredFamilies = families.filter((family) => {
     const query = searchQuery.trim().toLocaleLowerCase();
-    const terms = [family.name, family.urdu_name, family.description, family.family_code,
+    const terms = [family.name, family.description, family.family_code,
       ...(Array.isArray(family.aliases) ? family.aliases : [])];
     return (!query || terms.some(term => String(term || '').toLocaleLowerCase().includes(query)))
       && (selectedCategory === 'All Commodities' || String(family.category_id) === selectedCategory);
@@ -237,7 +237,7 @@ export const PoolsPage = () => {
                 placeholder={
                   viewMode === 'pools'
                     ? 'Search pools by commodity, spec code, or variety (e.g. Basmati, 1121, SPEC-001)...'
-                    : 'Search product families in English or Urdu...'
+                    : 'Search product families (e.g. Rice, Daal Chana, Cooking Oil)...'
                 }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -507,7 +507,6 @@ export const PoolsPage = () => {
                   </div>
                   <div>
                     <h3 className="font-sans font-bold text-base" style={{ color: 'var(--text-primary)' }}>{family.name}</h3>
-                    {family.urdu_name && <p lang="ur" dir="rtl" className="text-sm text-stone-500 text-left mt-1">{family.urdu_name}</p>}
                     <p className="text-xs text-stone-500 mt-2">{family.description}</p>
                   </div>
                   <div className="mt-auto border-t pt-3 text-xs text-stone-500"
