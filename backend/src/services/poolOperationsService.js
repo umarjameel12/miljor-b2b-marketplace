@@ -3,10 +3,12 @@
 // The B4/B5 state machines, Safepay, stock allocation and DB transactions remain authoritative.
 const db=require('../config/db');
 const supplierDelivery=require('./supplierDeliveryService');
+const exact=require('./exactDecimal');
 const overview=require('./unifiedSupplierPoolsService');
 const allowedId=value=>Number.isSafeInteger(Number(value))&&Number(value)>0;
 const bad=(message)=>Object.assign(new Error(message),{code:'INVALID_SUPPLIER',statusCode:400});
-const nonnegative=(x)=>{const n=Number(x);return Number.isFinite(n)&&n>=0?n:null;};
+const canonical=x=>{try{return exact.toCanonical(x,4)}catch{return null}};
+const zero='0.0000';
 const decimal=(x)=>x==null?null:String(x);
 const nowEpoch=()=>Date.now();
 class PoolOperationsService {
@@ -52,16 +54,20 @@ class PoolOperationsService {
     const items=rows.map(row=>{
       const mismatch=Number(row.unit_count||0)>1 ||
         (row.allocation_unit!=null && String(row.allocation_unit).toLowerCase()!==String(row.pricing_unit).toLowerCase());
-      const listed=nonnegative(row.listed_stock),pending=nonnegative(row.pending_qty),committed=nonnegative(row.committed_qty);
-      const remainder=listed!==null&&pending!==null&&committed!==null?listed-pending-committed:null;
-      const invalid=mismatch||remainder===null||remainder<0;
+      const listed=canonical(row.listed_stock),pending=canonical(row.pending_qty),committed=canonical(row.committed_qty);
+      let remainder=null;
+      try {if(listed!==null&&pending!==null&&committed!==null)
+        remainder=exact.exactDecimalSum([listed,'-'+pending,'-'+committed],4);
+      }catch {remainder=null;}
+      const invalid=mismatch||remainder===null||
+        (remainder!==null&&!exact.exactDecimalGte(remainder,zero,4));
       return {
         supplier_listing_id:row.supplier_listing_id,listing_code:row.listing_code,
         supplier_sku_id:row.supplier_sku_id,sku_title:row.sku_title,status:row.listing_status,
         unit:row.pricing_unit,listed_stock:decimal(row.listed_stock),
         pending_allocated:invalid?null:decimal(row.pending_qty),
         committed_allocated:invalid?null:decimal(row.committed_qty),
-        available_to_allocate:invalid?null:remainder.toFixed(4),
+        available_to_allocate:invalid?null:remainder,
         allocation_state:invalid?'RECONCILIATION_REQUIRED':'RECONCILED',
         note:invalid?'Allocation unit mismatch, negative stock or invalid numeric stock; publishing must fail closed.':null
       };
@@ -136,9 +142,9 @@ class PoolOperationsService {
         add('LOW_UNALLOCATED_STOCK','LISTING:'+listing.supplier_listing_id,'LOW',
           listing.listing_code+' has 10% or less unallocated stock.','warning');
     }
-    for(const o of dbRows[0])add('PAYMENT_AWAITING_PROVIDER',
+    for(const o of dbRows[0])add('ORDER_PAYMENT_OUTSTANDING',
       o.flash_pool_id?'FLASH:'+o.flash_pool_id:'REGULAR:'+o.pool_id,String(o.order_id),
-      'Order #'+o.order_id+' is awaiting authoritative payment confirmation.');
+      'Order #'+o.order_id+' has not yet reached a verified PAID state.');
     const seen=new Set();
     const alerts=notifications.filter(x=>{if(seen.has(x.id))return false;seen.add(x.id);return true});
     return {alerts,generated_at:new Date().toISOString(),delivery_channel:'IN_APP_READ_ONLY'};
