@@ -70,10 +70,23 @@ async function main(){
     assert.ok(preview.total_payable);
     const total=String(preview.total_payable);
     pass('Fee-inclusive buyer award preview');
-    const award=ok(await api('/procurement/requests/'+rid+'/award',
-      'BUYER','POST',{selections,buyer_total_confirmed:true,
-        accepted_total_payable:total,
-        delivery_address:'Johar Town Lahore Pakistan warehouse'}),201,'accept award').award;
+    const awardPayload={selections,buyer_total_confirmed:true,
+      accepted_total_payable:total,
+      delivery_address:'Johar Town Lahore Pakistan warehouse'};
+    const awardHttp=await api('/procurement/requests/'+rid+'/award',
+      'BUYER','POST',awardPayload);
+    if(awardHttp.status!==201){
+      // Test-only diagnostic; the public Express endpoint remains sanitized.
+      try {
+        await require('../src/services/procurementAwardService').accept(
+          5,rid,awardPayload,'DIAGNOSTIC-B6-'+tag
+        );
+      } catch(error) {
+        console.error('B6_ISOLATED_ACCEPT_DIAGNOSTIC',error.code||error.name,
+          error.message,error.stack);
+      }
+    }
+    const award=ok(awardHttp,201,'accept award').award;
     assert.equal(award.orders.length,1);
     const oid=Number(award.orders[0].order_id);
     const [[pre]]=await db.query('SELECT payment_status FROM orders WHERE id=?',[oid]);
