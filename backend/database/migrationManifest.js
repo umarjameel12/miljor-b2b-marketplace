@@ -22,7 +22,9 @@ function reject(code,details){const e=new Error(code+': '+details);e.code=code;t
 function scanMigrations(directory=path.join(__dirname,'migrations'),options={}){
   if(!fs.existsSync(directory))reject('MIGRATION_DIRECTORY_MISSING',directory);
   const files=fs.readdirSync(directory,{withFileTypes:true})
-    .filter(x=>x.isFile()&&x.name.endsWith('.sql'))
+    // Legacy migration directories contain forward SQL alongside *_rollback.sql.
+    // Rollback files are not forward migrations and must never be auto-applied.
+    .filter(x=>x.isFile()&&x.name.endsWith('.sql')&&!x.name.includes('rollback'))
     .map(x=>x.name).sort();
   const map=new Map();
   for(const filename of files){
