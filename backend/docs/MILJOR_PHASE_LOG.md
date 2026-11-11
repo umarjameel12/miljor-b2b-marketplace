@@ -1,3 +1,14 @@
+## P0 Financial Steps 1–3 — Isolated Regression, Auto-Fix, Concurrency (2026-11-11)
+- Branch: `fix/p0-financial-settlement-hardening-isolated` exclusively; unrelated active B4/B5/B6 branches untouched.
+- Step 1: fetched actual financial service and tested with mocked database; seven original cases PASS.
+- Step 2: implemented exact held/available comparisons; required approval actor; recheck supplier verified state, buyer-confirmed receipt, disabled external execution and exact payable balances at approval; exact decimal financial audit serialization.
+- Step 3: committed DB-free VM-based test covering 14 assertions, including simulated concurrent payout row-lock queue, exactly-one insert, second request rejection and rollback, idempotent replay.
+- Executed the committed test source through an isolated V8/Node-builtin-shim harness against actual fetched financialSettlementService + exactDecimal source: **14/14 PASS**.
+- Not executed under project Node/MySQL. Real InnoDB concurrency, Phase 3/4/Safepay HTTP suites and isolated test-DB E2E remain NOT VERIFIED.
+- No DB queries/migrations or live money movement performed by this session.
+- Detailed ledger: `backend/docs/MILJOR_P0_FINANCIAL_SETTLEMENT_HARDENING_LEDGER.md`.
+- Phase gate: **PARTIAL / BLOCKED FOR RELEASE**. CAN MERGE/DEPLOY: NO.
+
 ## P0 Isolated Financial Settlement Hardening — 2026-11-11
 - Branch `fix/p0-financial-settlement-hardening-isolated` derived from independent integrity branch; B4/B5/B6 branches/files untouched.
 - Implemented fail-closed payout preparation: admin-only, mandatory idempotency, per-payable single instruction, conflicting payload rejection, pending refund block, exact payable balance conservation, zero disbursed amount.
