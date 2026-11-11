@@ -63,11 +63,25 @@ class SupplierListingController {
         resolvedSupplierProductId = sku.supplier_product_id;
       }
 
-      // 1B. Validate spec existence
-      if (!resolvedSpecId) {
-        return res.status(400).json({
+      // 1B. Supplier-owned SKU is the sole identity for NEW commercial offers.
+      // Legacy global specifications remain readable for historical listings,
+      // but may not be used to create new supplier-owned offers.
+      if (!resolvedSupplierSkuId || !resolvedSpecId) {
+        return res.status(422).json({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Either supplier_sku_id or product_spec_id is required' }
+          error: {
+            code: 'PUBLISHED_SUPPLIER_SKU_REQUIRED',
+            message: 'Publish your own physical SKU before creating a commercial offer. Historical global specifications are not orderable templates.'
+          }
+        });
+      }
+      if (product_spec_id != null && Number(product_spec_id) !== Number(resolvedSpecId)) {
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'SKU_SPECIFICATION_MISMATCH',
+            message: 'The supplied specification does not belong to this published physical SKU.'
+          }
         });
       }
 
@@ -102,8 +116,15 @@ class SupplierListingController {
       if (!resolvedSupplierProductId && spec.supplier_product_id) {
         resolvedSupplierProductId = spec.supplier_product_id;
       }
-      if (!resolvedSupplierSkuId && spec.supplier_sku_id) {
-        resolvedSupplierSkuId = spec.supplier_sku_id;
+      if (Number(spec.supplier_sku_id) !== Number(resolvedSupplierSkuId) ||
+          Number(spec.supplier_id) !== Number(supplierId)) {
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'SKU_SPECIFICATION_MISMATCH',
+            message: 'A new commercial offer must reference the supplier-owned published SKU and its linked specification.'
+          }
+        });
       }
 
       // Package E2: Enforce that variant, parent family, and parent category are APPROVED and active
