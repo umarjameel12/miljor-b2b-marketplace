@@ -1,4 +1,4 @@
-import apiClient, { setAccessToken } from './client';
+import apiClient, { setAccessToken, refreshSession } from './client';
 
 export const authApi = {
   // Login with identifier, password, and persistent session flag
@@ -15,8 +15,7 @@ export const authApi = {
 
   // Silent session refresh via HttpOnly cookie
   refreshToken: async () => {
-    const res = await apiClient.post('/auth/refresh');
-    return res.data;
+    return refreshSession();
   },
 
   // Hydrate authenticated user session profile
