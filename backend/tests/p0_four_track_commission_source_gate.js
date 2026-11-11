@@ -1,0 +1,27 @@
+'use strict';
+// DB-free source contract checks only. This is NOT provider/browser/concurrency E2E.
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const migration=read('database/migrations/054_order_supplier_commission_snapshot.sql');
+const order=read('src/services/orderService.js');
+const settlement=read('src/services/financialSettlementService.js');
+const finance=require('../database/financeCompatibilityGate');
+assert.equal(finance.checkFinanceCompatibility().compatibility,'FINANCE_INTEGRATION_BLOCKED');
+assert.match(migration,/ADD COLUMN supplier_commission_percent DECIMAL\(5,2\) NULL/i);
+assert.doesNotMatch(migration,/\bUPDATE\s+orders\b/i,'Do not backfill history from mutable profiles');
+assert.match(order,/SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id = \? FOR UPDATE/);
+assert.match(order,/supplier_commission_percent, currency/);
+assert.match(order,/supplierCommissionSnapshot,/);
+assert.match(order,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
+assert.match(settlement,/order\.supplier_commission_percent/);
+assert.match(settlement,/COMMISSION_SNAPSHOT_REQUIRED/);
+assert.doesNotMatch(settlement,/commissionPercent\s*=\s*2\.50/);
+assert.doesNotMatch(settlement,/order\.transaction_fee_percent/);
+const files=fs.readdirSync(path.join(root,'database/migrations')).filter(f=>/^[0-9]{3}_.*\.sql$/.test(f));
+const versions=files.map(x=>x.slice(0,3));
+assert.equal(versions.length,new Set(versions).size,'No two canonical migrations may share version');
+assert.equal(files.filter(x=>x.startsWith('054_')).length,1);
+console.log('PASS: commission migration/source static integrity; live and historical E2E remain BLOCKED');
