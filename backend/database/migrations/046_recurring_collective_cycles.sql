@@ -62,3 +62,21 @@ CREATE TABLE IF NOT EXISTS procurement_recurring_collective_cycles (
  UNIQUE KEY uq_rec_collective_organizer_cycle (cohort_id,organizer_cycle_id),
  UNIQUE KEY uq_rec_collective_group (group_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Retry ledger exists even when proposal creation failed before a cycle row.
+CREATE TABLE IF NOT EXISTS procurement_recurring_collective_attempts (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ cohort_id BIGINT NOT NULL,
+ organizer_cycle_id BIGINT NOT NULL,
+ cycle_key CHAR(10) NOT NULL,
+ attempt_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+ status ENUM('RETRY','FAILED','DONE') NOT NULL DEFAULT 'RETRY',
+ retry_after_utc DATETIME NULL,
+ last_error_code VARCHAR(100) NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ CONSTRAINT fk_rec_cohort_attempt FOREIGN KEY (cohort_id) REFERENCES procurement_recurring_collectives(id),
+ CONSTRAINT fk_rec_cohort_attempt_cycle FOREIGN KEY (organizer_cycle_id) REFERENCES procurement_recurring_cycles(id),
+ UNIQUE KEY uq_rec_cohort_attempt (cohort_id,cycle_key),
+ KEY idx_rec_cohort_retry (status,retry_after_utc)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
