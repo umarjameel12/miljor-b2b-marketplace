@@ -32,6 +32,19 @@ async function preflight(){
  try{
   const [[row]]=await conn.query('SELECT DATABASE() AS db_name');
   if(row.db_name!==TEST_DB)blocked('B7_WRONG_DATABASE','Unexpected connected database');
+  const [history]=await conn.query(
+   "SELECT version,name FROM schema_migrations WHERE version IN ('046','047','048')");
+  const expected=new Map([
+   ['046','046_recurring_collective_cycles.sql'],
+   ['047','047_procurement_delivery_runs.sql'],
+   ['048','048_procurement_notification_outbox.sql']
+  ]);
+  const applied=new Map(history.map(row=>[String(row.version).padStart(3,'0'),row.name]));
+  for(const [version,name] of expected){
+   if(applied.get(version)!==name)
+    blocked('B7_MIGRATION_COLLISION','B6 migration '+version+' identity differs or is absent: '+
+      String(applied.get(version)||'MISSING'));
+  }
   const [tables]=await conn.query(
    "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('orders','payments','order_disputes','invoices')");
   if(tables.length!==4)blocked('B7_SCHEMA_INCOMPLETE','Expected basic order/payment/dispute/invoice tables');
