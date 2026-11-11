@@ -150,6 +150,16 @@ class AdminController {
         });
       }
 
+      // Rejected and information-requested decisions need actionable guidance.
+      // Never mark a supplier rejected or awaiting more documents with no reason.
+      if (['REJECTED', 'MORE_INFORMATION_REQUIRED'].includes(verification_status) &&
+          (typeof rejection_reason !== 'string' || rejection_reason.trim().length < 5)) {
+        return res.status(400).json({
+          success: false,
+          error: {code:'REASON_REQUIRED',message:'Please provide at least 5 characters explaining the decision'}
+        });
+      }
+
       // Server-side allowlists for verification level and subscription plan
       const ALLOWED_VERIFICATION_LEVELS = ['LEVEL_1_CONTACT', 'LEVEL_2_BUSINESS', 'LEVEL_3_QUALITY'];
       const ALLOWED_SUBSCRIPTION_PLANS = ['STARTER', 'GROWTH', 'BUSINESS'];
