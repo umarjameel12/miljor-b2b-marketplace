@@ -1778,10 +1778,17 @@ class PoolController {
         include_all_pickup: include_all_pickup === 'true' || include_all_pickup === true
       });
       const pools = await poolProgressService.enrichPoolsList(rawPools);
+      // Buyer countdown is informational; DB expiry gates remain authoritative.
+      const [[clock]] = await db.query(
+        "SELECT DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS now_utc"
+      );
+      const poolsWithClock = pools.map(pool => ({
+        ...pool, pool_type:'REGULAR', server_time:clock.now_utc
+      }));
       return res.status(200).json({
         success: true,
-        count: pools.length,
-        data: { pools }
+        count: poolsWithClock.length,
+        data: { pools: poolsWithClock }
       });
     } catch (error) {
       return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
@@ -1803,7 +1810,13 @@ class PoolController {
         return res.status(200).json({ success: true, data: { pool: { ...rawPool, allowed_actions: actions } } });
       }
       const actions = poolSnapshot.can_join ? ['RESERVE'] : [];
-      return res.status(200).json({ success: true, data: { pool: { ...poolSnapshot, allowed_actions: actions } } });
+      const [[clock]] = await db.query(
+        "SELECT DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS now_utc"
+      );
+      return res.status(200).json({success:true,data:{pool:{
+        ...poolSnapshot,pool_type:'REGULAR',server_time:clock.now_utc,allowed_actions:actions
+      }}});
+
     } catch (error) {
       return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
     }
