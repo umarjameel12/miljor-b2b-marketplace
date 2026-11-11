@@ -48,6 +48,16 @@ async function main(){
     assert.ok(!(await s.page.getByText('Supplier access required').isVisible().catch(()=>false)),
       'Supplier lost session after refresh');
     pass('Supplier pool dashboard session survives full reload');
+    // The supplier sees one management surface with two commercial term options,
+    // not two independent pool marketplaces.
+    await s.page.getByText('Supplier Portal · Unified Pools').waitFor({timeout:10000});
+    await s.page.getByRole('button',{name:'Drafts',exact:true}).waitFor({timeout:10000});
+    await s.page.getByRole('button',{name:'Active',exact:true}).waitFor({timeout:10000});
+    await s.page.getByRole('button',{name:'Create Pool'}).click();
+    await s.page.getByText('Group pricing terms').waitFor({timeout:10000});
+    await s.page.getByText('Ready-stock terms').waitFor({timeout:10000});
+    pass('Supplier uses one Pool Management/Create workflow with accurate commercial term choices');
+
     await b.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
     await b.page.getByRole('heading',{name:'Procurement Orders & Reservations'}).waitFor({timeout:15000});
     await b.page.reload({waitUntil:'domcontentloaded'});
@@ -65,6 +75,15 @@ async function main(){
     await b.page.reload({waitUntil:'domcontentloaded'});
     assert.ok(b.page.url().endsWith('/pools'),'Buyer failed to recover marketplace route');
     pass('Buyer marketplace recovers after one interrupted discovery request');
+    await b.page.getByLabel('Unified supplier pool marketplace').waitFor({timeout:10000});
+    assert.equal(await b.page.getByLabel('Choose pool type').count(),0,
+      'Buyer marketplace must not expose separate Regular/Flash tabs');
+    await b.page.goto(base+'/flash-pools',{waitUntil:'domcontentloaded'});
+    await b.page.waitForURL(base+'/pools',{timeout:12000});
+    assert.ok(!b.page.url().includes('type=FLASH'),'Legacy route must not resurrect Flash-only discovery');
+    pass('Real Chromium buyer unified pool page and legacy Flash deep-link redirect');
+    await b.page.goto(base+'/pools',{waitUntil:'domcontentloaded'});
+
     await b.page.context().setOffline(true);
     let offlineError=false;
     try{await b.page.reload({timeout:7000,waitUntil:'domcontentloaded'});}catch{offlineError=true;}
