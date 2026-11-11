@@ -89,7 +89,11 @@ class SupplierListingController {
       }
       const actualSku = await catalogRepo.findSupplierSkuById(Number(spec.supplier_sku_id));
       if (!actualSku || Number(actualSku.supplier_id) !== Number(supplierId) ||
-          actualSku.status !== 'PUBLISHED' || Number(actualSku.supplier_product_id) !== Number(spec.supplier_product_id)) {
+          actualSku.status !== 'PUBLISHED' || actualSku.product_status !== 'PUBLISHED' ||
+          !actualSku.family_is_active || !actualSku.category_is_active ||
+          actualSku.family_approval_status !== 'APPROVED' ||
+          actualSku.category_approval_status !== 'APPROVED' ||
+          Number(actualSku.supplier_product_id) !== Number(spec.supplier_product_id)) {
         return res.status(409).json({success:false,error:{
           code:'INVALID_SUPPLIER_SKU_BRIDGE',message:'Specification must reference a published supplier-owned SKU.'
         }});
