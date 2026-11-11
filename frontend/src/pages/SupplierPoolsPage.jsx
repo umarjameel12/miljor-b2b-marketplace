@@ -117,6 +117,8 @@ export function SupplierPoolsPage(){
   const [data,setData]=useState({pools:[],counts:{total:0,regular:0,flash:0},server_time:null});
   const [listings,setListings]=useState([]);
   const [fulfillment,setFulfillment]=useState(null);
+  const [analytics,setAnalytics]=useState(null);
+  const [analyticsError,setAnalyticsError]=useState('');
   const [stock,setStock]=useState(null);
   const [stockError,setStockError]=useState('');
   const [loading,setLoading]=useState(true);
@@ -132,9 +134,12 @@ export function SupplierPoolsPage(){
   const load=useCallback(async()=>{
     setLoading(true);setError('');
     try{
-      const [overview,listingsResult,deliveryResult]=await Promise.all([
-        unifiedPoolsApi.overview(),unifiedPoolsApi.listings(),unifiedPoolsApi.fulfillment()
+      const [overview,listingsResult,deliveryResult,analyticsResult]=await Promise.all([
+        unifiedPoolsApi.overview(),unifiedPoolsApi.listings(),unifiedPoolsApi.fulfillment(),
+        unifiedPoolsApi.analytics().catch(e=>({success:false,error:{message:e.response?.data?.error?.message||'Analytics unavailable'}}))
       ]);
+      if(analyticsResult.success){setAnalytics(analyticsResult.data);setAnalyticsError('');}
+      else{setAnalytics(null);setAnalyticsError(analyticsResult.error?.message||'Analytics unavailable');}
       setFulfillment(deliveryResult.data);
       setData(overview?.data||{pools:[],counts:{total:0,regular:0,flash:0}});
       setListings((listingsResult?.data?.listings||[]).filter(l=>l.status==='ACTIVE'&&l.supplier_sku_id&&l.product_spec_id));
@@ -366,6 +371,29 @@ export function SupplierPoolsPage(){
       <div className="grid grid-cols-3 gap-2">
         {[[data.counts.total,'All Pools'],[data.counts.regular,'Regular'],[data.counts.flash,'Flash']].map(([count,label])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]"><div className="text-2xl font-bold tabular-nums">{count||0}</div><div className="text-xs text-[var(--text-muted)]">{label}</div></div>)}
       </div>
+      {analytics&&<section className="space-y-3" aria-label="Verified Pool Analytics">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            ['Verified Regular orders',analytics.regular.paid_order_count],
+            ['Regular paid goods',`Rs. ${Number(analytics.regular.paid_goods_pkr).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+            ['Verified Flash orders',analytics.flash.paid_order_count],
+            ['Flash paid goods',`Rs. ${Number(analytics.flash.paid_goods_pkr).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}`],
+          ].map(([label,value])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]">
+            <div className="text-xs text-[var(--text-muted)]">{label}</div>
+            <strong className="text-lg tabular-nums">{value}</strong>
+          </div>)}
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">Amounts are verified PAID order goods subtotals, not supplier net payout or projected revenue. Regular active reservations: {analytics.regular.active_reservation_count}. Flash open payment holds: {analytics.flash.open_holds} (provider pending: {analytics.flash.provider_pending_holds}).</p>
+        {analytics.alerts.length>0&&<div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-2">
+          <h2 className="font-semibold text-sm">Pool action center · Live lifecycle signals</h2>
+          {analytics.alerts.map(a=><div key={a.key} className="text-xs flex flex-wrap gap-2 items-start border-b border-[var(--border-subtle)] pb-2">
+            <span className="font-bold">{a.pool_type} · {a.pool_code}</span>
+            <span>{a.message}</span>
+          </div>)}
+          <p className="text-[11px] text-[var(--text-muted)]">These are read-only in-app alerts, not emails/SMS or automatic payment/stock changes.</p>
+        </div>}
+      </section>}
+      {analyticsError&&<p role="alert" className="text-xs text-amber-600">{analyticsError}</p>}
       <div className="flex gap-2 flex-wrap">
         {['ALL','REGULAR','FLASH','DRAFT','ACTIVE'].map(t=><button key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${filter===t?'border-emerald-600 text-emerald-600':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'All':t[0]+t.slice(1).toLowerCase()}</button>)}
       </div>
