@@ -59,6 +59,35 @@ async function main(){
   reset();fixture.instructions=[{id:3,supplier_payable_id:7,external_execution_status:'EXECUTED',amount:'107.50',status:'APPROVED'}];
   r=await audit.getOrderIntegrity({orderId:1,actor});
   assert.equal(r.checks.find(x=>x.name==='NO_EXTERNAL_PAYOUT_EXECUTION').passed,false);
+  // Financial receipts cannot be fabricated by admin-provided references.
+  // Exercise the actual service's public methods with a DB-free runtime.
+  const settlementSource=fs.readFileSync(path.join(__dirname,
+    '../src/services/financialSettlementService.js'),'utf8');
+  const sm={exports:{}};
+  vm.runInNewContext(settlementSource,{
+    module:sm,exports:sm.exports,BigInt,console,Buffer,Date,
+    process:{env:{NODE_ENV:'test'}},
+    require:name=>{
+      if(name==='crypto')return require('node:crypto');
+      if(name==='../config/db')return mockDb;
+      if(name==='./exactDecimal')return exact;
+      if(name==='./feeService'||name==='./reservationEventService')return {};
+      throw Error('Unexpected financial import '+name);
+    }
+  },{timeout:5000});
+  const settlement=sm.exports;
+  const beforeFinancialQueries=queries;
+  await assert.rejects(()=>settlement.recordManualConfirmedRefund({
+    refundId:9,externalReference:'unverified-admin-reference',actor
+  }),e=>e.code==='PROVIDER_REFUND_VERIFICATION_REQUIRED');
+  await assert.rejects(()=>settlement.reconcileProviderSettlementBatch({
+    batchReference:'admin-supplied-only',grossAmount:'113.00',
+    providerFee:'3.00',netAmount:'110.00',actor
+  }),e=>e.code==='PROVIDER_SETTLEMENT_EVIDENCE_REQUIRED');
+  await assert.rejects(()=>settlement.recordManualConfirmedRefund({
+    refundId:9,actor:{id:4,role:'SUPPORT_ADMIN'}
+  }),e=>e.code==='UNAUTHORIZED_ROLE');
+  assert.equal(queries,beforeFinancialQueries,'Provider evidence guards must reject without DB access');
   assert.equal(updates,0,'Audit must never mutate any financial data');
   console.log('PASS FINANCE READ-ONLY CONTRACT: role denial, valid conservation, fee, commission, payable, refund, payout discrepancy; zero DB writes');
 }
