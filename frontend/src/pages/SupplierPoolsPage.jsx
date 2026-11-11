@@ -357,8 +357,8 @@ export function SupplierPoolsPage(){
                 const checked=form.delivery_clusters.includes(Number(rate.cluster_id));
                 return <label key={rate.cluster_id} className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] p-2 text-xs">
                   <input type="checkbox" checked={checked} onChange={e=>update('delivery_clusters',e.target.checked?
-                    [...new Set([...form.delivery_clusters,Number(rate.cluster_id)])]:
-                    form.delivery_clusters.filter(id=>id!==Number(rate.cluster_id))}/>
+                    Array.from(new Set([...form.delivery_clusters,Number(rate.cluster_id)])):
+                    form.delivery_clusters.filter(id=>id!==Number(rate.cluster_id)))}/>
                   {cluster?.name||'Cluster #'+rate.cluster_id} · Rs. {rate.fee_pkr} configured
                 </label>;
               })}
