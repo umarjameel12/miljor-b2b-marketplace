@@ -95,10 +95,18 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,
 },{timeout:5000});
 const svc=moduleRef.exports;
 (async()=>{
-  const same=await Promise.allSettled([
-    svc.receive({rawBody:event(),signature:'signed'}),
-    svc.receive({rawBody:event(),signature:'signed'})
-  ]);
+  // Bound the test: a broken fake lock queue must produce FAIL, not hang CI.
+  let watchdog;
+  const same=await Promise.race([
+    Promise.allSettled([
+      svc.receive({rawBody:event(),signature:'signed'}),
+      svc.receive({rawBody:event(),signature:'signed'})
+    ]),
+    new Promise((_,reject)=>{
+      watchdog=setTimeout(()=>reject(new Error(
+        'CONCURRENCY_TEST_TIMEOUT: simulated lock was not released')),2500);
+    })
+  ]).finally(()=>clearTimeout(watchdog));
   assert.equal(same.filter(x=>x.status==='fulfilled').length,2);
   assert.equal(same.filter(x=>x.status==='fulfilled'&&x.value.duplicate===true).length,1);
   assert.equal(state.events.length,1);
