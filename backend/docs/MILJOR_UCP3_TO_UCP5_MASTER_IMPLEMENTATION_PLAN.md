@@ -4,7 +4,7 @@ Owner scope: supplier-created B4 Regular and B5 Flash Pools ONLY.
 Status: APPROVED IMPLEMENTATION TARGET; FINAL ACCEPTANCE PENDING.
 
 ## 0. Non-negotiable invariants
-- B4 Regular uses supplier-defined tier pricing, minimum/target/max, closing deadline, supplier decision, buyer commitment, 15-minute order-payment initiation hold (migration 048), delivery SLA +24–72h.
+- B4 Regular uses supplier-defined tier pricing, minimum/target/max, closing deadline, supplier decision, buyer commitment, 15-minute order-payment initiation hold (migration 053), delivery SLA +24–72h.
 - B5 Flash uses ready-stock, fixed supplier-approved discount, whole-lot/multi-buyer purchase increments, supplier-selected duration starting at publication, 15-minute buyer checkout hold, best-before transparency, provider-reconciled payments.
 - B6 buyer-created RFQ / collective groups / recurring contracts, quote/award/payment engines and schemas are not changed or merged into any pool response.
 - Supplier owns physical product/SKU and published listing; admin owns 8 canonical categories / 25 approved families. Old 16 centrally authored variants and Urdu text must not appear in the new UI.

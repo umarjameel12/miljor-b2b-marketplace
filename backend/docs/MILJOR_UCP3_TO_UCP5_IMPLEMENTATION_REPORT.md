@@ -68,7 +68,7 @@ The business contract and detailed frozen sequence are in `backend/docs/MILJOR_U
 
 ## Final acceptance checklist (NOT EXECUTED)
 
-Run on disposable `miljor_test_db` with migrations through 048 only after all planned work concludes. Preserve read-only fingerprints of `miljor_db` and `miljor_sandbox_db`.
+Run on disposable `miljor_test_db` with migrations through 053 only after all planned work concludes. Preserve read-only fingerprints of `miljor_db` and `miljor_sandbox_db`.
 
 1. Isolated merge into up-to-date B6 hardening + dual-timers + original UCP. Resolve concurrent commits before rerunning.
 2. Verify schema and seed: 8 categories / 25 canonical families, own published SKUs, supplier subscriptions, immutable historical orders.

@@ -25,6 +25,12 @@ const goodDate = value => {
   return d;
 };
 const padSqlDate = date => date.toISOString().slice(0, 19).replace('T', ' ');
+const validIsoCalendarDate = value => {
+  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const d=new Date(value+'T00:00:00.000Z');
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0,10)===value;
+};
+
 function validMode(raw) {
   if (!['MULTI_BUYER','WHOLE_LOT'].includes(raw)) throw fail('INVALID_SELLING_MODE', 'Select MULTI_BUYER or WHOLE_LOT.');
   return raw;
@@ -93,8 +99,8 @@ class FlashPoolService {
     const deliveryFee = dec(payload.delivery_fee ?? '0', {positive:false});
     const condition=payload.condition_notes == null?'':String(payload.condition_notes).trim();
     const bestBefore=payload.best_before_date==null||payload.best_before_date===''?null:String(payload.best_before_date);
-    if(bestBefore && (!/^\\d{4}-\\d{2}-\\d{2}$/.test(bestBefore) ||
-        Number.isNaN(Date.parse(bestBefore)) || Date.parse(bestBefore+'T23:59:59Z')<=Date.now()))
+    if(bestBefore && (!validIsoCalendarDate(bestBefore) ||
+        Date.parse(bestBefore+'T23:59:59Z')<=Date.now()))
       throw fail('INVALID_BEST_BEFORE','Best-before date must be a valid future date; expired food cannot be listed.');
     if(/near[- ]?expir|best.before/i.test(reason) && !bestBefore)
       throw fail('BEST_BEFORE_REQUIRED','Expiry-related clearance requires a truthful best-before date.');
@@ -173,6 +179,10 @@ class FlashPoolService {
       const deliveryFee=dec(payload.delivery_fee??offer.delivery_fee,{positive:false});
       const bestBefore=payload.best_before_date===undefined?offer.best_before_date:
         (payload.best_before_date||null);
+      if(payload.best_before_date!==undefined && payload.best_before_date!==null &&
+         payload.best_before_date!=='' && !validIsoCalendarDate(payload.best_before_date))
+        throw fail('INVALID_BEST_BEFORE','Best-before must be an actual ISO calendar date.',422);
+
       if(reason.length<3||reason.length>255||condition.length>2000)
         throw fail('INVALID_FLASH_DETAILS','Check clearance and condition details.');
       if(bestBefore) {

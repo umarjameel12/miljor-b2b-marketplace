@@ -9,7 +9,7 @@ const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const service=read('src/services/regularPoolPaymentHoldService.js');
 const order=read('src/services/orderService.js');
 const checkout=read('src/services/safepayCheckoutService.js');
-const migration=read('database/migrations/048_regular_pool_payment_hold_deadlines.sql');
+const migration=read('database/migrations/053_regular_pool_payment_hold_deadlines.sql');
 const pool=read('src/controllers/poolController.js');
 const frontendRoot=path.resolve(root,'../frontend/src');
 const card=fs.readFileSync(path.join(frontendRoot,'components/RegularPaymentHoldCard.jsx'),'utf8');

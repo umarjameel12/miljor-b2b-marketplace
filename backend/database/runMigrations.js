@@ -46,13 +46,42 @@ async function runMigrations(targetDb) {
         failure_message VARCHAR(1000) NULL
       )
     `);
-    const [appliedRows] = await connection.query('SELECT version FROM schema_migrations');
+    const [appliedRows] = await connection.query('SELECT version,name FROM schema_migrations');
     const appliedVersions = new Set(appliedRows.map(row => row.version));
+    // UCP migration numbers were moved from 046–048 to 051–053 before
+    // integration with B6 Phase 2. A DB that already applied the old UCP
+    // filename MUST be manually reconciled, not silently re-applied.
+    const oldUcpNames = new Map([
+      ['046','046_expand_canonical_product_families.sql'],
+      ['047','047_demand_requester_role.sql'],
+      ['048','048_regular_pool_payment_hold_deadlines.sql']
+    ]);
+    for(const row of appliedRows){
+      if(row.name===oldUcpNames.get(String(row.version)))
+        throw new Error('MIGRATION_RENUMBERED_HISTORY_REQUIRES_RECONCILIATION: '+row.name+
+          ' already applied as '+row.version+'. Do not reapply 051–053 automatically.');
+    }
+
     const migrationsDir = path.join(__dirname, 'migrations');
     if (!fs.existsSync(migrationsDir)) return;
     const files = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql') && !file.includes('rollback'))
       .sort();
+    // PRE-FLIGHT BEFORE ANY DDL: parallel B6/UCP branches can reuse numeric
+    // prefixes (e.g. 046/047/048). Never silently skip a conflicting applied
+    // migration or partially apply earlier migrations before discovering it.
+    const versionMap=new Map();
+    for(const file of files){
+      const version=file.split('_')[0];
+      if(!/^\\d+$/.test(version))
+        throw new Error('INVALID_MIGRATION_VERSION: '+file);
+      const entries=versionMap.get(version)||[];
+      entries.push(file);versionMap.set(version,entries);
+    }
+    for(const [version,entries] of versionMap){
+      if(entries.length!==1)
+        throw new Error('DUPLICATE_MIGRATION_VERSION: '+version+' ('+entries.join(', ')+')');
+    }
     let appliedCount=0;
     for (const file of files) {
       const version=file.split('_')[0];

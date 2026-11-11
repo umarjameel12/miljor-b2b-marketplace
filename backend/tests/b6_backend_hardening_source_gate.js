@@ -40,9 +40,9 @@ check(invoice.includes('procurement_award_lines')&&invoice.includes('INVOICE_AMO
 const fees=source('src/services/feeService.js');
 check(fees.includes('return await this.calculateBuyerFeeExact')||fees.includes('const result = await this.calculateBuyerFeeExact'),'Legacy buyer fee exact-money');
 check(fees.includes('const result = await this.calculateSupplierFeeExact'),'Legacy supplier fee exact-money');
-const sql=source('database/migrations/047_demand_requester_role.sql');
+const sql=source('database/migrations/052_demand_requester_role.sql');
 check(sql.includes('ADD COLUMN requester_role')&&!sql.includes('DROP TABLE'),'Additive role migration');
-const family=source('database/migrations/046_expand_canonical_product_families.sql');
+const family=source('database/migrations/051_expand_canonical_product_families.sql');
 check((family.match(/'FAM-[A-Z-]+'/g)||[]).length===12,'12 new families catalog expansion');
 const listing=source('src/controllers/supplierListingController.js');
 const listingRepo=source('src/repositories/supplierListingRepo.js');

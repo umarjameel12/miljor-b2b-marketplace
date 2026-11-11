@@ -34,7 +34,7 @@
 ## B6 Backend Hardening & 25-Family Catalog Alignment — 2026-11-11
 
 - **Branch:** `fix/b6-backend-hardening` (not merged; original B6 branch preserved).
-- **Scope:** Supplier-owned physical SKU-only catalog/listings, English-only canonical family discovery, 25-family additive migration 046, demand requester migration 047, legacy procurement bypass containment, messaging privacy, paid-promotion fail-closed behavior, honest reviews, exact B6 invoice lines, unified fee arithmetic, and fail-closed migration journal.
+- **Scope:** Supplier-owned physical SKU-only catalog/listings, English-only canonical family discovery, 25-family additive migration 051, demand requester migration 052, legacy procurement bypass containment, messaging privacy, paid-promotion fail-closed behavior, honest reviews, exact B6 invoice lines, unified fee arithmetic, and fail-closed migration journal.
 - **Authoritative repair report:** `backend/docs/MILJOR_B6_BACKEND_HARDENING_REPORT.md`.
 - **Source check:** JavaScript syntax parsing for modified backend modules only; no live MySQL/API/frontend integration acceptance and no protected DB writes from GitHub-only editing.
 - **Final gate:** **INTEGRATION PENDING / RELEASE BLOCKED**. Do not merge or proceed to live promotion/subscription billing without paid-provider verification and isolated acceptance tests.
@@ -1547,3 +1547,12 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **B6-M worker follow-up:** Existing `schedulerService.js` now optionally runs `procurementRecurringService.runDueBatch` every five minutes under two explicit enable/approval flags; durable bounded retries and buyer-review draft-only semantics. `b6_recurring_worker_gate.js`: **8/8 isolated JS mock PASS**, separate from earlier **58/58 pure-policy PASS**, combined 66/66 source-level checks; not MySQL or frontend PASS.
 - **B6-K group readiness:** organizer-only atomic `qualifyGroup` checks all buyer consents on the same current supplier bid/version, minimum independent buyers, expiry and shared stock; freezes group only, no stock allocation or payment.
 - **B6 G–M acceptance stays BLOCKED:** K financial settlement/refund requirements and full G/H cross-pool Safepay/MySQL tests pending. Report `backend/docs/MILJOR_B6_PHASE1_INTEGRATION_REPORT.md` updated.
+
+
+## 2026-11-11 — UCP-3/4/5 INDEPENDENT AUDIT FIX (source committed / release blocked)
+- Branch: `fix/ucp3-5-audit-repair` (isolated from `feature/ucp3-5-delivery-marketplace-ops`); neither merge nor production DB mutation performed.
+- Fixed Flash best-before ISO regex and strict calendar validation; buyer Flash hold expiry field, countdown refresh and expired checkout UX; active commitment counting; Regular checkout retry idempotency.
+- Confirmed cross-branch 046/047/048 migration version conflicts. Renumbered unapplied UCP migrations to 051/052/053, preserving B6 Phase 2's own 046/047/048; migration runner rejects duplicate versions before DDL and blocks already-applied old UCP history from being replayed. Reconciled identified source gates/docs and updated release preflight.
+- Source parse verified on 18/18 inspected backend JS files prior to final report; no MySQL/HTTP/JSX build/real Safepay regression executed. New source audit gate prepared for final suite.
+- **Gate: BLOCKED** pending merge reconciliation, isolated `miljor_test_db` migration execution, full B4/B5/B6 security/concurrency/payment/JSX E2E acceptance and review.
+- See `backend/docs/MILJOR_UCP3_5_INDEPENDENT_AUDIT_FIX_REPORT.md` for exact findings, changed files and remaining gates.

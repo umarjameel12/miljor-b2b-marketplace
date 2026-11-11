@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useState} from 'react';
+import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {Clock,RefreshCw,ExternalLink,ShieldCheck} from 'lucide-react';
 import apiClient from '../api/client';
 import {CountdownTimer} from './ui/CountdownTimer';
@@ -9,6 +9,7 @@ export function RegularPaymentHoldCard({order}) {
   const [status,setStatus]=useState(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
+  const checkoutKey=useRef(null);
   const [error,setError]=useState('');
   const fetchStatus=useCallback(async()=>{
     try{
@@ -32,7 +33,8 @@ export function RegularPaymentHoldCard({order}) {
     if(!canCheckout||busy)return;
     setBusy(true);setError('');
     try {
-      const key=`b4-checkout-${order.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      if(!checkoutKey.current)checkoutKey.current=`b4-checkout-${order.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const key=checkoutKey.current;
       const {data}=await apiClient.post(`/orders/${order.id}/checkout`,{},{
         headers:{'X-Idempotency-Key':key}
       });
