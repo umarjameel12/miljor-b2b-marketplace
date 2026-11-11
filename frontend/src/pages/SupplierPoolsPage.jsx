@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState,useCallback} from 'react';
-import {Link,useNavigate,useSearchParams} from 'react-router-dom';
+import {Link,useSearchParams} from 'react-router-dom';
 import {toast} from 'react-toastify';
-import {Layers,Plus,RefreshCw,Clock,Package,AlertTriangle,CheckCircle2,ArrowLeft,Lock,Eye} from 'lucide-react';
+import {Layers,Plus,RefreshCw,Clock,Package,AlertTriangle,Lock} from 'lucide-react';
 import {AppShell} from '../components/layout/AppShell';
 import {useAuth} from '../context/AuthContext';
 import {CountdownTimer} from '../components/ui/CountdownTimer';
@@ -114,7 +114,6 @@ function buildPayload(mode,form,listing,editing){
 }
 export function SupplierPoolsPage(){
   const {user,isAuthenticated}=useAuth();
-  const navigate=useNavigate();
   const [params,setParams]=useSearchParams();
   const [data,setData]=useState({pools:[],counts:{total:0,regular:0,flash:0},server_time:null});
   const [listings,setListings]=useState([]);
@@ -148,24 +147,38 @@ export function SupplierPoolsPage(){
   };
   const openEdit=(pool)=>{
     const listing=listings.find(l=>Number(l.id)===Number(pool.supplier_listing_id));
-    if(!listing){toast.error('The original listing is no longer eligible; this draft cannot be edited here.');return;}
+    if(!listing){toast.error('Original supplier SKU listing is no longer eligible for editing.');return;}
     setMode(pool.type);setEdit(pool);
     const base=initialForm(listing);
-    if(pool.type==='REGULAR')Object.assign(base,{
-      target_qty:String(pool.quantity_target||''),max_capacity:String(pool.max_capacity||pool.quantity_target||''),
-      supplier_min_qty:String(pool.supplier_min_qty||listing.supplier_min_qty||''),
-      buyer_min_qty:String(pool.buyer_min_qty||listing.buyer_min_qty||''),
-      scheduled_close_at:localDate(pool.expires_at),
-      promised_delivery_at:localDate(new Date(pool.expires_at).getTime()+48*3600000),
-      tier1_price:String(pool.price||listing.base_unit_price||'')
-    });
-    else Object.assign(base,{
-      total_stock:String(pool.quantity_target||''),
-      discounted_unit_price:String(pool.price||''),
-      duration_minutes:String(pool.configured_duration_minutes||720),
-      selling_mode:pool.selling_mode||'MULTI_BUYER',
-      min_quantity:'1',max_quantity_per_buyer:String(pool.quantity_target||'')
-    });
+    if(pool.type==='REGULAR'){
+      const tiers=pool.price_tiers||[];
+      Object.assign(base,{
+        target_qty:String(pool.quantity_target??''),max_capacity:String(pool.max_capacity??pool.quantity_target??''),
+        supplier_min_qty:String(pool.supplier_min_qty??listing.supplier_min_qty??''),
+        buyer_min_qty:String(pool.buyer_min_qty??listing.buyer_min_qty??''),
+        purchase_increment:String(pool.purchase_increment??1),
+        scheduled_close_at:localDate(pool.expires_at),
+        promised_delivery_at:localDate(pool.promised_delivery_at),
+        delivery_type:pool.delivery_type||'DOORSTEP',
+        tier1_price:String(tiers[0]?.price_per_unit??pool.price??listing.base_unit_price??''),
+        tier2_price:tiers.length>1?String(tiers[1].price_per_unit):''
+      });
+    }else{
+      const bestBefore=pool.best_before_date?new Date(pool.best_before_date):null;
+      Object.assign(base,{
+        total_stock:String(pool.quantity_target??''),
+        discounted_unit_price:String(pool.price??''),
+        duration_minutes:String(pool.configured_duration_minutes??720),
+        selling_mode:pool.selling_mode||'MULTI_BUYER',
+        min_quantity:String(pool.min_quantity??1),
+        max_quantity_per_buyer:String(pool.max_quantity_per_buyer??pool.quantity_target??''),
+        purchase_increment:String(pool.purchase_increment??1),
+        clearance_reason:pool.clearance_reason||'',
+        condition_notes:pool.condition_notes||'',
+        delivery_fee:String(pool.delivery_fee??0),
+        best_before_date:bestBefore&&!Number.isNaN(bestBefore.getTime())?bestBefore.toISOString().slice(0,10):''
+      });
+    }
     setForm(base);setParams({create:'1',type:pool.type.toLowerCase()});
   };
   const close=()=>{setEdit(null);setParams({})};
