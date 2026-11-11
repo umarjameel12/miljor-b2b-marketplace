@@ -62,7 +62,7 @@ gate(flash.includes('async listHoldsForBuyer')&&procurement.includes("'/flash-po
   'Buyer-owned Flash hold recovery');
 gate(supplierPage.includes('delivery_clusters')&&supplierPage.includes('SUPPLIER_PICKUP'),
   'Regular create/edit uses authentic delivery clusters and pickup');
-gate(supplierPanel.includes('available_to_allocate')&&supplierPanel.includes('revenue'),
+gate(supplierPanel.includes('available_to_allocate')&&supplierPanel.includes('unavailable_reason'),
   'Supplier inventory and truthful analytics UI');
 gate(pools.includes('BuyerPoolCard')&&pools.includes('poolType')&&pools.includes('loadMore'),
   'Unified buyer marketplace, type filters and pagination');
