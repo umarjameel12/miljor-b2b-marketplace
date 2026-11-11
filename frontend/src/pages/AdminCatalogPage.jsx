@@ -49,7 +49,6 @@ export const AdminCatalogPage = () => {
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [newCategoryForm, setNewCategoryForm] = useState({
     name: '',
-    urdu_name: '',
     description: '',
     display_order: 100
   });
@@ -59,7 +58,6 @@ export const AdminCatalogPage = () => {
   const [newFamilyForm, setNewFamilyForm] = useState({
     category_id: '',
     name: '',
-    urdu_name: '',
     description: '',
     allowed_pack_units: 'kg, g',
     allowed_purchasing_units: 'bag, sack'
@@ -201,7 +199,7 @@ export const AdminCatalogPage = () => {
       await catalogApi.adminCreateCategory(newCategoryForm);
       toast.success('Canonical category created!');
       setCreateCategoryOpen(false);
-      setNewCategoryForm({ name: '', urdu_name: '', description: '', display_order: 100 });
+      setNewCategoryForm({ name: '', description: '', display_order: 100 });
       await loadAdminCatalogData();
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to create category.');
@@ -219,14 +217,13 @@ export const AdminCatalogPage = () => {
       await catalogApi.adminCreateFamily({
         category_id: Number(newFamilyForm.category_id),
         name: newFamilyForm.name,
-        urdu_name: newFamilyForm.urdu_name,
         description: newFamilyForm.description,
         allowed_pack_units: packUnits.length > 0 ? packUnits : ['kg', 'g'],
         allowed_purchasing_units: purchUnits.length > 0 ? purchUnits : ['bag', 'sack']
       });
       toast.success('Canonical product family created!');
       setCreateFamilyOpen(false);
-      setNewFamilyForm(prev => ({ ...prev, name: '', urdu_name: '', description: '' }));
+      setNewFamilyForm(prev => ({ ...prev, name: '', description: '' }));
       await loadAdminCatalogData();
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to create product family.');
