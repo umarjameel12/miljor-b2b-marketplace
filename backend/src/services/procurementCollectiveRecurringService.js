@@ -3,6 +3,7 @@
 // a NEW collective RFQ with private invitations and no implied consent.
 const crypto=require('node:crypto');
 const db=require('../config/db');
+const notifications=require('./procurementNotificationService');
 const {isCompatibleSchedule,previewRecurringCollective}=require('./procurementCollectiveRecurringPolicy');
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=v=>{if(v==null||typeof v==='boolean'||!/^[1-9]\d*$/.test(String(v))||
@@ -41,6 +42,8 @@ class ProcurementCollectiveRecurringService{
  }
  async createCohort(buyerId,contractId,payload,rawKey){
   const buyer=id(buyerId),contract=id(contractId),idem=key(rawKey);
+  if(payload?.confirm_own_schedule!==true)
+   throw fail('ORGANIZER_EXPLICIT_CONSENT_REQUIRED','Organizer must explicitly consent to future cycle invitations.');
   const minimum=Number(payload?.minimum_buyers??2);
   const joinMinutes=Number(payload?.join_cutoff_minutes??60);
   const quoteMinutes=Number(payload?.quote_window_minutes??1440);
@@ -89,6 +92,9 @@ class ProcurementCollectiveRecurringService{
    await conn.query("INSERT INTO procurement_recurring_collective_members(cohort_id,buyer_id,status) VALUES (?,?,'INVITED') ON DUPLICATE KEY UPDATE id=id",[cohortIdNum,buyer]);
    const [rows]=await conn.query('SELECT id,status FROM procurement_recurring_collective_members WHERE cohort_id=? AND buyer_id=?',[cohortIdNum,buyer]);
    if(rows[0].status==='LEFT')throw fail('MEMBER_LEFT','A left participant must explicitly rejoin under a future-policy process.',409);
+   await notifications.enqueue(conn,{recipient_id:buyer,recipient_role:'BUYER',
+    event_key:'cohort:invite:'+cohortIdNum+':'+buyer,event_type:'COHORT_INVITED',
+    payload:{cohort_id:cohortIdNum}});
    await conn.commit();return {member_id:rows[0].id,status:rows[0].status};
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
@@ -175,6 +181,9 @@ class ProcurementCollectiveRecurringService{
    const eligible=[];
    for(const m of enrolled){
     const buyer=Number(m.buyer_id),contractId=Number(m.recurring_contract_id);
+    const [active]=await conn.query(
+     "SELECT id FROM users WHERE id=? AND role='BUYER' AND is_verified=1 AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'",[buyer]);
+    if(!active.length)continue;
     const [contracts]=await conn.query('SELECT * FROM procurement_recurring_contracts WHERE id=? AND buyer_id=?',[contractId,buyer]);
     const contract=contracts[0];
     if(!contract||!isCompatibleSchedule(org,contract)||
@@ -200,6 +209,9 @@ class ProcurementCollectiveRecurringService{
     const [x]=await conn.query(
       "INSERT INTO procurement_recurring_collective_cycles(cohort_id,organizer_cycle_id,cycle_key,status,qualifying_buyer_count,qualification_snapshot,failure_code) VALUES (?,?,?,'UNQUALIFIED',?,?,'COHORT_BELOW_MINIMUM')",
       [gid,cycleId,cy.cycle_key,eligible.length,JSON.stringify(evidence)]);
+    await notifications.enqueue(conn,{recipient_id:organizer,recipient_role:'BUYER',
+     event_key:'cohort:unqualified:'+gid+':'+cy.cycle_key,
+     event_type:'COHORT_CYCLE_UNQUALIFIED',payload:{cohort_id:gid,cycle_id:x.insertId,status_code:'MINIMUM_NOT_MET'}});
     await conn.commit();
     return {cycle_id:x.insertId,status:'UNQUALIFIED',qualified_buyers:eligible.length,
       creates_orders:false,charges_buyers:false,is_replay:false};
@@ -241,6 +253,12 @@ class ProcurementCollectiveRecurringService{
    const [created]=await conn.query(
     "INSERT INTO procurement_recurring_collective_cycles(cohort_id,organizer_cycle_id,cycle_key,status,request_id,group_id,qualifying_buyer_count,qualification_snapshot) VALUES (?,?,?,'INVITING',?,?,?,?)",
     [gid,cycleId,cy.cycle_key,req.insertId,group.insertId,policy.qualifying_buyers,JSON.stringify(evidence)]);
+   for(const member of policy.buyers){
+    await notifications.enqueue(conn,{recipient_id:member.buyer_id,recipient_role:'BUYER',
+     event_key:'cohort:cycle:'+gid+':'+cy.cycle_key+':'+member.buyer_id,
+     event_type:'COHORT_CYCLE_READY',
+     payload:{cohort_id:gid,cycle_id:created.insertId,group_id:group.insertId,request_id:req.insertId}});
+   }
    await conn.commit();
    return {cycle_id:created.insertId,request_id:req.insertId,group_id:group.insertId,
     status:'INVITING',qualified_buyers:policy.qualifying_buyers,
