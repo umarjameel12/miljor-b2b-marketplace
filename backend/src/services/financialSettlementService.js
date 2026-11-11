@@ -963,135 +963,25 @@ class FinancialSettlementService {
   }
 
   /**
-   * Confirms a manually executed external refund (e.g. from Safepay dashboard).
-   * Requires authoritative external reference and admin role.
+   * SECURITY STOP: an admin-supplied reference is not Safepay-issued proof
+   * that a refund was actually executed. Until provider-authenticated refund
+   * events or a verified server-to-server refund-status API is integrated,
+   * this historical endpoint cannot label money as returned.
+   *
+   * Assessment and approval remain available, but neither marks CONFIRMED.
+   * No client-provided reference or attachment can bypass this rule.
    */
   async recordManualConfirmedRefund({ refundId, externalReference, notes = null, actor }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Only administrators can record confirmed external refunds');
+    if (!actor || !isAdminRole(actor.role)) {
+      const err = new Error('Only authorized administrators may access refund confirmation');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
     }
-
-    if (!externalReference || String(externalReference).trim().length < 4) {
-      const err = new Error('Authoritative external reference token/ID is required to confirm external refund');
-      err.code = 'EXTERNAL_REFERENCE_REQUIRED';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      const [refunds] = await connection.query(
-        `SELECT * FROM refund_obligations WHERE id = ? FOR UPDATE`,
-        [refundId]
-      );
-
-      if (refunds.length === 0) {
-        const err = new Error('Refund obligation record not found');
-        err.code = 'REFUND_NOT_FOUND';
-        err.statusCode = 404;
-        throw err;
-      }
-
-      const refund = refunds[0];
-
-      if (refund.status !== 'APPROVED') {
-        const err = new Error(`Cannot confirm refund in status '${refund.status}'. Expected APPROVED.`);
-        err.code = 'REFUND_NOT_APPROVED';
-        err.statusCode = 422;
-        throw err;
-      }
-
-      // Mark Refund CONFIRMED
-      await connection.query(
-        `UPDATE refund_obligations
-         SET status = 'CONFIRMED', external_reference = ?, confirmed_at = NOW(),
-             audit_notes = CONCAT_WS(' | ', audit_notes, ?),
-             updated_at = NOW()
-         WHERE id = ?`,
-        [externalReference.trim(), notes, refundId]
-      );
-
-      // Derive the payment's cumulative refunded state, not merely the
-      // currently confirmed refund_type. Multiple legitimate partial refunds
-      // can together exhaust the captured payment.
-      const [paidRows] = await connection.query(
-        'SELECT amount, status FROM payments WHERE id = ? FOR UPDATE',
-        [refund.payment_id]
-      );
-      if (paidRows.length !== 1 ||
-          !['PAID', 'PARTIALLY_REFUNDED'].includes(paidRows[0].status)) {
-        const err = new Error('Confirmed payment is missing or in an incompatible state');
-        err.code = 'PAYMENT_REFUND_STATE_CONFLICT';
-        err.statusCode = 409;
-        throw err;
-      }
-      const capturedAmount = exactDecimal.toCanonical(paidRows[0].amount, 2);
-      const [confirmedRows] = await connection.query(
-        `SELECT COALESCE(SUM(total_refund_amount), 0) AS confirmed_amount
-         FROM refund_obligations
-         WHERE payment_id = ? AND status = 'CONFIRMED'`,
-        [refund.payment_id]
-      );
-      // This refund was just changed to CONFIRMED in this same transaction;
-      // the aggregate already includes it. Never add it a second time.
-      const totalConfirmed = exactDecimal.toCanonical(
-        confirmedRows[0]?.confirmed_amount || '0.00', 2
-      );
-      if (!exactDecimal.exactDecimalGte(capturedAmount, totalConfirmed, 2)) {
-        const err = new Error('Confirmed refunds exceed captured payment');
-        err.code = 'REFUND_EXCEEDS_CAPTURED_AMOUNT';
-        err.statusCode = 409;
-        throw err;
-      }
-      const paymentStatus = exactDecimal.exactDecimalEquals(
-        capturedAmount, totalConfirmed, 2
-      ) ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-      await connection.query(
-        `UPDATE payments
-         SET status = ?, updated_at = NOW()
-         WHERE id = ?`,
-        [paymentStatus, refund.payment_id]
-      );
-
-      // Audit
-      await this._logAuditEvent(connection, {
-        orderId: refund.order_id,
-        paymentId: refund.payment_id,
-        entityType: 'REFUND_OBLIGATION',
-        entityId: refundId,
-        eventType: 'REFUND_CONFIRMED',
-        actorRole: actor.role,
-        actorId: actor.id,
-        fromStatus: 'APPROVED',
-        toStatus: 'CONFIRMED',
-        amountDelta: refund.total_refund_amount.toString(),
-        notes: `Confirmed external refund of PKR ${refund.total_refund_amount} with ref: ${externalReference}`
-      });
-
-      await connection.commit();
-
-      return {
-        success: true,
-        message: 'External refund successfully confirmed and recorded',
-        data: {
-          refund_id: refundId,
-          status: 'CONFIRMED',
-          external_reference: externalReference.trim(),
-          payment_status: paymentStatus
-        }
-      };
-
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    const err = new Error('Safepay-authenticated refund completion evidence is required before a refund may be confirmed');
+    err.code = 'PROVIDER_REFUND_VERIFICATION_REQUIRED';
+    err.statusCode = 409;
+    throw err;
   }
 
   // ===========================================================================
