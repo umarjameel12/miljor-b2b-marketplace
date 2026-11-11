@@ -31,14 +31,7 @@ import {
 } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
 
-const CATEGORIES = [
-  'All Commodities',
-  'Grains & Rice',
-  'Flour & Grain',
-  'Pulses & Legumes',
-  'Oils & Fats',
-  'Sugar & Sweeteners',
-];
+// Category options are sourced from canonical MilJor catalog (8 categories), never hardcoded.
 
 const FULFILLMENT_MODES = [
   { id: 'ALL', label: 'All Modes' },
@@ -96,7 +89,7 @@ export const PoolsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const categoryParam = viewMode === 'pools' && selectedCategory !== 'All Commodities' ? selectedCategory : undefined;
+      const categoryParam = selectedCategory !== 'All Commodities' ? selectedCategory : undefined;
       const clusterParam = selectedClusterId ? Number(selectedClusterId) : undefined;
       const modeParam = selectedFulfillmentMode === 'ALL' ? undefined : selectedFulfillmentMode;
 
@@ -166,9 +159,11 @@ export const PoolsPage = () => {
     return (!query || terms.some(term => String(term || '').toLocaleLowerCase().includes(query)))
       && (selectedCategory === 'All Commodities' || String(family.category_id) === selectedCategory);
   });
-  const categoryOptions = viewMode === 'catalog'
-    ? [{ id: 'All Commodities', name: 'All Commodities' }, ...catalogCategories.map(c => ({ id: String(c.id), name: c.name }))]
-    : CATEGORIES.map(name => ({ id: name, name }));
+  const categoryOptions = [
+    {id:'All Commodities',name:'All Commodities'},
+    ...catalogCategories.filter(c=>Number(c.is_active)===1&&c.approval_status==='APPROVED')
+      .map(c=>({id:String(c.id),name:c.name}))
+  ];
   const handleViewChange = (nextView) => {
     setViewMode(nextView);
     setSelectedCategory('All Commodities');
