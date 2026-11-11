@@ -15,6 +15,7 @@ const procurementRecurringService = require('../services/procurementRecurringSer
 const procurementAwardService = require('../services/procurementAwardService');
 const procurementCollectiveBidService = require('../services/procurementCollectiveBidService');
 const procurementCollectiveApprovalService = require('../services/procurementCollectiveApprovalService');
+const procurementCollectiveRecurringService = require('../services/procurementCollectiveRecurringService');
 
 class ProcurementController {
 
@@ -456,6 +457,56 @@ class ProcurementController {
     } catch (err) {
       res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } });
     }
+  }
+
+  // B6-N collective recurring: private cohorts, separate participant consent.
+  async createRecurringCohort(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.createCohort(
+        req.user.id,req.params.contractId,req.body,req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async inviteRecurringCohortBuyer(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.invite(
+        req.user.id,req.params.cohortId,req.body?.buyer_id);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async consentRecurringCohort(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.consent(
+        req.user.id,req.params.cohortId,req.body?.contract_id,
+        req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async activateRecurringCohort(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.activate(req.user.id,req.params.cohortId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async listRecurringCohorts(req,res){
+    try{
+      const cohorts=await procurementCollectiveRecurringService.listMine(req.user.id);
+      res.json({success:true,data:{cohorts}});
+    }catch(e){this._smartError(res,e);}
+  }
+  async prepareRecurringCohortCycle(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.prepareCycle(
+        req.user.id,req.params.cohortId,req.body?.organizer_cycle_id);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
+  }
+  async recurringCohortCycle(req,res){
+    try{
+      const result=await procurementCollectiveRecurringService.cycleForBuyer(
+        req.user.id,req.params.cohortId,req.params.cycleId);
+      res.json({success:true,data:result});
+    }catch(e){this._smartError(res,e);}
   }
 
   // RFQs & Quotes
