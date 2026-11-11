@@ -97,7 +97,7 @@ function request(method, path, body = null, token = null) {
     const supplierBToken = jwt.sign({ id: supplierBId, role: 'SUPPLIER' }, process.env.JWT_SECRET, jwtOpts);
     const buyerToken = jwt.sign({ id: buyerId, role: 'BUYER' }, process.env.JWT_SECRET, jwtOpts);
 
-    await runTest('Defect A & B Closed: Supplier CANNOT directly create public products via POST /api/v1/products (403 DIRECT_CATALOG_CREATION_PROHIBITED)', async () => {
+    await runTest('Supplier-owned SKU policy: direct global products endpoint is retired (409 SUPPLIER_OWNED_PRODUCTS)', async () => {
       const res = await request(
         'POST',
         '/api/v1/products',
@@ -113,11 +113,11 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(res.status, 403);
-      assert.strictEqual(res.body.error.code, 'DIRECT_CATALOG_CREATION_PROHIBITED');
+      assert.strictEqual(res.status, 409);
+      assert.strictEqual(res.body.error.code, 'SUPPLIER_OWNED_PRODUCTS');
     });
 
-    await runTest('Defect A & B Closed: Supplier CANNOT directly create public specifications via POST /api/v1/specifications (403 DIRECT_CATALOG_CREATION_PROHIBITED)', async () => {
+    await runTest('Supplier-owned SKU policy: direct global specifications endpoint is retired (409 SUPPLIER_OWNED_VARIANTS)', async () => {
       const res = await request(
         'POST',
         '/api/v1/specifications',
@@ -133,8 +133,8 @@ function request(method, path, body = null, token = null) {
         },
         supplierAToken
       );
-      assert.strictEqual(res.status, 403);
-      assert.strictEqual(res.body.error.code, 'DIRECT_CATALOG_CREATION_PROHIBITED');
+      assert.strictEqual(res.status, 409);
+      assert.strictEqual(res.body.error.code, 'SUPPLIER_OWNED_VARIANTS');
     });
 
     await runTest('Buyer CANNOT submit catalog requests or access admin moderation endpoints (403 Forbidden)', async () => {
