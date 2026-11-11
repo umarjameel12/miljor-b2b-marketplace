@@ -28,14 +28,14 @@ class SupplierPoolOperationsService {
   if(!unit||unit!==String(listing.pricing_unit||'').toLowerCase()||
     allocs.some(x=>String(x.unit||'').toLowerCase()!==unit))
     throw fail('INVENTORY_UNIT_MISMATCH','Listing and allocation units must reconcile before selling');
-  const stock=exact.toCanonical(listing.available_stock,2);
-  const allocated=exact.exactDecimalSum(allocs.map(a=>a.quantity),2);
-  const remaining=exact.exactDecimalGte(stock,allocated,2)
-    ?exact.exactDecimalSubtract(stock,allocated,2):null;
+  const stock=exact.toCanonical(listing.available_stock,4);
+  const allocated=exact.exactDecimalSum(allocs.map(a=>a.quantity),4);
+  const remaining=exact.exactDecimalGte(stock,allocated,4)
+    ?exact.exactDecimalSum([stock,'-'+allocated],4):null;
   if(remaining===null)throw fail('INVENTORY_OVERALLOCATED','Stock allocations exceed published listing stock');
   return {listing_id:Number(listingId),sku_id:Number(listing.supplier_sku_id),unit,
     listed_stock:stock,allocated_stock:allocated,available_to_allocate:remaining,
-    allocation_breakdown:allocs.map(a=>({status:a.status,quantity:exact.toCanonical(a.quantity,2)})),
+    allocation_breakdown:allocs.map(a=>({status:a.status,quantity:exact.toCanonical(a.quantity,4)})),
     provisional:true,server_note:'Read-only snapshot; B4/B5 publish transaction rechecks inventory with locks.'};
  }
  async fulfillment(supplierId){
