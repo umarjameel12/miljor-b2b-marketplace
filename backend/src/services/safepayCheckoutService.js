@@ -171,7 +171,15 @@ class SafepayCheckoutService {
 
     // A pre-existing Safepay attempt can still be reconciled after deadline.
     // A NEW attempt cannot be created after the original 15-minute hold ends.
-    await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+    try {
+      await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+    } catch (holdError) {
+      // If the deadline elapsed between claim and provider call, do not strand
+      // the order in PAYMENT_PENDING when no checkout was actually created.
+      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[B4] Could not unwind uninitiated checkout:',error));
+      throw holdError;
+    }
 
     // Step 2: Call Safepay API OUTSIDE transaction lock
     let trackerToken, rawResponse;
