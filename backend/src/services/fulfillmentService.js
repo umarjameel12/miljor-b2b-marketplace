@@ -1136,6 +1136,13 @@ class FulfillmentService {
         throw err;
       }
 
+      if (order.notes === 'SMART_PROCUREMENT_BASKET' && reason === 'QUANTITY_MISMATCH') {
+        const err = new Error('Use the immutable award-line shortage dispute to report received physical SKU quantities.');
+        err.code = 'B6_LINE_DISPUTE_REQUIRED';
+        err.statusCode = 409;
+        throw err;
+      }
+
       const currentStatus = order.fulfillment_status;
 
       // Discrepancy can only be reported if order was at least DISPATCHED or SUPPLIER_DELIVERED
