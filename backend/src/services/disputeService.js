@@ -467,7 +467,7 @@ class DisputeService {
             category,
             disputed_quantity: parsedDisputedQty,
             claimed_amount: calculatedClaimStr,
-            metadata: cleanMetadata
+            metadata: authoritativeEvidence
           }),
           trimmedKey
         ]
