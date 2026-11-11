@@ -136,6 +136,7 @@ export function PostPurchasePage(){
    </div>
    {error&&<div role="alert" className="rounded-xl border border-red-500 p-3 text-red-600 text-sm">{error}</div>}
    {notice&&<div role="status" className="rounded-xl border p-3 text-sm">{notice}</div>}
+   {busy&&<div aria-live="polite" className="rounded-xl border p-3 text-sm">Processing order action…</div>}
    <div className="grid lg:grid-cols-[minmax(250px,1fr)_minmax(0,2fr)] gap-4">
     <section className="rounded-2xl border border-[var(--border-subtle)] p-4 space-y-3">
      <h2 className="font-semibold">Paid orders</h2>
