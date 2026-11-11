@@ -98,7 +98,7 @@ async function main(){
       ['READY_FOR_DISPATCH','Dispatched'],
       ['DISPATCHED','Supplier Delivered']
     ]){
-      const button=supplier.page.getByRole('button',{name:'Move to '+to});
+      const button=supplier.page.getByRole('button',{name:new RegExp('Move to '+to,'i')});
       await button.waitFor({timeout:15000});
       if(to==='Dispatched'){
        await supplier.page.getByRole('combobox',{name:'Actual supplier delivery method'})
@@ -108,7 +108,7 @@ async function main(){
       if(to!=='Supplier Delivered'){
        const next=to==='Preparing'?'Ready for Dispatch':
         to==='Ready for Dispatch'?'Dispatched':'Supplier Delivered';
-       await supplier.page.getByRole('button',{name:'Move to '+next})
+       await supplier.page.getByRole('button',{name:new RegExp('Move to '+next,'i')})
         .waitFor({timeout:15000});
       }else{
        await supplier.page.getByText('supplier delivered',{exact:false}).first().waitFor();
