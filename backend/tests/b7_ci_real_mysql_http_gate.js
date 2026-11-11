@@ -109,6 +109,40 @@ async function main(){
  pass('Dispute does not impersonate buyer receipt',
   latest.find(x=>x.id===second.id)?.fulfillment_status==='EXCEPTION'&&
   latest.find(x=>x.id===first.id)?.fulfillment_status==='BUYER_CONFIRMED');
+ const [disputeRows]=await db.query(
+  'SELECT id,status FROM order_disputes WHERE order_id=? ORDER BY id DESC LIMIT 1',
+  [second.id]);
+ const disputeId=disputeRows[0]?.id;
+ if(!disputeId)throw Error('B7_DISPUTE_MISSING_AFTER_HTTP');
+ const response=await request(root,'POST',
+  '/api/v1/disputes/'+disputeId+'/supplier-response',supp,
+  {response:'Supplier will deliver the documented missing 20 bags.',
+   remediation_proposal:'DELIVER_MISSING_QUANTITY',
+   remediation_details:'Deliver the remaining 20 bags under the original awarded SKU.'},
+  'B7-REAL-RESPONSE-'+disputeId);
+ pass('Supplier submits actual MySQL remediation proposal without refund',
+  response.status===200&&response.body.success===true);
+ const dispatch=await request(root,'POST',
+  '/api/v1/disputes/'+disputeId+'/remediation/declare-delivered',supp,
+  {tracking_reference:'B7-MYSQL-REMEDY',notes:'Missing 20 bags physically delivered'},
+  'B7-REAL-REMEDY-DISPATCH-'+disputeId);
+ pass('Supplier records physical remediation dispatch',
+  dispatch.status===200&&dispatch.body.success===true);
+ const acknowledgment=await request(root,'POST',
+  '/api/v1/disputes/'+disputeId+'/remediation/confirm-receipt',buy,
+  {notes:'Confirmed receipt of 20 outstanding bags. Original order requires separate receipt.'},
+  'B7-REAL-REMEDY-CONFIRM-'+disputeId);
+ pass('Buyer separately acknowledges remediation goods',
+  acknowledgment.status===200&&acknowledgment.body.success===true);
+ const [[awaitingFull]]=await db.query(
+  'SELECT fulfillment_status FROM orders WHERE id=?',[second.id]);
+ pass('Remediation acknowledgment does not impersonate complete original order receipt',
+  awaitingFull.fulfillment_status==='SUPPLIER_DELIVERED');
+ const full=await request(root,'POST',endpoint('buyer',second.id)+'/confirm-receipt',buy,
+  {notes:'Full 100 bags now received after remediation.'},
+  'B7-REAL-FULL-RECEIPT-'+second.id);
+ pass('Only separate authenticated full-order receipt changes status to buyer-confirmed',
+  full.status===200&&full.body.success===true);
  const [after]=await db.query(
   'SELECT order_id,amount,status,escrow_status FROM payments WHERE order_id IN (?,?) ORDER BY order_id',
   orders.map(o=>o.id));
