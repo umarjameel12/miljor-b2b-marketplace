@@ -39,7 +39,7 @@ async function main(){
   try { urlFor(backend,'/');urlFor(frontend,'/'); }
   catch(e){record('Endpoint configuration','BLOCKED',e.message);}
   if(['miljor_test_db','miljor_sandbox_db'].includes(process.env.DB_NAME))
-    record('Approved demo database','PASS',process.env.DB_NAME);
+    record('Requested demo database','PASS',process.env.DB_NAME);
   else record('Approved demo database','BLOCKED','Set DB_NAME explicitly to miljor_test_db (preferred) or miljor_sandbox_db. Never use protected miljor_db.');
   const files=[
     'backend/server.js',
@@ -60,6 +60,7 @@ async function main(){
   for(const r of results)console.log('['+r.state+'] '+r.name+': '+r.detail);
   const failed=results.filter(r=>r.state!=='PASS');
   console.log('PASS '+(results.length-failed.length)+'/'+results.length+'; unresolved '+failed.length);
+  console.log('NOTE: DB_NAME is a caller-declared target, not proof of the running backend database. Verify backend/.env and live DB connection separately.');
   console.log('NOTE: No purchase, payment, browser E2E or migration was executed by this script.');
   if(failed.length)process.exitCode=1;
 }
