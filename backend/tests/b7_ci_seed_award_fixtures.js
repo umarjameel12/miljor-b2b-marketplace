@@ -16,7 +16,7 @@ async function run(){
     WHERE l.supplier_id=2 AND l.status='ACTIVE' AND s.status='PUBLISHED'
     ORDER BY l.id LIMIT 1`);
  if(stock.length!==1)throw Error('B7_FIXTURE_MISSING_SUPPLIER_LISTING; seed_b6_fixtures required');
- const listing=stock[0];const id=crypto.randomBytes(7).toString('hex');
+ const listing=stock[0];const id=crypto.randomBytes(4).toString('hex');
  const conn=await db.getConnection();
  const result=[];
  try{
