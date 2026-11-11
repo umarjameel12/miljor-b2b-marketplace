@@ -35,3 +35,35 @@ Parent: `fix/independent-backend-integrity`
 ## Acceptance gate
 **SOURCE IMPLEMENTED / TESTS NOT RUN / DATABASE NOT MODIFIED / RELEASE BLOCKED.**
 Follow-up: run isolated gate and Phase 4 suite, then real MySQL concurrency on `miljor_test_db` with rollbacks and financial conservation checks. Do not deploy or merge this branch until PASS.
+
+## Execution update — Steps 1–3 (2026-11-11)
+
+### Step 1 — Focused financial regression: PASS (isolated)
+Executed the ACTUAL fetched `prepareSupplierDisbursement`, `approveSupplierDisbursement`, and `_logAuditEvent` source methods using a V8 isolated environment. The committed `tests/p0_disbursement_integrity_gate.js` was also evaluated with Node built-in shims, mock DB connections and the real exactDecimal source. Last observed test gate: **14 / 14 assertions PASS**; this is NOT a real Node.js, MySQL or HTTP test run.
+
+### Step 2 — Fix issues: committed
+- Replaced floating-point payable held/available threshold checks with exactDecimal helpers.
+- Require a valid authorized actor when approving a prepared supplier payout.
+- Before approval, read current supplier verified state and buyer receipt fulfillment; reject revocation, incompatible fulfillment or external execution other than DISABLED.
+- Recheck that net payable minus refund deductions minus held amount equals available amount before approval.
+- Preserve existing prevention of duplicate payout instructions, conflicting keys, pending refund preparation and active holds.
+- Financial audit event amountDelta now uses canonical exact decimal instead of Number(value).toFixed(2).
+
+### Step 3 — Concurrency and accounting: PASS (simulated), DB gate pending
+The concurrency test simulates two asynchronous requests, a payable-row lock queue, transactional commit and rollback. Result: **one payout instruction inserted, one request committed, one duplicate rejected and rolled back**. A repeat with the successful request key returns the existing instruction; no second insert. Exact accounting and policy-negative tests pass under mocked DB responses.
+
+### Tests run and claims
+- Committed regression source under `backend/tests/p0_disbursement_integrity_gate.js`: 14/14 isolated V8-backed assertions PASS as executed against fetched service and real exactDecimal module.
+- No MySQL SQL migration, Safepay live call, DB mutation, external money transfer or project checkout performed.
+- Real `node tests/p0_disbursement_integrity_gate.js` under the repository's Node environment is **NOT EXECUTED** here.
+- Real MySQL InnoDB concurrent transaction test and full Phase 3/4/Safepay HTTP regression suite are **NOT EXECUTED** here.
+- Do not conflate isolated test green with production financial readiness.
+- No files from other chat-owned pool/B4/B5/B6/recurring/delivery implementation were changed.
+
+### Remaining P0 acceptance
+1. Clean dedicated worktree checkout of this branch and Node execution of `node tests/p0_disbursement_integrity_gate.js` (does not connect DB).
+2. Run existing financial/refund/payment regression suites against `miljor_test_db` ONLY.
+3. Verify real InnoDB concurrent preparation and approval, with rollback and unique DB constraints, using disposable fixtures; compare ledger totals before/after.
+4. Validate database schema and instruction uniqueness against migrations; confirm no old paid/approved instruction bypass path.
+5. Never allow real payouts while external payout execution is DISABLED.
+6. Status: **STEPS 1–3 ISOLATED IMPLEMENTATION AND SIMULATED TESTING COMPLETE; DATABASE E2E BLOCKED, NOT PRODUCTION READY**.
