@@ -96,7 +96,7 @@ async function main(){
     // PR #8 selective reconciliation: verify buyer discovery eligibility
     // against REAL disposable MySQL, not merely source string assertions.
     // This probe is separate from the concurrency waves and fully released.
-    const discoveryProbe=await prepare('REGULAR',1,0,'DISCOVERY');
+    const discoveryProbe=await prepare('REGULAR',5,0,'DISCOVERY');
     const probePublished=await req(discoveryProbe.endpoint,{method:'POST',auth,
       key:'P0-DISCOVERY-PUBLISH-'+stamp});
     must(probePublished,200,'publish discovery probe');
