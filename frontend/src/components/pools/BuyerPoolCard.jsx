@@ -90,7 +90,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
           {headers:{'X-Idempotency-Key':purchaseKey.current}});
         if(!result?.data?.success)throw Error('Unable to reserve quantity.');
         purchaseKey.current=null; // New explicit reservation may use a new key.
-        toast.success('Regular Pool quantity reserved. Final tier and payment follow the B4 commitment workflow.');
+        toast.success('Pool quantity reserved. The final commercial tier and payment require separate confirmation.');
         setOpen(false);onChange?.();
       }
     }catch(e){toast.error(errorMessage(e));}
@@ -117,7 +117,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
   const ends=pool.pool_close_at;
   return <article className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 space-y-3 flex flex-col" aria-label={pool.type+' supplier pool'}>
     <div className="flex justify-between gap-2 items-center">
-      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${flash?'text-amber-600 bg-amber-500/10':'text-emerald-600 bg-emerald-500/10'}`}>{flash?'Flash Pool':'Regular Pool'}</span>
+      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${flash?'text-amber-600 bg-amber-500/10':'text-emerald-600 bg-emerald-500/10'}`}>Pool</span>
       <span className="text-xs text-[var(--text-muted)]">{pool.code}</span>
     </div>
     <div>
@@ -127,7 +127,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     <div className="rounded-lg bg-[var(--bg-elevated)] p-3 space-y-1">
       {flash?<><div className="text-lg font-bold">{fmt(pool.discounted_unit_price)} <span className="text-xs font-normal">/ {pool.unit}</span></div>
         {pool.original_unit_price&&Number(pool.original_unit_price)>Number(pool.discounted_unit_price)&&
-          <p className="text-xs text-[var(--text-muted)]">Reference listing price when Flash was published: <s>{fmt(pool.original_unit_price)}</s></p>}
+          <p className="text-xs text-[var(--text-muted)]">Reference listing price when this offer was published: <s>{fmt(pool.original_unit_price)}</s></p>}
         <p className="text-xs">Remaining: <b>{pool.remaining_stock} / {pool.total_stock} {pool.unit}</b></p>
         <p className="text-xs">{pool.selling_mode==='WHOLE_LOT'?'Whole lot purchase only':
           'Buyer limit: '+pool.min_quantity+'–'+pool.max_quantity_per_buyer+' '+pool.unit}</p>
@@ -154,7 +154,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     </button>
     {open&&<div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Confirm supplier pool purchase">
       <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border-subtle)] p-5 max-w-md w-full space-y-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="font-semibold text-lg">{flash?'Flash Stock Hold':'Regular Pool Reservation'}</h3>
+        <h3 className="font-semibold text-lg">Pool Participation</h3>
         <p className="text-sm">{pool.product_title} · {pool.code}</p>
         {!hold?<><label className="text-xs block space-y-1">Quantity ({pool.unit})
           <input type="number" step={flash?'0.01':'0.0001'} min={flash?pool.min_quantity:pool.buyer_min_qty}
@@ -180,7 +180,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
           </div>}
           <p className="text-xs text-[var(--text-muted)]">{flash?
             'A 15-minute stock hold starts when the backend accepts your request. Safepay payment is a separate explicit action.':
-            'Joining a Regular Pool does not lock a guaranteed final price or immediately charge your account.'}</p>
+            'Joining this pool does not lock a guaranteed final price or immediately charge your account.'}</p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={()=>setOpen(false)} className="border rounded-lg px-3 py-2 text-xs">Back</button>
             <button disabled={saving} type="button" onClick={submit} className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs">
