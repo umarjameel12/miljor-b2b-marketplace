@@ -31,6 +31,10 @@ function isAdminRole(role) {
   return ['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'SUPPORT_ADMIN'].includes(role);
 }
 
+function isFinancialAdminRole(role) {
+  return ['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(role);
+}
+
 class FinancialSettlementService {
 
   /**
@@ -595,6 +599,91 @@ class FinancialSettlementService {
         throw err;
       }
 
+      // Idempotency lookup comes before duplicate-dispute rejection, so an
+      // identical network retry returns the original obligation instead of 409.
+      if (idempotencyKey) {
+        const [previous] = await connection.query(
+          'SELECT * FROM refund_obligations WHERE idempotency_key=? FOR UPDATE',
+          [idempotencyKey]
+        );
+        if (previous.length) {
+          if (Number(previous[0].order_id)!==Number(orderId) ||
+              Number(previous[0].buyer_id)!==Number(order.buyer_id) ||
+              (previous[0].dispute_id == null ? null : Number(previous[0].dispute_id)) !==
+                (disputeId == null ? null : Number(disputeId)) ||
+              previous[0].refund_type !== refundType ||
+              ((previous[0].disputed_quantity == null || disputedQuantity == null)
+                ? previous[0].disputed_quantity != disputedQuantity
+                : !exactDecimal.exactDecimalEquals(
+                    String(previous[0].disputed_quantity), String(disputedQuantity), 2
+                  ))) {
+            const err = new Error('Idempotency key was already used for a different refund request');
+            err.code = 'REFUND_IDEMPOTENCY_CONFLICT';
+            err.statusCode = 409;
+            throw err;
+          }
+          await connection.commit();
+          return {success:true,message:'Idempotent replay: Refund assessment already recorded',
+            data:{refund:previous[0]}};
+        }
+      }
+
+      // A buyer must not invent a partial monetary refund independent of a
+      // real owned delivery dispute. The discrepancy service records evidence;
+      // refund entitlement is separately assessed and remains non-executable.
+      if (refundType === 'PARTIAL' && actor.role === 'BUYER') {
+        if (!Number.isSafeInteger(Number(disputeId)) || Number(disputeId) <= 0) {
+          const err = new Error('A linked dispute is mandatory for buyer partial refunds');
+          err.code = 'PARTIAL_REFUND_DISPUTE_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+      if (refundType === 'PARTIAL' && disputeId !== null && disputeId !== undefined) {
+        const [linkedDisputes] = await connection.query(
+          `SELECT id, order_id, buyer_id, disputed_quantity, status
+           FROM order_disputes WHERE id=? AND order_id=? FOR UPDATE`,
+          [disputeId, orderId]
+        );
+        if (linkedDisputes.length !== 1 ||
+            Number(linkedDisputes[0].buyer_id) !== Number(order.buyer_id)) {
+          const err = new Error('Refund references an invalid or unrelated buyer dispute');
+          err.code = 'REFUND_DISPUTE_MISMATCH';
+          err.statusCode = 403;
+          throw err;
+        }
+        const linked = linkedDisputes[0];
+        if (['RESOLVED_REJECTED', 'CLOSED'].includes(linked.status)) {
+          const err = new Error('Refund is not allowed for a closed/rejected dispute');
+          err.code = 'REFUND_DISPUTE_NOT_ELIGIBLE';
+          err.statusCode = 409;
+          throw err;
+        }
+        if (disputedQuantity === null || disputedQuantity === undefined ||
+            !exactDecimal.exactDecimalGte(
+              String(linked.disputed_quantity), String(disputedQuantity), 2
+            ) || !exactDecimal.exactDecimalGte(String(disputedQuantity), '0.01', 2)) {
+          const err = new Error('Refund quantity must be positive and no more than linked disputed quantity');
+          err.code = 'REFUND_QUANTITY_EXCEEDS_DISPUTE';
+          err.statusCode = 422;
+          throw err;
+        }
+        const [pendingSameDispute] = await connection.query(
+          `SELECT id FROM refund_obligations
+           WHERE order_id=? AND dispute_id=?
+             AND status IN ('REQUESTED','UNDER_REVIEW','APPROVED',
+               'AWAITING_EXTERNAL_EXECUTION','EXTERNAL_PROCESSING','CONFIRMED')
+           LIMIT 1 FOR UPDATE`,
+          [orderId, disputeId]
+        );
+        if (pendingSameDispute.length) {
+          const err = new Error('A refund obligation already exists for this dispute; reconcile it before further assessments');
+          err.code = 'REFUND_ALREADY_ASSESSED_FOR_DISPUTE';
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+
       // Check existing approved/confirmed refunds to prevent over-refunding
       const [existingRefunds] = await connection.query(
         `SELECT SUM(total_refund_amount) AS total_refunded
@@ -628,6 +717,23 @@ class FinancialSettlementService {
           (order.buyer_platform_fee || 0.00).toString()
         ], 2);
       } else {
+        // Procurement awards can contain multiple SKU lines with different
+        // prices/units. An aggregate order.unit_price is NOT a defensible
+        // basis for a partial refund on any B6 award. Fail closed until a
+        // separately approved per-award-line refund allocation exists.
+        const [awardLineCounts] = await connection.query(
+          `SELECT COUNT(*) AS line_count
+           FROM procurement_award_lines al
+           JOIN procurement_award_orders ao ON ao.id=al.award_order_id
+           WHERE ao.order_id=?`,
+          [orderId]
+        );
+        if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
+          const err = new Error('Partial refunds for awarded procurement orders require line-item quantities, verified receipts and itemized contractual prices');
+          err.code = 'LINE_ITEM_REFUND_ALLOCATION_REQUIRED';
+          err.statusCode = 409;
+          throw err;
+        }
         // PARTIAL: based on disputed quantity and locked order.unit_price
         if (!disputedQuantity || Number(disputedQuantity) <= 0) {
           const err = new Error('Valid disputed quantity is required for partial refund assessment');
@@ -659,22 +765,6 @@ class FinancialSettlementService {
         err.code = 'REFUND_EXCEEDS_CAPTURED_AMOUNT';
         err.statusCode = 422;
         throw err;
-      }
-
-      // Idempotency check if key provided
-      if (idempotencyKey) {
-        const [existingIdem] = await connection.query(
-          `SELECT * FROM refund_obligations WHERE idempotency_key = ?`,
-          [idempotencyKey]
-        );
-        if (existingIdem.length > 0) {
-          await connection.commit();
-          return {
-            success: true,
-            message: 'Idempotent replay: Refund assessment already recorded',
-            data: { refund: existingIdem[0] }
-          };
-        }
       }
 
       const refundCode = `RFND-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
@@ -922,99 +1012,19 @@ class FinancialSettlementService {
    * Confirms a manually executed external refund (e.g. from Safepay dashboard).
    * Requires authoritative external reference and admin role.
    */
-  async recordManualConfirmedRefund({ refundId, externalReference, notes = null, actor }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Only administrators can record confirmed external refunds');
+  async recordManualConfirmedRefund({ actor }) {
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Finance administrator required for refund verification');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
     }
-
-    if (!externalReference || String(externalReference).trim().length < 4) {
-      const err = new Error('Authoritative external reference token/ID is required to confirm external refund');
-      err.code = 'EXTERNAL_REFERENCE_REQUIRED';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      const [refunds] = await connection.query(
-        `SELECT * FROM refund_obligations WHERE id = ? FOR UPDATE`,
-        [refundId]
-      );
-
-      if (refunds.length === 0) {
-        const err = new Error('Refund obligation record not found');
-        err.code = 'REFUND_NOT_FOUND';
-        err.statusCode = 404;
-        throw err;
-      }
-
-      const refund = refunds[0];
-
-      if (refund.status !== 'APPROVED') {
-        const err = new Error(`Cannot confirm refund in status '${refund.status}'. Expected APPROVED.`);
-        err.code = 'REFUND_NOT_APPROVED';
-        err.statusCode = 422;
-        throw err;
-      }
-
-      // Mark Refund CONFIRMED
-      await connection.query(
-        `UPDATE refund_obligations
-         SET status = 'CONFIRMED', external_reference = ?, confirmed_at = NOW(),
-             audit_notes = CONCAT_WS(' | ', audit_notes, ?),
-             updated_at = NOW()
-         WHERE id = ?`,
-        [externalReference.trim(), notes, refundId]
-      );
-
-      // Update payment record status
-      const paymentStatus = refund.refund_type === 'FULL' ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-      await connection.query(
-        `UPDATE payments
-         SET status = ?, updated_at = NOW()
-         WHERE id = ?`,
-        [paymentStatus, refund.payment_id]
-      );
-
-      // Audit
-      await this._logAuditEvent(connection, {
-        orderId: refund.order_id,
-        paymentId: refund.payment_id,
-        entityType: 'REFUND_OBLIGATION',
-        entityId: refundId,
-        eventType: 'REFUND_CONFIRMED',
-        actorRole: actor.role,
-        actorId: actor.id,
-        fromStatus: 'APPROVED',
-        toStatus: 'CONFIRMED',
-        amountDelta: refund.total_refund_amount.toString(),
-        notes: `Confirmed external refund of PKR ${refund.total_refund_amount} with ref: ${externalReference}`
-      });
-
-      await connection.commit();
-
-      return {
-        success: true,
-        message: 'External refund successfully confirmed and recorded',
-        data: {
-          refund_id: refundId,
-          status: 'CONFIRMED',
-          external_reference: externalReference.trim(),
-          payment_status: paymentStatus
-        }
-      };
-
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    // An administrator-provided reference is NOT cryptographic Safepay evidence.
+    // Do not mark payment/refund confirmed without verified provider callback.
+    const err = new Error('Safepay provider refund confirmation is required; manual references cannot confirm refunded money');
+    err.code = 'PROVIDER_REFUND_VERIFICATION_REQUIRED';
+    err.statusCode = 409;
+    throw err;
   }
 
   // ===========================================================================
@@ -1279,125 +1289,20 @@ class FinancialSettlementService {
   /**
    * Reconciles a Safepay provider settlement batch (e.g. from settlement CSV or API).
    */
-  async reconcileProviderSettlementBatch({
-    batchReference,
-    grossAmount,
-    providerFee = 0.00,
-    netAmount,
-    settlementDate,
-    matchedTrackerTokens = [],
-    rawMetadata = null,
-    actor
-  }) {
-    if (!isAdminRole(actor.role)) {
-      const err = new Error('Provider settlement reconciliation is restricted to administrators');
+  async reconcileProviderSettlementBatch({ actor }) {
+    if (!actor || !actor.id || !isFinancialAdminRole(actor.role)) {
+      const err = new Error('Only finance administrators may verify provider settlement');
       err.code = 'UNAUTHORIZED_ROLE';
       err.statusCode = 403;
       throw err;
     }
-
-    if (!batchReference || String(batchReference).trim().length < 3) {
-      const err = new Error('Valid batch reference (e.g. sb_...) is required');
-      err.code = 'INVALID_BATCH_REFERENCE';
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const grossStr = exactDecimal.toCanonical(grossAmount, 2);
-    const feeStr = exactDecimal.toCanonical(providerFee || 0.00, 2);
-    const netStr = exactDecimal.toCanonical(netAmount, 2);
-
-    // Verify arithmetic: gross - providerFee = net
-    const expectedNet = exactSub(grossStr, feeStr, 2);
-    let status = 'RECONCILED';
-    if (Number(expectedNet) !== Number(netStr)) {
-      status = 'MISMATCH_DETECTED';
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
-    try {
-      // Check existing batch
-      const [existing] = await connection.query(
-        `SELECT * FROM provider_settlement_batches WHERE batch_reference = ? FOR UPDATE`,
-        [batchReference]
-      );
-
-      if (existing.length > 0) {
-        await connection.commit();
-        return {
-          success: true,
-          message: 'Settlement batch already recorded',
-          data: { batch: existing[0] }
-        };
-      }
-
-      // Check matched payments if tokens provided
-      let matchedCount = 0;
-      if (matchedTrackerTokens.length > 0) {
-        const [matchedPayments] = await connection.query(
-          `SELECT COUNT(*) AS c FROM payments WHERE transaction_ref IN (?)`,
-          [matchedTrackerTokens]
-        );
-        matchedCount = matchedPayments[0].c;
-      }
-
-      const [batchInsert] = await connection.query(
-        `INSERT INTO provider_settlement_batches (
-          batch_reference, provider, gross_amount, provider_fee_amount,
-          net_settled_amount, currency, status, settlement_date,
-          raw_metadata, reconciled_at, created_at
-        ) VALUES (?, 'SAFEPAY', ?, ?, ?, 'PKR', ?, ?, ?, NOW(), NOW())`,
-        [
-          batchReference.trim(),
-          grossStr,
-          feeStr,
-          netStr,
-          status,
-          settlementDate || new Date(),
-          rawMetadata ? JSON.stringify(rawMetadata) : null
-        ]
-      );
-
-      const batchId = batchInsert.insertId;
-
-      // Audit
-      await this._logAuditEvent(connection, {
-        orderId: null,
-        paymentId: null,
-        entityType: 'SETTLEMENT',
-        entityId: batchId,
-        eventType: status === 'RECONCILED' ? 'SETTLEMENT_RECONCILED' : 'SETTLEMENT_MISMATCH_DETECTED',
-        actorRole: actor.role,
-        actorId: actor.id,
-        fromStatus: null,
-        toStatus: status,
-        amountDelta: netStr,
-        notes: `Reconciled settlement batch ${batchReference}: Gross ${grossStr}, Fee ${feeStr}, Net ${netStr}. Matched payments: ${matchedCount}`
-      });
-
-      await connection.commit();
-
-      const [createdBatch] = await connection.query('SELECT * FROM provider_settlement_batches WHERE id = ?', [batchId]);
-
-      return {
-        success: true,
-        message: status === 'RECONCILED' 
-          ? 'Settlement batch successfully reconciled' 
-          : 'Settlement batch recorded with arithmetic mismatch flag',
-        data: {
-          batch: createdBatch[0],
-          matched_payments_count: matchedCount
-        }
-      };
-
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
-    }
+    // Matching an admin-supplied gross/fee/net arithmetic statement is NOT
+    // proof of funds received from Safepay. Keep this disabled until there is
+    // a merchant-authenticated provider settlement artifact to reconcile.
+    const err = new Error('Authenticated provider settlement evidence is required');
+    err.code = 'PROVIDER_SETTLEMENT_EVIDENCE_REQUIRED';
+    err.statusCode = 409;
+    throw err;
   }
 
   // ===========================================================================

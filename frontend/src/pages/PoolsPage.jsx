@@ -47,9 +47,9 @@ const FULFILLMENT_MODES = [
 
 export const PoolsPage = () => {
   const { user } = useAuth();
-  const [searchParams,setSearchParams]=useSearchParams();
-  const initialType=String(searchParams.get('type')||'ALL').toUpperCase();
-  const [poolType,setPoolType]=useState(['ALL','REGULAR','FLASH'].includes(initialType)?initialType:'ALL');
+  const [searchParams]=useSearchParams();
+  // Legacy type query parameters no longer split the public buyer marketplace.
+  const poolType='ALL';
   const [serverTime,setServerTime]=useState(null);
   const [nextCursor,setNextCursor]=useState(null);
   const [loadingMore,setLoadingMore]=useState(false);
@@ -451,18 +451,8 @@ export const PoolsPage = () => {
           </div>
         )}
 
-        {viewMode==='pools'&&<div className="flex flex-wrap gap-2" aria-label="Choose pool type">
-          {['ALL','REGULAR','FLASH'].map(t=><button type="button" key={t} onClick={()=>{
-            setPoolType(t);
-            const next=new URLSearchParams(searchParams);
-            if(t==='ALL')next.delete('type');else next.set('type',t);
-            setSearchParams(next);
-          }} aria-pressed={poolType===t}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold border ${poolType===t?'border-emerald-600 bg-emerald-500/10 text-emerald-600':'border-[var(--border-subtle)]'}`}>
-            {t==='ALL'?'All Pools':t==='REGULAR'?'Regular Pools':'Flash Pools'}
-          </button>)}
-        </div>}
-        {/* Content Grid: Pools vs Catalog */}
+        {viewMode==='pools'&&<p className="text-xs text-[var(--text-muted)]" aria-label="Unified supplier pool marketplace">Browse all eligible supplier pools here. Each offer shows its own pricing, stock, delivery and commitment terms.</p>}
+                {/* Content Grid: Pools vs Catalog */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (

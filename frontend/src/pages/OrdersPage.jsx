@@ -191,8 +191,8 @@ export const OrdersPage = () => {
         {ordersLoading && <p className="text-xs text-[var(--text-muted)]">Loading your procurement orders…</p>}
         {ordersError && <p role="alert" className="text-xs text-red-600">{ordersError}</p>}
         {!ordersLoading && regularOrders.length > 0 && (
-          <section className="space-y-3" aria-label="Your regular pool orders">
-            <h2 className="font-semibold text-lg">Your Regular Pool Payments</h2>
+          <section className="space-y-3" aria-label="Your pool orders">
+            <h2 className="font-semibold text-lg">Your Pool Payments</h2>
             {regularOrders.map(order=>
               <RegularPaymentHoldCard key={order.id} order={order}/>
             )}
@@ -224,13 +224,13 @@ export const OrdersPage = () => {
           </div>
 
           <h3 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>
-            No Regular Pool Orders Yet
+            No Pool Orders Yet
           </h3>
 
           <p className="text-xs text-stone-500 mt-2 max-w-sm leading-relaxed">
             {isAuthenticated
-              ? 'You do not have any Regular Pool orders requiring payment right now. Browse live Regular Pools to join a supplier offer.'
-              : 'Sign in to reserve quantities and aggregate bulk volume for lower wholesale prices with guaranteed escrow delivery.'}
+              ? 'You do not have any pool orders requiring payment right now. Browse the supplier marketplace to join an eligible offer.'
+              : 'Sign in to reserve quantities and aggregate bulk volume for lower wholesale prices with verified payment status and tracked delivery.'}
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">

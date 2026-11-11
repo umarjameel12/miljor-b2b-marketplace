@@ -182,7 +182,7 @@ export const SupplierDashboardPage = () => {
                   className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--bg-card)] transition-colors text-xs font-medium text-[var(--text-primary)]"
                 >
                   <span className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" /> Manage Regular & Flash Pools
+                    <Zap className="w-4 h-4 text-amber-500" /> Manage Supplier Pools
                   </span>
                   <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 </Link>

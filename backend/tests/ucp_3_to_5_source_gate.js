@@ -13,6 +13,7 @@ function gate(value,message){assert.ok(value,message);console.log('PASS',++passe
 const supplier=source('src/routes/v1/supplierRoutes.js');
 const operations=source('src/services/poolOperationsService.js');
 const discovery=source('src/services/unifiedPoolDiscoveryService.js');
+const poolRepo=source('src/repositories/poolRepo.js');
 const routes=source('src/routes/v1/unifiedPoolRoutes.js');
 const flash=source('src/services/flashPoolService.js');
 const procurement=source('src/routes/v1/procurementRoutes.js');
@@ -44,6 +45,20 @@ gate(operations.includes('supplier_id=?')&&operations.includes("o.payment_status
   'Supplier-scoped outstanding payment alerts');
 gate(routes.includes("router.get('/pool-discovery'")&&server.includes('unifiedPoolRoutes'),
   'Buyer combined public read API mounted');
+// Reconcile PR #8's buyer-discovery eligibility without replacing canonical
+// pool delivery/analytics/read models or weakening B4/B5 transactional engines.
+for(const rule of [
+  "u.role='SUPPLIER'","u.is_verified=1","u.verification_status='VERIFIED'",
+  "profile.verification_status='VERIFIED'","sl.status='ACTIVE'",
+  "spec.id=p.product_spec_id","spec.supplier_id=p.supplier_id",
+  "spec.lifecycle_status='PUBLISHED'","spec.approval_status='APPROVED'",
+  "sku.status='PUBLISHED'","prod.status='PUBLISHED'",
+  "fam.approval_status='APPROVED'","cat.approval_status='APPROVED'"
+]){
+  gate(poolRepo.includes(rule),'Regular buyer discovery requires '+rule);
+}
+gate(poolRepo.includes("p.expires_at > UTC_TIMESTAMP()"),
+  'Regular discovery uses authoritative UTC expiry');
 gate(discovery.includes('poolRepo.findAllActive')&&discovery.includes('flash.getActive'),
   'Both authoritative B4 and B5 discovery engines are delegated');
 gate(discovery.includes("ps.lifecycle_status='PUBLISHED'")&&
@@ -78,8 +93,8 @@ gate(reservations.includes("'/reservations/my'")&&reservations.includes("X-Idemp
   'Regular buyer reservations remain visible and cancellation idempotent');
 gate(ordersPage.includes('BuyerRegularReservationsPanel')&&ordersPage.includes('FlashBuyerOrdersPanel'),
   'Both types remain independently visible in orders');
-gate(flashLegacy.includes('Navigate to="/pools?type=FLASH"'),
-  'Old Flash discovery link redirects without duplicate source of truth');
+gate(flashLegacy.includes('Navigate to="/pools"') && !flashLegacy.includes('Navigate to="/flash-pools"'),
+  'Old Flash discovery link redirects to single unified marketplace without duplicate source of truth');
 gate(!pools.includes('urdu_name')&&!supplierPage.includes('urdu_name')&&
   !buyerCard.includes('16 staple'),'No Urdu or old 16-staple catalog in new pool UI');
 console.log('UCP-3 TO UCP-5 SOURCE GATE:',passed,'PASS (source assertions; NOT E2E testing)');
