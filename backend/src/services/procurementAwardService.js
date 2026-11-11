@@ -122,6 +122,7 @@ class ProcurementAwardService{
       const buyerFee=shares.get(group.supplier_id);
       const total=exact.exactDecimalSum([group.item_subtotal,group.delivery_fee,buyerFee],2);
       groups.push({...group,buyer_platform_fee:buyerFee,total_amount:total,
+        supplier_commission_percent:supplierFee.fee_percent,
         supplier_transaction_fee:supplierFee.supplier_fee,
         supplier_net_payout:supplierFee.supplier_net_payout});
     }
@@ -273,10 +274,10 @@ class ProcurementAwardService{
         if(!exact.exactDecimalGte(needed.quantity,listing.buyer_min_qty,4))
           throw fail('BELOW_BUYER_MINIMUM','Quantity below supplier minimum.',409);
         const [allocations]=await conn.query(
-          `SELECT unit,SUM(allocated_qty) AS qty
+          `SELECT unit,allocated_qty AS qty
            FROM supplier_inventory_allocations
            WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED')
-           GROUP BY unit`,[listingId]
+           FOR UPDATE`,[listingId]
         );
         if(allocations.some(x=>String(x.unit).toLowerCase()!==needed.purchasing_unit))
           throw fail('INVENTORY_ALLOCATION_UNIT_MISMATCH',
@@ -311,13 +312,13 @@ class ProcurementAwardService{
           `INSERT INTO orders
           (order_code,buyer_id,supplier_id,total_qty,unit_price,
            subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,
-           currency,delivery_type,delivery_address,payment_status,
+           supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,
            order_status,notes)
-          VALUES (?,?,?,1.0000,?,?,?,?,?,'PKR','DOORSTEP',?,
+          VALUES (?,?,?,1.0000,?,?,?,?,?,?,'PKR','DOORSTEP',?,
                   'AWAITING_PAYMENT','AWAITING_PAYMENT','SMART_PROCUREMENT_BASKET')`,
           [code,buyer,group.supplier_id,group.item_subtotal,
            group.item_subtotal,group.delivery_fee,group.buyer_platform_fee,
-           group.total_amount,address]
+           group.total_amount,group.supplier_commission_percent,address]
         );
         const orderId=createdOrder.insertId;
         const [link]=await conn.query(

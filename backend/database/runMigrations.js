@@ -17,6 +17,13 @@ async function runMigrations(targetDb) {
   const selectedDb = targetDb || process.env.DB_NAME || 'miljor_db';
   if(process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' && selectedDb!=='miljor_test_db')
     throw new Error('MIGRATION_PROTECTED_DB_BLOCKED: test acceptance can only target miljor_test_db');
+  // Explicit TEST-ONLY historical fixture hook; never truncate release migrations.
+  const stopBefore=process.env.MILJOR_TEST_STOP_BEFORE_VERSION || null;
+  if(stopBefore && !(process.env.NODE_ENV==='test' &&
+       process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' &&
+       selectedDb==='miljor_test_db' &&
+       /^0[0-9]{2}$/.test(stopBefore)))
+    throw new Error('MIGRATION_PARTIAL_RUN_FORBIDDEN: stop-before is restricted to disposable test database');
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -65,6 +72,7 @@ async function runMigrations(targetDb) {
     let appliedCount=0;
     for(const item of manifest){
       const {filename:file,version,sha256}=item;
+      if(stopBefore && version>=stopBefore) break;
       const sql=fs.readFileSync(path.join(migrationsDir,file),'utf8');
       const attempt=attemptsByVersion.get(version);
       if (appliedVersions.has(version)) {

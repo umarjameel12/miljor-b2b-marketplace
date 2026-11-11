@@ -30,8 +30,9 @@ class ProductSpecificationRepository {
   }
 
   // Find specification by ID with base product & canonical family/category details
-  async findById(id) {
-    const [rows] = await db.query(
+  async findById(id, connection = null) {
+    const executor = connection || db;
+    const [rows] = await executor.query(
       `SELECT ps.*, 
               COALESCE(ps.category_id, p.category_id) AS canonical_category_id,
               COALESCE(ps.family_id, p.family_id) AS canonical_family_id,

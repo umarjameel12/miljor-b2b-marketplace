@@ -74,6 +74,34 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // A reload performed while offline can fail the initial cookie refresh.
+  // Restore the same HttpOnly session automatically when connectivity returns.
+  // Do not persist access tokens or manufacture a logged-in identity.
+  useEffect(() => {
+    if (token) return undefined;
+    let disposed = false;
+    let inFlight = false;
+    const restoreOnReconnect = async () => {
+      if (inFlight || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+      inFlight = true;
+      try {
+        const res = await authApi.refreshToken();
+        if (!disposed && res.success && res.data?.token && res.data?.user) {
+          updateAuthCredentials(res.data.token, res.data.user);
+        }
+      } catch {
+        // Stay unauthenticated if the browser has no valid refresh cookie.
+      } finally {
+        inFlight = false;
+      }
+    };
+    window.addEventListener('online', restoreOnReconnect);
+    return () => {
+      disposed = true;
+      window.removeEventListener('online', restoreOnReconnect);
+    };
+  }, [token]);
+
   // Login handler with persistent session flag
   const login = async ({ identifier, password, rememberMe = false }) => {
     const response = await authApi.login({ identifier, password, rememberMe });

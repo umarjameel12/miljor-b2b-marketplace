@@ -1533,7 +1533,7 @@ class PoolController {
       }
 
       // Fetch specification for unit conversion
-      const spec = await productSpecificationRepo.findById(pool.product_spec_id);
+      const spec = await productSpecificationRepo.findById(pool.product_spec_id, connection);
 
       // Determine required stock in listing's pricing unit
       const requiredCapacityUnits = pool.max_capacity !== null ? Number(pool.max_capacity) : Number(pool.target_qty);
@@ -1562,10 +1562,10 @@ class PoolController {
 
       // Check current active allocations
       const [allocRows] = await connection.query(
-        `SELECT unit, SUM(allocated_qty) AS total_allocated
+        `SELECT unit, allocated_qty AS total_allocated
          FROM supplier_inventory_allocations
          WHERE supplier_listing_id = ? AND status IN ('PENDING', 'COMMITTED')
-         GROUP BY unit`,
+         FOR UPDATE`,
         [pool.supplier_listing_id]
       );
       // B4-C: allocation balances are only additive within one compatible

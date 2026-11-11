@@ -46,7 +46,7 @@ class FlashPoolService {
     const [rows] = await conn.query(
       `SELECT u.role, u.verification_status, u.is_verified, sp.verification_status AS profile_verification
        FROM supplier_profiles sp JOIN users u ON u.id = sp.supplier_id
-       WHERE u.id = ? FOR UPDATE`, [supplierId]);
+       WHERE u.id = ? FOR SHARE`, [supplierId]);
     if (!rows.length || rows[0].role !== 'SUPPLIER' ||
         rows[0].verification_status !== 'VERIFIED' ||
         rows[0].profile_verification !== 'VERIFIED' ||
@@ -277,8 +277,8 @@ class FlashPoolService {
       await entitlement.assertCanPublishInFamily(supplierId,Number(spec.family_id),conn);
       // The shared inventory allocation ledger serializes regular and flash promises.
       const [allocations]=await conn.query(
-        `SELECT unit,SUM(allocated_qty) AS qty FROM supplier_inventory_allocations
-         WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED') GROUP BY unit`,
+        `SELECT unit,allocated_qty AS qty FROM supplier_inventory_allocations
+         WHERE supplier_listing_id=? AND status IN ('PENDING','COMMITTED') FOR UPDATE`,
          [listing.id]);
       const unit=spec.purchasing_unit || listing.pricing_unit;
       if(allocations.some(a=>String(a.unit).toLowerCase()!==String(unit).toLowerCase()))
@@ -469,14 +469,26 @@ class FlashPoolService {
       const orderCode='FL'+crypto.randomBytes(9).toString('hex');
       const address=verifiedDeliveryAddress||(typeof payload.delivery_address==='string'?payload.delivery_address.trim():'');
       if(address.length<8||address.length>1000)throw fail('DELIVERY_ADDRESS_REQUIRED','Provide a valid buyer delivery address.');
+      // Freeze immutable supplier commission at Flash order creation, not payable accrual.
+      // Read and validate inside the same locked transaction as the buyer stock hold.
+      const [commissionProfiles]=await conn.query(
+        'SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id=? FOR UPDATE',
+        [offer.supplier_id]);
+      const commissionValue=commissionProfiles[0]?.transaction_fee_percent;
+      if(commissionValue===null||commissionValue===undefined||
+         !/^[0-9]{1,3}(?:[.][0-9]{1,2})?$/.test(String(commissionValue))||
+         Number(commissionValue)<0||Number(commissionValue)>100)
+        throw fail('SUPPLIER_COMMISSION_NOT_CONFIGURED',
+          'Supplier commission contract must be configured before checkout.',409);
+      const commissionSnapshot=money.toCanonical(commissionValue,2);
       // Order is persisted BEFORE the existing Safepay checkout endpoint can be called.
       const [order]=await conn.query(
         `INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,
-          subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,currency,
+          subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,
           delivery_type,delivery_address,payment_status,order_status)
-        VALUES (?,?,?,?,?,?,?,?,?,'PKR','DOORSTEP',?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
+        VALUES (?,?,?,?,?,?,?,?,?,?,'PKR','DOORSTEP',?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
         [orderCode,buyerId,offer.supplier_id,quantity,offer.discounted_unit_price,
-          subtotal,deliveryFee,buyerFee,amount,address]
+          subtotal,deliveryFee,buyerFee,amount,commissionSnapshot,address]
       );
       const [h]=await conn.query(
         `INSERT INTO flash_purchase_holds

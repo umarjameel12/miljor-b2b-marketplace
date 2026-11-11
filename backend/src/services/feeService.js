@@ -35,7 +35,14 @@ class FeeService {
     const [profiles]=await connection.query(
       'SELECT transaction_fee_percent FROM supplier_profiles WHERE supplier_id=?',[id]
     );
-    const percent=exact.toCanonical(profiles[0]?.transaction_fee_percent??'2.50',2);
+    if(profiles.length!==1||profiles[0].transaction_fee_percent===null||
+       profiles[0].transaction_fee_percent===undefined){
+      const err=new Error('Supplier commission contract must be configured before quoting or accepting an order');
+      err.code='SUPPLIER_COMMISSION_NOT_CONFIGURED';
+      err.statusCode=409;
+      throw err;
+    }
+    const percent=exact.toCanonical(profiles[0].transaction_fee_percent,2);
     if(!exact.exactDecimalGte(percent,'0.00',2)||
        !exact.exactDecimalGte('100.00',percent,2))throw new Error('Supplier fee percent invalid');
     const cents=BigInt(subtotal.replace('.',''));
