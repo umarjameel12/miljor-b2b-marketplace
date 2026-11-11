@@ -4,6 +4,7 @@
 // =============================================================================
 
 const financialSettlementService = require('../services/financialSettlementService');
+const financialConservationService = require('../services/financialConservationService');
 
 class FinancialSettlementController {
 
@@ -291,6 +292,23 @@ class FinancialSettlementController {
         success: false,
         error: { code: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_FINANCIAL_REQUEST', message: status >= 500 ? 'Financial operation could not be completed.' : err.message }
       });
+    }
+  }
+
+  // GET /api/v1/settlements/admin/orders/:id/integrity
+  // Read-only exact financial conservation report; not bank custody proof.
+  async getOrderIntegrity(req,res) {
+    try {
+      const result=await financialConservationService.getOrderIntegrity({
+        orderId:req.params.id,actor:req.user
+      });
+      return res.status(200).json({success:true,data:result});
+    } catch(err) {
+      const status=err.statusCode||500;
+      return res.status(status).json({success:false,error:{
+        code:status>=500?'INTERNAL_ERROR':err.code||'INVALID_FINANCIAL_REQUEST',
+        message:status>=500?'Financial audit could not be completed.':err.message
+      }});
     }
   }
 
