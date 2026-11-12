@@ -52,7 +52,7 @@ class InvoiceService {
        FROM orders o
        JOIN users u_buyer ON o.buyer_id = u_buyer.id
        JOIN users u_supp ON o.supplier_id = u_supp.id
-       JOIN supplier_profiles sp ON sp.supplier_id = u_supp.id
+       LEFT JOIN supplier_profiles sp ON sp.supplier_id = u_supp.id
        WHERE o.id = ?`,
       [numericOrderId]
     );
@@ -125,7 +125,7 @@ class InvoiceService {
          FROM orders o
          JOIN users u_buyer ON o.buyer_id = u_buyer.id
          JOIN users u_supp ON o.supplier_id = u_supp.id
-         JOIN supplier_profiles sp ON sp.supplier_id = u_supp.id
+         LEFT JOIN supplier_profiles sp ON sp.supplier_id = u_supp.id
          WHERE o.id = ? FOR UPDATE`,
         [numericOrderId]
       );

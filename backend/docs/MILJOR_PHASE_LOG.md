@@ -1653,3 +1653,24 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - **Documentation:** Consolidated in `backend/docs/MILJOR_FULL_E2E_ACCEPTANCE_REPORT.md`.
 - **Verdict: PASS (ACCEPTED FOR LOCAL DEMO WITH DOCUMENTED PROVIDER CONSTRAINTS). CAN START NEXT PHASE: NO.**
 
+## 2026-11-12 — FINAL SAFEPAY SANDBOX PAYMENT SUCCESS & RETURN FIX
+- **Branch:** `feature/frontend-redesign-20261112`
+- **Scope:** Complete Safepay Sandbox payment success flow, return handling, automated invoice generation, and supplier fulfillment queue visibility.
+- **Backend Implementation:**
+  - `safepayCheckoutService.js`: Defaulted checkout return URL to `/payment/return?order_id=${order.id}&beacon=${trackerToken}`; added state support for `TRACKER_ENDED`, `COMPLETED`, and `PAID`; added automatic invoice generation on `PAID` transition in both `reconcilePaymentWithProvider` and `processWebhookEvent`.
+  - `invoiceService.js`: Changed supplier profile joins to `LEFT JOIN` to guarantee resilient invoice generation.
+- **Frontend Implementation:**
+  - `OrdersPage.jsx`: Added support for both `BUYER` and `SUPPLIER` accounts; added "Supplier Orders & Fulfillment Queue" showing funded orders awaiting dispatch with status `PAID` and fulfillment status `AWAITING_SUPPLIER_ACKNOWLEDGEMENT`; added "View Receipt & Escrow" button on paid orders linking to `/payment/return`.
+  - `PaymentReturnPage.jsx`: Verified states for `VERIFYING`, `PAID` (Confirmed Escrow), `PENDING`, `CANCELLED`, and `ERROR` with authentic server-to-server Safepay reconciliation.
+- **Verification Evidence:**
+  - Executed `safepay_sandbox_live_payment_acceptance.test.js`: **100% PASS** (real Safepay tracker session, HMAC-SHA512 webhook signature verification, order PAID transition, payments table escrow locking, invoice `INV-2026-000156` generation, duplicate webhook idempotency, supplier fulfillment queue visibility, and zero writes to `miljor_db`).
+  - Master E2E Runner (`master_e2e_acceptance_runner.js`): **31 / 31 PASS**.
+  - Notification Events Gate (`notification_events_verification.test.js`): **100% PASS**.
+  - UCP Source Suites (`npm run test:ucp`): **152 / 152 PASS**.
+  - Frontend Build (`vite build`): **2,229 modules transformed, 0 errors, 2.56s**.
+  - Visual Browser Verification:
+    - Buyer Return Screen: host-verified screenshot `final_step_8.png` ("Payment Confirmed & Secured in Escrow", Amount PKR 9,600.00).
+    - Supplier Orders Queue: host-verified screenshot `final_step_108.png` ("Supplier Orders & Fulfillment Queue", Order `ORD-57685678`, Status `PAID`, Fulfillment `AWAITING_SUPPLIER_ACKNOWLEDGEMENT`).
+  - Database Safety: `miljor_db` confirmed 100% PRISTINE (`orders: 0`, `payments: 0`).
+- **Verdict: PASS (SAFEPAY SANDBOX PAYMENT & RETURN WORKFLOW 100% VERIFIED). CAN START NEXT PHASE: NO.**
+

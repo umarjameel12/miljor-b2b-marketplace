@@ -209,12 +209,16 @@ class SafepayCheckoutService {
       // Non-fatal if mock client does not implement passport token
     }
 
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const effectiveRedirectUrl = redirectUrl || `${frontendBase}/payment/return?order_id=${order.id}&beacon=${trackerToken}`;
+    const effectiveCancelUrl = cancelUrl || `${frontendBase}/payment/cancelled?order_id=${order.id}`;
+
     const checkoutUrl = safepayAdapter.constructCheckoutUrl({
       trackerToken,
       orderCode: order.order_code,
       tbtToken,
-      redirectUrl,
-      cancelUrl
+      redirectUrl: effectiveRedirectUrl,
+      cancelUrl: effectiveCancelUrl
     });
 
     // Step 3: Record durable payment attempt in DB
@@ -596,6 +600,12 @@ class SafepayCheckoutService {
           flashError.code || flashError.message);
       }
 
+      try {
+        await require('./invoiceService').generateInvoiceForOrder(order.id, { id: order.buyer_id, role: 'BUYER' });
+      } catch (invoiceError) {
+        console.warn('[Safepay Webhook] Auto-invoice generation notice:', invoiceError.message);
+      }
+
       return {
         success: true,
         order_id: order.id,
@@ -815,7 +825,8 @@ class SafepayCheckoutService {
     }
 
     // Verify state: Safepay marks captured/completed sessions as 'TRACKER_ENDED' with transaction object
-    if (trackerData.state !== 'TRACKER_ENDED' || !trackerData.transaction) {
+    const isCaptured = ['TRACKER_ENDED', 'COMPLETED', 'PAID'].includes(trackerData.state) && !!trackerData.transaction;
+    if (!isCaptured) {
       return {
         success: true,
         reconciled: false,
@@ -1005,6 +1016,12 @@ class SafepayCheckoutService {
       } catch (flashError) {
         console.error('[B5/B6] Reconciled Flash payment needs stock update:',
           flashError.code || flashError.message);
+      }
+
+      try {
+        await require('./invoiceService').generateInvoiceForOrder(order.id, { id: order.buyer_id, role: 'BUYER' });
+      } catch (invoiceError) {
+        console.warn('[Safepay Reconcile] Auto-invoice generation notice:', invoiceError.message);
       }
 
       const [newPayments] = await db.query(

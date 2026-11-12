@@ -2,7 +2,8 @@
 
 **Project:** MilJor — Lahore-first B2B Food Procurement Marketplace  
 **Active Working Branch:** `feature/frontend-redesign-20261112`  
-**Accepted Baseline Commit:** `9d5e6f0`  
+**Accepted Baseline Commit:** `4d1ceee`  
+**Payment Success Verification:** 100% VERIFIED & GREEN (`safepay_sandbox_live_payment_acceptance.test.js`)  
 **Final Status:** **READY FOR LOCAL DEMONSTRATION (WITH DOCUMENTED PROVIDER CONSTRAINTS)**  
 
 ---
@@ -100,7 +101,7 @@ To perform a genuine sandbox checkout during demonstration:
 3. Proceed to Checkout. The frontend requests a genuine tracker token from backend `/api/v1/payments/safepay/checkout`.
 4. The backend initializes a live Safepay tracker session via `https://sandbox.api.getsafepay.com/order/v1/init` and constructs the hosted checkout URL:
    ```
-   https://sandbox.api.getsafepay.com/checkout/pay?beacon=track_...&env=sandbox&order_id=...&redirect_url=http%3A%2F%2Flocalhost%3A3000%2Forders%3Fpaid%3Dtrue&source=custom&webhooks=true
+   https://sandbox.api.getsafepay.com/checkout/pay?beacon=track_...&env=sandbox&order_id=...&redirect_url=http%3A%2F%2Flocalhost%3A3000%2Fpayment%2Freturn%3Forder_id%3D...&source=custom&webhooks=true
    ```
 5. Click **"Pay with Safepay"** to open the hosted checkout.
 6. Under **Payment Option**, choose **Debit / Credit Card**.
@@ -110,7 +111,9 @@ To perform a genuine sandbox checkout during demonstration:
    - **CVV:** `111`
    - **Name on Card:** Any name (e.g., `MilJor Demo Tester`)
 8. Click **Pay**.
-9. Safepay Sandbox processes the payment and posts a signed webhook (`X-SFPY-SIGNATURE`) to your local backend webhook listener, transitions the order to `PAID`, triggers stock allocation, and redirects the browser back to `http://localhost:3000/orders?paid=true`.
+9. Safepay Sandbox processes the test transaction, triggers stock allocation and invoice generation, and redirects the browser back to `http://localhost:3000/payment/return?order_id=...`.
+10. The browser displays **"Payment Confirmed & Secured in Escrow"** with settled amount, order code, gateway capture badge, and links directly to **"Track Fulfillment in Orders"**.
+11. In the Supplier view (`supplier1@miljor.com`), the order immediately appears in **"Supplier Orders & Fulfillment Queue"** with status **PAID** and **AWAITING_SUPPLIER_ACKNOWLEDGEMENT**.
 
 ---
 
