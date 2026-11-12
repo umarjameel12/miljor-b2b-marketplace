@@ -18,6 +18,7 @@
     "test:canonical:release": "npm run test:canonical:preflight && npm run test:b6 && npm --prefix ../frontend run build",
     "test:ucp:reconciliation": "node database/financeCompatibilityGate.js && node tests/ucp_thischat_reconciliation_gate.js",
     "migration:audit:test": "node database/readOnlyMigrationAudit.js --test-only",
+    "admin:provision": "node database/secureAdminProvision.js",
     "test:ucp:ci": "npm run migration:preflight && npm run test:ucp:reconciliation && npm run test:ucp && npm --prefix ../frontend run build"
   },
   "keywords": [],

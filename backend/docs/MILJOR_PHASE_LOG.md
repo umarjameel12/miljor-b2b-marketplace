@@ -1640,3 +1640,16 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - Source parse verified on 18/18 inspected backend JS files prior to final report; no MySQL/HTTP/JSX build/real Safepay regression executed. New source audit gate prepared for final suite.
 - **Gate: BLOCKED** pending merge reconciliation, isolated `miljor_test_db` migration execution, full B4/B5/B6 security/concurrency/payment/JSX E2E acceptance and review.
 - See `backend/docs/MILJOR_UCP3_5_INDEPENDENT_AUDIT_FIX_REPORT.md` for exact findings, changed files and remaining gates.
+
+## 2026-11-12 — MASTER E2E & POST-GAP CLOSURE DEMO ACCEPTANCE
+- **Branch:** `feature/frontend-redesign-20261112`
+- **Scope:** Full-system Master E2E, Post Master-E2E Gap Closure, Safepay sandbox integration, persistent notification events, and super admin credential hardening.
+- **Admin Credential Hardening:** Rotated `SUPER_ADMIN` (`admin@miljor.com`) password to 35-character secret stored exclusively in gitignored `backend/.env`; provisioned interactive tool `backend/database/secureAdminProvision.js` (`npm run admin:provision`); revoked all sessions and refresh tokens across `miljor_db` and `miljor_test_db`; verified admin login (200 OK) and strict RBAC authorization blocks (Buyer 403, Supplier 403). Sanitized all logs/reports.
+- **Safepay Sandbox & Checkout:** Verified live Safepay API calls with DNS jitter fallback (`robustLookup` in `safepayAdapter.js`). Live tracker session initialized (`track_4f4c8725-87a2-48cb-8469-677e69405bf8`), verified `TRACKER_STARTED`. Opened hosted checkout at `https://sandbox.api.getsafepay.com/checkout/pay` (HTTP 200, merchant `MilJor`, amount `Rs. 9,600.00`, captured screenshot `final_step_168.png`). Automated card submission documented as `BLOCKED / PAYMENT_REQUIRED` due to PCI sandboxed iframes. Verified cryptographic webhook signature verification via raw-body HMAC-SHA512.
+- **Refund Policy:** Documented Safepay lack of programmatic self-serve REST refund endpoint honestly as `BLOCKED / DASHBOARD_ONLY`; preserved safe stub `REFUND_PENDING_GATEWAY` without moving external funds (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).
+- **Procurement & Shortage Testing:** Executed real B6 award paid fulfillment gate (`demo_real_b6_award_paid_fulfillment_mysql_gate.js`: 7/7 PASS) and postpurchase 100/80/20 shortage gate (`demo_real_mysql_postpurchase_100_80_20_gate.js`: 10/10 PASS).
+- **Persistent Notifications:** Added `backend/database/migrations/049_in_app_notifications.sql` and `backend/src/services/notificationService.js`; verified all 9 lifecycle events with recipient isolation, unread counter tracking, and deduplication (`notification_events_verification.test.js`: 100% PASS).
+- **Consolidated Gates:** Master E2E: 31/31 PASS; UCP: 152/152 PASS; Safepay Readiness: 9/9 PASS; Frontend suites: 24/24 PASS; Vite build: 0 errors; `miljor_db`: 100% PRISTINE (0 orders, 0 payments, 0 reservations).
+- **Documentation:** Consolidated in `backend/docs/MILJOR_FULL_E2E_ACCEPTANCE_REPORT.md`.
+- **Verdict: PASS (ACCEPTED FOR LOCAL DEMO WITH DOCUMENTED PROVIDER CONSTRAINTS). CAN START NEXT PHASE: NO.**
+
