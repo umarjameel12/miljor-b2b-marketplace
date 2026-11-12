@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {Link} from 'react-router-dom';
 import {Clock,RefreshCw,ExternalLink,ShieldCheck} from 'lucide-react';
 import apiClient from '../api/client';
 import {CountdownTimer} from './ui/CountdownTimer';
@@ -65,10 +66,17 @@ export function RegularPaymentHoldCard({order}) {
             <div className="text-[11px] text-[var(--text-muted)] flex gap-1 items-center"><Clock size={13}/> Payment hold deadline</div>
             <CountdownTimer deadline={hold.expires_at} serverTime={hold.server_time} label="Pay within" onExpire={fetchStatus}/>
           </div>
-          <button type="button" disabled={!canCheckout||busy} onClick={checkout}
-            className="px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 bg-[var(--brand-accent)] text-[#072a21] flex gap-2 items-center shadow-xs hover:opacity-95 transition cursor-pointer">
-            {busy?'Connecting…':'Pay securely'}<ExternalLink size={13}/>
-          </button>
+          <div className="flex items-center gap-2">
+            <Link to={`/checkout/${order.id}`}
+              className="px-3 py-2 rounded-xl text-xs font-medium border hover:opacity-90 transition text-center"
+              style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
+              Breakdown
+            </Link>
+            <button type="button" disabled={!canCheckout||busy} onClick={checkout}
+              className="px-4 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 bg-[var(--brand-accent)] text-[#072a21] flex gap-2 items-center shadow-xs hover:opacity-95 transition cursor-pointer">
+              {busy?'Connecting…':'Pay securely'}<ExternalLink size={13}/>
+            </button>
+          </div>
         </div>}
       <div className="flex justify-between items-center gap-3">
         <span className="text-[11px] text-[var(--text-muted)]">Pool participation cutoff and payment hold are separate timers.</span>

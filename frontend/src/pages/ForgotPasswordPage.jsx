@@ -756,6 +756,9 @@ export const ForgotPasswordPage = () => {
               className={`${
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
               } p-6 sm:p-8 flex flex-col justify-center`}
+              style={{
+                backgroundColor: 'var(--bg-auth-card)',
+              }}
             >
               {renderFormContent()}
             </div>

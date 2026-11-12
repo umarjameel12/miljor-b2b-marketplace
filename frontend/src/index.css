@@ -78,6 +78,7 @@
     radial-gradient(ellipse 85% 45% at 15% 90%, rgba(214, 195, 168, 0.28) 0%, transparent 60%),
     radial-gradient(circle at 78% 28%, rgba(214, 185, 125, 0.20) 0%, transparent 60%),
     linear-gradient(180deg, #f8f2e6 0%, #f1e8d8 50%, #e8ddca 100%);
+  --bg-auth-card: #faf7f0;
 
   /* Light Theme Hero Background Blend Spot Behind Image */
   --glow-hero: radial-gradient(circle at 76% 34%, rgba(255, 255, 255, 0.65) 0%, rgba(214, 185, 125, 0.28) 35%, rgba(200, 178, 118, 0.12) 60%, transparent 80%);
@@ -171,6 +172,7 @@
     radial-gradient(ellipse 80% 40% at 20% 88%, rgba(5, 30, 24, 0.38) 0%, transparent 60%),
     radial-gradient(circle at 62% 22%, rgba(200, 178, 118, 0.16) 0%, transparent 52%),
     linear-gradient(180deg, #09382b 0%, #072a21 50%, #031914 100%);
+  --bg-auth-card: #0a3429;
 
   /* Dark Theme Hero Background Blend Spot Behind Image — Sweeping One-Sided Luminous Gold & Emerald */
   --glow-hero: radial-gradient(ellipse 90% 75% at 75% 38%, rgba(200, 178, 118, 0.32) 0%, rgba(16, 185, 129, 0.24) 38%, rgba(15, 90, 72, 0.10) 65%, transparent 85%);

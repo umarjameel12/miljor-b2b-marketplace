@@ -45,15 +45,15 @@ export function AuthHeroPanel({
     ];
   } else if (pageType === 'register') {
     heading = 'Better buying power starts together.';
-    supportingCopy = 'Join MilJor as we begin connecting businesses in Lahore — with a vision to grow across Pakistan.';
+    supportingCopy = 'Join Lahore\'s dedicated B2B food marketplace. Access smarter procurement, direct supplier connections, and collective volume savings across commercial clusters.';
     subDescription =
       role === 'SUPPLIER'
         ? 'Consolidate restaurant demand and reach commercial buyers across Lahore with zero listing commissions.'
         : 'Pool wholesale commodity demand with nearby kitchens and restaurants for guaranteed mill prices.';
     valueProps = [
-      { icon: Scale, text: '16 Standardized Lahore Commodity Specs' },
-      { icon: Building2, text: 'Verified Mills & Commercial Kitchens' },
-      { icon: ShieldCheck, text: 'Clustered Delivery or Depot Pickup' },
+      { icon: Scale, text: 'Smarter Wholesale Procurement · Direct mill pricing' },
+      { icon: Building2, text: 'Verified Supplier Network · Vetted mills & producers' },
+      { icon: ShieldCheck, text: 'Simplified Purchasing · Clustered delivery & escrow' },
     ];
   } else {
     // forgot-password
@@ -71,9 +71,9 @@ export function AuthHeroPanel({
     <div
       className={`relative p-6 sm:p-8 lg:p-10 flex flex-col justify-between overflow-hidden transition-colors duration-300 ${className}`}
       style={{
-        backgroundColor: isDark ? '#072A21' : '#f4eee3',
-        color: isDark ? '#f7f3e8' : '#0c2b24',
-        borderRight: isDark ? '1px solid rgba(200, 178, 118, 0.15)' : '1px solid var(--border-default)',
+        backgroundColor: isDark ? '#072A21' : '#e8ddcb',
+        color: isDark ? '#f7f3e8' : '#1a1d1a',
+        borderRight: isDark ? '1px solid rgba(200, 178, 118, 0.15)' : '1px solid rgba(174, 147, 96, 0.28)',
       }}
     >
       {/* Background Hero Layer */}
@@ -84,7 +84,7 @@ export function AuthHeroPanel({
             alt="MilJor Commodity Procurement"
             className="w-full h-full object-cover object-center transition-transform duration-700 scale-102"
             style={{
-              opacity: isDark ? 0.38 : 0.28,
+              opacity: isDark ? 0.38 : 0.42,
               mixBlendMode: isDark ? 'luminosity' : 'multiply',
             }}
           />
@@ -94,7 +94,7 @@ export function AuthHeroPanel({
             style={{
               background: isDark
                 ? 'linear-gradient(180deg, rgba(7,42,33,0.75) 0%, rgba(5,37,29,0.92) 100%)'
-                : 'linear-gradient(180deg, rgba(247,243,232,0.78) 0%, rgba(243,237,225,0.92) 100%)',
+                : 'linear-gradient(180deg, rgba(235,224,207,0.72) 0%, rgba(225,212,192,0.86) 100%)',
             }}
           />
         </div>
@@ -103,12 +103,18 @@ export function AuthHeroPanel({
       {/* Top Section: Nationwide Brand Badge & Editorial Heading */}
       <div className="relative z-10 space-y-3">
         {/* Nationwide Positioning Marker with Lahore Launch Market Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-sans font-semibold tracking-wide border shadow-xs">
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-sans font-semibold tracking-wide border shadow-xs"
+          style={{
+            backgroundColor: isDark ? 'rgba(7,42,33,0.60)' : 'rgba(255,255,255,0.40)',
+            borderColor: isDark ? 'rgba(200,178,118,0.25)' : 'rgba(174,147,96,0.30)',
+          }}
+        >
           <span
             className="w-1.5 h-1.5 rounded-full"
             style={{ backgroundColor: 'var(--brand-accent)' }}
           />
-          <span style={{ color: isDark ? '#e6dfd3' : 'var(--text-forest)' }}>
+          <span style={{ color: isDark ? '#e6dfd3' : '#1a1d1a' }}>
             Built for Pakistan · Launching first in Lahore
           </span>
         </div>
@@ -116,14 +122,14 @@ export function AuthHeroPanel({
         <div className="space-y-1.5 pt-1">
           <h2
             className="font-display font-bold text-2xl sm:text-3xl tracking-tight leading-tight"
-            style={{ color: isDark ? '#fbf8f1' : 'var(--text-primary)' }}
+            style={{ color: isDark ? '#fbf8f1' : '#1a1d1a' }}
           >
             {heading}
           </h2>
 
           <p
             className="text-xs sm:text-sm font-sans leading-relaxed"
-            style={{ color: isDark ? '#c8d4cd' : 'var(--text-secondary)' }}
+            style={{ color: isDark ? '#c8d4cd' : '#3d423d' }}
           >
             {supportingCopy}
           </p>
@@ -132,7 +138,7 @@ export function AuthHeroPanel({
         {subDescription && (
           <p
             className="text-xs font-sans leading-relaxed pt-1"
-            style={{ color: isDark ? '#95a89e' : 'var(--text-muted)' }}
+            style={{ color: isDark ? '#95a89e' : '#4a524a' }}
           >
             {subDescription}
           </p>
@@ -142,7 +148,7 @@ export function AuthHeroPanel({
       {/* Bottom Section: Clean Editorial Value Props & Tagline */}
       <div
         className="relative z-10 space-y-3 pt-6 border-t mt-6 sm:mt-8"
-        style={{ borderColor: isDark ? 'rgba(200, 178, 118, 0.22)' : 'var(--border-default)' }}
+        style={{ borderColor: isDark ? 'rgba(200, 178, 118, 0.22)' : 'rgba(174, 147, 96, 0.28)' }}
       >
         <div className="space-y-2">
           {valueProps.map((item, idx) => {
@@ -155,7 +161,7 @@ export function AuthHeroPanel({
                 />
                 <span
                   className="font-medium"
-                  style={{ color: isDark ? '#e4ede7' : 'var(--text-primary)' }}
+                  style={{ color: isDark ? '#e4ede7' : '#1a1d1a' }}
                 >
                   {item.text}
                 </span>
@@ -170,9 +176,6 @@ export function AuthHeroPanel({
             style={{ color: 'var(--brand-accent)' }}
           >
             Mil Kar Khareedo, Behtar Pao.
-          </span>
-          <span style={{ color: isDark ? '#82958b' : 'var(--text-muted)' }}>
-            B2B Food Platform
           </span>
         </div>
       </div>

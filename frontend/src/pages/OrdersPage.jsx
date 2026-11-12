@@ -214,10 +214,21 @@ export const OrdersPage = () => {
                   <span className="text-xs font-medium">{order.payment_status || 'AWAITING_PAYMENT'}</span>
                 </div>
                 <p className="text-sm">{order.product_title || 'Procurement Order'}</p>
-                <div className="flex flex-wrap gap-3 text-xs" style={{color:'var(--text-muted)'}}>
-                  <span>Order status: {order.order_status || 'PENDING'}</span>
-                  <span>Fulfillment: {order.fulfillment_status || 'NOT_STARTED'}</span>
-                  <span>Total: PKR {Number(order.total_amount || 0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                <div className="flex flex-wrap gap-3 text-xs items-center justify-between" style={{color:'var(--text-muted)'}}>
+                  <div className="flex flex-wrap gap-3">
+                    <span>Order status: {order.order_status || 'PENDING'}</span>
+                    <span>Fulfillment: {order.fulfillment_status || 'NOT_STARTED'}</span>
+                    <span>Total: PKR {Number(order.total_amount || 0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                  </div>
+                  {order.payment_status !== 'PAID' && order.order_status !== 'PAID' && (
+                    <Link
+                      to={`/checkout/${order.id}`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--brand-accent)] text-[#072a21] hover:opacity-90 transition flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <span>Complete Checkout</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  )}
                 </div>
               </article>
             ))}

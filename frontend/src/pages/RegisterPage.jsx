@@ -424,10 +424,10 @@ export const RegisterPage = () => {
             />
           </div>
 
-          {/* Role-Specific Address Handling */}
+          {/* Role-Specific Address Handling — Aligned Heights to Prevent Tab Jumps */}
           {role === 'BUYER' ? (
             <div className="space-y-2 pt-0.5">
-              <div className="flex items-start gap-1.5 text-[11px] text-stone-500">
+              <div className="flex items-start gap-1.5 text-[11px] text-stone-500 min-h-[28px]">
                 <Info className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
                 <span>
                   <strong>Optional Delivery Address:</strong> You can register now with just your base cluster. Full street delivery addresses are only required when placing doorstep delivery orders.
@@ -458,6 +458,13 @@ export const RegisterPage = () => {
             </div>
           ) : (
             <div className="space-y-2 pt-0.5">
+              <div className="flex items-start gap-1.5 text-[11px] text-stone-500 min-h-[28px]">
+                <Info className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Facility Address:</strong> Street address for your primary processing mill or supply depot is required for physical business verification in Lahore.
+                </span>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <Input
                   label="Society / Industrial Area"
@@ -582,7 +589,10 @@ export const RegisterPage = () => {
             <div
               className={`${
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
-              } p-6 sm:p-8 flex flex-col justify-center`}
+              } p-6 sm:p-8 flex flex-col justify-center min-h-[580px]`}
+              style={{
+                backgroundColor: 'var(--bg-auth-card)',
+              }}
             >
               {renderForm()}
             </div>
