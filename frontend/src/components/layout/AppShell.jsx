@@ -5,6 +5,7 @@ import { useTheme, THEME_MODES } from '../../context/ThemeContext';
 import { Logo } from '../ui/Logo';
 import { Drawer } from '../ui/Drawer';
 import FLAGS from '../../config/featureFlags';
+import { unifiedPoolsApi } from '../../api/unifiedPools';
 import {
   Layers,
   ClipboardList,
@@ -12,6 +13,7 @@ import {
   Tag,
   Search,
   Bell,
+  BellOff,
   User,
   Monitor,
   Sun,
@@ -83,6 +85,8 @@ export const AppShell = ({ children }) => {
   const notificationsRef = useRef(null);
   const mobileNotificationsRef = useRef(null);
   const navigate = useNavigate();
+  const { isAuthenticated, logout, user } = useAuth();
+  const role = user?.role;
 
   const [hoveredNav, setHoveredNav] = useState(null);
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -90,6 +94,40 @@ export const AppShell = ({ children }) => {
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNotificationsOpen, setMobileNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [readNotificationIds, setReadNotificationIds] = useState(new Set());
+
+  // Genuine backend alerts/notifications loader
+  useEffect(() => {
+    let isMounted = true;
+    async function loadNotifications() {
+      if (!isAuthenticated) {
+        if (isMounted) setNotifications([]);
+        return;
+      }
+      try {
+        if (role === 'SUPPLIER') {
+          const res = await unifiedPoolsApi.alerts();
+          if (isMounted && res?.alerts) {
+            setNotifications(res.alerts);
+          }
+        } else {
+          // For buyer / admin, genuine notifications come from backend events; if none, array remains empty
+          if (isMounted) setNotifications([]);
+        }
+      } catch {
+        if (isMounted) setNotifications([]);
+      }
+    }
+    loadNotifications();
+  }, [isAuthenticated, role]);
+
+  const unreadNotifications = notifications.filter(n => !readNotificationIds.has(n.id));
+  const unreadCount = unreadNotifications.length;
+
+  const markAllAsRead = () => {
+    setReadNotificationIds(new Set(notifications.map(n => n.id)));
+  };
 
   // Outside click listener: Close notifications dropdown when clicking outside
   useEffect(() => {
@@ -164,7 +202,6 @@ export const AppShell = ({ children }) => {
     };
   }, [accountMenuOpen]);
 
-  const { isAuthenticated, logout, user } = useAuth();
   const { theme, setTheme, isDark } = useTheme();
   const location = useLocation();
   const ActiveThemeIcon = theme === THEME_MODES.DARK ? Moon : theme === THEME_MODES.LIGHT ? Sun : Monitor;
@@ -172,7 +209,6 @@ export const AppShell = ({ children }) => {
   // Primary Navigation items matching the reference and functional routes
   const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
   const isAdmin = isAuthenticated && adminRoles.includes(user?.role);
-  const role = user?.role;
   const isSupplier = isAuthenticated && role === 'SUPPLIER';
   const path = location.pathname;
   const is = (p) => path === p || path.startsWith(p + '/');
@@ -325,8 +361,11 @@ export const AppShell = ({ children }) => {
                 }}
               >
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
-                {FLAGS.headerNotificationsPopover && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse" />
+                {unreadCount > 0 && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
+                    aria-label={`${unreadCount} unread alerts`}
+                  />
                 )}
               </button>
 
@@ -341,23 +380,77 @@ export const AppShell = ({ children }) => {
                   }}
                 >
                   <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Procurement Alerts</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                      2 New
-                    </span>
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
+                    {unreadCount > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
+                          {unreadCount} New
+                        </span>
+                        <button
+                          type="button"
+                          onClick={markAllAsRead}
+                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-stone-400">All caught up</span>
+                    )}
                   </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Basmati Rice Pool Reached 62%</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Wholesale Tier 2 will lock in 4 hours. Only 380 kg remaining.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">12 mins ago</span>
+
+                  {notifications.length === 0 ? (
+                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
+                        style={{
+                          backgroundColor: 'var(--bg-elevated)',
+                          color: 'var(--brand-accent)',
+                        }}
+                      >
+                        <BellOff className="w-4 h-4 opacity-75" />
+                      </div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        You're all caught up.
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        No new notifications at this time.
+                      </p>
                     </div>
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Canola Oil 16L Tin Pool Live</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Direct factory dispatch scheduled for Lahore restaurant cluster.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">1 hour ago</span>
+                  ) : (
+                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
+                      {notifications.map((n) => {
+                        const isRead = readNotificationIds.has(n.id);
+                        return (
+                          <div
+                            key={n.id}
+                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
+                            style={{
+                              backgroundColor: 'var(--bg-elevated)',
+                              borderColor: 'var(--border-subtle)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                                {n.title || n.type || 'Alert'}
+                              </p>
+                              {!isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              )}
+                            </div>
+                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                              {n.message}
+                            </p>
+                            {n.source && (
+                              <span className="text-[9px] text-stone-400 mt-1 block">
+                                {n.source.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -807,14 +900,17 @@ export const AppShell = ({ children }) => {
                 }}
               >
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
-                {FLAGS.headerNotificationsPopover && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse" />
+                {unreadCount > 0 && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
+                    aria-label={`${unreadCount} unread alerts`}
+                  />
                 )}
               </button>
 
               {FLAGS.headerNotificationsPopover && notificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-72 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  className="absolute right-0 top-full mt-2 w-80 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
@@ -822,23 +918,77 @@ export const AppShell = ({ children }) => {
                   }}
                 >
                   <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Procurement Alerts</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                      2 New
-                    </span>
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
+                    {unreadCount > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
+                          {unreadCount} New
+                        </span>
+                        <button
+                          type="button"
+                          onClick={markAllAsRead}
+                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-stone-400">All caught up</span>
+                    )}
                   </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Basmati Rice Pool Reached 62%</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Wholesale Tier 2 will lock in 4 hours. Only 380 kg remaining.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">12 mins ago</span>
+
+                  {notifications.length === 0 ? (
+                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
+                        style={{
+                          backgroundColor: 'var(--bg-elevated)',
+                          color: 'var(--brand-accent)',
+                        }}
+                      >
+                        <BellOff className="w-4 h-4 opacity-75" />
+                      </div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        You're all caught up.
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        No new notifications at this time.
+                      </p>
                     </div>
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Canola Oil 16L Tin Pool Live</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Direct factory dispatch scheduled for Lahore restaurant cluster.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">1 hour ago</span>
+                  ) : (
+                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
+                      {notifications.map((n) => {
+                        const isRead = readNotificationIds.has(n.id);
+                        return (
+                          <div
+                            key={n.id}
+                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
+                            style={{
+                              backgroundColor: 'var(--bg-elevated)',
+                              borderColor: 'var(--border-subtle)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                                {n.title || n.type || 'Alert'}
+                              </p>
+                              {!isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              )}
+                            </div>
+                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                              {n.message}
+                            </p>
+                            {n.source && (
+                              <span className="text-[9px] text-stone-400 mt-1 block">
+                                {n.source.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

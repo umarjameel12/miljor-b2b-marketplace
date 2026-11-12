@@ -12,9 +12,10 @@ export default function LahoreClusterSelector({
   onChange,
   error,
   disabled = false,
-  label = 'Base Cluster',
+  label = 'Marketplace Cluster',
+  badge = 'Local District Only',
   required = true,
-  helperText = 'Authoritative 12-cluster drop zone in Lahore District.'
+  helperText = ''
 }) {
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,13 +60,13 @@ export default function LahoreClusterSelector({
   return (
     <div className="flex flex-col gap-1.5 w-full">
       {label && (
-        <label className="text-xs font-sans font-medium flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
+        <label className="text-xs font-sans font-medium flex items-center justify-between h-4" style={{ color: 'var(--text-secondary)' }}>
           <span className="flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-stone-500 shrink-0" />
             <span>{label}</span>
             {required && <span className="text-red-500">*</span>}
           </span>
-          <span className="text-[10px] text-stone-400">Lahore District Only</span>
+          {badge && <span className="text-[10px] text-stone-400">{badge}</span>}
         </label>
       )}
 
@@ -110,7 +111,7 @@ export default function LahoreClusterSelector({
             disabled={disabled}
             required={required}
             aria-label={label}
-            className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand-accent)] appearance-none cursor-pointer ${
+            className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--brand-accent)] appearance-none cursor-pointer h-[42px] ${
               disabled ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             style={{

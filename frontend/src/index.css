@@ -315,19 +315,53 @@ h1, h2, h3, h4, h5, h6, .font-display {
   }
 }
 
-/* Enhanced Frosted & Sculpted Luxury Card Box for Auth Pages (Rollback Safe) */
+/* Enhanced Frosted & Sculpted Luxury Card Box for Auth Pages (Animated Living Surfaces) */
+@keyframes light-auth-glow {
+  0% {
+    background-position: 50% 0%, 100% 100%, 0% 0%;
+  }
+  50% {
+    background-position: 70% 12%, 85% 90%, 0% 0%;
+  }
+  100% {
+    background-position: 30% 0%, 95% 95%, 0% 0%;
+  }
+}
+
+@keyframes dark-auth-glow {
+  0% {
+    background-position: 50% 0%, 100% 100%, 0% 0%;
+  }
+  50% {
+    background-position: 65% 15%, 85% 90%, 0% 0%;
+  }
+  100% {
+    background-position: 35% 5%, 95% 95%, 0% 0%;
+  }
+}
+
 .auth-box-enhanced {
-  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.12) 0%, transparent 70%), var(--bg-surface);
+  background:
+    radial-gradient(ellipse 95% 45% at 50% 0%, rgba(255, 255, 255, 0.95) 0%, transparent 65%),
+    radial-gradient(circle at 100% 100%, rgba(200, 178, 118, 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, #fcfbf7 0%, #f7f3e8 100%);
+  background-size: 140% 140%, 130% 130%, 100% 100%;
+  animation: light-auth-glow 18s ease-in-out infinite alternate;
   border: 1px solid rgba(200, 178, 118, 0.30);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.90) inset, 0 20px 50px -10px rgba(12, 43, 36, 0.14), 0 4px 18px rgba(200, 178, 118, 0.10);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.90) inset, 0 20px 50px -10px rgba(12, 43, 36, 0.12), 0 4px 18px rgba(200, 178, 118, 0.10);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
 
 .dark .auth-box-enhanced {
-  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.18) 0%, transparent 70%), #072a21;
+  background:
+    radial-gradient(ellipse 95% 50% at 50% 0%, rgba(200, 178, 118, 0.18) 0%, transparent 70%),
+    radial-gradient(circle at 100% 100%, rgba(15, 90, 72, 0.32) 0%, transparent 60%),
+    linear-gradient(180deg, #072a21 0%, #05251d 100%);
+  background-size: 140% 140%, 130% 130%, 100% 100%;
+  animation: dark-auth-glow 16s ease-in-out infinite alternate;
   border: 1px solid rgba(200, 178, 118, 0.38);
-  box-shadow: 0 1px 0 0 rgba(200, 178, 118, 0.40) inset, 0 25px 65px -12px rgba(0, 0, 0, 0.75), 0 0 35px rgba(15, 90, 72, 0.25);
+  box-shadow: 0 1px 0 0 rgba(200, 178, 118, 0.35) inset, 0 25px 65px -12px rgba(0, 0, 0, 0.75), 0 0 35px rgba(15, 90, 72, 0.25);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }

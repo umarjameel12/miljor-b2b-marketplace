@@ -65,7 +65,7 @@ export function PasswordStrengthIndicator({
   if (!password && confirmPassword === null) return null;
 
   return (
-    <div className="space-y-2 pt-1 select-none animate-in fade-in duration-150">
+    <div className="space-y-1.5 pt-0.5 select-none animate-in fade-in duration-150">
       {/* Visual Bar Indicator */}
       {password.length > 0 && (
         <div className="space-y-1">
@@ -104,10 +104,10 @@ export function PasswordStrengthIndicator({
         </div>
       )}
 
-      {/* Live Requirement Checklist */}
+      {/* Live Requirement Checklist in One Horizontal Line */}
       {showChecklist && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-sans pt-0.5">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-2.5 gap-y-1 text-[11px] font-sans pt-0.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {isLengthValid ? (
               <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             ) : (
@@ -118,7 +118,7 @@ export function PasswordStrengthIndicator({
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {hasLetter ? (
               <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             ) : (
@@ -129,7 +129,7 @@ export function PasswordStrengthIndicator({
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {hasNumber ? (
               <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             ) : (
@@ -141,7 +141,7 @@ export function PasswordStrengthIndicator({
           </div>
 
           {confirmPassword !== null && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {isMatch ? (
                 <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               ) : confirmPassword.length > 0 ? (

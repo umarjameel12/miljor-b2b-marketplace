@@ -175,7 +175,7 @@ export function AuthHeroPanel({
 
   return (
     <div
-      className={`relative p-6 sm:p-8 lg:p-10 flex flex-col justify-between overflow-hidden transition-colors duration-300 ${className}`}
+      className={`relative p-4 sm:p-6 lg:p-6 xl:p-8 flex flex-col justify-between overflow-hidden transition-colors duration-300 ${className}`}
       style={{
         backgroundColor: colors.bg,
         borderRight: colors.borderRight,
@@ -204,7 +204,7 @@ export function AuthHeroPanel({
       )}
 
       {/* Top Section: Refined Category Badge & Editorial Heading */}
-      <div className="relative z-10 space-y-3.5">
+      <div className="relative z-10 space-y-2.5">
         <div
           className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-sans font-semibold tracking-wide border shadow-2xs"
           style={{
@@ -220,9 +220,9 @@ export function AuthHeroPanel({
           <span>{badgeLabel}</span>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <h2
-            className="font-display font-bold text-2xl sm:text-3xl tracking-tight leading-tight"
+            className="font-display font-bold text-xl sm:text-2xl tracking-tight leading-tight"
             style={{ color: colors.heading }}
           >
             {heading}
@@ -239,29 +239,29 @@ export function AuthHeroPanel({
 
       {/* Middle/Bottom Section: Visually Balanced Role-Specific Benefits */}
       <div
-        className="relative z-10 space-y-3.5 pt-6 border-t mt-6 sm:mt-8"
+        className="relative z-10 space-y-2.5 pt-4 border-t mt-4 sm:mt-5"
         style={{ borderColor: colors.divider }}
       >
-        <div className="space-y-3">
+        <div className="space-y-2">
           {benefits.map((benefit, idx) => {
             const Icon = benefit.icon;
             return (
               <div
                 key={idx}
-                className="flex items-start gap-3 p-2.5 rounded-xl transition-colors"
+                className="flex items-start gap-2.5 p-2 rounded-xl transition-colors"
                 style={{
                   backgroundColor: isDark ? 'rgba(7, 42, 33, 0.40)' : 'rgba(255, 255, 255, 0.32)',
                   border: `1px solid ${colors.benefitBorder}`,
                 }}
               >
                 <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                  className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                   style={{
                     backgroundColor: colors.benefitIconBg,
                     color: colors.accent,
                   }}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col space-y-0.5 text-xs font-sans">
                   <span
@@ -283,7 +283,7 @@ export function AuthHeroPanel({
         </div>
 
         {/* Footer Monogram & Tagline */}
-        <div className="pt-3 flex items-center justify-center text-center text-[11px] font-sans">
+        <div className="pt-2 flex items-center justify-center text-center text-[11px] font-sans">
           <span
             className="font-semibold tracking-widest uppercase text-[10px]"
             style={{ color: colors.accent }}

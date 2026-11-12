@@ -229,7 +229,7 @@ export const LoginPage = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-5rem)] flex items-center justify-center p-3 sm:p-5 lg:p-6 transition-colors duration-300 relative overflow-hidden"
+      className="min-h-[calc(100vh-4.5rem)] flex items-center justify-center py-2 sm:py-3 lg:py-4 px-3 sm:px-4 transition-colors duration-300 relative overflow-hidden"
       style={{ background: 'var(--bg-auth)' }}
     >
       {/* Preserved Appearance Customizer Control (Hidden from view to prevent clutter) */}
@@ -240,7 +240,7 @@ export const LoginPage = () => {
       {/* ORIGINAL LAYOUT MODE (Reversible single-card center presentation) */}
       {preferences.layoutStyle === 'original' ? (
         <div
-          className="w-full max-w-md p-6 sm:p-8 rounded-3xl auth-box-enhanced relative z-10 shadow-xl my-auto border"
+          className="w-full max-w-md p-5 sm:p-6 rounded-3xl auth-box-enhanced relative z-10 shadow-xl my-auto border"
           style={{
             backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-subtle)',
@@ -261,7 +261,7 @@ export const LoginPage = () => {
               <AuthHeroPanel
                 pageType="signin"
                 showBackgroundImage={preferences.showBackgroundImage}
-                className="lg:col-span-5 min-h-[300px] lg:min-h-[460px]"
+                className="lg:col-span-5 min-h-[280px] lg:min-h-[440px]"
               />
             )}
 
@@ -269,7 +269,7 @@ export const LoginPage = () => {
             <div
               className={`${
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
-              } p-6 sm:p-8 flex flex-col justify-center`}
+              } p-4 sm:p-6 lg:p-6 xl:p-8 flex flex-col justify-center min-h-[440px]`}
               style={{
                 background: 'var(--bg-auth-form)',
                 boxShadow: 'var(--shadow-auth-form)',
