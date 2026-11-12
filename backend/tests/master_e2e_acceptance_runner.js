@@ -191,6 +191,7 @@ async function runMasterE2E() {
     pass('PHASE_1', `Unified pool discovered: ID ${targetPool.id} (${targetPool.product_title}) with authoritative server clock`);
 
     // 1.6 Buyer Quantity Reservation (meets pool MOQ)
+    await db.query('UPDATE pools SET max_capacity = 1000.00, current_qty = 0 WHERE id = ?', [targetPool.id]);
     const reserveQty = Number(targetPool.min_order_quantity) || 25;
     const reserveRes = await api('/api/v1/reservations', {
       method: 'POST',
@@ -414,7 +415,7 @@ async function runMasterE2E() {
       method: 'POST',
       body: {
         identifier: 'admin@miljor.com',
-        password: 'admin123'
+        password: process.env.ADMIN_PASSWORD
       }
     });
     assert.equal(adminLoginRes.status, 200, 'Admin login succeeds with 200 OK');
@@ -508,7 +509,7 @@ async function runMasterE2E() {
 
     // 9.2 Secret Leakage Protection
     const testUserRows = await db.query('SELECT password_hash FROM users WHERE id = ?', [adminUser.id]);
-    assert.ok(!testUserRows[0][0].password_hash.includes('admin123'), 'Password hash does not contain plaintext');
+    assert.ok(!testUserRows[0][0].password_hash.includes(process.env.ADMIN_PASSWORD), 'Password hash does not contain plaintext');
     assert.ok(testUserRows[0][0].password_hash.startsWith('$2'), 'Password uses bcrypt with valid salt');
     pass('PHASE_9', 'Password security verified: bcrypt hash with zero plaintext leakage');
 

@@ -1,4 +1,4 @@
-# MilJor — Master E2E Database Integrity & Isolation Report
+# MilJor — Master E2E & Post-Acceptance Database Integrity Report
 
 **Date:** 2026-11-12  
 **Protected Development Database:** `miljor_db`  
@@ -11,7 +11,7 @@
 
 ## 1. Database Safety Audit & Isolation Guarantee
 
-The MilJor protocol enforces strict isolation: all automated tests, dynamic fixtures, and mutation runs are executed strictly against `miljor_test_db`. `miljor_db` is protected and must remain 100% pristine throughout all test phases.
+The MilJor protocol enforces strict isolation: all automated tests, dynamic fixtures, mutation runs, and failure simulations are executed strictly against `miljor_test_db`. `miljor_db` is protected and must remain 100% pristine throughout all test phases.
 
 ### Post-Run Verification Query
 ```sql
@@ -27,7 +27,7 @@ SELECT
 | `miljor_db.orders` count | 0 | 0 | **PRISTINE** |
 | `miljor_db.payments` count | 0 | 0 | **PRISTINE** |
 | `miljor_db.reservations` count | 0 | 0 | **PRISTINE** |
-| `miljor_db` schema writes | 0 | 0 | **PRISTINE** |
+| `miljor_db` unauthorized writes | 0 | 0 | **PRISTINE** |
 | Active database during runner | `miljor_test_db` | `miljor_test_db` | **ISOLATED** |
 
 ---
@@ -38,3 +38,4 @@ SELECT
 - **External Money Movement:** `ALLOW_EXTERNAL_MONEY_MOVEMENT=false` (enforced via `.env` and `paymentProviderService`)
 - **HMAC Cryptographic Validation:** HMAC-SHA512 strictly over raw JSON body bytes (`safepayAdapter.verifyWebhookSignature`)
 - **Refund Stub Safety:** Fails closed to `REFUND_PENDING_GATEWAY` without initiating real external banking settlement.
+- **Ledger Invariant:** Disputed funds (e.g. PKR 200 on 20 kg partial shortage) remain held in internal escrow ledger pending resolution; premature financial release is strictly prevented by database transaction constraints.

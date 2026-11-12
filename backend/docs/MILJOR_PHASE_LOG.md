@@ -1,29 +1,31 @@
 # MilJor — Phase Execution Log
 
-## Master E2E Implementation & Final Demo Acceptance (Full Multi-Role System Acceptance) — 2026-11-12
+## Post Master-E2E Gap Closure & Final Demo Acceptance (Production Hardened) — 2026-11-12
 
 - **Active Branch:** `feature/frontend-redesign-20261112`
 - **Authoritative Report:** `backend/docs/MILJOR_FULL_E2E_ACCEPTANCE_REPORT.md`
 - **Bug Register:** `backend/docs/MILJOR_FULL_E2E_BUG_REGISTER.md`
 - **Test Evidence:** `backend/docs/MILJOR_FULL_E2E_TEST_EVIDENCE.md`
 - **Database Integrity:** `backend/docs/MILJOR_FULL_E2E_DATABASE_INTEGRITY.md`
-- **Integrated Pillars & Verified Journeys:**
-  - **Phase 0 Baseline & Safety:** Database isolation verified against `miljor_test_db`; `ALLOW_EXTERNAL_MONEY_MOVEMENT=false` strictly preserved.
-  - **Phase 1 Buyer Journey:** Duplicate email prevention (409 Conflict), unique buyer registration, JWT authentication, invalid credential lockout (401), active pool discovery with authoritative server time, quantity reservation meeting pool MOQ, order creation awaiting payment.
-  - **Phase 2 Safepay Sandbox & Finance:** Secure credential validation, hosted sandbox checkout URL generation, raw HMAC-SHA512 webhook signature verification with tampered rejection, atomic order state machine transition to PAID, formal invoice issuance, fail-closed refund stub (`REFUND_PENDING_GATEWAY`).
-  - **Phase 3 Supplier Journey:** Profile verification status (`VERIFIED`), catalog SKU and specification validation, paid fulfillment queue isolation, cross-supplier IDOR order isolation.
-  - **Phase 4 Partial Delivery & Disputes:** Mandatory partial delivery shortage scenario (100 kg ordered, 80 kg delivered, 20 kg shortage @ PKR 10 = exactly PKR 200 held in dispute escrow).
-  - **Phase 5 B6 Procurement:** Multi-item RFQ creation, versioned supplier quote submission, buyer quote award and status transition to `ACCEPTED`.
-  - **Phase 6 Super Admin & RBAC:** Super Admin login (`admin@miljor.com` / `admin123`, role: `SUPER_ADMIN`), strict negative authorization tests (Buyer 403, Supplier 403, Unauthenticated 401).
-  - **Phase 7 Concurrency & Stock Locks:** High-contention `SELECT ... FOR UPDATE` row locks preventing concurrent inventory overselling beyond remaining capacity.
-  - **Phase 8 Notification Integrity:** Genuine database-driven alerts loaded, zero fabricated notifications, truthful empty state ("You're all caught up.").
-  - **Phase 9 Security & Pristine Database:** SQL injection neutralized via prepared statements, bcrypt hash validation without plaintext leakage, `miljor_db` verified 100% pristine (0 orders, 0 payments, 0 writes).
+- **Gap Closures & Hardening Completed:**
+  - **Task 1 Admin Credential Security:** Rotated SUPER_ADMIN password to a high-entropy secret stored exclusively in gitignored `backend/.env`. Hashed with bcrypt (12 rounds) across `miljor_db` and `miljor_test_db`. Revoked all active sessions and refresh tokens. Sanitized all plaintext password mentions across Git-tracked files and markdown reports. Verified admin login (200 OK, `SUPER_ADMIN`).
+  - **Task 2 Genuine Safepay Sandbox Session:** Created real checkout tracker session `track_1216a64c-0fb4-48b6-9f0f-bbae39312c8b` via live API call to `https://sandbox.api.getsafepay.com/order/v1/init`. Confirmed state `TRACKER_STARTED` via live `fetchTracker`. Verified raw HMAC-SHA512 webhook ingestion and tampered signature rejection.
+  - **Task 3 Safepay Refund Capabilities:** Documented technical reality: Safepay does not provide programmatic self-serve REST refund endpoints on standard sandbox accounts; merchant refunds operate through dashboard settlement. Fail-closed `REFUND_PENDING_GATEWAY` stub verified without live money movement under `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`.
+  - **Task 4 Complete B6 Paid Fulfillment:** Executed `demo_real_b6_award_paid_fulfillment_mysql_gate.js` (7/7 PASS): verified buyer RFQ creation, quote submission, fee-inclusive preview, single-supplier order creation (`AWAITING_PAYMENT`), signed Safepay callback reconciliation, stock commitment (`ORDER_DIRECT`), paid supplier fulfillment queue visibility, and immutable B6 invoice generation.
+  - **Task 5 Live Browser Journeys:** Executed live browser verification on `http://localhost:3000` via webview subagent:
+    - Buyer Journey: Authenticated as `buyer1@miljor.com`, verified `/pools` catalog with Flash and Regular pools and `/orders` empty state with volume counters.
+    - RBAC Check: Buyer attempting direct access to `/admin` blocked with "Administrator access required" and link to administrator login.
+    - Supplier Journey: Authenticated as `supplier1@miljor.com`, verified `/supplier/dashboard`, `/supplier/catalog`, and `/supplier/pools` with commodity hierarchy and pool management.
+  - **Task 6 Partial Shortage & Financial Escrow:** Executed `demo_real_mysql_postpurchase_100_80_20_gate.js` (10/10 PASS): 100 kg ordered, 80 kg delivered, 20 kg shortage creates exact PKR 200 dispute held in internal escrow; order completion and premature financial settlement prevented.
+  - **Task 7 Notification Events:** Verified database-driven in-app operational alerts via `poolOperationsService.alerts(supplierId)` and email notifications via `emailService.js`.
 - **Consolidated Gates Executed (100% Green):**
   - `master_e2e_acceptance_runner.js`: 31 / 31 PASS (100% Green).
+  - `demo_real_b6_award_paid_fulfillment_mysql_gate.js`: 7 / 7 PASS (100% Green).
+  - `demo_real_mysql_postpurchase_100_80_20_gate.js`: 10 / 10 PASS (100% Green).
   - `npm run test:ucp`: 152 / 152 PASS (100% Green).
   - `safepay_sandbox_readiness_gate.test.js`: 9 / 9 PASS (100% Green).
-  - Frontend test suites: Design tokens (10/10 PASS), Deadline parser (14/14 PASS).
-  - Frontend production build: Vite v8.3.4 (2,229 modules transformed, 0 errors in 2.28s).
+  - Frontend test suites: 24 / 24 PASS (100% Green).
+  - Frontend production build: Vite v8.3.4 (2,229 modules transformed, 0 errors, 10.94s).
 - **Database Safety:** `miljor_db` remains 100% PRISTINE (0 orders, 0 payments, 0 reservations).
 - **State:** **VERIFIED, INTEGRATED, DOCUMENTED & COMMITTED TO FEATURE BRANCH**.
 

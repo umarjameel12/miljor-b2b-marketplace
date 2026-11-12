@@ -112,7 +112,7 @@ Automated Playwright Chromium verification confirmed:
 3. **Authentication Flows (`/login`, `/register`, `/forgot-password`)**:
    - Clean card presentation without floating customizer clutter.
    - Laptop viewport responsive fit (1366×768 / 1440×900) verified.
-   - Super Admin credential verification: `admin@miljor.com` / `admin123` verified with 200 HTTP response and `/admin` authorization.
+   - Super Admin credential verification: `admin@miljor.com` / `[REDACTED_SECURE_ADMIN_PASSWORD]` verified with 200 HTTP response and `/admin` authorization.
 
 ---
 
