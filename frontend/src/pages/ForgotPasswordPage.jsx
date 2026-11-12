@@ -735,11 +735,7 @@ export const ForgotPasswordPage = () => {
         <div
           className={`w-full ${
             preferences.showBrandPanel ? 'max-w-4xl' : 'max-w-md'
-          } rounded-3xl auth-box-enhanced shadow-2xl relative z-10 overflow-hidden border transition-all duration-300 my-auto`}
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-subtle)',
-          }}
+          } rounded-3xl auth-box-enhanced shadow-2xl relative z-10 overflow-hidden transition-all duration-300 my-auto`}
         >
           <div className={`grid ${preferences.showBrandPanel ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'}`}>
             {/* Left Dedicated Recovery Hero Panel */}
@@ -757,7 +753,8 @@ export const ForgotPasswordPage = () => {
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
               } p-6 sm:p-8 flex flex-col justify-center`}
               style={{
-                backgroundColor: 'var(--bg-auth-card)',
+                background: 'var(--bg-auth-form)',
+                boxShadow: 'var(--shadow-auth-form)',
               }}
             >
               {renderFormContent()}

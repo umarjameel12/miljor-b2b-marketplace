@@ -57,21 +57,21 @@ export function AuthHeroPanel({
         imageOverlay: 'linear-gradient(180deg, rgba(7,42,33,0.78) 0%, rgba(5,37,29,0.92) 100%)',
       }
     : {
-        bg: '#DCC7A5',
-        borderRight: '1px solid rgba(169, 133, 67, 0.32)',
-        heading: '#242421',
-        supporting: '#40392F',
-        secondary: '#524B3E',
-        accent: '#A98543',
-        badgeBg: 'rgba(255, 255, 255, 0.45)',
-        badgeBorder: 'rgba(169, 133, 67, 0.35)',
-        badgeText: '#242421',
-        benefitIconBg: 'rgba(169, 133, 67, 0.14)',
-        benefitBorder: 'rgba(169, 133, 67, 0.22)',
-        divider: 'rgba(169, 133, 67, 0.25)',
-        imageOpacity: 0.52,
+        bg: '#EADDC7',
+        borderRight: '1px solid rgba(169, 133, 67, 0.25)',
+        heading: '#1C1C19',
+        supporting: '#38342C',
+        secondary: '#4A443A',
+        accent: '#967434',
+        badgeBg: 'rgba(255, 255, 255, 0.65)',
+        badgeBorder: 'rgba(169, 133, 67, 0.30)',
+        badgeText: '#1C1C19',
+        benefitIconBg: 'rgba(169, 133, 67, 0.12)',
+        benefitBorder: 'rgba(169, 133, 67, 0.18)',
+        divider: 'rgba(169, 133, 67, 0.20)',
+        imageOpacity: 0.25,
         imageBlend: 'multiply',
-        imageOverlay: 'linear-gradient(180deg, rgba(220,199,165,0.58) 0%, rgba(212,189,153,0.80) 100%)',
+        imageOverlay: 'linear-gradient(180deg, rgba(246,240,230,0.82) 0%, rgba(234,221,199,0.92) 100%)',
       };
 
   // Distinct copy & benefits per page type and role
@@ -283,9 +283,9 @@ export function AuthHeroPanel({
         </div>
 
         {/* Footer Monogram & Tagline */}
-        <div className="pt-2 flex items-center justify-between text-[11px] font-sans">
+        <div className="pt-3 flex items-center justify-center text-center text-[11px] font-sans">
           <span
-            className="font-semibold tracking-wider uppercase text-[10px]"
+            className="font-semibold tracking-widest uppercase text-[10px]"
             style={{ color: colors.accent }}
           >
             Mil Kar Khareedo, Behtar Pao.

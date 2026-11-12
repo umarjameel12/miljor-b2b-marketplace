@@ -38,21 +38,21 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
           aria-label={`Theme setting: currently ${currentOption.label}`}
           aria-haspopup="true"
           aria-expanded={dropdownOpen}
-          className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:border-[var(--brand-gold)] active:scale-95"
           style={{
-            backgroundColor: 'var(--bg-card)',
+            backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-default)',
             color: 'var(--text-primary)',
           }}
         >
-          <CurrentIcon className="w-4 h-4 text-emerald-900 dark:text-champagne" />
+          <CurrentIcon className="w-4 h-4 text-[#c89528] dark:text-[#dfcca9]" />
         </button>
 
         {dropdownOpen && (
           <div
-            className="absolute right-0 mt-2 w-40 rounded-2xl border p-2 shadow-xl z-50 animate-fade-in space-y-1"
+            className="absolute right-0 mt-2 w-40 rounded-2xl border p-1.5 shadow-xl z-50 animate-fade-in space-y-1"
             style={{
-              backgroundColor: 'var(--bg-surface)',
+              backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-default)',
               boxShadow: 'var(--shadow-elevated)',
             }}
@@ -72,19 +72,19 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
                   className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl transition-all duration-150 cursor-pointer ${
                     isSelected
                       ? 'font-semibold shadow-xs'
-                      : 'font-normal opacity-80 hover:opacity-100 hover:bg-[var(--bg-sidebar-active)]/60'
+                      : 'font-medium hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                   style={{
                     backgroundColor: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
-                    color: isSelected ? 'var(--text-primary)' : 'var(--text-muted)',
+                    color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
                     border: isSelected ? '1px solid var(--border-subtle)' : '1px solid transparent',
                   }}
                 >
                   <Icon
                     className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                       isSelected
-                        ? 'text-emerald-900 dark:text-champagne'
-                        : 'text-stone-500 dark:text-stone-400'
+                        ? 'text-[#c89528] dark:text-[#dfcca9]'
+                        : 'text-stone-600 dark:text-stone-300'
                     }`}
                   />
                   <span>{label}</span>

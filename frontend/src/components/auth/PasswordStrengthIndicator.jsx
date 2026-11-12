@@ -106,7 +106,7 @@ export function PasswordStrengthIndicator({
 
       {/* Live Requirement Checklist */}
       {showChecklist && (
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] font-sans pt-0.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-sans pt-0.5">
           <div className="flex items-center gap-1.5">
             {isLengthValid ? (
               <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />

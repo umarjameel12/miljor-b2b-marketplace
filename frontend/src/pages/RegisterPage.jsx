@@ -374,27 +374,17 @@ export const RegisterPage = () => {
           />
         </div>
 
-        {/* Geographic Launch Alignment Section */}
-        <div className="pt-2 border-t space-y-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
-              {role === 'SUPPLIER' ? 'Supplier Facility Location' : 'Marketplace Base Cluster'}
-            </span>
-            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Launch Service Area — Lahore</span>
-            </span>
-          </div>
-
+        {/* Geographic Base Cluster Section */}
+        <div className="space-y-2.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Launch City Fixed */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-sans font-medium flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
                 <span className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-stone-400" />
-                  <span>Launch City</span>
+                  <span>Operating City</span>
                 </span>
-                <span className="text-[10px] text-stone-400">First Market</span>
+                <span className="text-[10px] text-stone-400">Lahore District</span>
               </label>
               <input
                 type="text"
@@ -415,25 +405,14 @@ export const RegisterPage = () => {
             <LahoreClusterSelector
               value={formData.cluster_id}
               onChange={handleClusterChange}
-              label={role === 'SUPPLIER' ? 'Primary Mill / Facility Cluster' : 'Base Operating Cluster'}
-              helperText={
-                role === 'SUPPLIER'
-                  ? 'Location of your primary warehouse or processing facility in Lahore.'
-                  : 'Used for pool discovery. You can add specific delivery addresses later.'
-              }
+              label={role === 'SUPPLIER' ? 'Primary Mill / Facility Cluster' : 'Marketplace Base Cluster'}
+              helperText=""
             />
           </div>
 
           {/* Role-Specific Address Handling — Aligned Heights to Prevent Tab Jumps */}
           {role === 'BUYER' ? (
-            <div className="space-y-2 pt-0.5">
-              <div className="flex items-start gap-1.5 text-[11px] text-stone-500 min-h-[28px]">
-                <Info className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Optional Delivery Address:</strong> You can register now with just your base cluster. Full street delivery addresses are only required when placing doorstep delivery orders.
-                </span>
-              </div>
-
+            <div className="space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <Input
                   label="Society / Area (Optional)"
@@ -457,14 +436,7 @@ export const RegisterPage = () => {
               </div>
             </div>
           ) : (
-            <div className="space-y-2 pt-0.5">
-              <div className="flex items-start gap-1.5 text-[11px] text-stone-500 min-h-[28px]">
-                <Info className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Facility Address:</strong> Street address for your primary processing mill or supply depot is required for physical business verification in Lahore.
-                </span>
-              </div>
-
+            <div className="space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <Input
                   label="Society / Industrial Area"
@@ -492,7 +464,7 @@ export const RegisterPage = () => {
         </div>
 
         {/* Password & Confirmation with Live Checklist */}
-        <div className="pt-2 border-t space-y-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="space-y-2.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <PasswordField
               label="Account Password"
@@ -568,11 +540,7 @@ export const RegisterPage = () => {
         <div
           className={`w-full ${
             preferences.showBrandPanel ? 'max-w-5xl' : 'max-w-xl'
-          } rounded-3xl auth-box-enhanced shadow-2xl relative z-10 overflow-hidden border transition-all duration-300 my-auto`}
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-subtle)',
-          }}
+          } rounded-3xl auth-box-enhanced shadow-2xl relative z-10 overflow-hidden transition-all duration-300 my-auto`}
         >
           <div className={`grid ${preferences.showBrandPanel ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'}`}>
             {/* Left Dedicated Create Account Hero Panel */}
@@ -591,7 +559,8 @@ export const RegisterPage = () => {
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
               } p-6 sm:p-8 flex flex-col justify-center min-h-[580px]`}
               style={{
-                backgroundColor: 'var(--bg-auth-card)',
+                background: 'var(--bg-auth-form)',
+                boxShadow: 'var(--shadow-auth-form)',
               }}
             >
               {renderForm()}

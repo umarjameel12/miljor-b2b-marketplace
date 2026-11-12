@@ -79,6 +79,11 @@
     radial-gradient(circle at 78% 28%, rgba(214, 185, 125, 0.20) 0%, transparent 60%),
     linear-gradient(180deg, #f8f2e6 0%, #f1e8d8 50%, #e8ddca 100%);
   --bg-auth-card: #fcf9f2;
+  --bg-auth-form:
+    radial-gradient(ellipse 95% 45% at 50% 0%, rgba(255, 255, 255, 0.95) 0%, transparent 65%),
+    radial-gradient(circle at 100% 100%, rgba(200, 178, 118, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #fcfbf7 0%, #f7f3e8 100%);
+  --shadow-auth-form: 0 1px 0 0 rgba(255, 255, 255, 0.90) inset, 0 12px 32px -4px rgba(12, 43, 36, 0.08);
 
   /* Light Theme Hero Background Blend Spot Behind Image */
   --glow-hero: radial-gradient(circle at 76% 34%, rgba(255, 255, 255, 0.65) 0%, rgba(214, 185, 125, 0.28) 35%, rgba(200, 178, 118, 0.12) 60%, transparent 80%);
@@ -173,6 +178,11 @@
     radial-gradient(circle at 62% 22%, rgba(200, 178, 118, 0.16) 0%, transparent 52%),
     linear-gradient(180deg, #09382b 0%, #072a21 50%, #031914 100%);
   --bg-auth-card: #0a3429;
+  --bg-auth-form:
+    radial-gradient(ellipse 95% 50% at 50% 0%, rgba(200, 178, 118, 0.16) 0%, transparent 70%),
+    radial-gradient(circle at 100% 100%, rgba(15, 90, 72, 0.28) 0%, transparent 60%),
+    linear-gradient(180deg, #072a21 0%, #05251d 100%);
+  --shadow-auth-form: 0 1px 0 0 rgba(200, 178, 118, 0.28) inset, 0 16px 40px -8px rgba(0, 0, 0, 0.60);
 
   /* Dark Theme Hero Background Blend Spot Behind Image — Sweeping One-Sided Luminous Gold & Emerald */
   --glow-hero: radial-gradient(ellipse 90% 75% at 75% 38%, rgba(200, 178, 118, 0.32) 0%, rgba(16, 185, 129, 0.24) 38%, rgba(15, 90, 72, 0.10) 65%, transparent 85%);
@@ -307,19 +317,19 @@ h1, h2, h3, h4, h5, h6, .font-display {
 
 /* Enhanced Frosted & Sculpted Luxury Card Box for Auth Pages (Rollback Safe) */
 .auth-box-enhanced {
-  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.10) 0%, transparent 70%), var(--bg-surface);
-  border: 1px solid var(--border-default);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.85) inset, 0 16px 44px -8px rgba(12, 43, 36, 0.12), 0 4px 16px rgba(0, 0, 0, 0.04);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.12) 0%, transparent 70%), var(--bg-surface);
+  border: 1px solid rgba(200, 178, 118, 0.30);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.90) inset, 0 20px 50px -10px rgba(12, 43, 36, 0.14), 0 4px 18px rgba(200, 178, 118, 0.10);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .dark .auth-box-enhanced {
-  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.12) 0%, transparent 70%), var(--bg-surface);
-  border: 1px solid rgba(200, 178, 118, 0.32);
-  box-shadow: 0 1px 0 0 rgba(200, 178, 118, 0.35) inset, 0 20px 50px -10px rgba(0, 0, 0, 0.55), 0 0 30px rgba(15, 90, 72, 0.18);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(200, 178, 118, 0.18) 0%, transparent 70%), #072a21;
+  border: 1px solid rgba(200, 178, 118, 0.38);
+  box-shadow: 0 1px 0 0 rgba(200, 178, 118, 0.40) inset, 0 25px 65px -12px rgba(0, 0, 0, 0.75), 0 0 35px rgba(15, 90, 72, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 /* Subtle Luxury Button Shimmer Reflection */
