@@ -78,7 +78,7 @@
     radial-gradient(ellipse 85% 45% at 15% 90%, rgba(214, 195, 168, 0.28) 0%, transparent 60%),
     radial-gradient(circle at 78% 28%, rgba(214, 185, 125, 0.20) 0%, transparent 60%),
     linear-gradient(180deg, #f8f2e6 0%, #f1e8d8 50%, #e8ddca 100%);
-  --bg-auth-card: #faf7f0;
+  --bg-auth-card: #fcf9f2;
 
   /* Light Theme Hero Background Blend Spot Behind Image */
   --glow-hero: radial-gradient(circle at 76% 34%, rgba(255, 255, 255, 0.65) 0%, rgba(214, 185, 125, 0.28) 35%, rgba(200, 178, 118, 0.12) 60%, transparent 80%);

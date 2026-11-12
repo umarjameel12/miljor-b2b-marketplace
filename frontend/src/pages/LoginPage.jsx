@@ -100,7 +100,7 @@ export const LoginPage = () => {
           className="text-xs font-sans mt-0.5"
           style={{ color: 'var(--text-muted)' }}
         >
-          Smarter procurement for growing businesses · Launching first in Lahore
+          Smarter procurement for commercial food businesses
         </p>
       </div>
 

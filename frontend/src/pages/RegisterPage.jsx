@@ -224,8 +224,8 @@ export const RegisterPage = () => {
 
         <p className="text-xs font-sans mt-0.5" style={{ color: 'var(--text-muted)' }}>
           {role === 'SUPPLIER'
-            ? 'Wholesale mills, importers & commercial distributors — Launching first in Lahore'
-            : 'Commercial kitchens & restaurants pooling wholesale demand — Launching first in Lahore'}
+            ? 'Wholesale mills, importers & commercial food distributors'
+            : 'Commercial kitchens & restaurants pooling wholesale commodity demand'}
         </p>
       </div>
 

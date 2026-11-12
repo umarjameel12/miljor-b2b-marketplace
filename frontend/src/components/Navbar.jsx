@@ -151,36 +151,7 @@ export const Navbar = () => {
                     <LogOut className="w-4 h-4" />
                   </Button>
                 </div>
-              ) : isAuthRoute ? (
-                <div className="flex items-center gap-3">
-                  {location.pathname === '/login' ? (
-                    <Link to="/register">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        className="font-semibold shadow-xs"
-                        style={{
-                          backgroundColor: 'var(--brand-accent)',
-                          color: 'var(--text-on-champagne)',
-                        }}
-                      >
-                        <span>Create Account</span>
-                      </Button>
-                    </Link>
-                  ) : (
-                    <Link to="/login">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="font-semibold transition hover:bg-black/5 dark:hover:bg-white/5"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        Sign In
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              ) : (
+              ) : isAuthRoute ? null : (
                 <div className="flex items-center gap-3">
                   <Link to="/login">
                     <Button
