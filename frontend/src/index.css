@@ -41,7 +41,7 @@
   /* Light Theme Surfaces & Backgrounds — EXACT REFERENCE LOCK (#EEE6D8, #E3D7C4) */
   --bg-page: #eee6d8;
   --bg-surface: #f1eadf;
-  --bg-sidebar: #cbbda7;
+  --bg-sidebar: #e3d7c4;
   --bg-sidebar-active: #f4eee3;
   --bg-card: #f4eee3;
   --bg-elevated: #ede4d5;
@@ -136,7 +136,7 @@
   /* Dark Theme Surfaces — EXACT REFERENCE LOCK (#072A21, #05251D, #0F5A48) */
   --bg-page: #072a21;
   --bg-surface: #0a3429;
-  --bg-sidebar: #031813;
+  --bg-sidebar: #05251d;
   --bg-sidebar-active: #0f5a48;
   --bg-card: #0a3429;
   --bg-elevated: #103d32;

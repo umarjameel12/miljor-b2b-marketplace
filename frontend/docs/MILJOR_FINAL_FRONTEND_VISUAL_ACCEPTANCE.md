@@ -80,14 +80,15 @@ All 9 active frontend suites executed and confirmed 100% green:
 | Test Suite | Scope | Result |
 |---|---|:---:|
 | `frontend/tests/design_system_tokens.test.js` | Palette, typography, Ribbon-M logo, UI primitives | **PASS (10/10)** |
+| `frontend/tests/part5a_vf9_hero_integration.test.js` | Cinematic hero asset, dual-theme atmosphere, zero period check | **PASS (11/11)** |
+| `frontend/tests/part5a_vf8_appearance_and_contrast.test.js` | Inline appearance controls, theme persistence, asset integrity | **PASS (13/13)** |
+| `frontend/tests/part5a_sidebar_and_controls_fix.test.js` | Persistent sidebar state, top controls, account popover | **PASS (6/6)** |
 | `frontend/tests/auth_v2_frontend.test.cjs` | Auth hero panels, password strength, Lahore cluster gating | **PASS (7/7)** |
 | `frontend/tests/forgot_password_integration.test.cjs` | 4-step password recovery, 60s resend timer, OTP safety | **PASS (9/9)** |
 | `frontend/tests/package_e1_frontend_integration.test.cjs` | Supplier profile, onboarding wizard, admin verification queue | **PASS (6/6)** |
 | `frontend/tests/package_e2_frontend_catalog.test.cjs` | 6-level taxonomy hierarchy, admin moderation queue | **PASS (4/4)** |
 | `frontend/tests/package_c_onboarding_focused.test.js` | 12 Lahore cluster validations, address requirements | **PASS (7/7)** |
 | `frontend/tests/parse_deadline.test.js` | UTC timestamp parsing, ISO compliance, deadline safety | **PASS (14/14)** |
-| `frontend/tests/part5a_sidebar_and_controls_fix.test.js` | Persistent sidebar state, top controls, account popover | **PASS (6/6)** |
-| `frontend/tests/part5a_vf8_appearance_and_contrast.test.js` | Inline appearance controls, theme persistence, asset integrity | **PASS (13/13)** |
 
 ### 3.3 Backend UI Source & Contract Gates
 ```bash
@@ -97,6 +98,21 @@ cd backend; node tests/ucp_unified_supplier_pools_source_gate.js
 cd backend; node tests/p0_all_order_origins_source_gate.js
 ```
 - **Result:** **ALL PASS** (Unified buyer/supplier pool UX source contract, UCP-3 to UCP-5 46 assertions, UCP source gate 21 static assertions, and P0 all order origins contract).
+
+### 3.4 Live Authenticated Browser E2E Evidence
+Automated Playwright Chromium verification confirmed:
+1. **Landing Page (`http://localhost:3000/`)**:
+   - Eyebrow: `Milkar Khareedo, Behtar Pao`
+   - Headline: `Smarter Procurement. Better Buying Power. Buy Better, Together` (strict zero-period invariant).
+   - High-fidelity burlap rice sack image with floor pedestal shadow.
+   - 9 structured sections verified: Hero, Marketplace Advantages, How It Works (01-03), Wholesale Commodity Pools, Sourcing Methods (Collective Pools, Direct RFQs, Flash Offers), Supplier Hub, Enterprise Governance (Escrow, QC), Final CTA, and Clean Footer.
+2. **Dual-Theme Appearance**:
+   - **Light Mode**: Warm Ivory (`#EEE6D8` canvas / `#F1EADF` surface) with dark green serif titles and champagne gold accents.
+   - **Dark Mode**: Forest Green (`#072A21` canvas / `#0A3429` surface) with radiant gold typography.
+3. **Authentication Flows (`/login`, `/register`, `/forgot-password`)**:
+   - Clean card presentation without floating customizer clutter.
+   - Laptop viewport responsive fit (1366×768 / 1440×900) verified.
+   - Super Admin credential verification: `admin@miljor.com` / `admin123` verified with 200 HTTP response and `/admin` authorization.
 
 ---
 

@@ -1190,7 +1190,7 @@ export const SupplierCatalogPage = () => {
                               {variant.spec_code}
                             </span>
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                              {variant.lifecycle_status === 'PUBLISHED' ? 'SUPPLIER SKU' : 'LEGACY GLOBAL SPEC'}
+                              {variant.lifecycle_status === 'PUBLISHED' ? 'SUPPLIER SKU' : 'STANDARD SPEC'}
                             </span>
                           </div>
                           <h3 className="text-sm font-bold text-[var(--text-primary)]">

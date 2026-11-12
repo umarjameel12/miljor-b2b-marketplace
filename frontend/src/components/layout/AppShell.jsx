@@ -663,21 +663,27 @@ export const AppShell = ({ children }) => {
           {/* Account Section at Sidebar Bottom */}
           <div className="p-3 border-t mt-auto" style={{ borderColor: 'var(--border-sidebar, var(--border-subtle))' }}>
             {isAuthenticated ? (
-              <div className="flex items-center justify-between">
-                <Link to="/profile" className="flex items-center px-3 py-1.5 rounded-xl transition hover:opacity-100 flex-1 truncate" title="User Profile">
-                  <span className="w-6 h-6 flex items-center justify-center shrink-0">
-                    <div className="w-6 h-6 rounded-full bg-[var(--brand-accent)] text-[#072a21] flex items-center justify-center font-bold text-xs shrink-0">
-                      <User className="w-3.5 h-3.5" />
+              <div className="flex items-center justify-between gap-1">
+                <Link to="/profile" className="flex items-center px-2 py-1.5 rounded-xl transition hover:opacity-100 flex-1 truncate" title={user?.business_name || user?.full_name || 'User Profile'}>
+                  <span className="w-7 h-7 flex items-center justify-center shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-[var(--brand-accent)] text-[#072a21] flex items-center justify-center font-bold text-[10px] shrink-0 tracking-tight shadow-2xs">
+                      {(user?.business_name || user?.full_name || 'U').slice(0, 2).toUpperCase()}
                     </div>
                   </span>
                   <span
                     style={{ willChange: 'max-width, opacity' }}
-                    className={`text-xs font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out pl-3 inline-block ${
-                      collapsed ? 'max-w-0 opacity-0' : 'max-w-32 opacity-100'
+                    className={`whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out pl-2.5 inline-block ${
+                      collapsed ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'
                     }`}
-                    style={{ color: 'var(--text-primary)' }}
                   >
-                    My Account
+                    <span className="block text-xs font-semibold truncate leading-tight" style={{ color: 'var(--text-primary)' }}>
+                      {user?.business_name || user?.full_name || 'My Account'}
+                    </span>
+                    {user?.email && (
+                      <span className="block text-[10px] truncate text-stone-500 dark:text-stone-400 font-normal leading-tight mt-0.5">
+                        {user.email}
+                      </span>
+                    )}
                   </span>
                 </Link>
                 {!collapsed && (
@@ -861,8 +867,8 @@ export const AppShell = ({ children }) => {
                     <User className="w-3.5 h-3.5" />
                   )}
                 </div>
-                <span className="text-xs font-semibold max-w-[110px] truncate" style={{ color: 'var(--text-primary)' }}>
-                  {isAuthenticated ? (user?.full_name || user?.business_name || 'Account') : 'Account'}
+                <span className="text-xs font-semibold max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>
+                  {isAuthenticated ? (user?.business_name || user?.full_name || 'Account') : 'Account'}
                 </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-stone-700 dark:text-stone-300 transition-transform duration-200 ${
@@ -884,10 +890,17 @@ export const AppShell = ({ children }) => {
                   {isAuthenticated ? (
                     <div className="space-y-3">
                       <div className="pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                          {user?.full_name || user?.business_name || 'Valued Partner'}
-                        </p>
-                        <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {user?.business_name || user?.full_name || 'Valued Partner'}
+                          </p>
+                          {user?.role && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-[var(--brand-accent)]/15 text-[var(--brand-accent)] shrink-0">
+                              {user.role}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] truncate text-stone-500 dark:text-stone-400">
                           {user?.email}
                         </p>
                       </div>

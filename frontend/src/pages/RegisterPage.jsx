@@ -540,8 +540,10 @@ export const RegisterPage = () => {
       className="min-h-[calc(100vh-5rem)] flex items-center justify-center p-3 sm:p-5 lg:p-6 transition-colors duration-300 relative overflow-hidden"
       style={{ background: 'var(--bg-auth)' }}
     >
-      {/* Floating Appearance Customizer Control */}
-      <AuthAppearanceControl />
+      {/* Preserved Appearance Customizer Control (Hidden from view to prevent clutter) */}
+      <div className="hidden" aria-hidden="true">
+        <AuthAppearanceControl />
+      </div>
 
       {/* ORIGINAL LAYOUT MODE (Reversible single-card presentation) */}
       {preferences.layoutStyle === 'original' ? (
