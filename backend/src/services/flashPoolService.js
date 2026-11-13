@@ -403,6 +403,15 @@ class FlashPoolService {
       const [[openClock]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
       if(offer.status!=='ACTIVE'||!openClock.is_open)
         throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
+      // Do not accept an unsupported fulfillment selection silently.
+      // Pickup/Express need their own order and quote lifecycle before launch.
+      if(payload.fulfillment_mode!=null &&
+         payload.fulfillment_mode!=='STANDARD_CLUSTERED')
+        throw fail('FLASH_FULFILLMENT_UNSUPPORTED',
+          'This Flash offer currently supports verified standard clustered doorstep delivery only.',422);
+      if(payload.pickup_point_id!=null||payload.delivery_quote_code!=null)
+        throw fail('FLASH_FULFILLMENT_UNSUPPORTED',
+          'Pickup and external delivery quote acceptance are not enabled for Flash checkout.',422);
       // Flash delivery is buyer-specific: fail closed unless the saved Lahore
       // destination and the supplier's current cluster rate are both verified.
       // Never fall back to arbitrary raw addresses or a global published fee.
