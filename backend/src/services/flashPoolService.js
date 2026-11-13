@@ -332,6 +332,49 @@ class FlashPoolService {
        ORDER BY fp.expiry_time ASC`,params);
     return rows.map(rowSafe);
   }
+  // Read-only delivery preview. Final fee and eligibility are recalculated
+  // under the Flash stock lock in requestHold; this never reserves inventory.
+  async previewDelivery(buyerId,flashId,addressId) {
+    if(!Number.isSafeInteger(Number(flashId))||Number(flashId)<1||
+       !Number.isSafeInteger(Number(addressId))||Number(addressId)<1)
+      throw fail('INVALID_DELIVERY_PREVIEW','Choose a Flash offer and saved business address.',422);
+    const [offers]=await db.query(
+      'SELECT id,supplier_id,status,expiry_time FROM flash_pools WHERE id=?',[flashId]);
+    const offer=offers[0];
+    if(!offer)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
+    const [[clock]]=await db.query(
+      'SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
+    if(offer.status!=='ACTIVE'||!clock.is_open)
+      throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
+    const [addresses]=await db.query(
+      `SELECT a.id,a.cluster_id,a.full_address
+       FROM buyer_delivery_addresses a
+       JOIN geographic_clusters g ON g.id=a.cluster_id
+       WHERE a.id=? AND a.user_id=? AND LOWER(a.city)='lahore'
+         AND a.geographic_match_status='VERIFIED'
+         AND a.user_confirmation_status='CONFIRMED'
+         AND a.manual_review_required=0
+         AND g.is_active=1 AND g.district='Lahore'`,
+      [addressId,buyerId]);
+    if(!addresses.length)
+      throw fail('BUYER_ADDRESS_NOT_VERIFIED',
+        'Choose your confirmed verified Lahore delivery address.',422);
+    const destination=addresses[0];
+    const [rates]=await db.query(
+      `SELECT r.fee_pkr FROM supplier_delivery_cluster_rates r
+       JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
+       WHERE r.supplier_id=? AND r.cluster_id=?
+         AND r.mode='STANDARD_CLUSTERED' AND r.is_eligible=1
+         AND c.standard_delivery_enabled=1`,
+      [offer.supplier_id,destination.cluster_id]);
+    if(!rates.length)
+      throw fail('FLASH_DELIVERY_AREA_UNAVAILABLE',
+        'Supplier cannot deliver to this verified Lahore cluster.',409);
+    return {mode:'STANDARD_CLUSTERED',address_id:Number(destination.id),
+      cluster_id:Number(destination.cluster_id),
+      delivery_fee_pkr:dec(rates[0].fee_pkr,{positive:false}),
+      binding:'PREVIEW_ONLY_REVALIDATED_AT_HOLD'};
+  }
   async requestHold(buyerId,flashId,payload={},key) {
     if(!key||typeof key!=='string'||key.length>120)throw fail('IDEMPOTENCY_REQUIRED','X-Idempotency-Key is required.');
     const conn=await db.getConnection();
