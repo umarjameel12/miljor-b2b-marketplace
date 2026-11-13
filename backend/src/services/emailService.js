@@ -298,42 +298,48 @@ class EmailService {
     const reset = purpose === 'PASSWORD_RESET';
     const title = reset ? 'Your reset code' : 'Your verification code';
     const note = reset
-      ? 'If you did not request this, ignore this email.'
-      : 'If you did not sign up, ignore this email.';
+      ? 'Not you? You can ignore this email.'
+      : 'Did not sign up? You can ignore this email.';
 
     return `
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>${title} | MilJor</title>
   <style>
-    @media only screen and (max-width:480px) {
-      .mj-wrap { padding:12px 10px !important; }
-      .mj-card { padding:24px 20px 20px !important; }
-      .mj-title { font-size:23px !important; }
-      .mj-code { font-size:33px !important; letter-spacing:7px !important; }
+    @media screen and (max-width:480px) {
+      .mj-wrap { padding:14px 10px !important; }
+      .mj-card { padding:0 22px 22px !important; }
+      .mj-heading { font-size:23px !important; }
+      .mj-code { font-size:31px !important; letter-spacing:6px !important; }
+      .mj-band { height:5px !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#29261f;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">MilJor security code. Valid for 10 minutes.</div>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background-color:#f6f4ef;">
+<body style="margin:0;padding:0;background-color:#f5f2eb;font-family:Arial,Helvetica,sans-serif;color:#24231f;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your one-time MilJor code is valid for 10 minutes.</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background-color:#f5f2eb;background-image:linear-gradient(145deg,#f8f7f3 0%,#f1ebdd 100%);">
     <tr><td class="mj-wrap" align="center" style="padding:26px 14px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:450px;border-collapse:collapse;">
-        <tr><td class="mj-card" style="background-color:#fffefa;border:1px solid #e7e1d5;border-radius:12px;padding:30px 32px 24px;">
-          <p style="margin:0 0 25px;font-size:21px;line-height:1.2;font-weight:700;letter-spacing:-0.5px;color:#29261f;">MilJor<span style="color:#c8b276;">.</span></p>
-          <h1 class="mj-title" style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:600;line-height:1.25;letter-spacing:-0.6px;color:#29261f;">${title}</h1>
-          <p style="margin:0 0 25px;font-size:14px;line-height:1.55;color:#777064;">Hi ${escapedName}, enter this code to continue.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:440px;border-collapse:separate;border-spacing:0;">
+        <tr><td style="padding:0;border:1px solid #e7e1d5;border-bottom:none;border-radius:14px 14px 0 0;background-color:#fffefa;overflow:hidden;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-            <tr><td align="center" style="padding:18px 8px;background-color:#f9f6ef;border:1px solid #ebe2d0;border-radius:8px;">
-              <span class="mj-code" style="font-family:Arial,Helvetica,sans-serif;font-size:37px;font-weight:700;line-height:1.1;letter-spacing:9px;color:#453a29;">${escapedOtp}</span>
+            <tr><td class="mj-band" height="5" style="height:5px;font-size:0;line-height:0;background-color:#c8b276;background-image:linear-gradient(90deg,#9a7a40 0%,#e8d4a1 47%,#baa066 100%);">&nbsp;</td></tr>
+          </table>
+        </td></tr>
+        <tr><td class="mj-card" style="background-color:#fffefa;padding:0 34px 26px;border-left:1px solid #e7e1d5;border-right:1px solid #e7e1d5;border-bottom:1px solid #e7e1d5;border-radius:0 0 14px 14px;">
+          <p style="margin:24px 0 33px;font-size:20px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:-0.6px;line-height:1.2;color:#25241f;">MilJor<span style="color:#ba9b5b;">.</span></p>
+          <h1 class="mj-heading" style="margin:0 0 10px;font-size:26px;line-height:1.24;letter-spacing:-0.7px;font-weight:700;color:#25241f;font-family:Arial,Helvetica,sans-serif;">${title}</h1>
+          <p style="margin:0 0 23px;font-size:14px;line-height:1.55;color:#736e65;">Hi ${escapedName}, use this code to continue.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+            <tr><td align="center" style="background-color:#f8f5ed;background-image:linear-gradient(130deg,#fcfaf5 0%,#f4ecda 100%);border:1px solid #e7dcc6;border-radius:9px;padding:19px 7px;">
+              <span class="mj-code" style="font-family:Arial,Helvetica,sans-serif;font-weight:700;line-height:1.1;font-size:36px;letter-spacing:8px;color:#3e3427;">${escapedOtp}</span>
             </td></tr>
           </table>
-          <p style="margin:14px 0 0;font-size:12px;line-height:1.5;text-align:center;color:#827b6e;">Expires in <strong style="color:#4b4438;">10 minutes</strong> · Keep it private</p>
-          <p style="margin:27px 0 0;padding-top:16px;border-top:1px solid #eee9df;font-size:11px;line-height:1.5;color:#9b9387;">${note}</p>
+          <p style="margin:13px 0 0;font-size:12px;line-height:1.5;text-align:center;color:#777165;">Expires in <strong style="color:#433e36;">10 minutes</strong> · Never share this code</p>
+          <p style="margin:29px 0 0;padding-top:15px;border-top:1px solid #eeeae3;font-size:11px;line-height:1.5;color:#918a7f;">${note}</p>
         </td></tr>
       </table>
     </td></tr>
