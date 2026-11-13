@@ -320,31 +320,28 @@ class EmailService {
       .mj-content { padding:25px 22px 12px !important; }
       .mj-footer { padding:0 22px 24px !important; }
       .mj-card { border-radius:18px !important; }
-      .mj-accentbar { border-radius:17px 17px 0 0 !important; }
       .mj-title { font-size:24px !important; }
       .mj-code { font-size:32px !important; letter-spacing:5px !important; }
     }
     @media (prefers-color-scheme:dark) {
       .mj-page { background-color:#171917 !important; }
-      .mj-card { background-color:#252722 !important; border-color:#47483f !important; }
+      .mj-card { background-color:#252722 !important; border-color:#47483f !important; border-top-color:#d1b879 !important; }
       .mj-codebox { background-color:#32332c !important; border-color:#877650 !important; }
       .mj-heading { color:#faf5e9 !important; }
       .mj-copy { color:#d0cabd !important; }
       .mj-code { color:#f3d59b !important; }
       .mj-rule { border-top-color:#4a4b40 !important; }
       .mj-accent { color:#e0c78f !important; }
-      .mj-accentbar { background-color:#d1b879 !important; }
     }
     /* Gmail may use these classes instead of prefers-color-scheme. */
     [data-ogsc] .mj-page, [data-ogsb] .mj-page { background-color:#171917 !important; }
-    [data-ogsc] .mj-card, [data-ogsb] .mj-card { background-color:#252722 !important; border-color:#47483f !important; }
+    [data-ogsc] .mj-card, [data-ogsb] .mj-card { background-color:#252722 !important; border-color:#47483f !important; border-top-color:#d1b879 !important; }
     [data-ogsc] .mj-codebox, [data-ogsb] .mj-codebox { background-color:#32332c !important; border-color:#877650 !important; }
     [data-ogsc] .mj-heading, [data-ogsb] .mj-heading { color:#faf5e9 !important; }
     [data-ogsc] .mj-copy, [data-ogsb] .mj-copy { color:#d0cabd !important; }
     [data-ogsc] .mj-code, [data-ogsb] .mj-code { color:#f3d59b !important; }
     [data-ogsc] .mj-rule, [data-ogsb] .mj-rule { border-top-color:#4a4b40 !important; }
     [data-ogsc] .mj-accent, [data-ogsb] .mj-accent { color:#e0c78f !important; }
-    [data-ogsc] .mj-accentbar, [data-ogsb] .mj-accentbar { background-color:#d1b879 !important; }
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f5f2eb;font-family:Arial,Helvetica,sans-serif;color:#282824;">
@@ -352,8 +349,7 @@ class EmailService {
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your MilJor code expires in 10 minutes.</div>
   <table class="mj-page" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f5f2eb" style="border-collapse:collapse;background-color:#f5f2eb;">
     <tr><td class="mj-pagepad" align="center" style="padding:30px 14px;">
-      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffdf8" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border:1px solid #e6dfd2;border-radius:18px;box-shadow:0 10px 28px rgba(35,32,24,0.08);">
-        <tr><td style="padding:0;background-color:#fffdf8;border:0;border-radius:17px 17px 0 0;overflow:hidden;"><div class="mj-accentbar" style="height:5px;line-height:5px;font-size:0;background-color:#c8b276;border-radius:17px 17px 0 0;overflow:hidden;background-clip:padding-box;">&nbsp;</div></td></tr>
+      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffdf8" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border:1px solid #e6dfd2;border-top:5px solid #c8b276;border-radius:18px;box-shadow:0 10px 28px rgba(35,32,24,0.08);">
         <tr><td class="mj-content" style="padding:30px 34px 12px;">
           <p class="mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;line-height:1.2;color:#282824;margin:0 0 27px;">MilJor<span class="mj-accent" style="color:#ab8850;">.</span></p>
           <h1 class="mj-title mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:700;letter-spacing:-0.6px;line-height:1.18;color:#282824;margin:0 0 12px;">${title}</h1>
