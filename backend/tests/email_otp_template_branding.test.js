@@ -19,7 +19,7 @@ for (const [type,heading] of [
     assert.match(result.html, /<table role="presentation"/);
     assert.match(result.html, /<meta name="viewport"/);
     assert.match(result.html, /Expires in <strong[^>]*>10 minutes/);
-    assert.match(result.html, /MJ_OTP_EMAIL_V6/);
+    assert.match(result.html, /MJ_OTP_EMAIL_V7/);
     assert.match(result.html, /name="color-scheme" content="light dark"/);
     assert.match(result.html, /prefers-color-scheme:dark/);
     assert.match(result.html, /data-ogsc/);
@@ -27,9 +27,17 @@ for (const [type,heading] of [
     assert.match(result.html, /box-shadow:/);
     assert.match(result.html, /class="mj-accentbar" style="height:5px/);
     assert.match(result.html, /border-radius:16px 16px 0 0/);
-    assert.match(result.html, /border-radius:18px;overflow:hidden/);
+    assert.match(result.html, /border-radius:18px;box-shadow:/);
+    assert.doesNotMatch(result.html, /class="mj-card"[^>]*overflow:hidden/);
+    assert.match(result.html, /class="mj-footer"/);
+    assert.match(result.html, /The footer is a separate full-width table row/);
     assert.match(result.html, /background-clip:padding-box/);
     assert.match(result.html, /Expires in <strong>10 minutes<\/strong> · Keep it private/);
+    const footerIndex=result.html.indexOf('class="mj-footer"');
+    const codeIndex=result.html.indexOf('class="mj-codebox"');
+    assert.ok(footerIndex>codeIndex,'Footer must render after OTP in a separate row');
+    assert.match(result.html.slice(footerIndex), /class="mj-rule"/);
+    assert.match(result.html.slice(footerIndex), /You can ignore this email\./);
     assert.match(result.html, /class="mj-copy mj-rule"/);
     if(type==='PASSWORD_RESET_OTP'){
       assert.match(result.html, /Not your request\? You can ignore this email\./);
