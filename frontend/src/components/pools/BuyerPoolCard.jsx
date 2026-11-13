@@ -21,6 +21,9 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
   const [savedAddresses,setSavedAddresses]=useState([]);
   const [selectedAddress,setSelectedAddress]=useState('');
+  const [deliveryPreview,setDeliveryPreview]=useState(null);
+  const [deliveryPreviewLoading,setDeliveryPreviewLoading]=useState(false);
+  const [deliveryPreviewError,setDeliveryPreviewError]=useState('');
   const [loadingAddresses,setLoadingAddresses]=useState(false);
   const [saving,setSaving]=useState(false);
   const [hold,setHold]=useState(null);
@@ -55,6 +58,16 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     }).finally(()=>{if(active)setLoadingAddresses(false)});
     return()=>{active=false};
   },[open,flash,isAuthenticated,user?.role]);
+  useEffect(()=>{
+    if(!flash||!open||!selectedAddress||hold)return;
+    let active=true;
+    setDeliveryPreview(null);setDeliveryPreviewError('');setDeliveryPreviewLoading(true);
+    apiClient.get(`/flash-pools/${pool.id}/delivery-preview`,{params:{address_id:Number(selectedAddress)}})
+      .then(({data})=>{if(active)setDeliveryPreview(data?.data||null);})
+      .catch(e=>{if(active)setDeliveryPreviewError(errorMessage(e));})
+      .finally(()=>{if(active)setDeliveryPreviewLoading(false);});
+    return()=>{active=false};
+  },[flash,open,selectedAddress,pool.id,hold]);
   const refreshHold=useCallback(async()=>{
     if(!hold?.id)return;
     try {
@@ -76,6 +89,8 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       if(flash){
         const saved=savedAddresses.find(a=>String(a.id)===selectedAddress);
         if(!saved)throw Error('Choose your verified saved Lahore business delivery address before holding ready stock.');
+        if(!deliveryPreview||Number(deliveryPreview.address_id)!==Number(saved.id))
+          throw Error('Verify the delivery fee and supplier coverage before reserving ready stock.');
         const payload={quantity:String(quantity),delivery_address_id:Number(saved.id),
           delivery_cluster_id:Number(saved.cluster_id)};
         const fingerprint=JSON.stringify(payload);
@@ -158,7 +173,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       <p><Info size={12} className="inline mr-1"/>Clearance: {pool.clearance_reason||'Reason not provided'}</p>
       {pool.best_before_date&&<p>Best-before: {String(pool.best_before_date).slice(0,10)}</p>}
       {pool.condition_notes&&<p>Condition: {pool.condition_notes}</p>}
-      <p>Published delivery charge: {fmt(pool.delivery_fee_pkr)}. Final total verified at checkout.</p>
+      <p>Standard clustered delivery: fee calculated from your verified business address and supplier cluster rate. Preview before reserving stock.</p>
     </div>:<p className="text-xs text-[var(--text-muted)]"><Truck size={13} className="inline mr-1"/>Delivery options: {pool.delivery_modes?.join(', ')||'Buyer eligibility to be verified'}.</p>}
     <button type="button" onClick={openForBuyer} disabled={!pool.can_join}
       className="mt-auto rounded-xl px-3 py-2.5 bg-[var(--brand-accent)] text-[#072a21] text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs hover:opacity-95 transition cursor-pointer">
@@ -189,6 +204,9 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
             {!loadingAddresses&&savedAddresses.length===0&&<p className="text-xs text-amber-600">
               No verified delivery address found. <Link className="underline" to="/profile">Save or verify a Lahore delivery address in your profile</Link>.
             </p>}
+            {deliveryPreviewLoading&&<p className="text-xs text-[var(--text-muted)]">Checking supplier cluster delivery rate…</p>}
+            {deliveryPreviewError&&<p role="alert" className="text-xs text-amber-600">{deliveryPreviewError}</p>}
+            {deliveryPreview&&!deliveryPreviewLoading&&<p role="status" className="text-xs font-medium">Standard clustered delivery fee: {fmt(deliveryPreview.delivery_fee_pkr)} (preview; fee rechecked by server when stock is held).</p>}
             {savedAddresses.length>0&&<p className="text-xs text-[var(--text-muted)]">
               Supplier coverage will be checked against the selected address's verified Lahore cluster before stock is held.
             </p>}
@@ -198,7 +216,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
             'Joining a pool does not guarantee final tier pricing or charge you; the supplier offer and payment are separate steps.'}</p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={()=>setOpen(false)} className="border rounded-lg px-3 py-2 text-xs">Back</button>
-            <button disabled={saving} type="button" onClick={submit} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer">
+            <button disabled={saving||(flash&&(!deliveryPreview||deliveryPreviewLoading||Number(deliveryPreview.address_id)!==Number(selectedAddress)))} type="button" onClick={submit} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer disabled:opacity-50">
               {saving?'Submitting…':flash?'Reserve for 15 minutes':'Confirm reservation'}
             </button>
           </div></>:
