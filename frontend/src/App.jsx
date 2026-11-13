@@ -27,7 +27,6 @@ const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then((m) 
 const SupplierDashboardPage = lazy(() => import('./pages/SupplierDashboardPage').then((m) => ({ default: m.SupplierDashboardPage })));
 const SupplierPoolsPage = lazy(() => import('./pages/SupplierPoolsPage').then((m) => ({ default: m.SupplierPoolsPage })));
 const SupplierSubscriptionPage = lazy(() => import('./pages/SupplierSubscriptionPage').then((m) => ({ default: m.SupplierSubscriptionPage })));
-const FlashPoolsPage = lazy(() => import('./pages/FlashPoolsPage').then((m) => ({ default: m.FlashPoolsPage })));
 const DemandRequestsPage = lazy(() => import('./pages/DemandRequestsPage').then((m) => ({ default: m.DemandRequestsPage })));
 const RfqPage = lazy(() => import('./pages/RfqPage').then((m) => ({ default: m.RfqPage })));
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
@@ -77,7 +76,7 @@ function AppContent() {
           <Route path="/payment/return" element={<PaymentReturnPage />} />
           <Route path="/payment/cancelled" element={<PaymentReturnPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/flash-pools" element={<FlashPoolsPage />} />
+          <Route path="/flash-pools" element={<Navigate to="/pools?type=FLASH" replace />} />
           <Route path="/demand-requests" element={<DemandRequestsPage />} />
           <Route path="/rfqs" element={<RfqPage />} />
           <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
