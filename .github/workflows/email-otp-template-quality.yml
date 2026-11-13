@@ -1,0 +1,30 @@
+name: MilJor Branded OTP Email Quality
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/services/emailService.js'
+      - 'backend/tests/email_otp_template_branding.test.js'
+      - '.github/workflows/email-otp-template-quality.yml'
+  pull_request:
+    paths:
+      - 'backend/src/services/emailService.js'
+      - 'backend/tests/email_otp_template_branding.test.js'
+      - '.github/workflows/email-otp-template-quality.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Validate email template source
+        run: node --check backend/src/services/emailService.js
+      - name: Check OTP email layouts and escaping
+        run: node --test backend/tests/email_otp_template_branding.test.js
