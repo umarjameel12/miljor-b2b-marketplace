@@ -158,7 +158,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       <p><Info size={12} className="inline mr-1"/>Clearance: {pool.clearance_reason||'Reason not provided'}</p>
       {pool.best_before_date&&<p>Best-before: {String(pool.best_before_date).slice(0,10)}</p>}
       {pool.condition_notes&&<p>Condition: {pool.condition_notes}</p>}
-      <p>Published delivery charge: {fmt(pool.delivery_fee_pkr)}. Final total verified at checkout.</p>
+      <p>Delivery: Standard clustered doorstep. Your verified Lahore address determines the supplier-configured delivery fee; the exact amount is locked by the server before checkout.</p>
     </div>:<p className="text-xs text-[var(--text-muted)]"><Truck size={13} className="inline mr-1"/>Delivery options: {pool.delivery_modes?.join(', ')||'Buyer eligibility to be verified'}.</p>}
     <button type="button" onClick={openForBuyer} disabled={!pool.can_join}
       className="mt-auto rounded-xl px-3 py-2.5 bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
