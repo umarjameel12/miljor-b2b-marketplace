@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -215,7 +216,7 @@ export const RfqPage = () => {
         setQuoteDeadline('');
       }
       await refreshRequests();
-      toast.success(publish ? 'Shopping list published. Supplier quotations are the next rollout stage.' : 'Shopping list draft saved');
+      toast.success(publish ? 'Shopping list published. Invite eligible suppliers to receive quotations.' : 'Shopping list draft saved');
     } catch (error) {
       setShoppingError(error.message);
     } finally { setShoppingBusy(false); }
@@ -727,6 +728,14 @@ export const RfqPage = () => {
               <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Get Best Quotes — Your Shopping List</h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">Choose solo or group purchasing, one product or a complete shopping list, and one-time or recurring procurement. Payments require a later explicit buyer confirmation.</p>
             </div>
+            {user?.role === 'BUYER' && (!user.is_verified || !['VERIFIED', 'EMAIL_VERIFIED'].includes(user.verification_status)) && (
+              <div role="status" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-sm text-[var(--text-primary)]">
+                Verify your buyer account email before publishing procurement requests.{' '}
+                <Link to="/verify-email" state={{ email: user.email }} className="font-semibold underline text-[var(--brand-accent)]">
+                  Verify email
+                </Link>
+              </div>
+            )}
             {shoppingError && <p role="alert" className="text-sm text-red-600">{shoppingError}</p>}
             <div className="grid sm:grid-cols-2 gap-3">
               <label className="text-xs font-semibold">How would you like to buy?
