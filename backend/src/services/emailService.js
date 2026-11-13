@@ -298,8 +298,8 @@ class EmailService {
     const reset = purpose === 'PASSWORD_RESET';
     const title = reset ? 'Your reset code' : 'Your verification code';
     const note = reset
-      ? 'Not you? You can ignore this email.'
-      : 'Did not sign up? You can ignore this email.';
+      ? 'Did not request this? You can ignore this email.'
+      : 'Did not create an account? You can ignore this email.';
 
     return `
 <!doctype html>
@@ -307,39 +307,45 @@ class EmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light">
   <title>${title} | MilJor</title>
   <style>
-    @media screen and (max-width:480px) {
-      .mj-wrap { padding:14px 10px !important; }
-      .mj-card { padding:0 22px 22px !important; }
-      .mj-heading { font-size:23px !important; }
-      .mj-code { font-size:31px !important; letter-spacing:6px !important; }
-      .mj-band { height:5px !important; }
+    :root { color-scheme:light only; supported-color-schemes:light; }
+    @media only screen and (max-width:480px) {
+      .mj-shell { padding:12px 10px !important; }
+      .mj-inner { padding:24px 22px 20px !important; }
+      .mj-title { font-size:24px !important; }
+      .mj-otp { font-size:32px !important; letter-spacing:6px !important; }
+    }
+    @media (prefers-color-scheme:dark) {
+      .mj-page { background-color:#f5f3ee !important; }
+      .mj-card { background-color:#ffffff !important; }
+      .mj-otp-box { background-color:#f9f6ef !important; }
+      .mj-ink { color:#252520 !important; }
+      .mj-muted { color:#68645b !important; }
+      .mj-otp { color:#373028 !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f5f2eb;font-family:Arial,Helvetica,sans-serif;color:#24231f;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your one-time MilJor code is valid for 10 minutes.</div>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background-color:#f5f2eb;background-image:linear-gradient(145deg,#f8f7f3 0%,#f1ebdd 100%);">
-    <tr><td class="mj-wrap" align="center" style="padding:26px 14px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:440px;border-collapse:separate;border-spacing:0;">
-        <tr><td style="padding:0;border:1px solid #e7e1d5;border-bottom:none;border-radius:14px 14px 0 0;background-color:#fffefa;overflow:hidden;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-            <tr><td class="mj-band" height="5" style="height:5px;font-size:0;line-height:0;background-color:#c8b276;background-image:linear-gradient(90deg,#9a7a40 0%,#e8d4a1 47%,#baa066 100%);">&nbsp;</td></tr>
-          </table>
-        </td></tr>
-        <tr><td class="mj-card" style="background-color:#fffefa;padding:0 34px 26px;border-left:1px solid #e7e1d5;border-right:1px solid #e7e1d5;border-bottom:1px solid #e7e1d5;border-radius:0 0 14px 14px;">
-          <p style="margin:24px 0 33px;font-size:20px;font-family:Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:-0.6px;line-height:1.2;color:#25241f;">MilJor<span style="color:#ba9b5b;">.</span></p>
-          <h1 class="mj-heading" style="margin:0 0 10px;font-size:26px;line-height:1.24;letter-spacing:-0.7px;font-weight:700;color:#25241f;font-family:Arial,Helvetica,sans-serif;">${title}</h1>
-          <p style="margin:0 0 23px;font-size:14px;line-height:1.55;color:#736e65;">Hi ${escapedName}, use this code to continue.</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-            <tr><td align="center" style="background-color:#f8f5ed;background-image:linear-gradient(130deg,#fcfaf5 0%,#f4ecda 100%);border:1px solid #e7dcc6;border-radius:9px;padding:19px 7px;">
-              <span class="mj-code" style="font-family:Arial,Helvetica,sans-serif;font-weight:700;line-height:1.1;font-size:36px;letter-spacing:8px;color:#3e3427;">${escapedOtp}</span>
+<body style="margin:0;padding:0;background-color:#f5f3ee;font-family:Arial,Helvetica,sans-serif;color:#252520;">
+  <!-- MJ_OTP_EMAIL_V4 -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">A secure MilJor code valid for 10 minutes.</div>
+  <table class="mj-page" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f5f3ee" style="background-color:#f5f3ee;border-collapse:collapse;">
+    <tr><td class="mj-shell" align="center" style="padding:25px 12px;">
+      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#ffffff" style="max-width:450px;background-color:#ffffff;border-collapse:separate;border-spacing:0;border:1px solid #eae5d9;border-radius:16px;box-shadow:0 8px 28px rgba(51,42,29,0.07);">
+        <tr><td height="4" bgcolor="#c8b276" style="height:4px;background-color:#c8b276;font-size:0;line-height:0;border-radius:16px 16px 0 0;">&nbsp;</td></tr>
+        <tr><td class="mj-inner" style="padding:26px 32px 24px;">
+          <p class="mj-ink" style="margin:0 0 30px;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;line-height:1.2;letter-spacing:-0.35px;color:#252520;">MilJor<span style="color:#b89a5a;">.</span></p>
+          <h1 class="mj-title mj-ink" style="margin:0 0 11px;font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:700;letter-spacing:-0.65px;line-height:1.18;color:#252520;">${title}</h1>
+          <p class="mj-muted" style="margin:0 0 23px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#68645b;">Hi ${escapedName}, enter the code below to continue.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:separate;border-spacing:0;">
+            <tr><td class="mj-otp-box" align="center" bgcolor="#f9f6ef" style="padding:18px 5px;background-color:#f9f6ef;border:1px solid #e6dac2;border-radius:12px;box-shadow:0 3px 11px rgba(76,60,31,0.08);">
+              <span class="mj-otp" style="font-family:Arial,Helvetica,sans-serif;font-size:36px;font-weight:700;letter-spacing:8px;line-height:1.2;color:#373028;">${escapedOtp}</span>
             </td></tr>
           </table>
-          <p style="margin:13px 0 0;font-size:12px;line-height:1.5;text-align:center;color:#777165;">Expires in <strong style="color:#433e36;">10 minutes</strong> · Never share this code</p>
-          <p style="margin:29px 0 0;padding-top:15px;border-top:1px solid #eeeae3;font-size:11px;line-height:1.5;color:#918a7f;">${note}</p>
+          <p class="mj-muted" style="margin:12px 0 0;text-align:center;font-size:12px;line-height:1.4;color:#68645b;">Valid for <strong>10 minutes</strong> · Do not share</p>
+          <p class="mj-muted" style="margin:25px 0 0;padding-top:14px;border-top:1px solid #eeeae3;font-size:11px;line-height:1.45;color:#68645b;">${note}</p>
         </td></tr>
       </table>
     </td></tr>
