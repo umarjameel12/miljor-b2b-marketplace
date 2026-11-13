@@ -25,8 +25,17 @@ for (const [type,heading] of [
     assert.match(result.html, /data-ogsc/);
     assert.match(result.html, /border-radius:13px/);
     assert.match(result.html, /box-shadow:/);
-    assert.match(result.html, /class="mj-accentbar" height="5"/);
-    assert.match(result.html, /border-radius:17px 17px 0 0/);
+    assert.match(result.html, /class="mj-accentbar" style="height:5px/);
+    assert.match(result.html, /border-radius:16px 16px 0 0/);
+    assert.match(result.html, /border-radius:18px;overflow:hidden/);
+    assert.match(result.html, /background-clip:padding-box/);
+    assert.match(result.html, /Expires in <strong>10 minutes<\/strong> · Keep it private/);
+    assert.match(result.html, /class="mj-copy mj-rule"/);
+    if(type==='PASSWORD_RESET_OTP'){
+      assert.match(result.html, /Not your request\? You can ignore this email\./);
+    } else {
+      assert.match(result.html, /Did not sign up\? You can ignore this email\./);
+    }
     assert.match(result.html, /background-color:#f5f2eb/);
     assert.match(result.html, /background-color:#fffdf8/);
     assert.match(result.html, /background-color:#171917 !important/);
