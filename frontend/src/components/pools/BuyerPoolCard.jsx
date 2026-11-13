@@ -21,6 +21,9 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
   const [savedAddresses,setSavedAddresses]=useState([]);
   const [selectedAddress,setSelectedAddress]=useState('');
+  const [deliveryMode,setDeliveryMode]=useState('STANDARD_CLUSTERED');
+  const [pickupPointId,setPickupPointId]=useState('');
+  const [pickupPoints,setPickupPoints]=useState([]);
   const [deliveryPreview,setDeliveryPreview]=useState(null);
   const [deliveryPreviewLoading,setDeliveryPreviewLoading]=useState(false);
   const [deliveryPreviewError,setDeliveryPreviewError]=useState('');
@@ -37,6 +40,8 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
   useEffect(()=>{
     setQuantity(String(flash?
       (pool.selling_mode==='WHOLE_LOT'?pool.total_stock:pool.min_quantity):pool.buyer_min_qty));
+    setDeliveryMode('STANDARD_CLUSTERED');setPickupPointId('');setPickupPoints([]);
+    setDeliveryPreview(null);setDeliveryPreviewError('');
     setHold(null);setHoldState(null);setHoldClockExpired(false);purchaseKey.current=null;purchaseIntent.current=null;setUncertainPurchase(false);checkoutKey.current=null;setOpen(false);
   },[pool.id,pool.type]);
   useEffect(()=>{
@@ -59,15 +64,27 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     return()=>{active=false};
   },[open,flash,isAuthenticated,user?.role]);
   useEffect(()=>{
-    if(!flash||!open||!selectedAddress||hold)return;
+    if(!flash||!open||hold)return;
     let active=true;
-    setDeliveryPreview(null);setDeliveryPreviewError('');setDeliveryPreviewLoading(true);
-    apiClient.get(`/flash-pools/${pool.id}/delivery-preview`,{params:{address_id:Number(selectedAddress)}})
-      .then(({data})=>{if(active)setDeliveryPreview(data?.data||null);})
+    setDeliveryPreview(null);setDeliveryPreviewError('');
+    if(deliveryMode!=='PICKUP'&&!selectedAddress)return;
+    setDeliveryPreviewLoading(true);
+    const params=deliveryMode==='PICKUP'
+      ?{mode:'PICKUP',...(pickupPointId?{pickup_point_id:Number(pickupPointId)}:{})}
+      :{mode:deliveryMode,address_id:Number(selectedAddress)};
+    apiClient.get(`/flash-pools/${pool.id}/delivery-preview`,{params})
+      .then(({data})=>{
+        if(!active)return;
+        const preview=data?.data||null;
+        if(preview?.pickup_points){
+          setPickupPoints(preview.pickup_points);
+          setPickupPointId(prev=>preview.pickup_points.some(p=>String(p.id)===prev)?prev:'');
+        }else setDeliveryPreview(preview);
+      })
       .catch(e=>{if(active)setDeliveryPreviewError(errorMessage(e));})
       .finally(()=>{if(active)setDeliveryPreviewLoading(false);});
     return()=>{active=false};
-  },[flash,open,selectedAddress,pool.id,hold]);
+  },[flash,open,selectedAddress,deliveryMode,pickupPointId,pool.id,hold]);
   const refreshHold=useCallback(async()=>{
     if(!hold?.id)return;
     try {
@@ -87,12 +104,20 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
     setSaving(true);setQuoteNotice('');
     try{
       if(flash){
-        const saved=savedAddresses.find(a=>String(a.id)===selectedAddress);
-        if(!saved)throw Error('Choose your verified saved Lahore business delivery address before holding ready stock.');
-        if(!deliveryPreview||Number(deliveryPreview.address_id)!==Number(saved.id))
-          throw Error('Verify the delivery fee and supplier coverage before reserving ready stock.');
-        const payload={quantity:String(quantity),delivery_address_id:Number(saved.id),
-          delivery_cluster_id:Number(saved.cluster_id)};
+        if(!deliveryPreview||deliveryPreview.mode!==deliveryMode)
+          throw Error('Verify the selected delivery option and fee before reserving stock.');
+        const payload={quantity:String(quantity),fulfillment_mode:deliveryMode};
+        if(deliveryMode==='PICKUP'){
+          if(!pickupPointId||Number(deliveryPreview.pickup_point_id)!==Number(pickupPointId))
+            throw Error('Choose an eligible supplier pickup point.');
+          payload.pickup_point_id=Number(pickupPointId);
+        }else{
+          const saved=savedAddresses.find(a=>String(a.id)===selectedAddress);
+          if(!saved||Number(deliveryPreview.address_id)!==Number(saved.id))
+            throw Error('Choose a verified Lahore delivery address and matching supplier coverage.');
+          payload.delivery_address_id=Number(saved.id);
+          payload.delivery_cluster_id=Number(saved.cluster_id);
+        }
         const fingerprint=JSON.stringify(payload);
         if(purchaseIntent.current && purchaseIntent.current.fingerprint!==fingerprint)
           throw Error('Previous stock-hold outcome is uncertain. Review My Orders before changing quantity or delivery address.');
@@ -173,7 +198,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       <p><Info size={12} className="inline mr-1"/>Clearance: {pool.clearance_reason||'Reason not provided'}</p>
       {pool.best_before_date&&<p>Best-before: {String(pool.best_before_date).slice(0,10)}</p>}
       {pool.condition_notes&&<p>Condition: {pool.condition_notes}</p>}
-      <p>Standard clustered delivery: fee calculated from your verified business address and supplier cluster rate. Preview before reserving stock.</p>
+      <p>Delivery: Standard, Supplier Pickup or Express (when offered). The server previews and locks your actual delivery fee before payment.</p>
     </div>:<p className="text-xs text-[var(--text-muted)]"><Truck size={13} className="inline mr-1"/>Delivery options: {pool.delivery_modes?.join(', ')||'Buyer eligibility to be verified'}.</p>}
     <button type="button" onClick={openForBuyer} disabled={!pool.can_join}
       className="mt-auto rounded-xl px-3 py-2.5 bg-[var(--brand-accent)] text-[#072a21] text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs hover:opacity-95 transition cursor-pointer">
@@ -190,24 +215,40 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
             className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]" />
         </label>
           {flash&&<div className="space-y-2">
-            <label className="text-xs block space-y-1">Verified Lahore delivery address
-              <select required disabled={loadingAddresses} value={selectedAddress} onChange={e=>setSelectedAddress(e.target.value)}
+            <label className="text-xs block space-y-1">Delivery option
+              <select value={deliveryMode} onChange={e=>{setDeliveryMode(e.target.value);setPickupPointId('');setPickupPoints([]);}}
                 className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-                <option value="">Select verified address</option>
-                {savedAddresses.map(a=><option value={a.id} key={a.id}>{a.society_area} · {a.full_address}</option>)}
+                <option value="STANDARD_CLUSTERED">Standard clustered doorstep</option>
+                <option value="PICKUP">Supplier pickup</option>
+                <option value="EXPRESS">Express delivery</option>
               </select>
             </label>
+            {deliveryMode==='PICKUP'
+              ?<label className="text-xs block space-y-1">Supplier pickup point
+                  <select value={pickupPointId} onChange={e=>setPickupPointId(e.target.value)}
+                    className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+                    <option value="">Choose active supplier pickup point</option>
+                    {pickupPoints.map(p=><option key={p.id} value={p.id}>{p.name} — {p.address}</option>)}
+                  </select>
+                </label>
+              :<label className="text-xs block space-y-1">Verified Lahore delivery address
+                  <select required disabled={loadingAddresses} value={selectedAddress} onChange={e=>setSelectedAddress(e.target.value)}
+                    className="block w-full border rounded-xl p-3 border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+                    <option value="">Select verified address</option>
+                    {savedAddresses.map(a=><option value={a.id} key={a.id}>{a.society_area} · {a.full_address}</option>)}
+                  </select>
+                </label>}
             {uncertainPurchase&&<p role="alert" className="text-xs text-amber-600">
                 A previous purchase/reservation request may already exist. Retry only the identical request, or check My Orders before another action.
               </p>}
               {loadingAddresses&&<p className="text-xs text-[var(--text-muted)]">Loading business delivery addresses…</p>}
-            {!loadingAddresses&&savedAddresses.length===0&&<p className="text-xs text-amber-600">
+            {deliveryMode!=='PICKUP'&&!loadingAddresses&&savedAddresses.length===0&&<p className="text-xs text-amber-600">
               No verified delivery address found. <Link className="underline" to="/profile">Save or verify a Lahore delivery address in your profile</Link>.
             </p>}
             {deliveryPreviewLoading&&<p className="text-xs text-[var(--text-muted)]">Checking supplier cluster delivery rate…</p>}
             {deliveryPreviewError&&<p role="alert" className="text-xs text-amber-600">{deliveryPreviewError}</p>}
-            {deliveryPreview&&!deliveryPreviewLoading&&<p role="status" className="text-xs font-medium">Standard clustered delivery fee: {fmt(deliveryPreview.delivery_fee_pkr)} (preview; fee rechecked by server when stock is held).</p>}
-            {savedAddresses.length>0&&<p className="text-xs text-[var(--text-muted)]">
+            {deliveryPreview&&!deliveryPreviewLoading&&<p role="status" className="text-xs font-medium">Delivery fee ({deliveryPreview.mode}): {fmt(deliveryPreview.delivery_fee_pkr)} (preview; rechecked at stock hold).</p>}
+            {deliveryMode!=='PICKUP'&&savedAddresses.length>0&&<p className="text-xs text-[var(--text-muted)]">
               Supplier coverage will be checked against the selected address's verified Lahore cluster before stock is held.
             </p>}
           </div>}
@@ -216,7 +257,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
             'Joining a pool does not guarantee final tier pricing or charge you; the supplier offer and payment are separate steps.'}</p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={()=>setOpen(false)} className="border rounded-lg px-3 py-2 text-xs">Back</button>
-            <button disabled={saving||(flash&&(!deliveryPreview||deliveryPreviewLoading||Number(deliveryPreview.address_id)!==Number(selectedAddress)))} type="button" onClick={submit} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer disabled:opacity-50">
+            <button disabled={saving||(flash&&(!deliveryPreview||deliveryPreviewLoading||deliveryPreview.mode!==deliveryMode||(deliveryMode==='PICKUP'?Number(deliveryPreview.pickup_point_id)!==Number(pickupPointId):Number(deliveryPreview.address_id)!==Number(selectedAddress))))} type="button" onClick={submit} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer disabled:opacity-50">
               {saving?'Submitting…':flash?'Reserve for 15 minutes':'Confirm reservation'}
             </button>
           </div></>:
