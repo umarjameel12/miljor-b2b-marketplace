@@ -298,8 +298,8 @@ class EmailService {
     const reset = purpose === 'PASSWORD_RESET';
     const title = reset ? 'Your reset code' : 'Your verification code';
     const note = reset
-      ? 'Did not request this? You can ignore this email.'
-      : 'Did not create an account? You can ignore this email.';
+      ? 'Not your request? You can ignore this email.'
+      : 'Did not sign up? You can ignore this email.';
 
     return `
 <!doctype html>
@@ -307,45 +307,56 @@ class EmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light only">
-  <meta name="supported-color-schemes" content="light">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <title>${title} | MilJor</title>
   <style>
-    :root { color-scheme:light only; supported-color-schemes:light; }
-    @media only screen and (max-width:480px) {
-      .mj-shell { padding:12px 10px !important; }
-      .mj-inner { padding:24px 22px 20px !important; }
+    :root { color-scheme:light dark; supported-color-schemes:light dark; }
+    @media screen and (max-width:480px) {
+      .mj-pagepad { padding:15px 10px !important; }
+      .mj-content { padding:25px 22px 22px !important; }
       .mj-title { font-size:24px !important; }
-      .mj-otp { font-size:32px !important; letter-spacing:6px !important; }
+      .mj-code { font-size:32px !important; letter-spacing:5px !important; }
     }
     @media (prefers-color-scheme:dark) {
-      .mj-page { background-color:#f5f3ee !important; }
-      .mj-card { background-color:#ffffff !important; }
-      .mj-otp-box { background-color:#f9f6ef !important; }
-      .mj-ink { color:#252520 !important; }
-      .mj-muted { color:#68645b !important; }
-      .mj-otp { color:#373028 !important; }
+      .mj-page { background-color:#17191c !important; }
+      .mj-card { background-color:#222427 !important; border-color:#3b3934 !important; }
+      .mj-codebox { background-color:#2e2c29 !important; border-color:#716040 !important; }
+      .mj-heading { color:#f7f2e7 !important; }
+      .mj-copy { color:#c2bdb3 !important; }
+      .mj-code { color:#f4ddb0 !important; }
+      .mj-rule { border-top-color:#403e38 !important; }
+      .mj-accent { color:#d8b979 !important; }
     }
+    /* Gmail may use these classes instead of prefers-color-scheme. */
+    [data-ogsc] .mj-page, [data-ogsb] .mj-page { background-color:#17191c !important; }
+    [data-ogsc] .mj-card, [data-ogsb] .mj-card { background-color:#222427 !important; border-color:#3b3934 !important; }
+    [data-ogsc] .mj-codebox, [data-ogsb] .mj-codebox { background-color:#2e2c29 !important; border-color:#716040 !important; }
+    [data-ogsc] .mj-heading, [data-ogsb] .mj-heading { color:#f7f2e7 !important; }
+    [data-ogsc] .mj-copy, [data-ogsb] .mj-copy { color:#c2bdb3 !important; }
+    [data-ogsc] .mj-code, [data-ogsb] .mj-code { color:#f4ddb0 !important; }
+    [data-ogsc] .mj-rule, [data-ogsb] .mj-rule { border-top-color:#403e38 !important; }
+    [data-ogsc] .mj-accent, [data-ogsb] .mj-accent { color:#d8b979 !important; }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f5f3ee;font-family:Arial,Helvetica,sans-serif;color:#252520;">
-  <!-- MJ_OTP_EMAIL_V4 -->
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">A secure MilJor code valid for 10 minutes.</div>
-  <table class="mj-page" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f5f3ee" style="background-color:#f5f3ee;border-collapse:collapse;">
-    <tr><td class="mj-shell" align="center" style="padding:25px 12px;">
-      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#ffffff" style="max-width:450px;background-color:#ffffff;border-collapse:separate;border-spacing:0;border:1px solid #eae5d9;border-radius:16px;box-shadow:0 8px 28px rgba(51,42,29,0.07);">
-        <tr><td height="4" bgcolor="#c8b276" style="height:4px;background-color:#c8b276;font-size:0;line-height:0;border-radius:16px 16px 0 0;">&nbsp;</td></tr>
-        <tr><td class="mj-inner" style="padding:26px 32px 24px;">
-          <p class="mj-ink" style="margin:0 0 30px;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;line-height:1.2;letter-spacing:-0.35px;color:#252520;">MilJor<span style="color:#b89a5a;">.</span></p>
-          <h1 class="mj-title mj-ink" style="margin:0 0 11px;font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:700;letter-spacing:-0.65px;line-height:1.18;color:#252520;">${title}</h1>
-          <p class="mj-muted" style="margin:0 0 23px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#68645b;">Hi ${escapedName}, enter the code below to continue.</p>
+<body style="margin:0;padding:0;background-color:#f1efe9;font-family:Arial,Helvetica,sans-serif;color:#272725;">
+  <!-- MJ_OTP_EMAIL_V5 -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your MilJor code expires in 10 minutes.</div>
+  <table class="mj-page" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f1efe9" style="border-collapse:collapse;background-color:#f1efe9;">
+    <tr><td class="mj-pagepad" align="center" style="padding:30px 14px;">
+      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffefa" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffefa;border:1px solid #e3ddd0;border-radius:16px;box-shadow:0 8px 24px rgba(31,28,23,0.07);">
+        <tr><td height="4" bgcolor="#c8b276" style="height:4px;line-height:0;font-size:0;background-color:#c8b276;">&nbsp;</td></tr>
+        <tr><td class="mj-content" style="padding:28px 34px 26px;">
+          <p class="mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;line-height:1.2;color:#272725;margin:0 0 28px;">MilJor<span class="mj-accent" style="color:#b08b4f;">.</span></p>
+          <h1 class="mj-title mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:700;letter-spacing:-0.6px;line-height:1.18;color:#272725;margin:0 0 10px;">${title}</h1>
+          <p class="mj-copy" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#686258;margin:0 0 23px;">Hi ${escapedName}, enter this code to continue.</p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:separate;border-spacing:0;">
-            <tr><td class="mj-otp-box" align="center" bgcolor="#f9f6ef" style="padding:18px 5px;background-color:#f9f6ef;border:1px solid #e6dac2;border-radius:12px;box-shadow:0 3px 11px rgba(76,60,31,0.08);">
-              <span class="mj-otp" style="font-family:Arial,Helvetica,sans-serif;font-size:36px;font-weight:700;letter-spacing:8px;line-height:1.2;color:#373028;">${escapedOtp}</span>
+            <tr><td class="mj-codebox" bgcolor="#f8f3e8" align="center" style="background-color:#f8f3e8;padding:19px 6px;border:1px solid #e5d6b9;border-radius:12px;box-shadow:0 3px 10px rgba(76,60,31,0.07);">
+              <span class="mj-code" style="font-family:Arial,Helvetica,sans-serif;font-size:36px;font-weight:700;letter-spacing:8px;line-height:1.2;color:#443822;">${escapedOtp}</span>
             </td></tr>
           </table>
-          <p class="mj-muted" style="margin:12px 0 0;text-align:center;font-size:12px;line-height:1.4;color:#68645b;">Valid for <strong>10 minutes</strong> · Do not share</p>
-          <p class="mj-muted" style="margin:25px 0 0;padding-top:14px;border-top:1px solid #eeeae3;font-size:11px;line-height:1.45;color:#68645b;">${note}</p>
+          <p class="mj-copy" style="margin:13px 0 0;text-align:center;font-size:12px;line-height:1.5;color:#686258;">Expires in <strong>10 minutes</strong> · Keep it private</p>
+          <p class="mj-copy mj-rule" style="margin:27px 0 0;padding-top:14px;border-top:1px solid #eae4da;font-size:11px;line-height:1.5;color:#736e64;">${note}</p>
         </td></tr>
       </table>
     </td></tr>
