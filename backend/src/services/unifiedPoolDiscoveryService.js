@@ -117,32 +117,45 @@ class UnifiedPoolDiscoveryService {
      });
    }
    let flashes=[];
-   if(flashRaw.length && ['ALL','STANDARD_CLUSTERED'].includes(fulfillment)){
+   if(flashRaw.length){
      const ids=flashRaw.map(p=>Number(p.id)).filter(Number.isSafeInteger);
      const [tax]=await db.query(
        `SELECT fp.id,ps.family_id,ps.category_id
         FROM flash_pools fp JOIN product_specifications ps ON ps.id=fp.product_spec_id
         WHERE fp.id IN (${ids.map(()=>'?').join(',')})`,ids);
      const taxonomy=new Map(tax.map(p=>[Number(p.id),p]));
-     // Flash currently supports verified Standard Clustered Doorstep only.
-     // Display no fixed fee: the actual configured cluster rate is calculated
-     // authoritatively during the buyer's locked stock hold. Never advertise
-     // Pickup or Express until their order/quote lifecycle is implemented.
-     let eligibleSuppliers=null;
-     // A Flash offer must serve at least one enabled Lahore cluster even
-     // when the buyer browses without selecting a destination filter.
-     {
-       const [rates]=await db.query(
-         `SELECT DISTINCT r.supplier_id FROM supplier_delivery_cluster_rates r
-            JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
-            JOIN geographic_clusters g ON g.id=r.cluster_id
-            WHERE r.mode='STANDARD_CLUSTERED' AND r.is_eligible=1
-              AND c.standard_delivery_enabled=1 AND g.is_active=1 AND g.district='Lahore'
-              AND (? IS NULL OR r.cluster_id=?)`,[clusterId,clusterId]);
-       eligibleSuppliers=new Set(rates.map(x=>Number(x.supplier_id)));
+     // Flash modes are supplier-configured. Price is NEVER shown as a fixed
+     // promise here; each buyer's delivery is validated at preview and hold.
+     const includeRemotePickup=raw.include_all_pickup==='true';
+     const [eligible]=await db.query(
+       `SELECT r.supplier_id,r.mode,c.express_cutoff_time
+          FROM supplier_delivery_cluster_rates r
+          JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
+          JOIN geographic_clusters g ON g.id=r.cluster_id
+         WHERE r.is_eligible=1 AND g.is_active=1 AND g.district='Lahore'
+           AND ((r.mode='STANDARD_CLUSTERED' AND c.standard_delivery_enabled=1)
+              OR (r.mode='EXPRESS' AND c.express_enabled=1))
+           AND (? IS NULL OR r.cluster_id=?)
+        UNION ALL
+        SELECT p.supplier_id,'PICKUP' AS mode,NULL AS express_cutoff_time
+          FROM supplier_pickup_points p
+          JOIN supplier_delivery_configurations c ON c.supplier_id=p.supplier_id
+          JOIN geographic_clusters g ON g.id=p.cluster_id
+         WHERE p.is_active=1 AND c.pickup_enabled=1
+           AND g.is_active=1 AND g.district='Lahore'
+           AND (? IS NULL OR ?=1 OR p.cluster_id=?)`,
+       [clusterId,clusterId,clusterId,includeRemotePickup?1:0,clusterId]);
+     const modesBySupplier=new Map();
+     const nowPk=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Karachi',hour12:false});
+     for(const e of eligible){
+       if(e.mode==='EXPRESS'&&nowPk>String(e.express_cutoff_time||'14:00:00').slice(0,8))continue;
+       const id=Number(e.supplier_id);
+       if(!modesBySupplier.has(id))modesBySupplier.set(id,new Set());
+       modesBySupplier.get(id).add(e.mode);
      }
      flashes=flashRaw.filter(p=>taxonomy.has(Number(p.id)) &&
-       (!eligibleSuppliers || eligibleSuppliers.has(Number(p.supplier_id)))).map(p=>{
+       (modesBySupplier.get(Number(p.supplier_id))?.has(fulfillment)||
+        (fulfillment==='ALL'&&modesBySupplier.has(Number(p.supplier_id))))).map(p=>{
        const t=taxonomy.get(Number(p.id));
        return {type:'FLASH',id:p.id,code:p.flash_code,status:p.status,
          product_title:p.sku_title,supplier_name:p.supplier_name,
@@ -155,8 +168,9 @@ class UnifiedPoolDiscoveryService {
          clearance_reason:p.clearance_reason,condition_notes:p.condition_notes,
          best_before_date:p.best_before_date,
          pool_close_at:p.expiry_at_utc,can_join:Number(p.remaining_stock)>0,
-         delivery_modes:['STANDARD_CLUSTERED'],delivery_fee_pkr:null,delivery_quote_required:true,
-         delivery_fee_source:'SUPPLIER_CLUSTER_RATE_AT_HOLD'};
+         delivery_modes:[...modesBySupplier.get(Number(p.supplier_id))],
+         delivery_fee_pkr:null,delivery_quote_required:true,
+         delivery_fee_source:'VERIFIED_SUPPLIER_RATE_AT_HOLD'};
      });
    }
    const matches=p=>(!categoryId||Number(p.category_id)===categoryId)&&
