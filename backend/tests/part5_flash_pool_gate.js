@@ -222,11 +222,18 @@ async function runPart5FlashPoolGate() {
     assert.ok(testCluster, 'Lahore test cluster must exist after migration');
     const testClusterId=Number(testCluster.id);
     await db.query(
-      "INSERT INTO supplier_delivery_configurations (supplier_id,standard_delivery_enabled) VALUES (?,1)",
+      "INSERT INTO supplier_delivery_configurations (supplier_id,standard_delivery_enabled,pickup_enabled,express_enabled,express_cutoff_time) VALUES (?,1,1,1,'23:59:59')",
       [supplierId]);
     await db.query(
       "INSERT INTO supplier_delivery_cluster_rates (supplier_id,cluster_id,mode,is_eligible,fee_pkr) VALUES (?,?,'STANDARD_CLUSTERED',1,?)",
       [supplierId,testClusterId,'325.00']);
+    await db.query(
+      "INSERT INTO supplier_delivery_cluster_rates (supplier_id,cluster_id,mode,is_eligible,fee_pkr) VALUES (?,?,'EXPRESS',1,?)",
+      [supplierId,testClusterId,'725.00']);
+    const [testPickup]=await db.query(
+      "INSERT INTO supplier_pickup_points (supplier_id,point_name,cluster_id,address_line,pickup_handling_fee_pkr,is_active) VALUES (?,'Gulberg Depot',?,'Depot Street 10, Gulberg, Lahore',75,1)",
+      [supplierId,testClusterId]);
+    const testPickupPointId=testPickup.insertId;
     const [buyer1AddressResult]=await db.query(
       "INSERT INTO buyer_delivery_addresses (user_id,city,cluster_id,society_area,full_address,geographic_match_status,user_confirmation_status,manual_review_required) VALUES (?,'Lahore',?,'Gulberg','Plaza 12, Gulberg III, Lahore','VERIFIED','CONFIRMED',0)",
       [buyer1Id,testClusterId]);
@@ -474,17 +481,17 @@ async function runPart5FlashPoolGate() {
       assert.equal(res.body?.error?.code,'DELIVERY_CLUSTER_MISMATCH');
       pass('B04C client cannot override the verified address cluster');
     }
-    // Delivery rejection: unsupported express/pickup cannot silently become doorstep.
+    // Invalid client-side delivery mode must fail closed (no fallback).
     {
       const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
         method:'POST',
-        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_unsupported_delivery_${ts}`},
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_unknown_mode_${ts}`},
         body:{quantity:'4.00',delivery_address_id:buyer1AddressId,
-          delivery_cluster_id:testClusterId,fulfillment_mode:'EXPRESS'}
+          delivery_cluster_id:testClusterId,fulfillment_mode:'DRONE'}
       });
       assert.equal(res.status,422);
       assert.equal(res.body?.error?.code,'FLASH_FULFILLMENT_UNSUPPORTED');
-      pass('B04D unsupported delivery mode fails closed');
+      pass('B04D unknown delivery mode fails closed');
     }
 
     // B05 & B06: WHOLE_LOT mode
@@ -783,6 +790,7 @@ async function runPart5FlashPoolGate() {
       if (cleanupFixtures.orderIds.length) {
         await db.query(`DELETE FROM payments WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
         await db.query(`DELETE FROM payment_attempts WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
+        await db.query(`DELETE FROM flash_order_delivery_terms WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
         await db.query(`DELETE FROM flash_purchase_holds WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
         await db.query(`DELETE FROM orders WHERE id IN (?)`, [cleanupFixtures.orderIds]);
       }
@@ -803,6 +811,7 @@ async function runPart5FlashPoolGate() {
       // Remove dependent delivery fixtures before deleting supplier/buyers.
       if (cleanupFixtures.userIds.length) {
         await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id IN (?)', [cleanupFixtures.userIds]);
+        await db.query('DELETE FROM supplier_pickup_points WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
         await db.query('DELETE FROM supplier_delivery_cluster_rates WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
         await db.query('DELETE FROM supplier_delivery_configurations WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
       }
