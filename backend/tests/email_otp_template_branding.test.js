@@ -19,12 +19,25 @@ for (const [type,heading] of [
     assert.match(result.html, /<table role="presentation"/);
     assert.match(result.html, /<meta name="viewport"/);
     assert.match(result.html, /Expires in <strong[^>]*>10 minutes/);
-    assert.match(result.html, /MJ_OTP_EMAIL_V5/);
+    assert.match(result.html, /MJ_OTP_EMAIL_V6/);
     assert.match(result.html, /name="color-scheme" content="light dark"/);
     assert.match(result.html, /prefers-color-scheme:dark/);
     assert.match(result.html, /data-ogsc/);
-    assert.match(result.html, /border-radius:12px/);
+    assert.match(result.html, /border-radius:13px/);
     assert.match(result.html, /box-shadow:/);
+    assert.match(result.html, /class="mj-accentbar" height="5"/);
+    assert.match(result.html, /border-radius:17px 17px 0 0/);
+    assert.match(result.html, /background-color:#f5f2eb/);
+    assert.match(result.html, /background-color:#fffdf8/);
+    assert.match(result.html, /background-color:#171917 !important/);
+    assert.match(result.html, /background-color:#252722 !important/);
+    assert.match(result.html, /background-color:#32332c !important/);
+    assert.doesNotMatch(result.html, /enter this code to continue/i);
+    if (type === 'PASSWORD_RESET_OTP') {
+      assert.match(result.html, /Use this one-time code to reset your MilJor password\./);
+    } else {
+      assert.match(result.html, /Use this one-time code to verify your MilJor email address\./);
+    }
     assert.doesNotMatch(result.html, /PASSWORD RESET|EMAIL VERIFICATION|SMART BUSINESS PROCUREMENT/);
     assert.doesNotMatch(result.html, /<script|<iframe|<img/i);
     assert.doesNotMatch(result.html, /https?:\/\//);
