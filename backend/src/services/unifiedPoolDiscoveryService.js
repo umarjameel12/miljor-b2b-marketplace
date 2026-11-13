@@ -129,7 +129,9 @@ class UnifiedPoolDiscoveryService {
      // authoritatively during the buyer's locked stock hold. Never advertise
      // Pickup or Express until their order/quote lifecycle is implemented.
      let eligibleSuppliers=null;
-     if(clusterId||fulfillment==='STANDARD_CLUSTERED'){
+     // A Flash offer must serve at least one enabled Lahore cluster even
+     // when the buyer browses without selecting a destination filter.
+     {
        const [rates]=await db.query(
          `SELECT DISTINCT r.supplier_id FROM supplier_delivery_cluster_rates r
             JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
