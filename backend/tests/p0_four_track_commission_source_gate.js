@@ -20,7 +20,7 @@ assert.match(order,/supplier_commission_percent, currency/);
 assert.match(order,/supplierCommissionSnapshot,/);
 assert.match(order,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
 assert.match(flash,/supplier_commission_percent,currency/);
-assert.match(flash,/commissionSnapshot,address/);
+assert.match(flash,/commissionSnapshot,deliveryTerms\.delivery_type,address/);
 assert.match(flash,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
 assert.match(procurement,/supplier_commission_percent,currency,delivery_type/);
 assert.match(procurement,/group\.supplier_commission_percent,address/);
