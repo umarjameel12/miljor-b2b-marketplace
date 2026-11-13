@@ -420,6 +420,20 @@ class SafepayCheckoutService {
 
       const attempt = attempts[0];
 
+      // The initial event lookup is deliberately fast but NOT sufficient under
+      // concurrent provider retries. Acquiring the payment attempt's FOR UPDATE
+      // lock serializes callbacks for the same tracker; recheck event identity
+      // inside this transaction after waiting for any previous callback commit.
+      // This prevents duplicate-key HTTP 500s without changing financial state.
+      const [completedEvent]=await connection.query(
+        'SELECT event_id FROM payment_webhook_events WHERE event_id=? FOR UPDATE',
+        [effectiveEventId]);
+      if(completedEvent.length){
+        await connection.commit();
+        return {success:true,is_duplicate:true,
+          message:'Duplicate authenticated webhook acknowledged after serialized tracker lock'};
+      }
+
       // Lock parent order row FOR UPDATE
       const [orders] = await connection.query(
         `SELECT * FROM orders WHERE id = ? FOR UPDATE`,
