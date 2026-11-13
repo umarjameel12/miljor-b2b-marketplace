@@ -94,8 +94,21 @@ async function run(){
     const refund=x.data.data.refund;
     assert.equal(round(refund.total_refund_amount),'1145.00');
     assert.equal(refund.external_execution_status,'DISABLED');
-    let r=await send('/settlements/refunds/assess',{key:refundKey,body:{order_id:orderId,refund_type:'FULL',reason:'Sandbox-only full refund scenario'}});
-    eq(r,201);assert.equal(Number(r.data.data.refund.id),Number(refund.id));
+    const concurrentRefunds=await Promise.all(Array.from({length:20},()=>send(
+      '/settlements/refunds/assess',{
+        key:refundKey,
+        body:{order_id:orderId,refund_type:'FULL',reason:'Sandbox-only full refund scenario'}
+      })));
+    assert.ok(concurrentRefunds.every(response=>response.status===201),
+      'Concurrent identical refund requests must resolve idempotently: '+
+      JSON.stringify(concurrentRefunds.filter(response=>response.status!==201).slice(0,3)));
+    const [uniqueRefunds]=await db.query(
+      'SELECT id FROM refund_obligations WHERE order_id=?',[orderId]);
+    assert.equal(uniqueRefunds.length,1,'Concurrent refund requests must create exactly one obligation');
+    assert.ok(concurrentRefunds.every(response=>
+      Number(response.data.data.refund.id)===Number(refund.id)));
+    console.log('PASS S05A 20 concurrent identical refund requests create exactly one refund obligation');
+    let r=concurrentRefunds[0];
     r=await send('/settlements/refunds/'+refund.id+'/approve',{id:2,role:'SUPPLIER'});eq(r,403);
     r=await send('/settlements/refunds/'+refund.id+'/approve',{id:1,role:'SUPER_ADMIN'});eq(r,200);
     const [[approved]]=await db.query('SELECT status,external_execution_status,total_refund_amount FROM refund_obligations WHERE id=?',[refund.id]);
