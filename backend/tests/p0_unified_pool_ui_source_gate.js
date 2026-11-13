@@ -8,7 +8,11 @@ const buyer=read('pages/PoolsPage.jsx'),card=read('components/pools/BuyerPoolCar
 const supplier=read('pages/SupplierPoolsPage.jsx'),legacy=read('pages/FlashPoolsPage.jsx');
 assert.match(legacy,/to="\/pools"/);
 assert.doesNotMatch(legacy,/type=FLASH/);
-assert.match(buyer,/\[poolType,setPoolType\]=useState\('ALL'\)/);
+assert.match(buyer,/\[poolType,setPoolType\]=useState\(\['ALL','REGULAR','FLASH'\]\.includes\(requestedPoolType\)/);
+assert.match(buyer,/searchParams\.get\('type'\)/);
+const app=read('App.jsx');
+assert.match(app,/<Route path="\/flash-pools" element=\{<Navigate to="\/pools\?type=FLASH" replace \/>\} \/>/);
+assert.doesNotMatch(app,/import\('\.\/pages\/FlashPoolsPage'\)/);
 assert.match(buyer,/Unified Pool subcategories/);
 assert.match(buyer,/\['REGULAR','Regular'\]/);
 assert.match(buyer,/\['FLASH','Flash'\]/);

@@ -49,7 +49,12 @@ export const PoolsPage = () => {
   const { user } = useAuth();
   const [searchParams]=useSearchParams();
   // The marketplace is ONE page; Regular and Flash are subcategories, never separate destinations.
-  const [poolType,setPoolType]=useState('ALL');
+  const requestedPoolType=String(searchParams.get('type')||'ALL').toUpperCase();
+  const [poolType,setPoolType]=useState(['ALL','REGULAR','FLASH'].includes(requestedPoolType)?requestedPoolType:'ALL');
+  useEffect(()=>{
+    setPoolType(['ALL','REGULAR','FLASH'].includes(requestedPoolType)?requestedPoolType:'ALL');
+    setNextCursor(null);
+  },[requestedPoolType]);
   const [serverTime,setServerTime]=useState(null);
   const [nextCursor,setNextCursor]=useState(null);
   const [loadingMore,setLoadingMore]=useState(false);
