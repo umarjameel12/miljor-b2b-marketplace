@@ -409,7 +409,12 @@ class ProcurementController {
   async previewFlashDelivery(req,res) {
     try {
       const data=await require('../services/flashPoolService').previewDelivery(
-        req.user.id,Number(req.params.id),Number(req.query.address_id));
+        req.user.id,Number(req.params.id),{
+          mode:req.query.mode||'STANDARD_CLUSTERED',
+          address_id:req.query.address_id,
+          cluster_id:req.query.cluster_id,
+          pickup_point_id:req.query.pickup_point_id
+        });
       res.status(200).json({success:true,data});
     }catch(e){res.status(e.statusCode||500).json({success:false,
       error:{code:e.code||'FLASH_DELIVERY_PREVIEW_FAILED',
