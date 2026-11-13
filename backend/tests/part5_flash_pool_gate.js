@@ -215,6 +215,27 @@ async function runPart5FlashPoolGate() {
     cleanupFixtures.userIds.push(buyer2Id);
     const buyer2Token = generateToken(buyer2Id, 'BUYER', 'VERIFIED');
 
+    // Flash delivery regression fixtures: authoritative supplier cluster tariff
+    // and owned, confirmed Lahore addresses. Never bypass address verification.
+    const [[testCluster]] = await db.query(
+      "SELECT id FROM geographic_clusters WHERE cluster_code='LHR-CORE-COMMERCIAL' AND is_active=1");
+    assert.ok(testCluster, 'Lahore test cluster must exist after migration');
+    const testClusterId=Number(testCluster.id);
+    await db.query(
+      "INSERT INTO supplier_delivery_configurations (supplier_id,standard_delivery_enabled) VALUES (?,1)",
+      [supplierId]);
+    await db.query(
+      "INSERT INTO supplier_delivery_cluster_rates (supplier_id,cluster_id,mode,is_eligible,fee_pkr) VALUES (?,?,'STANDARD_CLUSTERED',1,?)",
+      [supplierId,testClusterId,'325.00']);
+    const [buyer1AddressResult]=await db.query(
+      "INSERT INTO buyer_delivery_addresses (user_id,city,cluster_id,society_area,full_address,geographic_match_status,user_confirmation_status,manual_review_required) VALUES (?,'Lahore',?,'Gulberg','Plaza 12, Gulberg III, Lahore','VERIFIED','CONFIRMED',0)",
+      [buyer1Id,testClusterId]);
+    const buyer1AddressId=buyer1AddressResult.insertId;
+    const [buyer2AddressResult]=await db.query(
+      "INSERT INTO buyer_delivery_addresses (user_id,city,cluster_id,society_area,full_address,geographic_match_status,user_confirmation_status,manual_review_required) VALUES (?,'Lahore',?,'Gulberg','MM Alam Road, Gulberg, Lahore','VERIFIED','CONFIRMED',0)",
+      [buyer2Id,testClusterId]);
+    const buyer2AddressId=buyer2AddressResult.insertId;
+
     // Canonical Category & Family (Rice - ID 1)
     const categoryId = 1;
     const familyId = 1;
@@ -379,7 +400,7 @@ async function runPart5FlashPoolGate() {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer1Token}`, 'X-Idempotency-Key': `idem_p5_b03_${ts}` },
-        body: { quantity: '3.00', delivery_address: 'Plaza 12, Gulberg III, Lahore' }
+        body: { quantity: '3.00', delivery_address_id: buyer1AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(res.status, 409);
       assert.equal(res.body?.error?.code, 'INVALID_PURCHASE_INCREMENT');
@@ -393,9 +414,11 @@ async function runPart5FlashPoolGate() {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer1Token}`, 'X-Idempotency-Key': `idem_p5_b04_${ts}` },
-        body: { quantity: '4.00', delivery_address: 'Plaza 12, Gulberg III, Lahore' }
+        body: { quantity: '4.00', delivery_address_id: buyer1AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(res.status, 201);
+      assert.equal(Number(res.body.data.hold.delivery_fee),325);
+      assert.ok(Number(res.body.data.hold.total_amount)>0);
       buyer1HoldId = res.body.data.hold.id;
       buyer1OrderId = res.body.data.hold.order_id;
       cleanupFixtures.orderIds.push(buyer1OrderId);
@@ -420,7 +443,7 @@ async function runPart5FlashPoolGate() {
       const resPartial = await api(`/api/v1/flash-pools/${wholeLotPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer2Token}`, 'X-Idempotency-Key': `idem_p5_b05_${ts}` },
-        body: { quantity: '10.00', delivery_address: 'MM Alam Road, Gulberg, Lahore' }
+        body: { quantity: '10.00', delivery_address_id: buyer2AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(resPartial.status, 409);
       pass('B05 WHOLE_LOT partial quantity hold fails with 409 WHOLE_LOT_REQUIRED');
@@ -428,7 +451,7 @@ async function runPart5FlashPoolGate() {
       const resFull = await api(`/api/v1/flash-pools/${wholeLotPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer2Token}`, 'X-Idempotency-Key': `idem_p5_b06_${ts}` },
-        body: { quantity: '30.00', delivery_address: 'MM Alam Road, Gulberg, Lahore' }
+        body: { quantity: '30.00', delivery_address_id: buyer2AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(resFull.status, 201);
       cleanupFixtures.orderIds.push(resFull.body.data.hold.order_id);
@@ -486,7 +509,7 @@ async function runPart5FlashPoolGate() {
         api(`/api/v1/flash-pools/${racePoolId}/hold`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'X-Idempotency-Key': `idem_p5_race_${ts}_${idx}` },
-          body: { quantity: '4.00', delivery_address: `Race address ${idx}, Lahore` }
+          body: { quantity: '4.00', delivery_address_id: idx%2===0?buyer1AddressId:buyer2AddressId, delivery_cluster_id: testClusterId }
         })
       );
       const results = await Promise.all(promises);
@@ -522,7 +545,7 @@ async function runPart5FlashPoolGate() {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer2Token}`, 'X-Idempotency-Key': `idem_p5_d01_${ts}` },
-        body: { quantity: '6.00', delivery_address: 'Commercial Kitchen 4, DHA Phase 5, Lahore' }
+        body: { quantity: '6.00', delivery_address_id: buyer2AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(res.status, 201);
       freshHoldId = res.body.data.hold.id;
@@ -601,7 +624,7 @@ async function runPart5FlashPoolGate() {
       const resHold = await api(`/api/v1/flash-pools/${soPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer1Token}`, 'X-Idempotency-Key': `idem_p5_so_${ts}` },
-        body: { quantity: '2.00', delivery_address: 'Sold out test address, Lahore' }
+        body: { quantity: '2.00', delivery_address_id: buyer1AddressId, delivery_cluster_id: testClusterId }
       });
       const soOrderId = resHold.body.data.hold.order_id;
       cleanupFixtures.orderIds.push(soOrderId);
@@ -714,6 +737,12 @@ async function runPart5FlashPoolGate() {
       }
       if (cleanupFixtures.productIds.length) {
         await db.query(`DELETE FROM supplier_products WHERE id IN (?)`, [cleanupFixtures.productIds]);
+      }
+      // Remove dependent delivery fixtures before deleting supplier/buyers.
+      if (cleanupFixtures.userIds.length) {
+        await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id IN (?)', [cleanupFixtures.userIds]);
+        await db.query('DELETE FROM supplier_delivery_cluster_rates WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
+        await db.query('DELETE FROM supplier_delivery_configurations WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
       }
       if (cleanupFixtures.userIds.length) {
         await db.query(`DELETE FROM supplier_profiles WHERE supplier_id IN (?)`, [cleanupFixtures.userIds]);
