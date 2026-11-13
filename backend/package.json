@@ -10,7 +10,7 @@
     "test:hardening": "node tests/b6_backend_hardening_source_gate.js && node tests/canonical_family_discovery_gate.js",
     "test:b6": "node tests/b6_release_gate.js",
     "test:release": "npm test && npm run test:b6 && npm run test:ucp && npm --prefix ../frontend run build",
-    "test:ucp": "npm run test:ucp:audit && node tests/b4_regular_dual_timer_source_gate.js && node tests/ucp_unified_supplier_pools_source_gate.js && node tests/ucp_3_to_5_source_gate.js",
+    "test:ucp": "npm run test:ucp:audit && node tests/b4_regular_dual_timer_source_gate.js && node tests/ucp_unified_supplier_pools_source_gate.js && node tests/ucp_3_to_5_source_gate.js && node tests/ucp_flash_delivery_source_gate.js",
     "test:ucp:audit": "node tests/ucp_independent_audit_source_gate.js",
     "test:buyer:source": "node tests/buyer_procurement_auth_alignment_gate.js",
     "migration:preflight": "node database/migrationManifest.js",
