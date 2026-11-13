@@ -26,7 +26,9 @@ for (const [type,heading] of [
     assert.match(result.html, /border-radius:13px/);
     assert.match(result.html, /box-shadow:/);
     assert.match(result.html, /class="mj-accentbar" style="height:5px/);
-    assert.match(result.html, /border-radius:16px 16px 0 0/);
+    assert.match(result.html, /border-radius:17px 17px 0 0/);
+    assert.match(result.html, /<tr><td style="padding:0;background-color:#fffdf8;border:0;border-radius:17px 17px 0 0;overflow:hidden;"><div class="mj-accentbar"/);
+    assert.doesNotMatch(result.html, /padding:0 1px;background-color:#fffdf8;border:0/);
     assert.match(result.html, /border-radius:18px;box-shadow:/);
     assert.doesNotMatch(result.html, /class="mj-card"[^>]*overflow:hidden/);
     assert.match(result.html, /class="mj-footer"/);
