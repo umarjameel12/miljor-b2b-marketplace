@@ -74,3 +74,9 @@ jobs:
         env:
           SAFEPAY_WEBHOOK_SECRET: ci-synthetic-safepay-stress-only-2026
         run: cd backend && node tests/sandbox_payment_refund_stress_gate.js
+      - name: Concurrent Regular and Flash same SKU stock publication race
+        timeout-minutes: 5
+        run: cd backend && node tests/p0_same_sku_publication_stress_gate.js
+      - name: Read-side load and recovery benchmark (isolated DB only)
+        timeout-minutes: 4
+        run: cd backend && node tests/benchmark_load_stress.js
