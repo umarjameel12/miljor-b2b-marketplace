@@ -58,9 +58,9 @@ function checkFinanceCompatibility(directory=path.join(__dirname,'migrations')){
     const sql=migrationSql(notificationFile);
     for(const required of [
       /CREATE TABLE IF NOT EXISTS platform_notifications/i,
-      /FOREIGN KEY \\(user_id\\) REFERENCES users\\(id\\)/i,
-      /UNIQUE KEY uq_user_event_key \\(user_id, event_key\\)/i,
-      /KEY idx_user_unread \\(user_id, is_read, created_at\\)/i
+      /FOREIGN KEY \(user_id\) REFERENCES users\(id\)/i,
+      /UNIQUE KEY uq_user_event_key \(user_id, event_key\)/i,
+      /KEY idx_user_unread \(user_id, is_read, created_at\)/i
     ]){
       if(!required.test(sql))
         invalid('NOTIFICATION_MIGRATION_INVALID','049 must preserve recipient isolation, deduplication and unread index');
