@@ -20,4 +20,8 @@ assert.match(discovery,/SUPPLIER_CLUSTER_RATE_AT_HOLD/);
 assert.match(discovery,/delivery_fee_pkr:null/);
 assert.match(card,/supplier-configured delivery fee/);
 assert.match(supplier,/supplier cluster rates at buyer checkout/);
+assert.match(flash,/async previewDelivery/);
+assert.match(flash,/PREVIEW_ONLY_REVALIDATED_AT_HOLD/);
+assert.match(card,/delivery-preview/);
+assert.match(card,/deliveryPreviewLoading/);
 console.log('PASS Flash UCP delivery source safety checks (not MySQL or browser E2E)');
