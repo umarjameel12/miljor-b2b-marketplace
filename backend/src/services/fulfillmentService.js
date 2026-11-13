@@ -379,6 +379,19 @@ class FulfillmentService {
         }
       }
 
+      // Flash pickup is a buyer collection handoff, not a courier delivery.
+      // Preserve the immutable order's selected fulfillment type.
+      if(toStatus==='DISPATCHED' && order.delivery_type==='SUPPLIER_PICKUP' &&
+         deliveryMethod!=='BUYER_PICKUP') {
+        const err=new Error('Supplier-pickup orders must be handed over through BUYER_PICKUP.');
+        err.code='PICKUP_DELIVERY_METHOD_MISMATCH';err.statusCode=422;throw err;
+      }
+      if(toStatus==='DISPATCHED' && String(order.order_code||'').startsWith('FL') &&
+         order.delivery_type!=='SUPPLIER_PICKUP' && deliveryMethod==='BUYER_PICKUP') {
+        const err=new Error('Flash doorstep and Express orders cannot be handed over as buyer pickup.');
+        err.code='FLASH_DELIVERY_METHOD_MISMATCH';err.statusCode=422;throw err;
+      }
+
       // Update order state and timestamps
       let updateSql = 'UPDATE orders SET fulfillment_status = ?, updated_at = NOW()';
       const updateParams = [toStatus];
