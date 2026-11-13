@@ -377,7 +377,7 @@ export function SupplierPoolsPage(){
             <Field label="Ready stock (listing purchase units)" value={form.total_stock} onChange={v=>update('total_stock',v)} step="0.01"/>
             <Field label="Discounted price PKR per unit" value={form.discounted_unit_price} onChange={v=>update('discounted_unit_price',v)}/>
             <Field label="Duration (whole minutes, starts at publish)" value={form.duration_minutes} onChange={v=>update('duration_minutes',v)} step="1" min="2"/>
-            <Field label="Buyer delivery fee PKR" value={form.delivery_fee} onChange={v=>update('delivery_fee',v)} min="0"/>
+            <p className="text-xs rounded-lg border border-[var(--border-subtle)] p-3">Flash delivery charges are calculated from your enabled supplier cluster rates at buyer checkout. Configure your Standard delivery areas and rates in Supplier Profile. The old single fixed offer fee is not charged for new Flash holds.</p>
           </div>
           <label className="block text-xs font-semibold space-y-1">Selling mode
             <select value={form.selling_mode} onChange={e=>update('selling_mode',e.target.value)} className="w-full rounded-xl p-3 border bg-[var(--bg-elevated)] border-[var(--border-subtle)]">
