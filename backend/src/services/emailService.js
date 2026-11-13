@@ -317,7 +317,8 @@ class EmailService {
     :root { color-scheme:light dark; supported-color-schemes:light dark; }
     @media screen and (max-width:480px) {
       .mj-pagepad { padding:15px 10px !important; }
-      .mj-content { padding:25px 22px 22px !important; }
+      .mj-content { padding:25px 22px 12px !important; }
+      .mj-footer { padding:0 22px 24px !important; }
       .mj-card { border-radius:18px !important; }
       .mj-accentbar { border-radius:16px 16px 0 0 !important; }
       .mj-title { font-size:24px !important; }
@@ -347,13 +348,13 @@ class EmailService {
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f5f2eb;font-family:Arial,Helvetica,sans-serif;color:#282824;">
-  <!-- MJ_OTP_EMAIL_V6 -->
+  <!-- MJ_OTP_EMAIL_V7 -->
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your MilJor code expires in 10 minutes.</div>
   <table class="mj-page" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f5f2eb" style="border-collapse:collapse;background-color:#f5f2eb;">
     <tr><td class="mj-pagepad" align="center" style="padding:30px 14px;">
-      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffdf8" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border:1px solid #e6dfd2;border-radius:18px;overflow:hidden;box-shadow:0 10px 28px rgba(35,32,24,0.08);">
-        <tr><td style="padding:0;background-color:#fffdf8;border:0;"><div class="mj-accentbar" style="height:5px;line-height:5px;font-size:0;background-color:#c8b276;border-radius:16px 16px 0 0;overflow:hidden;background-clip:padding-box;">&nbsp;</div></td></tr>
-        <tr><td class="mj-content" style="padding:30px 34px 27px;">
+      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffdf8" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border:1px solid #e6dfd2;border-radius:18px;box-shadow:0 10px 28px rgba(35,32,24,0.08);">
+        <tr><td style="padding:0 1px;background-color:#fffdf8;border:0;"><div class="mj-accentbar" style="height:5px;line-height:5px;font-size:0;background-color:#c8b276;border-radius:16px 16px 0 0;overflow:hidden;background-clip:padding-box;">&nbsp;</div></td></tr>
+        <tr><td class="mj-content" style="padding:30px 34px 12px;">
           <p class="mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;line-height:1.2;color:#282824;margin:0 0 27px;">MilJor<span class="mj-accent" style="color:#ab8850;">.</span></p>
           <h1 class="mj-title mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:700;letter-spacing:-0.6px;line-height:1.18;color:#282824;margin:0 0 12px;">${title}</h1>
           <p class="mj-copy" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#655e51;margin:0 0 23px;">Hi ${escapedName},</p>
@@ -363,8 +364,19 @@ class EmailService {
               <span class="mj-code" style="font-family:Arial,Helvetica,sans-serif;font-size:36px;font-weight:700;letter-spacing:8px;line-height:1.2;color:#493a24;">${escapedOtp}</span>
             </td></tr>
           </table>
-          <p class="mj-copy" style="margin:13px 0 0;text-align:center;font-size:12px;line-height:1.5;color:#655e51;">Expires in <strong>10 minutes</strong> · Keep it private</p>
-          <p class="mj-copy mj-rule" style="margin:27px 0 0;padding-top:14px;border-top:1px solid #e9e2d6;font-size:11px;line-height:1.5;color:#766f63;">${note}</p>
+        </td></tr>
+        <!-- The footer is a separate full-width table row, never clipped by the OTP cell. -->
+        <tr><td class="mj-footer" style="padding:0 34px 27px;vertical-align:top;height:auto;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;width:100%;">
+            <tr><td class="mj-copy" align="center" style="padding:1px 0 0;color:#655e51;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;text-align:center;">
+              Expires in <strong>10 minutes</strong> · Keep it private
+            </td></tr>
+            <tr><td class="mj-rule" height="27" style="height:27px;line-height:27px;font-size:0;">&nbsp;</td></tr>
+            <tr><td class="mj-rule" style="border-top:1px solid #e9e2d6;font-size:0;line-height:0;height:0;">&nbsp;</td></tr>
+            <tr><td class="mj-copy" style="padding:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#766f63;">
+              ${note}
+            </td></tr>
+          </table>
         </td></tr>
       </table>
     </td></tr>
