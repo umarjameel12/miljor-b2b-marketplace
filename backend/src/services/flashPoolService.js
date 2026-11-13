@@ -389,11 +389,15 @@ class FlashPoolService {
       const [[openClock]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
       if(offer.status!=='ACTIVE'||!openClock.is_open)
         throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
-      // UCP-3: optional verified address binding for unified buyer checkout.
-      // Existing B5 callers using the earlier explicit delivery_address contract
-      // remain compatible; unified UI always supplies an owned saved address ID.
+      // Flash delivery is buyer-specific: fail closed unless the saved Lahore
+      // destination and the supplier's current cluster rate are both verified.
+      // Never fall back to arbitrary raw addresses or a global published fee.
+      if(payload.delivery_address_id==null)
+        throw fail('FLASH_VERIFIED_ADDRESS_REQUIRED',
+          'Choose a confirmed, verified Lahore business delivery address.',422);
       let verifiedDeliveryAddress=null;
-      if(payload.delivery_address_id!=null){
+      let verifiedClusterDeliveryFee=null;
+      {
         const addressId=Number(payload.delivery_address_id);
         if(!Number.isSafeInteger(addressId)||addressId<1)
           throw fail('INVALID_DELIVERY_ADDRESS','Choose a saved verified Lahore business address.',422);
@@ -412,7 +416,7 @@ class FlashPoolService {
           Number(payload.delivery_cluster_id)!==Number(address.cluster_id))
           throw fail('DELIVERY_CLUSTER_MISMATCH','Selected delivery area does not match the saved address.',409);
         const [coverage]=await conn.query(
-          `SELECT r.cluster_id FROM supplier_delivery_cluster_rates r
+          `SELECT r.cluster_id,r.fee_pkr FROM supplier_delivery_cluster_rates r
            JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
            JOIN geographic_clusters g ON g.id=r.cluster_id
            WHERE r.supplier_id=? AND r.cluster_id=? AND r.mode='STANDARD_CLUSTERED'
@@ -423,6 +427,7 @@ class FlashPoolService {
         if(!coverage.length)
           throw fail('FLASH_DELIVERY_AREA_UNAVAILABLE','Supplier cannot deliver this Flash offer to your verified Lahore cluster.',409);
         verifiedDeliveryAddress=String(address.full_address).trim();
+        verifiedClusterDeliveryFee=dec(coverage[0].fee_pkr,{positive:false});
       }
       const quantity=dec(payload.quantity);
       // Physical purchasing packs are indivisible; mass/volume listings can use
@@ -464,10 +469,12 @@ class FlashPoolService {
       const subtotal = money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
       const buyerFeeModel = await feeService.calculateBuyerFee(subtotal);
       const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
-      const deliveryFee = dec(offer.delivery_fee||'0',{positive:false});
+      // Recompute inside the stock-lock transaction, never trust a client fee
+      // or the supplier's offer-wide fee for a cluster-specific destination.
+      const deliveryFee = verifiedClusterDeliveryFee;
       const amount = money.exactDecimalSum([subtotal,buyerFee,deliveryFee],2);
       const orderCode='FL'+crypto.randomBytes(9).toString('hex');
-      const address=verifiedDeliveryAddress||(typeof payload.delivery_address==='string'?payload.delivery_address.trim():'');
+      const address=verifiedDeliveryAddress;
       if(address.length<8||address.length>1000)throw fail('DELIVERY_ADDRESS_REQUIRED','Provide a valid buyer delivery address.');
       // Freeze immutable supplier commission at Flash order creation, not payable accrual.
       // Read and validate inside the same locked transaction as the buyer stock hold.
