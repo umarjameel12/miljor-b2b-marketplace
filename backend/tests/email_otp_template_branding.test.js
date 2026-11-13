@@ -38,7 +38,7 @@ for (const [type,heading] of [
     assert.ok(footerIndex>codeIndex,'Footer must render after OTP in a separate row');
     assert.match(result.html.slice(footerIndex), /class="mj-rule"/);
     assert.match(result.html.slice(footerIndex), /You can ignore this email\./);
-    assert.match(result.html, /class="mj-copy mj-rule"/);
+    assert.match(result.html, /<tr><td class="mj-rule" style="border-top:1px solid/);
     if(type==='PASSWORD_RESET_OTP'){
       assert.match(result.html, /Not your request\? You can ignore this email\./);
     } else {
