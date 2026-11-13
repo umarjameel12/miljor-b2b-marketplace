@@ -778,6 +778,72 @@ async function runPart5FlashPoolGate() {
       pass('E04 Countdown parseDeadline handles MySQL strings as UTC, ISO, offsets, and invalid inputs');
     }
 
+    // UCP Flash pickup / express full HTTP + disposable MySQL acceptance.
+    {
+      const modeDraft=await api('/api/v1/flash-pools',{method:'POST',
+        headers:{Authorization:`Bearer ${supplierToken}`},body:{
+          supplier_listing_id:listingId,total_stock:'10.00',
+          discounted_unit_price:'4100.00',original_unit_price:'5000.00',
+          selling_mode:'MULTI_BUYER',min_quantity:'2.00',max_quantity_per_buyer:'10.00',
+          expiry_time:new Date(Date.now()+3600000).toISOString(),clearance_reason:'Pickup and Express mode gate'
+        }});
+      assert.equal(modeDraft.status,201);
+      const modePoolId=modeDraft.body.data.flash_pool.id;
+      cleanupFixtures.flashPoolIds.push(modePoolId);
+      const modePublish=await api(`/api/v1/flash-pools/${modePoolId}/publish`,{method:'POST',
+        headers:{Authorization:`Bearer ${supplierToken}`}});
+      assert.equal(modePublish.status,200);
+      const pickupList=await api(`/api/v1/flash-pools/${modePoolId}/delivery-preview?mode=PICKUP`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}});
+      assert.equal(pickupList.status,200);
+      assert.equal(pickupList.body.data.pickup_points[0].id,testPickupPointId);
+      const pickupPreview=await api(`/api/v1/flash-pools/${modePoolId}/delivery-preview?mode=PICKUP&pickup_point_id=${testPickupPointId}`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}});
+      assert.equal(pickupPreview.status,200);
+      assert.equal(Number(pickupPreview.body.data.delivery_fee_pkr),75);
+      const pickupHold=await api(`/api/v1/flash-pools/${modePoolId}/hold`,{method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_pickup_${ts}`},
+        body:{quantity:'2.00',fulfillment_mode:'PICKUP',pickup_point_id:testPickupPointId,delivery_fee:'0.00'}});
+      assert.equal(pickupHold.status,201);
+      assert.equal(Number(pickupHold.body.data.hold.delivery_fee),75);
+      assert.equal(pickupHold.body.data.hold.delivery_mode,'PICKUP');
+      const pickupOrderId=pickupHold.body.data.hold.order_id;
+      cleanupFixtures.orderIds.push(pickupOrderId);
+      const [[pickupOrder]]=await db.query('SELECT delivery_type,delivery_fee,delivery_address FROM orders WHERE id=?',[pickupOrderId]);
+      assert.equal(pickupOrder.delivery_type,'SUPPLIER_PICKUP');
+      assert.equal(Number(pickupOrder.delivery_fee),75);
+      assert.ok(pickupOrder.delivery_address.includes('Gulberg Depot'));
+      const [[pickupTerms]]=await db.query('SELECT mode,pickup_point_id,delivery_address_id,delivery_fee_pkr FROM flash_order_delivery_terms WHERE order_id=?',[pickupOrderId]);
+      assert.equal(pickupTerms.mode,'PICKUP');
+      assert.equal(Number(pickupTerms.pickup_point_id),testPickupPointId);
+      assert.equal(pickupTerms.delivery_address_id,null);
+      assert.equal(Number(pickupTerms.delivery_fee_pkr),75);
+      pass('F01 Flash supplier pickup is selected, priced and snapshot-locked in real MySQL');
+      const expressPreview=await api(`/api/v1/flash-pools/${modePoolId}/delivery-preview?mode=EXPRESS&address_id=${buyer2AddressId}`,{
+        headers:{Authorization:`Bearer ${buyer2Token}`}});
+      assert.equal(expressPreview.status,200);
+      assert.equal(Number(expressPreview.body.data.delivery_fee_pkr),725);
+      const expressHold=await api(`/api/v1/flash-pools/${modePoolId}/hold`,{method:'POST',
+        headers:{Authorization:`Bearer ${buyer2Token}`,'X-Idempotency-Key':`idem_p5_express_${ts}`},
+        body:{quantity:'2.00',fulfillment_mode:'EXPRESS',delivery_address_id:buyer2AddressId,
+          delivery_cluster_id:testClusterId,delivery_fee:'1.00'}});
+      assert.equal(expressHold.status,201);
+      assert.equal(Number(expressHold.body.data.hold.delivery_fee),725);
+      const expressOrderId=expressHold.body.data.hold.order_id;
+      cleanupFixtures.orderIds.push(expressOrderId);
+      const [[expressTerms]]=await db.query('SELECT mode,delivery_address_id,pickup_point_id,delivery_fee_pkr FROM flash_order_delivery_terms WHERE order_id=?',[expressOrderId]);
+      assert.equal(expressTerms.mode,'EXPRESS');
+      assert.equal(Number(expressTerms.delivery_address_id),buyer2AddressId);
+      assert.equal(expressTerms.pickup_point_id,null);
+      assert.equal(Number(expressTerms.delivery_fee_pkr),725);
+      pass('F02 Flash Express buyer area/rate is snapshot-locked; injected fee ignored');
+      const conflicting=await api(`/api/v1/flash-pools/${modePoolId}/hold`,{method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_pickup_${ts}`},
+        body:{quantity:'2.00',fulfillment_mode:'EXPRESS',delivery_address_id:buyer1AddressId}});
+      assert.equal(conflicting.status,409);
+      assert.equal(conflicting.body.error.code,'IDEMPOTENCY_CONFLICT');
+      pass('F03 Flash idempotency replays cannot switch pickup to Express');
+    }
     console.log('\n=================================================================');
     console.log(`🎉 ALL PART 5 FLASH POOL GATE TESTS PASSED (${passed}/${passed})`);
     console.log('=================================================================\n');
