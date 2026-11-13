@@ -20,7 +20,7 @@ export function PasswordField({
   confirmValue = null,
   error = null,
   helperText = null,
-  guidanceText = 'Use at least 8 characters with letters and numbers. A longer, unique password is safer.',
+  guidanceText = '',
 }) {
   return (
     <div className="space-y-1.5">

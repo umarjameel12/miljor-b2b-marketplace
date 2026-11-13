@@ -139,16 +139,20 @@ export const AuthProvider = ({ children }) => {
     throw new Error(response.error?.message || 'Registration failed');
   };
 
-  // Verify Email OTP handler
+  // OTP verification changes server-side identity state; it does not issue a new JWT.
+  // Re-fetch the authoritative profile so B6 receives the verified buyer state.
   const verifyEmail = async ({ email, otp }) => {
     const response = await authApi.verifyEmail({ email, otp });
-    if (response.success && response.data?.token) {
-      const newToken = response.data.token;
-      const newUser = response.data.user;
-      updateAuthCredentials(newToken, newUser);
-      return { success: true, user: newUser };
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Verification failed');
     }
-    throw new Error(response.error?.message || 'Verification failed');
+
+    const profile = await authApi.getMe();
+    if (!profile.success || !profile.data?.user) {
+      throw new Error('Email verified, but your account could not be refreshed. Please log in again.');
+    }
+    setUser(profile.data.user);
+    return { success: true, user: profile.data.user };
   };
 
   // Resend OTP handler

@@ -80,9 +80,9 @@ export function RegularReservationWorkflow({reservation,onRefresh}){
            {['PRICE_HIGH','FOUND_ALTERNATIVE','NO_LONGER_NEEDED','DELIVERY_WINDOW_UNSUITABLE','TERMS_UNACCEPTABLE','OTHER']
              .map(code=><option key={code} value={code}>{code.replaceAll('_',' ')}</option>)}
          </select>}
-         <button type="button" onClick={()=>decide(confirmation)} disabled={busy} className="bg-emerald-700 text-white rounded-lg px-3 py-2">Confirm {confirmation}</button>
+         <button type="button" onClick={()=>decide(confirmation)} disabled={busy} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-3 py-2 shadow-xs hover:opacity-95 transition cursor-pointer">Confirm {confirmation}</button>
          <button type="button" onClick={()=>setConfirmation('')} className="ml-2 underline">Go back</button>
-       </div>:<div className="flex gap-2"><button type="button" onClick={()=>setConfirmation('ACCEPT')} className="bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs">Accept offer</button>
+       </div>:<div className="flex gap-2"><button type="button" onClick={()=>setConfirmation('ACCEPT')} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-3 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer">Accept offer</button>
           <button type="button" onClick={()=>setConfirmation('DECLINE')} className="border rounded-lg px-3 py-2 text-xs">Decline</button></div>}
      </div>}
      {offer.buyer_decision_status?.has_decision&&<p className="text-xs font-semibold">Buyer decision: {offer.buyer_decision_status.decision}</p>}
@@ -96,7 +96,7 @@ export function RegularReservationWorkflow({reservation,onRefresh}){
        <textarea rows={2} value={address} maxLength={1000} onChange={e=>setAddress(e.target.value)}
          className="w-full border rounded-xl p-2 bg-[var(--bg-elevated)] border-[var(--border-subtle)]"/>
      </label>
-     <button type="button" onClick={convert} disabled={busy} className="bg-emerald-700 text-white rounded-lg px-3 py-2 text-xs">Create payable B4 order</button>
+     <button type="button" onClick={convert} disabled={busy} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-3 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer">Create payable B4 order</button>
    </div>}
    {createdOrder&&<p className="text-xs text-emerald-600">Order {createdOrder.order_code} created. Use the Regular Pool payment-hold card above to initiate Safepay checkout.</p>}
    {error&&<p role="alert" className="text-xs text-red-600">{error}</p>}

@@ -45,13 +45,27 @@ function checkFinanceCompatibility(directory=path.join(__dirname,'migrations')){
     if(fs.existsSync(path.join(directory,alias)))
       invalid('FINANCE_MIGRATION_ALIAS_PRESENT',alias+' requires finance-specific reconciliation');
   }
-  // 049/050 are currently unclaimed in this canonical branch; fail closed if
-  // somebody drops unreviewed SQL into those slots.
-  for(const version of ['049','050']){
-    if(found.has(version))
-      invalid('RESERVED_MIGRATION_SLOT_REQUIRES_REVIEW',version+' '+found.get(version));
-  }
+  // 049 was deliberately assigned to persistent in-app notifications.
+  // Explicitly accept only that reviewed filename and its expected DDL contract;
+  // keep the competing finance alias and all other unexpected migrations blocked.
+  const notificationFile='049_in_app_notifications.sql';
+  if(found.has('049') && found.get('049')!==notificationFile)
+    invalid('RESERVED_MIGRATION_SLOT_REQUIRES_REVIEW','049 '+found.get('049'));
+  if(found.has('050'))
+    invalid('RESERVED_MIGRATION_SLOT_REQUIRES_REVIEW','050 '+found.get('050'));
   const migrationSql=file=>fs.readFileSync(path.join(directory,file),'utf8');
+  if(found.has('049')){
+    const sql=migrationSql(notificationFile);
+    for(const required of [
+      /CREATE TABLE IF NOT EXISTS platform_notifications/i,
+      /FOREIGN KEY \(user_id\) REFERENCES users\(id\)/i,
+      /UNIQUE KEY uq_user_event_key \(user_id, event_key\)/i,
+      /KEY idx_user_unread \(user_id, is_read, created_at\)/i
+    ]){
+      if(!required.test(sql))
+        invalid('NOTIFICATION_MIGRATION_INVALID','049 must preserve recipient isolation, deduplication and unread index');
+    }
+  }
   if(!/CREATE TABLE IF NOT EXISTS regular_pool_payment_holds/i.test(
       migrationSql(CANONICAL['053'])))
     invalid('REGULAR_PAYMENT_HOLD_MIGRATION_INVALID','Expected B4 hold DDL in UCP 053');

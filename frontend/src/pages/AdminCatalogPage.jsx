@@ -253,8 +253,8 @@ export const AdminCatalogPage = () => {
                   Supplier Verification Queue
                 </Link>
                 <span className="text-[var(--border-subtle)]">•</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Package E2 Catalog Governance
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--brand-accent)]">
+                  Catalog Governance & Verification
                 </span>
               </div>
               <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)]">

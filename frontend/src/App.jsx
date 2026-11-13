@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -7,27 +7,39 @@ import { Navbar } from './components/Navbar';
 import { OpeningTreatment } from './components/ui/OpeningTreatment';
 import { Logo } from './components/ui/Logo';
 import { LandingPage } from './pages/LandingPage';
-import { PoolsPage } from './pages/PoolsPage';
-import { OrdersPage } from './pages/OrdersPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
-import { VerifyEmailPage } from './pages/VerifyEmailPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { SupplierProfilePage } from './pages/SupplierProfilePage';
-import { SupplierOnboardingPage } from './pages/SupplierOnboardingPage';
-import { SupplierCatalogPage } from './pages/SupplierCatalogPage';
-import { AdminVerificationPage } from './pages/AdminVerificationPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-import { AdminCatalogPage } from './pages/AdminCatalogPage';
-import { SupplierDashboardPage } from './pages/SupplierDashboardPage';
-import { SupplierPoolsPage } from './pages/SupplierPoolsPage';
-import { SupplierSubscriptionPage } from './pages/SupplierSubscriptionPage';
-import { FlashPoolsPage } from './pages/FlashPoolsPage';
-import { DemandRequestsPage } from './pages/DemandRequestsPage';
-import { RfqPage } from './pages/RfqPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
+const PoolsPage = lazy(() => import('./pages/PoolsPage').then((m) => ({ default: m.PoolsPage })));
+const OrdersPage = lazy(() => import('./pages/OrdersPage').then((m) => ({ default: m.OrdersPage })));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage })));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const SupplierProfilePage = lazy(() => import('./pages/SupplierProfilePage').then((m) => ({ default: m.SupplierProfilePage })));
+const SupplierOnboardingPage = lazy(() => import('./pages/SupplierOnboardingPage').then((m) => ({ default: m.SupplierOnboardingPage })));
+const SupplierCatalogPage = lazy(() => import('./pages/SupplierCatalogPage').then((m) => ({ default: m.SupplierCatalogPage })));
+const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage').then((m) => ({ default: m.AdminVerificationPage })));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then((m) => ({ default: m.AdminCatalogPage })));
+const SupplierDashboardPage = lazy(() => import('./pages/SupplierDashboardPage').then((m) => ({ default: m.SupplierDashboardPage })));
+const SupplierPoolsPage = lazy(() => import('./pages/SupplierPoolsPage').then((m) => ({ default: m.SupplierPoolsPage })));
+const SupplierSubscriptionPage = lazy(() => import('./pages/SupplierSubscriptionPage').then((m) => ({ default: m.SupplierSubscriptionPage })));
+const FlashPoolsPage = lazy(() => import('./pages/FlashPoolsPage').then((m) => ({ default: m.FlashPoolsPage })));
+const DemandRequestsPage = lazy(() => import('./pages/DemandRequestsPage').then((m) => ({ default: m.DemandRequestsPage })));
+const RfqPage = lazy(() => import('./pages/RfqPage').then((m) => ({ default: m.RfqPage })));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
+const PaymentReturnPage = lazy(() => import('./pages/PaymentReturnPage').then((m) => ({ default: m.PaymentReturnPage })));
+
+function RouteFallback() {
+  return (
+    <div className="flex-1 flex items-center justify-center py-24" role="status" aria-live="polite">
+      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Loading…</span>
+    </div>
+  );
+}
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -41,9 +53,9 @@ function AppContent() {
     return <OpeningTreatment />;
   }
 
-  // Showcase (/), marketplace (/pools), orders (/orders), profile (/profile), supplier (/supplier), and admin (/admin) use the responsive AppShell layout with sidebar.
+  // Showcase (/), marketplace (/pools), orders (/orders), checkout (/checkout), payment (/payment), profile (/profile), supplier (/supplier), and admin (/admin) use the responsive AppShell layout with sidebar.
   // Auth routes (/login, /register, /verify-email, /forgot-password) use the clean standalone Navbar.
-  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
+  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/checkout') || location.pathname.startsWith('/payment') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
 
   return (
     <div
@@ -56,10 +68,14 @@ function AppContent() {
       {!isAppShellRoute && <Navbar />}
 
       <div className="flex-1 flex flex-col">
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/checkout/:orderId" element={<CheckoutPage />} />
+          <Route path="/payment/return" element={<PaymentReturnPage />} />
+          <Route path="/payment/cancelled" element={<PaymentReturnPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/flash-pools" element={<FlashPoolsPage />} />
           <Route path="/demand-requests" element={<DemandRequestsPage />} />
@@ -79,8 +95,9 @@ function AppContent() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </div>
 
       <ToastContainer

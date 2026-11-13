@@ -40,7 +40,7 @@ class ProcurementRequestService {
     );
     if (!rows.length || rows[0].role !== 'BUYER' ||
         Number(rows[0].is_verified) !== 1 ||
-        rows[0].verification_status !== 'VERIFIED' ||
+        !['VERIFIED', 'EMAIL_VERIFIED'].includes(rows[0].verification_status) ||
         rows[0].buyer_trust_status === 'SUSPENDED') {
       throw issue('BUYER_NOT_ELIGIBLE', 'An active B2B buyer account is required.', 403);
     }

@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Truck,
   ArrowRight,
+  Receipt,
 } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
 
@@ -25,23 +26,25 @@ export const OrdersPage = () => {
   const [flashHolds,setFlashHolds]=useState([]);
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
-  const regularOrders=realOrders.filter(order=>order.pool_id&&order.reservation_id);
+  const isSupplier = user?.role === 'SUPPLIER';
+  const regularOrders=isSupplier ? [] : realOrders.filter(order=>order.pool_id&&order.reservation_id);
   // Flash/B6 procurement orders can be legitimate without a legacy pool/reservation.
-  // Never silently hide these server-owned orders from the buyer.
-  const procurementOrders=realOrders.filter(order=>!(order.pool_id&&order.reservation_id));
+  // For suppliers, all assigned customer orders are displayed in their fulfillment queue.
+  const procurementOrders=isSupplier ? realOrders : realOrders.filter(order=>!(order.pool_id&&order.reservation_id));
   const activeCommitmentCount=regularOrders.filter(o=>!['PAID','CANCELLED','REFUNDED'].includes(o.payment_status)).length+
     flashHolds.filter(h=>!['PAID','EXPIRED','RELEASED','FAILED'].includes(h.status)&&h.payment_status!=='PAID').length;
   useEffect(()=>{
-    if(!isAuthenticated || user?.role!=='BUYER')return;
+    if(!isAuthenticated) return;
     let mounted=true;
     setOrdersLoading(true);
-    Promise.all([
-      apiClient.get('/orders',{params:{limit:100}}),
-      apiClient.get('/flash-pools/holds/mine')
-    ]).then(([orders,flash])=>{
+    const promises = [apiClient.get('/orders',{params:{limit:100}})];
+    if (user?.role === 'BUYER') {
+      promises.push(apiClient.get('/flash-pools/holds/mine').catch(()=>({data:{data:{holds:[]}}})));
+    }
+    Promise.all(promises).then(([ordersRes, flashRes])=>{
       if(mounted){
-        setRealOrders(orders?.data?.data?.orders||[]);
-        setFlashHolds(flash?.data?.data?.holds||[]);
+        setRealOrders(ordersRes?.data?.data?.orders || ordersRes?.data?.orders || []);
+        if (flashRes) setFlashHolds(flashRes?.data?.data?.holds || []);
       }
     }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Could not load orders');})
       .finally(()=>{if(mounted)setOrdersLoading(false)});
@@ -62,13 +65,13 @@ export const OrdersPage = () => {
               }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>{isAuthenticated ? `Buyer Account · ${user?.business_name || user?.full_name || 'Verified Member'}` : 'Guest Preview'}</span>
+              <span>{isAuthenticated ? (isSupplier ? `Supplier Account · ${user?.business_name || user?.full_name || 'Verified Supplier'}` : `Buyer Account · ${user?.business_name || user?.full_name || 'Verified Member'}`) : 'Guest Preview'}</span>
             </div>
             <h1 className="font-display font-bold text-2xl sm:text-3xl tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Procurement Orders & Reservations
+              {isSupplier ? 'Supplier Orders & Fulfillment Queue' : 'Procurement Orders & Reservations'}
             </h1>
             <p className="mt-1 text-xs sm:text-sm max-w-xl" style={{ color: 'var(--text-muted)' }}>
-              Track pooled commodity commitments, collective volume lock milestones, and delivery fulfillment.
+              {isSupplier ? 'Manage funded buyer procurement orders, view escrow custody, and coordinate dispatch.' : 'Track pooled commodity commitments, collective volume lock milestones, and delivery fulfillment.'}
             </p>
           </div>
 
@@ -204,8 +207,8 @@ export const OrdersPage = () => {
         {/* Real poolless Flash/B6 awards are first-class orders. Display only server
             authorized order data, not preview records or fabricated payment status. */}
         {!ordersLoading && procurementOrders.length > 0 && (
-          <section className="space-y-3" aria-label="Your procurement orders">
-            <h2 className="font-semibold text-lg">Your Procurement Orders</h2>
+          <section className="space-y-3" aria-label="Orders queue">
+            <h2 className="font-semibold text-lg">{isSupplier ? 'Funded Orders Awaiting Fulfillment' : 'Your Procurement Orders'}</h2>
             {procurementOrders.map(order => (
               <article key={order.id} className="rounded-xl border p-4 space-y-2"
                 style={{backgroundColor:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
@@ -214,10 +217,29 @@ export const OrdersPage = () => {
                   <span className="text-xs font-medium">{order.payment_status || 'AWAITING_PAYMENT'}</span>
                 </div>
                 <p className="text-sm">{order.product_title || 'Procurement Order'}</p>
-                <div className="flex flex-wrap gap-3 text-xs" style={{color:'var(--text-muted)'}}>
-                  <span>Order status: {order.order_status || 'PENDING'}</span>
-                  <span>Fulfillment: {order.fulfillment_status || 'NOT_STARTED'}</span>
-                  <span>Total: PKR {Number(order.total_amount || 0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                <div className="flex flex-wrap gap-3 text-xs items-center justify-between" style={{color:'var(--text-muted)'}}>
+                  <div className="flex flex-wrap gap-3">
+                    <span>Order status: {order.order_status || 'PENDING'}</span>
+                    <span>Fulfillment: {order.fulfillment_status || 'NOT_STARTED'}</span>
+                    <span>Total: PKR {Number(order.total_amount || 0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                  </div>
+                  {order.payment_status !== 'PAID' && order.order_status !== 'PAID' ? (
+                    <Link
+                      to={`/checkout/${order.id}`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--brand-accent)] text-[#072a21] hover:opacity-90 transition flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <span>Complete Checkout</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  ) : (
+                    <Link
+                      to={`/payment/return?order_id=${order.id}`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20 transition flex items-center gap-1.5"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>View Receipt & Escrow</span>
+                    </Link>
+                  )}
                 </div>
               </article>
             ))}

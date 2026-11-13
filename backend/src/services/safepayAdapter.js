@@ -13,6 +13,21 @@ if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
 
+const robustLookup = (hostname, opts, cb) => {
+  const callback = typeof opts === 'function' ? opts : cb;
+  const options = typeof opts === 'object' ? opts : {};
+  dns.lookup(hostname, options, (err, addr, fam) => {
+    if (err && (err.code === 'EAI_AGAIN' || err.code === 'ENOTFOUND')) {
+      dns.resolve4(hostname, (err2, addrs) => {
+        if (!err2 && addrs && addrs.length > 0) return callback(null, addrs[0], 4);
+        return callback(err);
+      });
+    } else {
+      return callback(err, addr, fam);
+    }
+  });
+};
+
 class SafepayAdapter {
   constructor() {
     this.env = process.env.SAFEPAY_ENV || 'sandbox';
@@ -86,6 +101,7 @@ class SafepayAdapter {
       const req = https.request({
         hostname: this.sandboxApiHost,
         port: 443,
+        lookup: robustLookup,
         path: '/order/v1/init',
         method: 'POST',
         family: 4,
@@ -177,6 +193,7 @@ class SafepayAdapter {
       const req = https.request({
         hostname: this.sandboxApiHost,
         port: 443,
+        lookup: robustLookup,
         path: '/client/passport/v1/token',
         method: 'POST',
         family: 4,
@@ -276,6 +293,7 @@ class SafepayAdapter {
       const req = https.request({
         hostname: this.sandboxApiHost,
         port: 443,
+        lookup: robustLookup,
         path: `/order/v1/${trackerToken}`,
         method: 'GET',
         family: 4,

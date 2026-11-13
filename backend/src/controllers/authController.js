@@ -478,11 +478,24 @@ class AuthController {
         connection.release();
       }
 
-      // 10. Issue Session Token
+      // 10. Issue Session Token. Buyer registration requires OTP before B6 procurement.
+      // Send only after the transaction commits; failed delivery must not roll back
+      // a valid account. The buyer can request another OTP from the verification page.
+      if (assignedRole === 'BUYER' && email) {
+        try {
+          await emailService.createAndSendOtp({
+            userId, email, userName: full_name || business_name || 'Buyer',
+            purpose: 'REGISTRATION_VERIFY'
+          });
+        } catch {
+          console.warn('Buyer verification email delivery unavailable; resend OTP is available.');
+        }
+      }
       const token = signToken({ id: userId, email: email || null, phone: cleanPhone, role: assignedRole });
 
       return res.status(201).json({
         success: true,
+        requires_verification: assignedRole === 'BUYER',
         message: 'Account created successfully. Welcome to MilJor!',
         data: {
           token,
@@ -1104,8 +1117,13 @@ class AuthController {
       // Update user verification status
       await db.query(
         `UPDATE users
-         SET verification_status = 'EMAIL_VERIFIED',
-             is_verified = CASE WHEN role = 'BUYER' THEN 1 ELSE is_verified END
+         SET verification_status = CASE
+               WHEN role = 'BUYER' AND verification_status NOT IN ('BLOCKED', 'VERIFIED')
+                 THEN 'EMAIL_VERIFIED'
+               ELSE verification_status END,
+             is_verified = CASE
+               WHEN role = 'BUYER' AND verification_status <> 'BLOCKED'
+                 THEN 1 ELSE is_verified END
          WHERE id = ?`,
         [userId]
       );

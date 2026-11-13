@@ -28,7 +28,7 @@ export const FLAGS = {
   phoneFormattingHelper: ENHANCEMENTS_ENABLED && true,
 
   // 5. Orders Page (Clean Sample Order Flow without emoji)
-  ordersSamplePreview: ENHANCEMENTS_ENABLED && true,
+  ordersSamplePreview: false, // simulated orders must never appear in the real orders journey
 };
 
 export default FLAGS;

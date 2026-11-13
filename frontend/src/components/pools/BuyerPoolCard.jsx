@@ -161,7 +161,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
       <p>Published delivery charge: {fmt(pool.delivery_fee_pkr)}. Final total verified at checkout.</p>
     </div>:<p className="text-xs text-[var(--text-muted)]"><Truck size={13} className="inline mr-1"/>Delivery options: {pool.delivery_modes?.join(', ')||'Buyer eligibility to be verified'}.</p>}
     <button type="button" onClick={openForBuyer} disabled={!pool.can_join}
-      className="mt-auto rounded-xl px-3 py-2.5 bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+      className="mt-auto rounded-xl px-3 py-2.5 bg-[var(--brand-accent)] text-[#072a21] text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs hover:opacity-95 transition cursor-pointer">
       <ShoppingCart size={14}/>{pool.can_join?(flash?'Reserve stock for checkout':'Join pool'):'Unavailable'}
     </button>
     {open&&<div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Confirm supplier pool purchase">
@@ -198,7 +198,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
             'Joining a pool does not guarantee final tier pricing or charge you; the supplier offer and payment are separate steps.'}</p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={()=>setOpen(false)} className="border rounded-lg px-3 py-2 text-xs">Back</button>
-            <button disabled={saving} type="button" onClick={submit} className="bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs">
+            <button disabled={saving} type="button" onClick={submit} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-xs shadow-xs hover:opacity-95 transition cursor-pointer">
               {saving?'Submitting…':flash?'Reserve for 15 minutes':'Confirm reservation'}
             </button>
           </div></>:
@@ -211,7 +211,7 @@ export function BuyerPoolCard({pool,serverTime,clusterId,onChange}){
             {paid?<p className="text-emerald-600 text-sm">Payment verified.</p>:
               pending?<p className="text-amber-600 text-xs">Awaiting authoritative Safepay verification; do not create a duplicate order.</p>:
               holdExpired?<p className="text-amber-600 text-xs">Stock hold is no longer payable. Refresh order status or contact support.</p>:
-              <button disabled={saving} onClick={checkout} type="button" className="w-full bg-emerald-700 rounded-lg p-3 text-white text-xs">
+              <button disabled={saving} onClick={checkout} type="button" className="w-full bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg p-3 text-xs shadow-xs hover:opacity-95 transition cursor-pointer">
                 {saving?'Opening…':'Continue to Safepay'}
               </button>}
             <div className="flex justify-between text-xs"><button type="button" onClick={refreshHold} className="underline">Refresh hold status</button>

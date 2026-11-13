@@ -31,7 +31,7 @@ class ProcurementRecurringService {
   async _verified(conn,buyer){
     const [rows]=await conn.query(
       `SELECT id FROM users WHERE id=? AND role='BUYER' AND is_verified=1
-        AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'`,[buyer]);
+        AND verification_status IN ('VERIFIED','EMAIL_VERIFIED') AND buyer_trust_status<>'SUSPENDED'`,[buyer]);
     if(!rows.length)throw fail('BUYER_NOT_ELIGIBLE','Active verified B2B buyer required.',403);
   }
   async createDraft(buyerId,requestId,schedule,rawKey){

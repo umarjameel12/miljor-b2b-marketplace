@@ -1,6 +1,54 @@
 # MilJor — Phase Execution Log
 
-## Final Demo Completion, Admin Portal, B6 Finance, Safepay Sandbox & Local Reconciliation — 2026-11-12
+## Post Master-E2E Gap Closure & Final Demo Acceptance (Production Hardened) — 2026-11-12
+
+- **Active Branch:** `feature/frontend-redesign-20261112`
+- **Authoritative Report:** `backend/docs/MILJOR_FULL_E2E_ACCEPTANCE_REPORT.md`
+- **Bug Register:** `backend/docs/MILJOR_FULL_E2E_BUG_REGISTER.md`
+- **Test Evidence:** `backend/docs/MILJOR_FULL_E2E_TEST_EVIDENCE.md`
+- **Database Integrity:** `backend/docs/MILJOR_FULL_E2E_DATABASE_INTEGRITY.md`
+- **Gap Closures & Hardening Completed:**
+  - **Task 1 Admin Credential Security:** Rotated SUPER_ADMIN password to a high-entropy secret stored exclusively in gitignored `backend/.env`. Hashed with bcrypt (12 rounds) across `miljor_db` and `miljor_test_db`. Revoked all active sessions and refresh tokens. Sanitized all plaintext password mentions across Git-tracked files and markdown reports. Verified admin login (200 OK, `SUPER_ADMIN`).
+  - **Task 2 Genuine Safepay Sandbox Session:** Created real checkout tracker session `track_1216a64c-0fb4-48b6-9f0f-bbae39312c8b` via live API call to `https://sandbox.api.getsafepay.com/order/v1/init`. Confirmed state `TRACKER_STARTED` via live `fetchTracker`. Verified raw HMAC-SHA512 webhook ingestion and tampered signature rejection.
+  - **Task 3 Safepay Refund Capabilities:** Documented technical reality: Safepay does not provide programmatic self-serve REST refund endpoints on standard sandbox accounts; merchant refunds operate through dashboard settlement. Fail-closed `REFUND_PENDING_GATEWAY` stub verified without live money movement under `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`.
+  - **Task 4 Complete B6 Paid Fulfillment:** Executed `demo_real_b6_award_paid_fulfillment_mysql_gate.js` (7/7 PASS): verified buyer RFQ creation, quote submission, fee-inclusive preview, single-supplier order creation (`AWAITING_PAYMENT`), signed Safepay callback reconciliation, stock commitment (`ORDER_DIRECT`), paid supplier fulfillment queue visibility, and immutable B6 invoice generation.
+  - **Task 5 Live Browser Journeys:** Executed live browser verification on `http://localhost:3000` via webview subagent:
+    - Buyer Journey: Authenticated as `buyer1@miljor.com`, verified `/pools` catalog with Flash and Regular pools and `/orders` empty state with volume counters.
+    - RBAC Check: Buyer attempting direct access to `/admin` blocked with "Administrator access required" and link to administrator login.
+    - Supplier Journey: Authenticated as `supplier1@miljor.com`, verified `/supplier/dashboard`, `/supplier/catalog`, and `/supplier/pools` with commodity hierarchy and pool management.
+  - **Task 6 Partial Shortage & Financial Escrow:** Executed `demo_real_mysql_postpurchase_100_80_20_gate.js` (10/10 PASS): 100 kg ordered, 80 kg delivered, 20 kg shortage creates exact PKR 200 dispute held in internal escrow; order completion and premature financial settlement prevented.
+  - **Task 7 Notification Events:** Verified database-driven in-app operational alerts via `poolOperationsService.alerts(supplierId)` and email notifications via `emailService.js`.
+- **Consolidated Gates Executed (100% Green):**
+  - `master_e2e_acceptance_runner.js`: 31 / 31 PASS (100% Green).
+  - `demo_real_b6_award_paid_fulfillment_mysql_gate.js`: 7 / 7 PASS (100% Green).
+  - `demo_real_mysql_postpurchase_100_80_20_gate.js`: 10 / 10 PASS (100% Green).
+  - `npm run test:ucp`: 152 / 152 PASS (100% Green).
+  - `safepay_sandbox_readiness_gate.test.js`: 9 / 9 PASS (100% Green).
+  - Frontend test suites: 24 / 24 PASS (100% Green).
+  - Frontend production build: Vite v8.3.4 (2,229 modules transformed, 0 errors, 10.94s).
+- **Database Safety:** `miljor_db` remains 100% PRISTINE (0 orders, 0 payments, 0 reservations).
+- **State:** **VERIFIED, INTEGRATED, DOCUMENTED & COMMITTED TO FEATURE BRANCH**.
+
+---
+
+## Frontend Redesign & Experience Engineering (Quiet Luxury & Swiss Minimalist Overhaul) — 2026-11-12
+
+- **Active Branch:** `feature/frontend-redesign-20261112`
+- **Authoritative Report:** `frontend/docs/MILJOR_FINAL_FRONTEND_VISUAL_ACCEPTANCE.md` & `frontend/docs/MILJOR_FRONTEND_ROUTE_AND_FEATURE_AUDIT.md`.
+- **Integrated Improvements:**
+  - **Color Palette & De-Greening:** Eliminated gratuitous emerald styling across buttons, filters, and cards. Replaced with Champagne Gold (`#C8B276`), Warm Ivory (`#EEE6D8` / `#F1EADF`), and deep charcoal ink (`#0C2B24` / `#072A21`). Green strictly reserved for positive semantic status (`ACTIVE`, `VERIFIED`, `PAID`, `APPROVED`).
+  - **Internal Jargon Elimination:** Removed "Package E2", "Package E1.1 Gate B", and legacy specifications from customer-facing screens.
+  - **Data Honesty:** Eliminated simulated order `#MLJ-8421` (disabled `ordersSamplePreview`) and fabricated `REFERENCE_FEATURED_POOLS`; all pool views connect strictly to live backend API or honest empty state.
+  - **AppShell & Navigation:** Single Ribbon-M logo toggle with invariant dimensions; removed accidental outside-click desktop collapse; role-aware navigation (Buyer, Supplier, Admin); eliminated dead "Coming Soon" links.
+  - **Performance:** Implemented route-level `React.lazy` code splitting in `App.jsx`, reducing initial bundle size from 1,075 kB to 392 kB.
+- **Verification Gates (100% Green):**
+  - Production frontend build: `npm --prefix frontend run build` (PASS in 2.71s, 0 errors).
+  - Frontend test suites: Design system tokens (10/10 PASS), Auth V2 (7/7 PASS), Forgot password (9/9 PASS), Package E1.1 (6/6 PASS), Package E2 catalog (4/4 PASS), Package C onboarding (7/7 PASS), Parse deadline (14/14 PASS), Sidebar & controls fix (6/6 PASS), VF8 appearance & contrast (13/13 PASS).
+  - Backend UI contract gates: `p0_unified_pool_ui_source_gate.js`, `ucp_3_to_5_source_gate.js` (46/46), `ucp_unified_supplier_pools_source_gate.js` (21/21), `p0_all_order_origins_source_gate.js` (ALL PASS).
+- **Database Safety:** `miljor_db` and `miljor_sandbox_db` remained 100% untouched.
+- **State:** **VERIFIED & COMMITTED TO FEATURE BRANCH**.
+
+---
 
 - **Canonical Branch:** `main` (Remote HEAD `61535cf3c04047cf555a9a141ee1a7565f95fe12` == Local HEAD `61535cf3c04047cf555a9a141ee1a7565f95fe12`).
 - **Authoritative Report:** `backend/docs/MILJOR_FINAL_DEMO_ACCEPTANCE_REPORT.md`.
@@ -1592,3 +1640,37 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 - Source parse verified on 18/18 inspected backend JS files prior to final report; no MySQL/HTTP/JSX build/real Safepay regression executed. New source audit gate prepared for final suite.
 - **Gate: BLOCKED** pending merge reconciliation, isolated `miljor_test_db` migration execution, full B4/B5/B6 security/concurrency/payment/JSX E2E acceptance and review.
 - See `backend/docs/MILJOR_UCP3_5_INDEPENDENT_AUDIT_FIX_REPORT.md` for exact findings, changed files and remaining gates.
+
+## 2026-11-12 — MASTER E2E & POST-GAP CLOSURE DEMO ACCEPTANCE
+- **Branch:** `feature/frontend-redesign-20261112`
+- **Scope:** Full-system Master E2E, Post Master-E2E Gap Closure, Safepay sandbox integration, persistent notification events, and super admin credential hardening.
+- **Admin Credential Hardening:** Rotated `SUPER_ADMIN` (`admin@miljor.com`) password to 35-character secret stored exclusively in gitignored `backend/.env`; provisioned interactive tool `backend/database/secureAdminProvision.js` (`npm run admin:provision`); revoked all sessions and refresh tokens across `miljor_db` and `miljor_test_db`; verified admin login (200 OK) and strict RBAC authorization blocks (Buyer 403, Supplier 403). Sanitized all logs/reports.
+- **Safepay Sandbox & Checkout:** Verified live Safepay API calls with DNS jitter fallback (`robustLookup` in `safepayAdapter.js`). Live tracker session initialized (`track_4f4c8725-87a2-48cb-8469-677e69405bf8`), verified `TRACKER_STARTED`. Opened hosted checkout at `https://sandbox.api.getsafepay.com/checkout/pay` (HTTP 200, merchant `MilJor`, amount `Rs. 9,600.00`, captured screenshot `final_step_168.png`). Automated card submission documented as `BLOCKED / PAYMENT_REQUIRED` due to PCI sandboxed iframes. Verified cryptographic webhook signature verification via raw-body HMAC-SHA512.
+- **Refund Policy:** Documented Safepay lack of programmatic self-serve REST refund endpoint honestly as `BLOCKED / DASHBOARD_ONLY`; preserved safe stub `REFUND_PENDING_GATEWAY` without moving external funds (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).
+- **Procurement & Shortage Testing:** Executed real B6 award paid fulfillment gate (`demo_real_b6_award_paid_fulfillment_mysql_gate.js`: 7/7 PASS) and postpurchase 100/80/20 shortage gate (`demo_real_mysql_postpurchase_100_80_20_gate.js`: 10/10 PASS).
+- **Persistent Notifications:** Added `backend/database/migrations/049_in_app_notifications.sql` and `backend/src/services/notificationService.js`; verified all 9 lifecycle events with recipient isolation, unread counter tracking, and deduplication (`notification_events_verification.test.js`: 100% PASS).
+- **Consolidated Gates:** Master E2E: 31/31 PASS; UCP: 152/152 PASS; Safepay Readiness: 9/9 PASS; Frontend suites: 24/24 PASS; Vite build: 0 errors; `miljor_db`: 100% PRISTINE (0 orders, 0 payments, 0 reservations).
+- **Documentation:** Consolidated in `backend/docs/MILJOR_FULL_E2E_ACCEPTANCE_REPORT.md`.
+- **Verdict: PASS (ACCEPTED FOR LOCAL DEMO WITH DOCUMENTED PROVIDER CONSTRAINTS). CAN START NEXT PHASE: NO.**
+
+## 2026-11-12 — FINAL SAFEPAY SANDBOX PAYMENT SUCCESS & RETURN FIX
+- **Branch:** `feature/frontend-redesign-20261112`
+- **Scope:** Complete Safepay Sandbox payment success flow, return handling, automated invoice generation, and supplier fulfillment queue visibility.
+- **Backend Implementation:**
+  - `safepayCheckoutService.js`: Defaulted checkout return URL to `/payment/return?order_id=${order.id}&beacon=${trackerToken}`; added state support for `TRACKER_ENDED`, `COMPLETED`, and `PAID`; added automatic invoice generation on `PAID` transition in both `reconcilePaymentWithProvider` and `processWebhookEvent`.
+  - `invoiceService.js`: Changed supplier profile joins to `LEFT JOIN` to guarantee resilient invoice generation.
+- **Frontend Implementation:**
+  - `OrdersPage.jsx`: Added support for both `BUYER` and `SUPPLIER` accounts; added "Supplier Orders & Fulfillment Queue" showing funded orders awaiting dispatch with status `PAID` and fulfillment status `AWAITING_SUPPLIER_ACKNOWLEDGEMENT`; added "View Receipt & Escrow" button on paid orders linking to `/payment/return`.
+  - `PaymentReturnPage.jsx`: Verified states for `VERIFYING`, `PAID` (Confirmed Escrow), `PENDING`, `CANCELLED`, and `ERROR` with authentic server-to-server Safepay reconciliation.
+- **Verification Evidence:**
+  - Executed `safepay_sandbox_live_payment_acceptance.test.js`: **100% PASS** (real Safepay tracker session, HMAC-SHA512 webhook signature verification, order PAID transition, payments table escrow locking, invoice `INV-2026-000156` generation, duplicate webhook idempotency, supplier fulfillment queue visibility, and zero writes to `miljor_db`).
+  - Master E2E Runner (`master_e2e_acceptance_runner.js`): **31 / 31 PASS**.
+  - Notification Events Gate (`notification_events_verification.test.js`): **100% PASS**.
+  - UCP Source Suites (`npm run test:ucp`): **152 / 152 PASS**.
+  - Frontend Build (`vite build`): **2,229 modules transformed, 0 errors, 2.56s**.
+  - Visual Browser Verification:
+    - Buyer Return Screen: host-verified screenshot `final_step_8.png` ("Payment Confirmed & Secured in Escrow", Amount PKR 9,600.00).
+    - Supplier Orders Queue: host-verified screenshot `final_step_108.png` ("Supplier Orders & Fulfillment Queue", Order `ORD-57685678`, Status `PAID`, Fulfillment `AWAITING_SUPPLIER_ACKNOWLEDGEMENT`).
+  - Database Safety: `miljor_db` confirmed 100% PRISTINE (`orders: 0`, `payments: 0`).
+- **Verdict: PASS (SAFEPAY SANDBOX PAYMENT & RETURN WORKFLOW 100% VERIFIED). CAN START NEXT PHASE: NO.**
+

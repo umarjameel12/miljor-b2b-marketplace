@@ -3,7 +3,7 @@ import { useTheme, THEME_MODES } from '../../context/ThemeContext';
 import { Sun, Moon, Monitor } from 'lucide-react';
 
 export const ThemeSelector = ({ compact = false, minimal = false, className = '' }) => {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, isDark } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -38,29 +38,41 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
           aria-label={`Theme setting: currently ${currentOption.label}`}
           aria-haspopup="true"
           aria-expanded={dropdownOpen}
-          className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:border-[var(--brand-gold)] active:scale-95"
           style={{
-            backgroundColor: 'var(--bg-card)',
+            backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-default)',
             color: 'var(--text-primary)',
           }}
         >
-          <CurrentIcon className="w-4 h-4 text-emerald-900 dark:text-champagne" />
+          <CurrentIcon className="w-4 h-4 text-[#c89528] dark:text-[#dfcca9]" />
         </button>
 
         {dropdownOpen && (
           <div
-            className="absolute right-0 mt-2 w-40 rounded-2xl border p-2 shadow-xl z-50 animate-fade-in space-y-1"
+            className="absolute right-0 mt-2 w-40 rounded-2xl border p-1.5 shadow-xl z-50 animate-fade-in space-y-1"
             style={{
-              backgroundColor: 'var(--bg-surface)',
-              borderColor: 'var(--border-default)',
-              boxShadow: 'var(--shadow-elevated)',
+              backgroundColor: isDark ? '#072a21' : '#fcfbf7',
+              borderColor: isDark ? 'rgba(200, 178, 118, 0.28)' : 'rgba(169, 133, 67, 0.25)',
+              boxShadow: isDark
+                ? '0 12px 30px -4px rgba(0, 0, 0, 0.70)'
+                : '0 12px 30px -4px rgba(12, 43, 36, 0.12)',
             }}
             role="menu"
             aria-label="Select theme"
           >
             {options.map(({ mode, label, icon: Icon }) => {
               const isSelected = theme === mode;
+              const activeBg = isDark ? 'rgba(200, 178, 118, 0.16)' : 'rgba(200, 178, 118, 0.18)';
+              const activeBorder = isDark
+                ? '1px solid rgba(200, 178, 118, 0.35)'
+                : '1px solid rgba(169, 133, 67, 0.35)';
+              const activeText = isDark ? '#f7f3e8' : '#0c2b24';
+              const activeIcon = isDark ? '#dfcca9' : '#967434';
+
+              const inactiveText = isDark ? '#c8d3cf' : '#2e3d36';
+              const inactiveIcon = isDark ? '#8a9e97' : '#57635a';
+
               return (
                 <button
                   key={mode}
@@ -72,20 +84,19 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
                   className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl transition-all duration-150 cursor-pointer ${
                     isSelected
                       ? 'font-semibold shadow-xs'
-                      : 'font-normal opacity-80 hover:opacity-100 hover:bg-[var(--bg-sidebar-active)]/60'
+                      : isDark
+                      ? 'font-medium hover:bg-white/5'
+                      : 'font-medium hover:bg-[rgba(169,133,67,0.08)]'
                   }`}
                   style={{
-                    backgroundColor: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
-                    color: isSelected ? 'var(--text-primary)' : 'var(--text-muted)',
-                    border: isSelected ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                    backgroundColor: isSelected ? activeBg : 'transparent',
+                    color: isSelected ? activeText : inactiveText,
+                    border: isSelected ? activeBorder : '1px solid transparent',
                   }}
                 >
                   <Icon
-                    className={`w-3.5 h-3.5 shrink-0 transition-colors ${
-                      isSelected
-                        ? 'text-emerald-900 dark:text-champagne'
-                        : 'text-stone-500 dark:text-stone-400'
-                    }`}
+                    className="w-3.5 h-3.5 shrink-0 transition-colors"
+                    style={{ color: isSelected ? activeIcon : inactiveIcon }}
                   />
                   <span>{label}</span>
                 </button>

@@ -11,6 +11,7 @@ import { useAuthAppearance } from '../context/AuthAppearanceContext';
 import { AuthAppearanceControl } from '../components/auth/AuthAppearanceControl';
 import { AuthHeroPanel } from '../components/auth/AuthHeroPanel';
 import { PasswordField } from '../components/auth/PasswordField';
+import { PasswordStrengthIndicator } from '../components/auth/PasswordStrengthIndicator';
 import { Logo } from '../components/ui/Logo';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -200,16 +201,16 @@ export const RegisterPage = () => {
 
   // Registration Form Body
   const renderForm = () => (
-    <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
+    <div className="flex flex-col gap-2.5 sm:gap-3 w-full">
       {/* Top Branding & Positioning */}
       <div className="flex flex-col items-center text-center">
-        <Link to="/" aria-label="MilJor Home" className="mb-1">
-          <Logo variant="monogram" size="lg" />
+        <Link to="/" aria-label="MilJor Home" className="mb-0.5">
+          <Logo variant="monogram" size="md" />
         </Link>
 
         {preferences.showTagline && (
           <span
-            className="font-sans font-semibold text-[10px] sm:text-[11px] tracking-widest uppercase mb-0.5"
+            className="font-sans font-semibold text-[10px] tracking-widest uppercase mb-0.5"
             style={{ color: 'var(--brand-accent)' }}
           >
             Mil Kar Khareedo, Behtar Pao
@@ -217,15 +218,15 @@ export const RegisterPage = () => {
         )}
 
         {preferences.showBrandHeading && (
-          <h1 className="font-display font-black text-xl sm:text-2xl tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="font-display font-black text-lg sm:text-xl tracking-tight leading-tight" style={{ color: 'var(--text-primary)' }}>
             {role === 'SUPPLIER' ? 'Create Supplier Account' : 'Create Buyer Account'}
           </h1>
         )}
 
-        <p className="text-xs font-sans mt-0.5" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-[11px] sm:text-xs font-sans mt-0.5" style={{ color: 'var(--text-muted)' }}>
           {role === 'SUPPLIER'
-            ? 'Wholesale mills, importers & commercial distributors — Launching first in Lahore'
-            : 'Commercial kitchens & restaurants pooling wholesale demand — Launching first in Lahore'}
+            ? 'Wholesale mills, importers & commercial food distributors'
+            : 'Commercial kitchens & restaurants pooling wholesale commodity demand'}
         </p>
       </div>
 
@@ -239,13 +240,13 @@ export const RegisterPage = () => {
       >
         <Link
           to="/login"
-          className="py-1.5 text-center rounded-lg transition-all hover:text-[var(--text-primary)]"
+          className="py-1 text-center rounded-lg transition-all hover:text-[var(--text-primary)]"
           style={{ color: 'var(--text-muted)' }}
         >
           Sign In
         </Link>
         <span
-          className="py-1.5 text-center rounded-lg transition-all shadow-xs cursor-default"
+          className="py-1 text-center rounded-lg transition-all shadow-xs cursor-default"
           style={{
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
@@ -374,118 +375,96 @@ export const RegisterPage = () => {
           />
         </div>
 
-        {/* Geographic Launch Alignment Section */}
-        <div className="pt-2 border-t space-y-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
-              {role === 'SUPPLIER' ? 'Supplier Facility Location' : 'Marketplace Base Cluster'}
-            </span>
-            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Launch Service Area — Lahore</span>
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Launch City Fixed */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-sans font-medium flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-stone-400" />
-                  <span>Launch City</span>
-                </span>
-                <span className="text-[10px] text-stone-400">First Market</span>
-              </label>
-              <input
-                type="text"
-                readOnly
-                value="Lahore District, Pakistan"
-                aria-label="Launch City"
-                className="w-full px-3.5 py-2 rounded-xl border text-xs font-medium cursor-not-allowed select-none"
-                style={{
-                  backgroundColor: 'var(--bg-input)',
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--text-primary)',
-                  opacity: 0.9,
-                }}
-              />
-            </div>
-
-            {/* Authoritative Lahore Base Cluster Dropdown */}
-            <LahoreClusterSelector
-              value={formData.cluster_id}
-              onChange={handleClusterChange}
-              label={role === 'SUPPLIER' ? 'Primary Mill / Facility Cluster' : 'Base Operating Cluster'}
-              helperText={
-                role === 'SUPPLIER'
-                  ? 'Location of your primary warehouse or processing facility in Lahore.'
-                  : 'Used for pool discovery. You can add specific delivery addresses later.'
-              }
+        {/* Geographic Base Cluster Section — Clean Horizontal Alignment */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-start">
+          {/* Launch City Fixed */}
+          <div className="flex flex-col gap-1.5 w-full">
+            <label className="text-xs font-sans font-medium flex items-center justify-between h-4" style={{ color: 'var(--text-secondary)' }}>
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-stone-400" />
+                <span>Operating City</span>
+              </span>
+              <span className="text-[10px] text-stone-400">Local District Only</span>
+            </label>
+            <input
+              type="text"
+              readOnly
+              value="Lahore District, Pakistan"
+              aria-label="Launch City"
+              className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-not-allowed select-none h-[42px]"
+              style={{
+                backgroundColor: 'var(--bg-input)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--text-primary)',
+                opacity: 0.9,
+              }}
             />
           </div>
 
-          {/* Role-Specific Address Handling */}
-          {role === 'BUYER' ? (
-            <div className="space-y-2 pt-0.5">
-              <div className="flex items-start gap-1.5 text-[11px] text-stone-500">
-                <Info className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Optional Delivery Address:</strong> You can register now with just your base cluster. Full street delivery addresses are only required when placing doorstep delivery orders.
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <Input
-                  label="Society / Area (Optional)"
-                  type="text"
-                  name="society_area"
-                  placeholder="e.g. Johar Town Block G1, DHA Phase 6"
-                  value={formData.society_area}
-                  onChange={handleChange}
-                  icon={MapPin}
-                />
-
-                <Input
-                  label="Commercial Address (Optional)"
-                  type="text"
-                  name="address"
-                  placeholder="e.g. Shop 4B, Main Market"
-                  value={formData.address}
-                  onChange={handleChange}
-                  icon={Building2}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2 pt-0.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <Input
-                  label="Society / Industrial Area"
-                  type="text"
-                  name="society_area"
-                  placeholder="e.g. Badami Bagh, Quaid-e-Azam Estate"
-                  value={formData.society_area}
-                  onChange={handleChange}
-                  icon={MapPin}
-                />
-
-                <Input
-                  label="Facility Street Address"
-                  type="text"
-                  name="address"
-                  placeholder="e.g. Plot 14-B, Industrial Area, Kot Lakhpat"
-                  value={formData.address}
-                  onChange={handleChange}
-                  icon={Building2}
-                  required
-                />
-              </div>
-            </div>
-          )}
+          {/* Authoritative Lahore Base Cluster Dropdown */}
+          <LahoreClusterSelector
+            value={formData.cluster_id}
+            onChange={handleClusterChange}
+            label="Marketplace Cluster"
+            badge="Local District Only"
+            helperText=""
+          />
         </div>
 
-        {/* Password & Confirmation with Live Checklist */}
-        <div className="pt-2 border-t space-y-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
+        {/* Role-Specific Address Handling — Aligned Heights to Prevent Tab Jumps */}
+        {role === 'BUYER' ? (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <Input
+                label="Society / Area (Optional)"
+                type="text"
+                name="society_area"
+                placeholder="e.g. Johar Town Block G1, DHA Phase 6"
+                value={formData.society_area}
+                onChange={handleChange}
+                icon={MapPin}
+              />
+
+              <Input
+                label="Commercial Address (Optional)"
+                type="text"
+                name="address"
+                placeholder="e.g. Shop 4B, Main Market"
+                value={formData.address}
+                onChange={handleChange}
+                icon={Building2}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <Input
+                label="Society / Industrial Area"
+                type="text"
+                name="society_area"
+                placeholder="e.g. Badami Bagh, Quaid-e-Azam Estate"
+                value={formData.society_area}
+                onChange={handleChange}
+                icon={MapPin}
+              />
+
+              <Input
+                label="Facility Street Address"
+                type="text"
+                name="address"
+                placeholder="e.g. Plot 14-B, Industrial Area, Kot Lakhpat"
+                value={formData.address}
+                onChange={handleChange}
+                icon={Building2}
+                required
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Password & Confirmation with Live Horizontal Checklist */}
+        <div className="space-y-1.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <PasswordField
               label="Account Password"
@@ -495,8 +474,7 @@ export const RegisterPage = () => {
               id="password"
               autoComplete="new-password"
               required={true}
-              showStrength={true}
-              confirmValue={formData.confirm_password}
+              showStrength={false}
             />
 
             <PasswordField
@@ -512,6 +490,12 @@ export const RegisterPage = () => {
               guidanceText=""
             />
           </div>
+
+          <PasswordStrengthIndicator
+            password={formData.password}
+            confirmPassword={formData.confirm_password}
+            showChecklist={true}
+          />
         </div>
 
         <Button
@@ -537,16 +521,18 @@ export const RegisterPage = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-5rem)] flex items-center justify-center p-3 sm:p-5 lg:p-6 transition-colors duration-300 relative overflow-hidden"
+      className="min-h-[calc(100vh-4.5rem)] flex items-center justify-center py-2 sm:py-3 lg:py-4 px-3 sm:px-4 transition-colors duration-300 relative overflow-hidden"
       style={{ background: 'var(--bg-auth)' }}
     >
-      {/* Floating Appearance Customizer Control */}
-      <AuthAppearanceControl />
+      {/* Preserved Appearance Customizer Control (Hidden from view to prevent clutter) */}
+      <div className="hidden" aria-hidden="true">
+        <AuthAppearanceControl />
+      </div>
 
       {/* ORIGINAL LAYOUT MODE (Reversible single-card presentation) */}
       {preferences.layoutStyle === 'original' ? (
         <div
-          className="w-full max-w-lg p-6 sm:p-8 rounded-3xl auth-box-enhanced relative z-10 shadow-xl my-auto border"
+          className="w-full max-w-lg p-5 sm:p-6 rounded-3xl auth-box-enhanced relative z-10 shadow-xl my-auto border"
           style={{
             backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-subtle)',
@@ -559,11 +545,7 @@ export const RegisterPage = () => {
         <div
           className={`w-full ${
             preferences.showBrandPanel ? 'max-w-5xl' : 'max-w-xl'
-          } rounded-3xl auth-box-enhanced shadow-2xl relative z-10 overflow-hidden border transition-all duration-300 my-auto`}
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-subtle)',
-          }}
+          } rounded-3xl auth-box-enhanced shadow-2xl relative z-10 overflow-hidden transition-all duration-300 my-auto`}
         >
           <div className={`grid ${preferences.showBrandPanel ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'}`}>
             {/* Left Dedicated Create Account Hero Panel */}
@@ -572,7 +554,7 @@ export const RegisterPage = () => {
                 pageType="register"
                 role={role}
                 showBackgroundImage={preferences.showBackgroundImage}
-                className="lg:col-span-5 min-h-[300px] lg:min-h-[580px]"
+                className="lg:col-span-5 min-h-[280px] lg:min-h-[480px]"
               />
             )}
 
@@ -580,7 +562,11 @@ export const RegisterPage = () => {
             <div
               className={`${
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
-              } p-6 sm:p-8 flex flex-col justify-center`}
+              } p-4 sm:p-5 lg:p-6 flex flex-col justify-center min-h-[480px]`}
+              style={{
+                background: 'var(--bg-auth-form)',
+                boxShadow: 'var(--shadow-auth-form)',
+              }}
             >
               {renderForm()}
             </div>

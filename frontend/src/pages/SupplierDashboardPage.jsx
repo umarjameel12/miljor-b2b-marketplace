@@ -89,8 +89,8 @@ export const SupplierDashboardPage = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link to="/supplier/pools" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-600 text-emerald-600 text-sm font-semibold">
-              <Layers className="w-4 h-4"/> Pool Management
+            <Link to="/supplier/pools" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--border-default)] text-[var(--text-primary)] hover:bg-[var(--bg-card)] text-sm font-semibold transition-colors">
+              <Layers className="w-4 h-4 text-[var(--brand-accent)]"/> Pool Management
             </Link>
             <Link
               to="/supplier/catalog"

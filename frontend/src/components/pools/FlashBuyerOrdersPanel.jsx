@@ -66,7 +66,7 @@ export function FlashBuyerOrdersPanel({holds=[],onRefresh}){
             onExpire={()=>setExpiredIds(ids=>ids.includes(h.id)?ids:[...ids,h.id])}/>}
         {!paid&&<div className="flex flex-wrap gap-2 mt-2">
           {!awaiting&&!blocked&&<button type="button" disabled={busy===h.id} onClick={()=>pay(h)}
-            className="rounded-lg bg-emerald-700 text-white px-3 py-2 text-xs disabled:opacity-50">Pay via Safepay</button>}
+            className="rounded-lg bg-[var(--brand-accent)] text-[#072a21] font-semibold px-3 py-2 text-xs disabled:opacity-50 shadow-xs hover:opacity-95 transition cursor-pointer">Pay via Safepay</button>}
           {awaiting&&<button type="button" disabled={busy===h.id}
             onClick={()=>reconcile(h)} className="rounded-lg border px-3 py-2 text-xs disabled:opacity-50">Check provider status</button>}
         </div>}

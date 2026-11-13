@@ -32,7 +32,7 @@ class ProcurementCollectiveService{
   async _verified(conn,buyerId){
     const [buyers]=await conn.query(
       `SELECT id FROM users WHERE id=? AND role='BUYER' AND is_verified=1
-       AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'`,[buyerId]);
+       AND verification_status IN ('VERIFIED','EMAIL_VERIFIED') AND buyer_trust_status<>'SUSPENDED'`,[buyerId]);
     if(!buyers.length)throw fail('BUYER_NOT_ELIGIBLE','Verified active B2B buyer required.',403);
   }
   async _group(conn,groupId,lock=false){

@@ -19,7 +19,11 @@ export const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const isAuthRoute = location.pathname === '/login' || location.pathname === '/register' || location.pathname === '/verify-email';
+  const isAuthRoute =
+    location.pathname === '/login' ||
+    location.pathname === '/register' ||
+    location.pathname === '/verify-email' ||
+    location.pathname === '/forgot-password';
 
   const handleLogout = async () => {
     await logout();
@@ -78,39 +82,41 @@ export const Navbar = () => {
               </button>
             </div>
 
-            {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex items-center gap-8" aria-label="Main Navigation">
-              <Link
-                to="/pools"
-                className={`text-sm font-sans font-medium transition-colors flex items-center gap-2 ${
-                  isActiveRoute('/pools')
-                    ? 'font-semibold text-emerald-950 dark:text-champagne-light'
-                    : 'hover:opacity-100 opacity-90'
-                }`}
-                style={{ color: 'var(--text-primary)' }}
-              >
-                <Layers className={`w-4 h-4 ${isActiveRoute('/pools') ? 'text-emerald-900 dark:text-champagne' : 'text-emerald-800 dark:text-champagne'}`} />
-                <span>Pools</span>
-              </Link>
+            {/* Desktop Navigation Links — Hidden on Auth Routes for Focus */}
+            {!isAuthRoute && (
+              <nav className="hidden md:flex items-center gap-8" aria-label="Main Navigation">
+                <Link
+                  to="/pools"
+                  className={`text-sm font-sans font-medium transition-colors flex items-center gap-2 ${
+                    isActiveRoute('/pools')
+                      ? 'font-semibold text-emerald-950 dark:text-champagne-light'
+                      : 'hover:opacity-100 opacity-90'
+                  }`}
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <Layers className={`w-4 h-4 ${isActiveRoute('/pools') ? 'text-emerald-900 dark:text-champagne' : 'text-emerald-800 dark:text-champagne'}`} />
+                  <span>Pools</span>
+                </Link>
 
-              <a
-                href="/#how-it-works"
-                className="text-sm font-sans font-medium transition-colors flex items-center gap-2 opacity-90 hover:opacity-100"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                <HelpCircle className="w-4 h-4 text-emerald-800 dark:text-champagne" />
-                <span>How It Works</span>
-              </a>
+                <a
+                  href="/#how-it-works"
+                  className="text-sm font-sans font-medium transition-colors flex items-center gap-2 opacity-90 hover:opacity-100"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <HelpCircle className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                  <span>How It Works</span>
+                </a>
 
-              <a
-                href="/#collective-procurement"
-                className="text-sm font-sans font-medium transition-colors flex items-center gap-2 opacity-90 hover:opacity-100"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                <Users className="w-4 h-4 text-emerald-800 dark:text-champagne" />
-                <span>Collective Buying</span>
-              </a>
-            </nav>
+                <a
+                  href="/#collective-procurement"
+                  className="text-sm font-sans font-medium transition-colors flex items-center gap-2 opacity-90 hover:opacity-100"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <Users className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                  <span>Collective Buying</span>
+                </a>
+              </nav>
+            )}
 
             {/* Right Action Cluster: Discreet Theme Selector & Auth CTAs */}
             <div className="hidden md:flex items-center gap-4">
@@ -240,45 +246,66 @@ export const Navbar = () => {
             )}
 
             {/* Navigation Routes — High Contrast in Light and Dark Themes */}
-            <nav className="flex flex-col space-y-1.5" aria-label="Mobile Navigation">
-              <Link
-                to="/pools"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium transition-colors ${
-                  isActiveRoute('/pools')
-                    ? 'font-bold shadow-xs'
-                    : 'hover:bg-black/5 dark:hover:bg-white/5'
-                }`}
-                style={{
-                  backgroundColor: isActiveRoute('/pools') ? 'var(--bg-sidebar-active)' : 'transparent',
-                  color: 'var(--text-primary)',
-                  border: isActiveRoute('/pools') ? '1px solid var(--border-subtle)' : '1px solid transparent',
-                }}
-              >
-                <Layers className="w-4 h-4 text-emerald-800 dark:text-champagne shrink-0" />
-                <span>Explore Wholesale Pools</span>
-              </Link>
+            {!isAuthRoute ? (
+              <nav className="flex flex-col space-y-1.5" aria-label="Mobile Navigation">
+                <Link
+                  to="/pools"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium transition-colors ${
+                    isActiveRoute('/pools')
+                      ? 'font-bold shadow-xs'
+                      : 'hover:bg-black/5 dark:hover:bg-white/5'
+                  }`}
+                  style={{
+                    backgroundColor: isActiveRoute('/pools') ? 'var(--bg-sidebar-active)' : 'transparent',
+                    color: 'var(--text-primary)',
+                    border: isActiveRoute('/pools') ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                  }}
+                >
+                  <Layers className="w-4 h-4 text-emerald-800 dark:text-champagne shrink-0" />
+                  <span>Explore Wholesale Pools</span>
+                </Link>
 
-              <a
-                href="/#how-it-works"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                <HelpCircle className="w-4 h-4 text-emerald-800 dark:text-champagne shrink-0" />
-                <span>How Collective Buying Works</span>
-              </a>
+                <a
+                  href="/#how-it-works"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <HelpCircle className="w-4 h-4 text-emerald-800 dark:text-champagne shrink-0" />
+                  <span>How Collective Buying Works</span>
+                </a>
 
-              <a
-                href="/#collective-procurement"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                <Users className="w-4 h-4 text-emerald-800 dark:text-champagne shrink-0" />
-                <span>Collective Procurement Benefits</span>
-              </a>
-            </nav>
+                <a
+                  href="/#collective-procurement"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <Users className="w-4 h-4 text-emerald-800 dark:text-champagne shrink-0" />
+                  <span>Collective Procurement Benefits</span>
+                </a>
+              </nav>
+            ) : (
+              <nav className="flex flex-col space-y-1.5" aria-label="Mobile Navigation">
+                <Link
+                  to="/"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <span>Return to Home</span>
+                </Link>
+                <Link
+                  to="/pools"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-sans font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <span>Explore Pools</span>
+                </Link>
+              </nav>
+            )}
           </div>
 
           {/* Drawer Footer: Theme Settings & Auth Action */}

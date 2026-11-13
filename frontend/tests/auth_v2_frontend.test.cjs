@@ -27,16 +27,16 @@ function runAuthV2Verification() {
   assert(heroSrc.includes('Secure account recovery.'), 'Forgot password must feature recovery copy');
   console.log('  ✔ Distinct hero panels, imagery, and copy verified for Sign In, Register, and Recovery');
 
-  // Gate 2: Nationwide Brand Positioning & Operational Grounding
-  console.log('\n▶ Gate 2: Nationwide Brand Positioning vs Lahore Launch Operational Truth...');
-  assert(heroSrc.includes('Built for Pakistan · Launching first in Lahore'), 'Hero must show nationwide positioning with Lahore launch');
+  // Gate 2: Clean B2B Brand Narrative & Operational Grounding
+  console.log('\n▶ Gate 2: Clean B2B Brand Narrative vs Lahore Launch Operational Truth...');
+  assert(!heroSrc.includes('Built for Pakistan · Launching first in Lahore'), 'Hero must remove repetitive promotional badge');
   const loginSrc = fs.readFileSync(path.join(FRONTEND_SRC, 'pages/LoginPage.jsx'), 'utf8');
-  assert(loginSrc.includes('Smarter procurement for growing businesses · Launching first in Lahore'), 'Login must use nationwide tagline');
+  assert(loginSrc.includes('Smarter procurement for commercial food businesses'), 'Login must use clean B2B procurement tagline');
   const regSrc = fs.readFileSync(path.join(FRONTEND_SRC, 'pages/RegisterPage.jsx'), 'utf8');
-  assert(regSrc.includes('Launching first in Lahore'), 'Register must clarify Lahore is first market');
+  assert(regSrc.includes('Commercial kitchens & restaurants pooling wholesale commodity demand'), 'Register must clarify B2B buyer purpose');
   assert(regSrc.includes('LahoreClusterSelector'), 'Operational cluster picker must remain Lahore District');
   assert(regSrc.includes('city: \'Lahore\''), 'City must remain fixed to Lahore');
-  console.log('  ✔ Nationwide brand narrative implemented without relaxing Lahore operational boundaries');
+  console.log('  ✔ Clean B2B brand narrative implemented without relaxing Lahore operational boundaries');
 
   // Gate 3: Password Guidance & Live Strength Feedback
   console.log('\n▶ Gate 3: Password Guidance & Live Strength Feedback...');

@@ -5,14 +5,15 @@ import { useTheme, THEME_MODES } from '../../context/ThemeContext';
 import { Logo } from '../ui/Logo';
 import { Drawer } from '../ui/Drawer';
 import FLAGS from '../../config/featureFlags';
+import { unifiedPoolsApi } from '../../api/unifiedPools';
 import {
   Layers,
   ClipboardList,
   Users,
   Tag,
-  Headphones,
   Search,
   Bell,
+  BellOff,
   User,
   Monitor,
   Sun,
@@ -84,6 +85,8 @@ export const AppShell = ({ children }) => {
   const notificationsRef = useRef(null);
   const mobileNotificationsRef = useRef(null);
   const navigate = useNavigate();
+  const { isAuthenticated, logout, user } = useAuth();
+  const role = user?.role;
 
   const [hoveredNav, setHoveredNav] = useState(null);
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -91,6 +94,40 @@ export const AppShell = ({ children }) => {
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNotificationsOpen, setMobileNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [readNotificationIds, setReadNotificationIds] = useState(new Set());
+
+  // Genuine backend alerts/notifications loader
+  useEffect(() => {
+    let isMounted = true;
+    async function loadNotifications() {
+      if (!isAuthenticated) {
+        if (isMounted) setNotifications([]);
+        return;
+      }
+      try {
+        if (role === 'SUPPLIER') {
+          const res = await unifiedPoolsApi.alerts();
+          if (isMounted && res?.alerts) {
+            setNotifications(res.alerts);
+          }
+        } else {
+          // For buyer / admin, genuine notifications come from backend events; if none, array remains empty
+          if (isMounted) setNotifications([]);
+        }
+      } catch {
+        if (isMounted) setNotifications([]);
+      }
+    }
+    loadNotifications();
+  }, [isAuthenticated, role]);
+
+  const unreadNotifications = notifications.filter(n => !readNotificationIds.has(n.id));
+  const unreadCount = unreadNotifications.length;
+
+  const markAllAsRead = () => {
+    setReadNotificationIds(new Set(notifications.map(n => n.id)));
+  };
 
   // Outside click listener: Close notifications dropdown when clicking outside
   useEffect(() => {
@@ -146,28 +183,6 @@ export const AppShell = ({ children }) => {
     setCollapsedPanelOpen(false);
   };
 
-  // Outside click listener: Close sidebar when clicking anywhere outside it
-  useEffect(() => {
-    if (collapsed) return;
-
-    const handleOutsideSidebarClick = (event) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
-        setCollapsed(true);
-        try {
-          localStorage.setItem('miljor_sidebar_collapsed', 'true');
-        } catch {}
-      }
-    };
-
-    document.addEventListener('mousedown', handleOutsideSidebarClick);
-    document.addEventListener('touchstart', handleOutsideSidebarClick);
-
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideSidebarClick);
-      document.removeEventListener('touchstart', handleOutsideSidebarClick);
-    };
-  }, [collapsed]);
-
   // Outside click listener: Close account dropdown when clicking anywhere outside it
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -187,7 +202,6 @@ export const AppShell = ({ children }) => {
     };
   }, [accountMenuOpen]);
 
-  const { isAuthenticated, logout, user } = useAuth();
   const { theme, setTheme, isDark } = useTheme();
   const location = useLocation();
   const ActiveThemeIcon = theme === THEME_MODES.DARK ? Moon : theme === THEME_MODES.LIGHT ? Sun : Monitor;
@@ -195,15 +209,35 @@ export const AppShell = ({ children }) => {
   // Primary Navigation items matching the reference and functional routes
   const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
   const isAdmin = isAuthenticated && adminRoles.includes(user?.role);
-  const navItems = [
-    ...(isAdmin ? [{ label: 'Admin Console', path: '/admin', icon: ShieldCheck, active: location.pathname.startsWith('/admin') }] : []),
-    { label: 'Home', path: '/', icon: Home, active: location.pathname === '/' },
-    { label: 'Explore Pools', path: '/pools', icon: Layers, active: location.pathname === '/pools' },
-    { label: 'Orders', path: '/orders', icon: ClipboardList, active: location.pathname === '/orders' },
-    { label: 'Suppliers', path: '/suppliers', icon: Users, disabled: true, tooltip: 'Suppliers Directory (Coming Soon)' },
-    { label: 'Pricing', path: '/pricing', icon: Tag, disabled: true, tooltip: 'Volume Pricing Tiers (Coming Soon)' },
-    { label: 'Support', path: '/support', icon: Headphones, disabled: true, tooltip: 'Procurement Concierge (Coming Soon)' },
-  ];
+  const isSupplier = isAuthenticated && role === 'SUPPLIER';
+  const path = location.pathname;
+  const is = (p) => path === p || path.startsWith(p + '/');
+  const navItems = isAdmin
+    ? [
+        { label: 'Admin Console', path: '/admin', icon: ShieldCheck, active: path === '/admin' || path === '/admin/dashboard' },
+        { label: 'Supplier Verification', path: '/admin/verifications', icon: Users, active: is('/admin/verifications') || is('/admin/suppliers') },
+        { label: 'Catalog Governance', path: '/admin/catalog', icon: Layers, active: is('/admin/catalog') },
+      ]
+    : isSupplier
+    ? [
+        { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
+        { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
+        { label: 'Pool Management', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
+        { label: 'Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Subscription', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
+        { label: 'Business Profile', path: '/supplier/profile', icon: User, active: is('/supplier/profile') || is('/supplier/onboarding') },
+      ]
+    : [
+        { label: 'Home', path: '/', icon: Home, active: path === '/' },
+        { label: 'Explore Pools', path: '/pools', icon: Layers, active: is('/pools') },
+        ...(isAuthenticated
+          ? [
+              { label: 'Orders', path: '/orders', icon: ClipboardList, active: is('/orders') },
+              { label: 'Procurement', path: '/rfqs', icon: Tag, active: is('/rfqs') },
+              { label: 'Demand Requests', path: '/demand-requests', icon: Users, active: is('/demand-requests') },
+            ]
+          : []),
+      ];
 
   // Mobile bottom bar items matching reference phone mockup
   const mobileBottomItems = [
@@ -327,8 +361,11 @@ export const AppShell = ({ children }) => {
                 }}
               >
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
-                {FLAGS.headerNotificationsPopover && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse" />
+                {unreadCount > 0 && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
+                    aria-label={`${unreadCount} unread alerts`}
+                  />
                 )}
               </button>
 
@@ -343,23 +380,77 @@ export const AppShell = ({ children }) => {
                   }}
                 >
                   <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Procurement Alerts</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                      2 New
-                    </span>
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
+                    {unreadCount > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
+                          {unreadCount} New
+                        </span>
+                        <button
+                          type="button"
+                          onClick={markAllAsRead}
+                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-stone-400">All caught up</span>
+                    )}
                   </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Basmati Rice Pool Reached 62%</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Wholesale Tier 2 will lock in 4 hours. Only 380 kg remaining.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">12 mins ago</span>
+
+                  {notifications.length === 0 ? (
+                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
+                        style={{
+                          backgroundColor: 'var(--bg-elevated)',
+                          color: 'var(--brand-accent)',
+                        }}
+                      >
+                        <BellOff className="w-4 h-4 opacity-75" />
+                      </div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        You're all caught up.
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        No new notifications at this time.
+                      </p>
                     </div>
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Canola Oil 16L Tin Pool Live</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Direct factory dispatch scheduled for Lahore restaurant cluster.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">1 hour ago</span>
+                  ) : (
+                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
+                      {notifications.map((n) => {
+                        const isRead = readNotificationIds.has(n.id);
+                        return (
+                          <div
+                            key={n.id}
+                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
+                            style={{
+                              backgroundColor: 'var(--bg-elevated)',
+                              borderColor: 'var(--border-subtle)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                                {n.title || n.type || 'Alert'}
+                              </p>
+                              {!isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              )}
+                            </div>
+                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                              {n.message}
+                            </p>
+                            {n.source && (
+                              <span className="text-[9px] text-stone-400 mt-1 block">
+                                {n.source.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -450,26 +541,6 @@ export const AppShell = ({ children }) => {
                     </span>
                   </div>
                 );
-
-                if (item.disabled) {
-                  return (
-                    <div
-                      key={item.label}
-                      className="relative cursor-default"
-                      onMouseEnter={() => collapsed && setHoveredNav(item.label)}
-                      onMouseLeave={() => collapsed && setHoveredNav(null)}
-                      title={!FLAGS.customTooltips ? (item.tooltip || (collapsed ? `${item.label} (Coming Soon)` : undefined)) : undefined}
-                      aria-disabled="true"
-                    >
-                      {content}
-                      {FLAGS.customTooltips && collapsed && hoveredNav === item.label && (
-                        <div className="luxury-tooltip" role="tooltip">
-                          {item.label} <span className="opacity-70 text-[10px] ml-1">(Coming Soon)</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
 
                 return (
                   <div
@@ -685,21 +756,27 @@ export const AppShell = ({ children }) => {
           {/* Account Section at Sidebar Bottom */}
           <div className="p-3 border-t mt-auto" style={{ borderColor: 'var(--border-sidebar, var(--border-subtle))' }}>
             {isAuthenticated ? (
-              <div className="flex items-center justify-between">
-                <Link to="/profile" className="flex items-center px-3 py-1.5 rounded-xl transition hover:opacity-100 flex-1 truncate" title="User Profile">
-                  <span className="w-6 h-6 flex items-center justify-center shrink-0">
-                    <div className="w-6 h-6 rounded-full bg-[var(--brand-accent)] text-[#072a21] flex items-center justify-center font-bold text-xs shrink-0">
-                      <User className="w-3.5 h-3.5" />
+              <div className="flex items-center justify-between gap-1">
+                <Link to="/profile" className="flex items-center px-2 py-1.5 rounded-xl transition hover:opacity-100 flex-1 truncate" title={user?.business_name || user?.full_name || 'User Profile'}>
+                  <span className="w-7 h-7 flex items-center justify-center shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-[var(--brand-accent)] text-[#072a21] flex items-center justify-center font-bold text-[10px] shrink-0 tracking-tight shadow-2xs">
+                      {(user?.business_name || user?.full_name || 'U').slice(0, 2).toUpperCase()}
                     </div>
                   </span>
                   <span
                     style={{ willChange: 'max-width, opacity' }}
-                    className={`text-xs font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out pl-3 inline-block ${
-                      collapsed ? 'max-w-0 opacity-0' : 'max-w-32 opacity-100'
+                    className={`whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out pl-2.5 inline-block ${
+                      collapsed ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'
                     }`}
-                    style={{ color: 'var(--text-primary)' }}
                   >
-                    My Account
+                    <span className="block text-xs font-semibold truncate leading-tight" style={{ color: 'var(--text-primary)' }}>
+                      {user?.business_name || user?.full_name || 'My Account'}
+                    </span>
+                    {user?.email && (
+                      <span className="block text-[10px] truncate text-stone-500 dark:text-stone-400 font-normal leading-tight mt-0.5">
+                        {user.email}
+                      </span>
+                    )}
                   </span>
                 </Link>
                 {!collapsed && (
@@ -823,14 +900,17 @@ export const AppShell = ({ children }) => {
                 }}
               >
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
-                {FLAGS.headerNotificationsPopover && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse" />
+                {unreadCount > 0 && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
+                    aria-label={`${unreadCount} unread alerts`}
+                  />
                 )}
               </button>
 
               {FLAGS.headerNotificationsPopover && notificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-72 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  className="absolute right-0 top-full mt-2 w-80 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
@@ -838,23 +918,77 @@ export const AppShell = ({ children }) => {
                   }}
                 >
                   <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Procurement Alerts</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                      2 New
-                    </span>
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
+                    {unreadCount > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
+                          {unreadCount} New
+                        </span>
+                        <button
+                          type="button"
+                          onClick={markAllAsRead}
+                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-stone-400">All caught up</span>
+                    )}
                   </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Basmati Rice Pool Reached 62%</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Wholesale Tier 2 will lock in 4 hours. Only 380 kg remaining.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">12 mins ago</span>
+
+                  {notifications.length === 0 ? (
+                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
+                        style={{
+                          backgroundColor: 'var(--bg-elevated)',
+                          color: 'var(--brand-accent)',
+                        }}
+                      >
+                        <BellOff className="w-4 h-4 opacity-75" />
+                      </div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        You're all caught up.
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        No new notifications at this time.
+                      </p>
                     </div>
-                    <div className="p-2.5 rounded-xl border transition hover:opacity-90" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Canola Oil 16L Tin Pool Live</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Direct factory dispatch scheduled for Lahore restaurant cluster.</p>
-                      <span className="text-[9px] text-stone-400 mt-1 block">1 hour ago</span>
+                  ) : (
+                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
+                      {notifications.map((n) => {
+                        const isRead = readNotificationIds.has(n.id);
+                        return (
+                          <div
+                            key={n.id}
+                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
+                            style={{
+                              backgroundColor: 'var(--bg-elevated)',
+                              borderColor: 'var(--border-subtle)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                                {n.title || n.type || 'Alert'}
+                              </p>
+                              {!isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              )}
+                            </div>
+                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                              {n.message}
+                            </p>
+                            {n.source && (
+                              <span className="text-[9px] text-stone-400 mt-1 block">
+                                {n.source.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -883,8 +1017,8 @@ export const AppShell = ({ children }) => {
                     <User className="w-3.5 h-3.5" />
                   )}
                 </div>
-                <span className="text-xs font-semibold max-w-[110px] truncate" style={{ color: 'var(--text-primary)' }}>
-                  {isAuthenticated ? (user?.full_name || user?.business_name || 'Account') : 'Account'}
+                <span className="text-xs font-semibold max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>
+                  {isAuthenticated ? (user?.business_name || user?.full_name || 'Account') : 'Account'}
                 </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-stone-700 dark:text-stone-300 transition-transform duration-200 ${
@@ -906,10 +1040,17 @@ export const AppShell = ({ children }) => {
                   {isAuthenticated ? (
                     <div className="space-y-3">
                       <div className="pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                          {user?.full_name || user?.business_name || 'Valued Partner'}
-                        </p>
-                        <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {user?.business_name || user?.full_name || 'Valued Partner'}
+                          </p>
+                          {user?.role && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-[var(--brand-accent)]/15 text-[var(--brand-accent)] shrink-0">
+                              {user.role}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] truncate text-stone-500 dark:text-stone-400">
                           {user?.email}
                         </p>
                       </div>
