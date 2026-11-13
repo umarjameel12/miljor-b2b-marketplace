@@ -395,6 +395,22 @@ async function runPart5FlashPoolGate() {
       pass('B02 Publication transitions pool to ACTIVE and computes expiry_time from publication timestamp');
     }
 
+    // Buyer-authenticated delivery preview is non-binding and destination scoped.
+    {
+      const valid=await api(`/api/v1/flash-pools/${draftPoolId}/delivery-preview?address_id=${buyer1AddressId}`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}
+      });
+      assert.equal(valid.status,200);
+      assert.equal(valid.body?.data?.mode,'STANDARD_CLUSTERED');
+      assert.equal(Number(valid.body?.data?.delivery_fee_pkr),325);
+      const stolen=await api(`/api/v1/flash-pools/${draftPoolId}/delivery-preview?address_id=${buyer2AddressId}`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}
+      });
+      assert.equal(stolen.status,422);
+      assert.equal(stolen.body?.error?.code,'BUYER_ADDRESS_NOT_VERIFIED');
+      pass('B02A server delivery preview validates buyer ownership and the exact cluster tariff');
+    }
+
     // B03: MULTI_BUYER unaligned increment rejected
     {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
