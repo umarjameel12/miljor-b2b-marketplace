@@ -25,15 +25,16 @@ for (const [type,heading] of [
     assert.match(result.html, /data-ogsc/);
     assert.match(result.html, /border-radius:13px/);
     assert.match(result.html, /box-shadow:/);
-    assert.match(result.html, /class="mj-accentbar" style="height:5px/);
-    assert.match(result.html, /border-radius:17px 17px 0 0/);
-    assert.match(result.html, /<tr><td style="padding:0;background-color:#fffdf8;border:0;border-radius:17px 17px 0 0;overflow:hidden;"><div class="mj-accentbar"/);
-    assert.doesNotMatch(result.html, /padding:0 1px;background-color:#fffdf8;border:0/);
-    assert.match(result.html, /border-radius:18px;box-shadow:/);
+    // The gold accent must be the actual curved card border, not a separate
+    // stripe that can extend past the corner at either edge.
+    assert.match(result.html, /border:1px solid #e6dfd2;border-top:5px solid #c8b276;border-radius:18px/);
+    assert.match(result.html, /border-top-color:#d1b879 !important/);
+    assert.doesNotMatch(result.html, /mj-accentbar/);
+    assert.doesNotMatch(result.html, /background-clip:padding-box/);
     assert.doesNotMatch(result.html, /class="mj-card"[^>]*overflow:hidden/);
     assert.match(result.html, /class="mj-footer"/);
     assert.match(result.html, /The footer is a separate full-width table row/);
-    assert.match(result.html, /background-clip:padding-box/);
+
     assert.match(result.html, /Expires in <strong>10 minutes<\/strong> · Keep it private/);
     const footerIndex=result.html.indexOf('class="mj-footer"');
     const codeIndex=result.html.indexOf('class="mj-codebox"');
