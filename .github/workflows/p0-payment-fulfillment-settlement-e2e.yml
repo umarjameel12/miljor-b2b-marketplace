@@ -69,3 +69,8 @@ jobs:
       - name: Real HTTP and InnoDB payment to settlement acceptance
         timeout-minutes: 9
         run: cd backend && node tests/p0_payment_fulfillment_settlement_http_e2e.js
+      - name: Safepay synthetic payment, refund and 80 concurrent callback/retry stress checks
+        timeout-minutes: 9
+        env:
+          SAFEPAY_WEBHOOK_SECRET: ci-synthetic-safepay-stress-only-2026
+        run: cd backend && node tests/sandbox_payment_refund_stress_gate.js
