@@ -288,44 +288,85 @@ class EmailService {
   }
 
   /**
+   * Shared, mobile-friendly transactional OTP design.
+   * Email-client-safe tables and inline styles; no remote images or scripts.
+   * This branded header lives inside the message, independent of Gmail avatars.
+   */
+  _renderOtpEmail({ name, otp, purpose }) {
+    const escapedName = this._escapeHtml(name || 'there');
+    const escapedOtp = this._escapeHtml(otp);
+    const reset = purpose === 'PASSWORD_RESET';
+    const title = reset ? 'Reset your password' : 'Verify your email';
+    const intro = reset
+      ? 'We received a request to reset your MilJor password. Enter the code below to continue.'
+      : 'Welcome to MilJor. Enter the verification code below to secure your account.';
+    const context = reset ? 'PASSWORD RESET' : 'EMAIL VERIFICATION';
+    const footer = reset
+      ? 'If you did not request a password reset, you can safely ignore this email.'
+      : 'If you did not create a MilJor account, you can safely ignore this email.';
+    return `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${title} | MilJor</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f5f2eb;font-family:Arial,Helvetica,sans-serif;color:#24221e;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your MilJor security code expires in 10 minutes. Do not share it.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f2eb;border-collapse:collapse;">
+      <tr><td align="center" style="padding:36px 16px 44px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:540px;border-collapse:collapse;">
+          <tr><td style="padding:0 4px 20px;text-align:center;">
+            <span style="font-family:Georgia,'Times New Roman',serif;font-size:28px;letter-spacing:1px;font-weight:bold;color:#3a3023;">MilJor</span>
+            <span style="display:block;color:#8b7c64;font-size:11px;letter-spacing:2px;margin-top:7px;">BUSINESS PROCUREMENT, SIMPLIFIED</span>
+          </td></tr>
+          <tr><td style="background-color:#fffdfa;border:1px solid #e8e0d3;border-top:4px solid #c8b276;border-radius:12px;padding:38px 34px 30px;">
+            <p style="margin:0 0 16px;color:#9b7a3e;font-weight:bold;font-size:11px;letter-spacing:2px;">${context}</p>
+            <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:29px;line-height:1.2;color:#2e2923;margin:0 0 18px;font-weight:bold;">${title}</h1>
+            <p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#403c35;">Hi ${escapedName},</p>
+            <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#635d53;">${intro}</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+              <tr><td align="center" style="background-color:#f8f3e9;border:1px solid #e8d9b8;border-radius:9px;padding:22px 8px;">
+                <span style="font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:bold;letter-spacing:8px;color:#4d3d27;">${escapedOtp}</span>
+              </td></tr>
+            </table>
+            <p style="text-align:center;margin:18px 0 30px;font-size:13px;color:#746b5b;">Expires in <strong style="color:#3b352b;">10 minutes</strong> · One-time use</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+              <tr><td style="border-top:1px solid #ece6dc;padding-top:21px;font-size:13px;line-height:1.6;color:#746d62;">
+                <strong style="color:#514533;">Security reminder:</strong> MilJor will never ask you to share this code by phone, email or chat.
+              </td></tr>
+            </table>
+            <p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:#837b6e;">${footer}</p>
+          </td></tr>
+          <tr><td style="padding:23px 16px 0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#756e62;">MilJor · Secure business procurement</p>
+            <p style="margin:8px 0 0;font-size:11px;color:#9a9488;">This is an automated account security message.</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  }
+
+  /**
    * Render pre-built email templates.
    */
   _renderTemplate(templateName, payload) {
     switch (templateName) {
       case 'REGISTRATION_OTP':
         return {
-          subject: 'Your MilJor Verification Code',
-          text: `Welcome to MilJor, ${payload.name || 'User'}!\n\nYour one-time verification code is: ${payload.otp}\n\nThis code will expire in 10 minutes. Please do not share this code with anyone.`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 8px;">
-              <h2 style="color: #059669;">Welcome to MilJor B2B Procurement</h2>
-              <p>Hello <strong>${this._escapeHtml(payload.name || 'User')}</strong>,</p>
-              <p>Thank you for joining MilJor. Use the verification code below to verify your email address:</p>
-              <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 5px; color: #111827; border-radius: 6px; margin: 20px 0;">
-                ${this._escapeHtml(payload.otp)}
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">This code will expire in 10 minutes. If you did not request this verification, please ignore this email.</p>
-              <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-              <p style="color: #9ca3af; font-size: 12px; text-align: center;">MilJor B2B Collective Food Procurement • Lahore, Pakistan</p>
-            </div>
-          `
+          subject: 'MilJor | Verify your email',
+          text: `Hi ${payload.name || 'there'},\n\nYour MilJor email verification code is: ${payload.otp}\n\nThis code expires in 10 minutes. Do not share it.\n\nIf you did not create an account, ignore this email.\n\nMilJor — Secure business procurement`,
+          html: this._renderOtpEmail({ name: payload.name, otp: payload.otp, purpose: 'REGISTRATION_OTP' })
         };
 
       case 'PASSWORD_RESET_OTP':
         return {
-          subject: 'Reset Your MilJor Account Password',
-          text: `Hello ${payload.name || 'User'},\n\nYour password reset code is: ${payload.otp}\n\nThis code will expire in 10 minutes. If you did not request a password reset, your account is safe and you can ignore this email.`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-              <h2 style="color: #dc2626;">MilJor Password Reset Request</h2>
-              <p>Hello <strong>${this._escapeHtml(payload.name || 'User')}</strong>,</p>
-              <p>We received a request to reset your password. Use the verification code below to proceed:</p>
-              <div style="background-color: #fef2f2; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 5px; color: #991b1b; border-radius: 6px; margin: 20px 0;">
-                ${this._escapeHtml(payload.otp)}
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">This code expires in 10 minutes. If you did not initiate this request, someone may be trying to access your account.</p>
-            </div>
-          `
+          subject: 'MilJor | Password reset code',
+          text: `Hi ${payload.name || 'there'},\n\nYour MilJor password reset code is: ${payload.otp}\n\nThis code expires in 10 minutes. Do not share it.\n\nIf you did not request a password reset, ignore this email.\n\nMilJor — Secure business procurement`,
+          html: this._renderOtpEmail({ name: payload.name, otp: payload.otp, purpose: 'PASSWORD_RESET' })
         };
 
       case 'SECURITY_ALERT':
