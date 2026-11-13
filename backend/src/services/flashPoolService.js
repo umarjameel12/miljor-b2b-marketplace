@@ -438,20 +438,19 @@ class FlashPoolService {
         if(Number(prior[0].flash_pool_id)!==Number(flashId) ||
           money.toCanonical(prior[0].quantity,2)!==money.toCanonical(payload.quantity,2))
           throw fail('IDEMPOTENCY_CONFLICT','This key belongs to a different purchase.',409);
-        // A retry with a reused key must not silently switch delivery address.
-        // Compare against the existing order before returning the previous hold.
-        const [priorOrder]=await conn.query(
-          'SELECT delivery_address FROM orders WHERE id=? AND buyer_id=?',
-          [prior[0].order_id,buyerId]);
-        if(!priorOrder.length)throw fail('FLASH_ORDER_MISSING','Existing Flash order cannot be reconciled.',409);
-        const requestedAddressId=Number(payload.delivery_address_id);
-        if(!Number.isSafeInteger(requestedAddressId)||requestedAddressId<1)
-          throw fail('IDEMPOTENCY_CONFLICT','The previous Flash hold requires its original verified destination.',409);
-        const [priorAddress]=await conn.query(
-          'SELECT full_address FROM buyer_delivery_addresses WHERE id=? AND user_id=?',
-          [requestedAddressId,buyerId]);
-        if(!priorAddress.length||String(priorAddress[0].full_address).trim()!==String(priorOrder[0].delivery_address).trim())
-          throw fail('IDEMPOTENCY_CONFLICT','This idempotency key belongs to a different delivery destination.',409);
+        // Replay identity includes the exact selected delivery mode and pickup/address,
+        // not merely the same quantity and pool.
+        const [terms]=await conn.query(
+          'SELECT mode,delivery_address_id,pickup_point_id FROM flash_order_delivery_terms WHERE order_id=?',
+          [prior[0].order_id]);
+        if(!terms.length)throw fail('FLASH_LEGACY_HOLD_RECONCILIATION_REQUIRED',
+          'This older hold predates delivery snapshots. Review My Orders before retrying.',409);
+        const mode=String(payload.fulfillment_mode||'STANDARD_CLUSTERED').toUpperCase();
+        if(terms[0].mode!==mode ||
+          (mode==='PICKUP'
+            ? Number(terms[0].pickup_point_id)!==Number(payload.pickup_point_id)
+            : Number(terms[0].delivery_address_id)!==Number(payload.delivery_address_id)))
+          throw fail('IDEMPOTENCY_CONFLICT','This key belongs to different delivery terms.',409);
         await conn.commit();
         return {id:prior[0].id,order_id:prior[0].order_id,quantity:prior[0].quantity,
           locked_unit_price:prior[0].locked_unit_price,status:prior[0].status,
@@ -494,55 +493,13 @@ class FlashPoolService {
       const [[openClock]] = await conn.query('SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
       if(offer.status!=='ACTIVE'||!openClock.is_open)
         throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
-      // Do not accept an unsupported fulfillment selection silently.
-      // Pickup/Express need their own order and quote lifecycle before launch.
-      if(payload.fulfillment_mode!=null &&
-         payload.fulfillment_mode!=='STANDARD_CLUSTERED')
-        throw fail('FLASH_FULFILLMENT_UNSUPPORTED',
-          'This Flash offer currently supports verified standard clustered doorstep delivery only.',422);
-      if(payload.pickup_point_id!=null||payload.delivery_quote_code!=null)
-        throw fail('FLASH_FULFILLMENT_UNSUPPORTED',
-          'Pickup and external delivery quote acceptance are not enabled for Flash checkout.',422);
-      // Flash delivery is buyer-specific: fail closed unless the saved Lahore
-      // destination and the supplier's current cluster rate are both verified.
-      // Never fall back to arbitrary raw addresses or a global published fee.
-      if(payload.delivery_address_id==null)
-        throw fail('FLASH_VERIFIED_ADDRESS_REQUIRED',
-          'Choose a confirmed, verified Lahore business delivery address.',422);
-      let verifiedDeliveryAddress=null;
-      let verifiedClusterDeliveryFee=null;
-      {
-        const addressId=Number(payload.delivery_address_id);
-        if(!Number.isSafeInteger(addressId)||addressId<1)
-          throw fail('INVALID_DELIVERY_ADDRESS','Choose a saved verified Lahore business address.',422);
-        const [addresses]=await conn.query(
-          `SELECT id,cluster_id,city,full_address,geographic_match_status,
-                  user_confirmation_status,manual_review_required
-           FROM buyer_delivery_addresses WHERE id=? AND user_id=?`,
-          [addressId,buyerId]
-        );
-        const address=addresses[0];
-        if(!address||String(address.city).toLowerCase()!=='lahore'||
-           address.geographic_match_status!=='VERIFIED'||
-           address.user_confirmation_status!=='CONFIRMED'||address.manual_review_required)
-          throw fail('BUYER_ADDRESS_NOT_VERIFIED','Use a confirmed, verified Lahore delivery address.',422);
-        if(payload.delivery_cluster_id!=null &&
-          Number(payload.delivery_cluster_id)!==Number(address.cluster_id))
-          throw fail('DELIVERY_CLUSTER_MISMATCH','Selected delivery area does not match the saved address.',409);
-        const [coverage]=await conn.query(
-          `SELECT r.cluster_id,r.fee_pkr FROM supplier_delivery_cluster_rates r
-           JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
-           JOIN geographic_clusters g ON g.id=r.cluster_id
-           WHERE r.supplier_id=? AND r.cluster_id=? AND r.mode='STANDARD_CLUSTERED'
-             AND r.is_eligible=1 AND c.standard_delivery_enabled=1
-             AND g.is_active=1 AND g.district='Lahore'`,
-          [offer.supplier_id,address.cluster_id]
-        );
-        if(!coverage.length)
-          throw fail('FLASH_DELIVERY_AREA_UNAVAILABLE','Supplier cannot deliver this Flash offer to your verified Lahore cluster.',409);
-        verifiedDeliveryAddress=String(address.full_address).trim();
-        verifiedClusterDeliveryFee=dec(coverage[0].fee_pkr,{positive:false});
-      }
+      if(payload.delivery_quote_code!=null)throw fail('FLASH_DELIVERY_QUOTE_UNSUPPORTED',
+        'Flash checkout uses a fresh server-locked delivery fee; do not supply a quote code.',422);
+      const deliveryTerms=await this._resolveDelivery(conn,buyerId,offer,{
+        mode:payload.fulfillment_mode||'STANDARD_CLUSTERED',
+        addressId:payload.delivery_address_id,clusterId:payload.delivery_cluster_id,
+        pickupPointId:payload.pickup_point_id,allowPickupList:false
+      });
       const quantity=dec(payload.quantity);
       // Physical purchasing packs are indivisible; mass/volume listings can use
       // their explicitly configured valid fractional increments.
@@ -585,10 +542,10 @@ class FlashPoolService {
       const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
       // Recompute inside the stock-lock transaction, never trust a client fee
       // or the supplier's offer-wide fee for a cluster-specific destination.
-      const deliveryFee = verifiedClusterDeliveryFee;
+      const deliveryFee = deliveryTerms.delivery_fee_pkr;
       const amount = money.exactDecimalSum([subtotal,buyerFee,deliveryFee],2);
       const orderCode='FL'+crypto.randomBytes(9).toString('hex');
-      const address=verifiedDeliveryAddress;
+      const address=deliveryTerms.delivery_address;
       if(address.length<8||address.length>1000)throw fail('DELIVERY_ADDRESS_REQUIRED','Provide a valid buyer delivery address.');
       // Freeze immutable supplier commission at Flash order creation, not payable accrual.
       // Read and validate inside the same locked transaction as the buyer stock hold.
@@ -607,10 +564,30 @@ class FlashPoolService {
         `INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,
           subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,
           delivery_type,delivery_address,payment_status,order_status)
-        VALUES (?,?,?,?,?,?,?,?,?,?,'PKR','DOORSTEP',?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
+        VALUES (?,?,?,?,?,?,?,?,?,?,'PKR',?,?,'AWAITING_PAYMENT','AWAITING_PAYMENT')`,
         [orderCode,buyerId,offer.supplier_id,quantity,offer.discounted_unit_price,
-          subtotal,deliveryFee,buyerFee,amount,commissionSnapshot,address]
+          subtotal,deliveryFee,buyerFee,amount,commissionSnapshot,deliveryTerms.delivery_type,address]
       );
+      // Immutable order-level delivery contract for real fulfillment, invoices
+      // and disputes. No editable quote or client fee is used after this point.
+      await conn.query(
+        `INSERT INTO flash_order_delivery_terms (
+           order_id,flash_pool_id,buyer_id,supplier_id,mode,delivery_address_id,cluster_id,
+           pickup_point_id,pickup_point_name,pickup_point_address,delivery_fee_pkr,
+           supplier_config_version,rate_or_point_version,snapshot_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [order.insertId,flashId,buyerId,offer.supplier_id,deliveryTerms.mode,
+         deliveryTerms.address_id,deliveryTerms.cluster_id,deliveryTerms.pickup_point_id,
+         deliveryTerms.pickup_point_name,deliveryTerms.pickup_point_address,deliveryFee,
+         deliveryTerms.supplier_config_version,deliveryTerms.rate_or_point_version,
+         JSON.stringify({mode:deliveryTerms.mode,delivery_type:deliveryTerms.delivery_type,
+           address_id:deliveryTerms.address_id,cluster_id:deliveryTerms.cluster_id,
+           pickup_point_id:deliveryTerms.pickup_point_id,
+           pickup_point_name:deliveryTerms.pickup_point_name,
+           pickup_point_address:deliveryTerms.pickup_point_address,
+           delivery_address:address,delivery_fee_pkr:deliveryFee,
+           supplier_config_version:deliveryTerms.supplier_config_version,
+           rate_or_point_version:deliveryTerms.rate_or_point_version})]);
       const [h]=await conn.query(
         `INSERT INTO flash_purchase_holds
          (flash_pool_id,buyer_id,quantity,locked_unit_price,status,expires_at,order_id,idempotency_key)
@@ -629,6 +606,7 @@ class FlashPoolService {
         hold_expires_at:holdClock.hold_expires_at,
         quantity,locked_unit_price:offer.discounted_unit_price,subtotal_amount:subtotal,
         buyer_platform_fee:buyerFee,delivery_fee:deliveryFee,total_amount:amount,
+        delivery_mode:deliveryTerms.mode,pickup_point_id:deliveryTerms.pickup_point_id,
         checkout_endpoint:`/api/v1/orders/${order.insertId}/checkout`,hold_expires_in_seconds:900};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
