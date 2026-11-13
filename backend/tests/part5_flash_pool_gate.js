@@ -425,6 +425,52 @@ async function runPart5FlashPoolGate() {
       pass('B04 MULTI_BUYER hold request with valid increment succeeds (quantity: 4.00)');
     }
 
+    // Delivery rejection: legacy raw addresses cannot bypass owned Lahore addresses.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_raw_addr_${ts}`},
+        body:{quantity:'4.00',delivery_address:'Unverified address, Lahore'}
+      });
+      assert.equal(res.status,422);
+      assert.equal(res.body?.error?.code,'FLASH_VERIFIED_ADDRESS_REQUIRED');
+      pass('B04A free-text address cannot bypass verified address requirement');
+    }
+    // Delivery rejection: a buyer cannot use another buyer's saved address.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_other_address_${ts}`},
+        body:{quantity:'4.00',delivery_address_id:buyer2AddressId,delivery_cluster_id:testClusterId}
+      });
+      assert.equal(res.status,422);
+      assert.equal(res.body?.error?.code,'BUYER_ADDRESS_NOT_VERIFIED');
+      pass('B04B buyer cannot use another buyer\'s Lahore address');
+    }
+    // Delivery rejection: selected cluster must match the verified destination.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_wrong_cluster_${ts}`},
+        body:{quantity:'4.00',delivery_address_id:buyer1AddressId,delivery_cluster_id:testClusterId===1?2:1}
+      });
+      assert.equal(res.status,409);
+      assert.equal(res.body?.error?.code,'DELIVERY_CLUSTER_MISMATCH');
+      pass('B04C client cannot override the verified address cluster');
+    }
+    // Delivery rejection: unsupported express/pickup cannot silently become doorstep.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_unsupported_delivery_${ts}`},
+        body:{quantity:'4.00',delivery_address_id:buyer1AddressId,
+          delivery_cluster_id:testClusterId,fulfillment_mode:'EXPRESS'}
+      });
+      assert.equal(res.status,422);
+      assert.equal(res.body?.error?.code,'FLASH_FULFILLMENT_UNSUPPORTED');
+      pass('B04D unsupported delivery mode fails closed');
+    }
+
     // B05 & B06: WHOLE_LOT mode
     let wholeLotPoolId;
     {
