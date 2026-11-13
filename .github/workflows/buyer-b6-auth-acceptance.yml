@@ -1,0 +1,46 @@
+name: Buyer B6 Auth and Frontend Acceptance
+on:
+  push:
+    branches:
+      - feature/frontend-redesign-20261112
+    paths:
+      - 'backend/src/controllers/authController.js'
+      - 'backend/src/services/procurement*Service.js'
+      - 'backend/src/routes/v1/procurementRoutes.js'
+      - 'backend/tests/buyer_procurement_auth_alignment_gate.js'
+      - 'backend/package.json'
+      - 'frontend/src/pages/RfqPage.jsx'
+      - 'frontend/src/context/AuthContext.jsx'
+      - '.github/workflows/buyer-b6-auth-acceptance.yml'
+  pull_request:
+    paths:
+      - 'backend/src/controllers/authController.js'
+      - 'backend/src/services/procurement*Service.js'
+      - 'backend/src/routes/v1/procurementRoutes.js'
+      - 'backend/tests/buyer_procurement_auth_alignment_gate.js'
+      - 'backend/package.json'
+      - 'frontend/src/pages/RfqPage.jsx'
+      - 'frontend/src/context/AuthContext.jsx'
+      - '.github/workflows/buyer-b6-auth-acceptance.yml'
+permissions:
+  contents: read
+jobs:
+  buyer-b6-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Buyer verification and B6 source gate
+        run: |
+          node --check backend/src/controllers/authController.js
+          node --check backend/src/services/procurementRequestService.js
+          node --check backend/src/services/procurementCollectiveService.js
+          node --check backend/src/services/procurementRecurringService.js
+          node backend/tests/buyer_procurement_auth_alignment_gate.js
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Frontend production build
+        run: npm run build --prefix frontend
