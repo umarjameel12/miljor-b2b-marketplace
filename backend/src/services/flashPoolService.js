@@ -332,21 +332,48 @@ class FlashPoolService {
        ORDER BY fp.expiry_time ASC`,params);
     return rows.map(rowSafe);
   }
-  // Read-only delivery preview. Final fee and eligibility are recalculated
-  // under the Flash stock lock in requestHold; this never reserves inventory.
-  async previewDelivery(buyerId,flashId,addressId) {
-    if(!Number.isSafeInteger(Number(flashId))||Number(flashId)<1||
-       !Number.isSafeInteger(Number(addressId))||Number(addressId)<1)
-      throw fail('INVALID_DELIVERY_PREVIEW','Choose a Flash offer and saved business address.',422);
-    const [offers]=await db.query(
-      'SELECT id,supplier_id,status,expiry_time FROM flash_pools WHERE id=?',[flashId]);
-    const offer=offers[0];
-    if(!offer)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
-    const [[clock]]=await db.query(
-      'SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
-    if(offer.status!=='ACTIVE'||!clock.is_open)
-      throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
-    const [addresses]=await db.query(
+  // Flash delivery quote is read-only in preview and re-evaluated inside
+  // requestHold's stock/financial transaction. Neither client fees nor
+  // supplier's legacy offer-wide fixed fee can influence the locked order.
+  async _resolveDelivery(client,buyerId,offer,{mode='STANDARD_CLUSTERED',addressId=null,clusterId=null,pickupPointId=null,allowPickupList=false}={}) {
+    const chosen=String(mode||'STANDARD_CLUSTERED').toUpperCase();
+    if(!['STANDARD_CLUSTERED','PICKUP','EXPRESS'].includes(chosen))
+      throw fail('FLASH_FULFILLMENT_UNSUPPORTED','Choose Standard, Pickup or Express delivery.',422);
+    const [configs]=await client.query(
+      'SELECT * FROM supplier_delivery_configurations WHERE supplier_id=?',[offer.supplier_id]);
+    const config=configs[0];
+    if(!config)throw fail('FLASH_DELIVERY_NOT_CONFIGURED','Supplier must configure a delivery method before Flash checkout.',409);
+    if(chosen==='PICKUP'){
+      if(!config.pickup_enabled)throw fail('FLASH_DELIVERY_MODE_UNAVAILABLE','Supplier pickup is unavailable.',409);
+      if(addressId!=null||clusterId!=null)
+        throw fail('FLASH_PICKUP_DESTINATION_CONFLICT','Pickup does not accept a buyer delivery address.',422);
+      const [points]=await client.query(
+        `SELECT p.id,p.point_name,p.address_line,p.cluster_id,p.pickup_handling_fee_pkr,p.version
+         FROM supplier_pickup_points p
+         JOIN geographic_clusters g ON g.id=p.cluster_id
+         WHERE p.supplier_id=? AND p.is_active=1 AND g.is_active=1 AND g.district='Lahore'
+         ORDER BY p.id`,[offer.supplier_id]);
+      if(!points.length)throw fail('FLASH_PICKUP_UNAVAILABLE','Supplier has no eligible active Lahore pickup point.',409);
+      if(pickupPointId==null&&allowPickupList)return {mode:'PICKUP',pickup_points:points.map(p=>({
+        id:Number(p.id),name:p.point_name,address:p.address_line,cluster_id:Number(p.cluster_id),
+        delivery_fee_pkr:dec(p.pickup_handling_fee_pkr,{positive:false})
+      })),binding:'PICKUP_POINT_SELECTION_REQUIRED'};
+      const id=Number(pickupPointId);
+      if(!Number.isSafeInteger(id)||id<1)throw fail('FLASH_PICKUP_POINT_REQUIRED','Choose a supplier pickup point.',422);
+      const point=points.find(p=>Number(p.id)===id);
+      if(!point)throw fail('FLASH_PICKUP_POINT_UNAVAILABLE','Selected pickup point is not owned and active for this supplier.',409);
+      return {mode:'PICKUP',delivery_type:'SUPPLIER_PICKUP',address_id:null,pickup_point_id:id,
+        cluster_id:Number(point.cluster_id),pickup_point_name:point.point_name,
+        pickup_point_address:point.address_line,delivery_address:`${point.point_name}: ${point.address_line}`,
+        delivery_fee_pkr:dec(point.pickup_handling_fee_pkr,{positive:false}),
+        supplier_config_version:Number(config.version)||1,rate_or_point_version:Number(point.version)||1,
+        binding:'PREVIEW_ONLY_REVALIDATED_AT_HOLD'};
+    }
+    if(pickupPointId!=null)throw fail('FLASH_PICKUP_DESTINATION_CONFLICT','A pickup point cannot be attached to doorstep delivery.',422);
+    const id=Number(addressId);
+    if(!Number.isSafeInteger(id)||id<1)
+      throw fail('FLASH_VERIFIED_ADDRESS_REQUIRED','Choose your verified Lahore business delivery address.',422);
+    const [addresses]=await client.query(
       `SELECT a.id,a.cluster_id,a.full_address
        FROM buyer_delivery_addresses a
        JOIN geographic_clusters g ON g.id=a.cluster_id
@@ -354,26 +381,47 @@ class FlashPoolService {
          AND a.geographic_match_status='VERIFIED'
          AND a.user_confirmation_status='CONFIRMED'
          AND a.manual_review_required=0
-         AND g.is_active=1 AND g.district='Lahore'`,
-      [addressId,buyerId]);
-    if(!addresses.length)
-      throw fail('BUYER_ADDRESS_NOT_VERIFIED',
-        'Choose your confirmed verified Lahore delivery address.',422);
-    const destination=addresses[0];
-    const [rates]=await db.query(
-      `SELECT r.fee_pkr FROM supplier_delivery_cluster_rates r
-       JOIN supplier_delivery_configurations c ON c.supplier_id=r.supplier_id
-       WHERE r.supplier_id=? AND r.cluster_id=?
-         AND r.mode='STANDARD_CLUSTERED' AND r.is_eligible=1
-         AND c.standard_delivery_enabled=1`,
-      [offer.supplier_id,destination.cluster_id]);
-    if(!rates.length)
-      throw fail('FLASH_DELIVERY_AREA_UNAVAILABLE',
-        'Supplier cannot deliver to this verified Lahore cluster.',409);
-    return {mode:'STANDARD_CLUSTERED',address_id:Number(destination.id),
-      cluster_id:Number(destination.cluster_id),
-      delivery_fee_pkr:dec(rates[0].fee_pkr,{positive:false}),
+         AND g.is_active=1 AND g.district='Lahore'`,[id,buyerId]);
+    const address=addresses[0];
+    if(!address)throw fail('BUYER_ADDRESS_NOT_VERIFIED','Use an owned, confirmed, verified Lahore delivery address.',422);
+    if(clusterId!=null&&Number(clusterId)!==Number(address.cluster_id))
+      throw fail('DELIVERY_CLUSTER_MISMATCH','Selected delivery area does not match the verified saved address.',409);
+    if(chosen==='EXPRESS'){
+      if(!config.express_enabled)throw fail('FLASH_DELIVERY_MODE_UNAVAILABLE','Express delivery is disabled by supplier.',409);
+      const pkTime=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Karachi',hour12:false});
+      const cutoff=String(config.express_cutoff_time||'14:00:00').slice(0,8);
+      if(pkTime>cutoff)throw fail('FLASH_EXPRESS_CUTOFF_PASSED','Express order cutoff in Pakistan time has passed.',409);
+    }else if(!config.standard_delivery_enabled)
+      throw fail('FLASH_DELIVERY_MODE_UNAVAILABLE','Standard clustered delivery is disabled by supplier.',409);
+    const [rates]=await client.query(
+      `SELECT r.fee_pkr,r.version
+       FROM supplier_delivery_cluster_rates r
+       WHERE r.supplier_id=? AND r.cluster_id=? AND r.mode=? AND r.is_eligible=1`,
+      [offer.supplier_id,address.cluster_id,chosen]);
+    if(!rates.length)throw fail('FLASH_DELIVERY_AREA_UNAVAILABLE',
+      'Supplier does not offer this delivery mode in your verified Lahore area.',409);
+    const addr=String(address.full_address).trim();
+    if(addr.length<8||addr.length>1000)throw fail('DELIVERY_ADDRESS_REQUIRED','Valid business address required.',422);
+    return {mode:chosen,delivery_type:'DOORSTEP',address_id:id,pickup_point_id:null,
+      cluster_id:Number(address.cluster_id),pickup_point_name:null,pickup_point_address:null,
+      delivery_address:addr,delivery_fee_pkr:dec(rates[0].fee_pkr,{positive:false}),
+      supplier_config_version:Number(config.version)||1,rate_or_point_version:Number(rates[0].version)||1,
       binding:'PREVIEW_ONLY_REVALIDATED_AT_HOLD'};
+  }
+  async previewDelivery(buyerId,flashId,selection={}) {
+    if(!Number.isSafeInteger(Number(flashId))||Number(flashId)<1)
+      throw fail('INVALID_DELIVERY_PREVIEW','Choose a valid Flash offer.',422);
+    const [offers]=await db.query(
+      'SELECT id,supplier_id,status,expiry_time FROM flash_pools WHERE id=?',[flashId]);
+    const offer=offers[0];
+    if(!offer)throw fail('FLASH_NOT_FOUND','Flash offer not found.',404);
+    const [[clock]]=await db.query('SELECT (? > UTC_TIMESTAMP()) AS is_open',[offer.expiry_time]);
+    if(offer.status!=='ACTIVE'||!clock.is_open)throw fail('FLASH_CLOSED','Flash offer is no longer open.',409);
+    return this._resolveDelivery(db,buyerId,offer,{
+      mode:selection.mode,
+      addressId:selection.address_id,clusterId:selection.cluster_id,
+      pickupPointId:selection.pickup_point_id,allowPickupList:true
+    });
   }
   async requestHold(buyerId,flashId,payload={},key) {
     if(!key||typeof key!=='string'||key.length>120)throw fail('IDEMPOTENCY_REQUIRED','X-Idempotency-Key is required.');
