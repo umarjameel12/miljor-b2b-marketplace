@@ -1,0 +1,27 @@
+'use strict';
+// Flash UCP delivery safety source contract. Static checks are not DB E2E.
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const flash=read('src/services/flashPoolService.js');
+const discovery=read('src/services/unifiedPoolDiscoveryService.js');
+const card=fs.readFileSync(path.resolve(root,'../frontend/src/components/pools/BuyerPoolCard.jsx'),'utf8');
+const supplier=fs.readFileSync(path.resolve(root,'../frontend/src/pages/SupplierPoolsPage.jsx'),'utf8');
+assert.match(flash,/FLASH_VERIFIED_ADDRESS_REQUIRED/);
+assert.match(flash,/BUYER_ADDRESS_NOT_VERIFIED/);
+assert.match(flash,/FLASH_DELIVERY_AREA_UNAVAILABLE/);
+assert.match(flash,/verifiedClusterDeliveryFee=dec\(coverage\[0\]\.fee_pkr/);
+assert.match(flash,/const deliveryFee = verifiedClusterDeliveryFee/);
+assert.match(flash,/const address=verifiedDeliveryAddress/);
+assert.doesNotMatch(flash,/const address=verifiedDeliveryAddress\|\|/);
+assert.match(flash,/different delivery destination/);
+assert.match(discovery,/SUPPLIER_CLUSTER_RATE_AT_HOLD/);
+assert.match(discovery,/delivery_fee_pkr:null/);
+assert.match(card,/supplier-configured delivery fee/);
+assert.match(supplier,/supplier cluster rates at buyer checkout/);
+assert.match(flash,/async previewDelivery/);
+assert.match(flash,/PREVIEW_ONLY_REVALIDATED_AT_HOLD/);
+assert.match(card,/delivery-preview/);
+assert.match(card,/deliveryPreviewLoading/);
+console.log('PASS Flash UCP delivery source safety checks (not MySQL or browser E2E)');
