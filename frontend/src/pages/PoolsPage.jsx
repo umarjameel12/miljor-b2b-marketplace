@@ -48,8 +48,8 @@ const FULFILLMENT_MODES = [
 export const PoolsPage = () => {
   const { user } = useAuth();
   const [searchParams]=useSearchParams();
-  // Legacy type query parameters no longer split the public buyer marketplace.
-  const poolType='ALL';
+  // The marketplace is ONE page; Regular and Flash are subcategories, never separate destinations.
+  const [poolType,setPoolType]=useState('ALL');
   const [serverTime,setServerTime]=useState(null);
   const [nextCursor,setNextCursor]=useState(null);
   const [loadingMore,setLoadingMore]=useState(false);
@@ -157,7 +157,7 @@ export const PoolsPage = () => {
     }catch(e){setError(e.response?.data?.error?.message||e.message||'Could not load more pools');}
     finally{setLoadingMore(false);}
   };
-  const filteredPools = pools;
+  const filteredPools = pools; // The discovery API enforces the selected subcategory.
 
   const filteredFamilies = families.filter((family) => {
     const query = searchQuery.trim().toLocaleLowerCase();
@@ -328,7 +328,27 @@ export const PoolsPage = () => {
 
           {/* Fulfillment Modes & Remote Pickup Toggle (When viewing live pools) */}
           {viewMode === 'pools' && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }} aria-label="Unified Pool subcategories">
+              <span className="text-xs font-semibold mr-2" style={{color:'var(--text-secondary)'}}>Unified Pool</span>
+              {[
+                ['ALL','All Pools'],
+                ['REGULAR','Regular'],
+                ['FLASH','Flash']
+              ].map(([type,label]) => (
+                <button type="button" key={type} aria-pressed={poolType===type}
+                  onClick={() => {setPoolType(type);setNextCursor(null);}}
+                  className="rounded-lg border px-3 py-2 text-xs font-semibold transition"
+                  style={{
+                    borderColor:poolType===type?'var(--brand-accent)':'var(--border-subtle)',
+                    backgroundColor:poolType===type?'var(--brand-accent)':'var(--bg-elevated)',
+                    color:poolType===type?'var(--text-on-champagne)':'var(--text-secondary)'
+                  }}>{label}</button>
+              ))}
+            </div>
+          )}
+          {viewMode === 'pools' && (
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              {/* Delivery filters are shared across the same Unified Pool marketplace. */}
               {/* Mode Pills */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] font-semibold text-stone-500 mr-1 flex items-center gap-1">

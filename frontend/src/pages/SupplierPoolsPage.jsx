@@ -131,6 +131,7 @@ export function SupplierPoolsPage(){
   const [operationsError,setOperationsError]=useState('');
 
   const [filter,setFilter]=useState('ALL');
+  const [statusFilter,setStatusFilter]=useState('ALL');
   const [mode,setMode]=useState('REGULAR');
   const [form,setForm]=useState(initialForm());
   const [edit,setEdit]=useState(null);
@@ -180,8 +181,8 @@ export function SupplierPoolsPage(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[params.toString(),listings.length,edit]);
   const chosen=useMemo(()=>listings.find(l=>String(l.id)===String(form.supplier_listing_id)),[listings,form.supplier_listing_id]);
-  const rows=useMemo(()=>data.pools.filter(p=>filter==='ALL'||p.type===filter||
-    (filter==='ACTIVE'&&p.status==='ACTIVE')||(filter==='DRAFT'&&p.status==='DRAFT')), [data.pools,filter]);
+  const rows=useMemo(()=>data.pools.filter(p=>(filter==='ALL'||p.type===filter)&&
+    (statusFilter==='ALL'||p.status===statusFilter)), [data.pools,filter,statusFilter]);
   const update=(name,value)=>setForm(old=>({...old,[name]:value}));
   const openCreate=(type='REGULAR',listingId='')=>{
     const listing=listings.find(l=>String(l.id)===String(listingId))||listings[0];
@@ -299,9 +300,9 @@ export function SupplierPoolsPage(){
   if(!isAuthenticated||user?.role!=='SUPPLIER')return <AppShell><div className="max-w-xl mx-auto p-8 space-y-3"><h1 className="text-xl font-bold">Supplier access required</h1><p className="text-sm text-[var(--text-muted)]">Only signed-in suppliers manage commercial pools.</p><Link to="/login" className="underline">Sign in</Link></div></AppShell>;
   return <AppShell><div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3">
-      <div><p className="text-xs font-semibold text-[var(--brand-accent)] uppercase">Supplier Portal · Unified Pools</p>
-        <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">Pool Management</h1>
-        <p className="text-sm text-[var(--text-muted)]">One supplier pool workspace. Configure pricing, stock, delivery and commitment terms for each offer. RFQs and recurring procurement remain separate contracts.</p>
+      <div><p className="text-xs font-semibold text-[var(--brand-accent)] uppercase">Supplier Portal · Unified Pool</p>
+        <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">Unified Pool Management</h1>
+        <p className="text-sm text-[var(--text-muted)]">One Unified Pool manager with Regular and Flash subcategories. Delivery and commercial rules are enforced by their respective backend engines.</p>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={load} className="rounded-xl border border-[var(--border-default)] px-3 py-2 flex items-center gap-2 text-sm hover:bg-[var(--bg-card)] transition"><RefreshCw size={15}/>Refresh</button>
@@ -318,7 +319,7 @@ export function SupplierPoolsPage(){
       <div className="flex items-center gap-2"><Layers size={18}/><h2 className="font-semibold text-lg">{edit?'Edit':'Create'} Pool Draft</h2></div>
       {!edit&&<div className="grid grid-cols-2 gap-2">
         {['REGULAR','FLASH'].map(t=><button key={t} type="button" onClick={()=>setMode(t)} className={`rounded-xl border p-3 text-left text-sm ${mode===t?'border-[var(--brand-accent)] bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]':'border-[var(--border-subtle)]'}`}>
-          <b>{t==='REGULAR'?'Group pricing terms':'Ready-stock terms'}</b><p className="text-xs mt-1 text-[var(--text-muted)]">{t==='REGULAR'?'Demand aggregation & price tiers':'Ready-stock discount & immediate checkout'}</p>
+          <b>{t==='REGULAR'?'Regular Pool':'Flash Pool'}</b><p className="text-xs mt-1 text-[var(--text-muted)]">{t==='REGULAR'?'Demand aggregation & price tiers':'Ready-stock discount & immediate checkout'}</p>
         </button>)}
       </div>}
       {!listings.length?<div className="rounded-xl border p-4 text-sm space-y-2"><AlertTriangle size={18} className="text-amber-600"/><p>No eligible published supplier listings. Create and publish your physical SKU and commercial offer first.</p><Link to="/supplier/catalog" className="underline text-emerald-600">Open Supplier Catalog</Link></div>:
@@ -375,7 +376,7 @@ export function SupplierPoolsPage(){
             <Field label="Ready stock (listing purchase units)" value={form.total_stock} onChange={v=>update('total_stock',v)} step="0.01"/>
             <Field label="Discounted price PKR per unit" value={form.discounted_unit_price} onChange={v=>update('discounted_unit_price',v)}/>
             <Field label="Duration (whole minutes, starts at publish)" value={form.duration_minutes} onChange={v=>update('duration_minutes',v)} step="1" min="2"/>
-            <Field label="Buyer delivery fee PKR" value={form.delivery_fee} onChange={v=>update('delivery_fee',v)} min="0"/>
+            <p className="text-xs rounded-lg border border-[var(--border-subtle)] p-3">Flash delivery fees use your configured supplier cluster rates at buyer checkout. Configure eligible areas and charges in Supplier Profile; the old fixed Flash fee is not charged for new Flash holds.</p>
           </div>
           <label className="block text-xs font-semibold space-y-1">Selling mode
             <select value={form.selling_mode} onChange={e=>update('selling_mode',e.target.value)} className="w-full rounded-xl p-3 border bg-[var(--bg-elevated)] border-[var(--border-subtle)]">
@@ -408,7 +409,14 @@ export function SupplierPoolsPage(){
         {[[data.counts.total,'All Pools'],[data.counts.regular,'Regular'],[data.counts.flash,'Flash']].map(([count,label])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-card)]"><div className="text-2xl font-bold tabular-nums">{count||0}</div><div className="text-xs text-[var(--text-muted)]">{label}</div></div>)}
       </div>
       <div className="flex gap-2 flex-wrap">
-        {['ALL','REGULAR','FLASH','DRAFT','ACTIVE'].map(t=><button key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 border rounded-xl text-xs transition ${filter===t?'border-[var(--brand-accent)] text-[var(--brand-accent)] bg-[var(--brand-accent)]/10 font-bold':'border-[var(--border-subtle)] text-[var(--text-secondary)]'}`}>{t==='ALL'?'All':t[0]+t.slice(1).toLowerCase()}</button>)}
+        <div aria-label="Unified Pool subcategories" className="flex items-center flex-wrap gap-2">
+          <span className="text-xs font-semibold text-[var(--text-secondary)]">Pool category</span>
+          {['ALL','REGULAR','FLASH'].map(t=><button type="button" aria-pressed={filter===t} key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${filter===t?'border-[var(--brand-accent)] text-[var(--brand-accent)]':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'All Pools':t==='REGULAR'?'Regular':'Flash'}</button>)}
+        </div>
+        <div aria-label="Pool status filters" className="flex items-center flex-wrap gap-2">
+          <span className="text-xs text-[var(--text-secondary)]">Status</span>
+          {['ALL','DRAFT','ACTIVE'].map(t=><button type="button" aria-pressed={statusFilter===t} key={t} onClick={()=>setStatusFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${statusFilter===t?'border-[var(--brand-accent)] text-[var(--brand-accent)]':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'Any status':t==='DRAFT'?'Draft':'Active'}</button>)}
+        </div>
       </div>
       {loading?<p className="text-sm text-[var(--text-muted)]">Loading supplier pools…</p>:rows.length===0?
         <div className="p-8 text-center rounded-xl border border-[var(--border-subtle)]"><Package className="mx-auto mb-2 text-[var(--text-muted)]"/><p className="font-semibold">No matching pools</p><p className="text-xs text-[var(--text-muted)]">Create a pool from a published supplier listing.</p></div>:

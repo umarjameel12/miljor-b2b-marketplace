@@ -406,6 +406,20 @@ class ProcurementController {
       res.status(200).json({success:true,data:{flash_pools:rows,server_time:new Date().toISOString()}});
     }catch(e){res.status(500).json({success:false,error:{code:'FLASH_LIST_FAILED',message:'Unable to list supplier Flash Pools'}});}
   }
+  async previewFlashDelivery(req,res) {
+    try {
+      const data=await require('../services/flashPoolService').previewDelivery(
+        req.user.id,Number(req.params.id),{
+          mode:req.query.mode||'STANDARD_CLUSTERED',
+          address_id:req.query.address_id,
+          cluster_id:req.query.cluster_id,
+          pickup_point_id:req.query.pickup_point_id
+        });
+      res.status(200).json({success:true,data});
+    }catch(e){res.status(e.statusCode||500).json({success:false,
+      error:{code:e.code||'FLASH_DELIVERY_PREVIEW_FAILED',
+        message:e.statusCode?e.message:'Unable to preview Flash delivery'}});}
+  }
   async reserveFlashPool(req,res) {
     try {
       const result=await require('../services/flashPoolService').requestHold(

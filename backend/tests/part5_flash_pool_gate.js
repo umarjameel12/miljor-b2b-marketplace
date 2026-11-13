@@ -215,6 +215,34 @@ async function runPart5FlashPoolGate() {
     cleanupFixtures.userIds.push(buyer2Id);
     const buyer2Token = generateToken(buyer2Id, 'BUYER', 'VERIFIED');
 
+    // Flash delivery regression fixtures: authoritative supplier cluster tariff
+    // and owned, confirmed Lahore addresses. Never bypass address verification.
+    const [[testCluster]] = await db.query(
+      "SELECT id FROM geographic_clusters WHERE cluster_code='LHR-CORE-COMMERCIAL' AND is_active=1");
+    assert.ok(testCluster, 'Lahore test cluster must exist after migration');
+    const testClusterId=Number(testCluster.id);
+    await db.query(
+      "INSERT INTO supplier_delivery_configurations (supplier_id,standard_delivery_enabled,pickup_enabled,express_enabled,express_cutoff_time) VALUES (?,1,1,1,'23:59:59')",
+      [supplierId]);
+    await db.query(
+      "INSERT INTO supplier_delivery_cluster_rates (supplier_id,cluster_id,mode,is_eligible,fee_pkr) VALUES (?,?,'STANDARD_CLUSTERED',1,?)",
+      [supplierId,testClusterId,'325.00']);
+    await db.query(
+      "INSERT INTO supplier_delivery_cluster_rates (supplier_id,cluster_id,mode,is_eligible,fee_pkr) VALUES (?,?,'EXPRESS',1,?)",
+      [supplierId,testClusterId,'725.00']);
+    const [testPickup]=await db.query(
+      "INSERT INTO supplier_pickup_points (supplier_id,point_name,cluster_id,address_line,pickup_handling_fee_pkr,is_active) VALUES (?,'Gulberg Depot',?,'Depot Street 10, Gulberg, Lahore',75,1)",
+      [supplierId,testClusterId]);
+    const testPickupPointId=testPickup.insertId;
+    const [buyer1AddressResult]=await db.query(
+      "INSERT INTO buyer_delivery_addresses (user_id,city,cluster_id,society_area,full_address,geographic_match_status,user_confirmation_status,manual_review_required) VALUES (?,'Lahore',?,'Gulberg','Plaza 12, Gulberg III, Lahore','VERIFIED','CONFIRMED',0)",
+      [buyer1Id,testClusterId]);
+    const buyer1AddressId=buyer1AddressResult.insertId;
+    const [buyer2AddressResult]=await db.query(
+      "INSERT INTO buyer_delivery_addresses (user_id,city,cluster_id,society_area,full_address,geographic_match_status,user_confirmation_status,manual_review_required) VALUES (?,'Lahore',?,'Gulberg','MM Alam Road, Gulberg, Lahore','VERIFIED','CONFIRMED',0)",
+      [buyer2Id,testClusterId]);
+    const buyer2AddressId=buyer2AddressResult.insertId;
+
     // Canonical Category & Family (Rice - ID 1)
     const categoryId = 1;
     const familyId = 1;
@@ -374,12 +402,28 @@ async function runPart5FlashPoolGate() {
       pass('B02 Publication transitions pool to ACTIVE and computes expiry_time from publication timestamp');
     }
 
+    // Buyer-authenticated delivery preview is non-binding and destination scoped.
+    {
+      const valid=await api(`/api/v1/flash-pools/${draftPoolId}/delivery-preview?address_id=${buyer1AddressId}`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}
+      });
+      assert.equal(valid.status,200);
+      assert.equal(valid.body?.data?.mode,'STANDARD_CLUSTERED');
+      assert.equal(Number(valid.body?.data?.delivery_fee_pkr),325);
+      const stolen=await api(`/api/v1/flash-pools/${draftPoolId}/delivery-preview?address_id=${buyer2AddressId}`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}
+      });
+      assert.equal(stolen.status,422);
+      assert.equal(stolen.body?.error?.code,'BUYER_ADDRESS_NOT_VERIFIED');
+      pass('B02A server delivery preview validates buyer ownership and the exact cluster tariff');
+    }
+
     // B03: MULTI_BUYER unaligned increment rejected
     {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer1Token}`, 'X-Idempotency-Key': `idem_p5_b03_${ts}` },
-        body: { quantity: '3.00', delivery_address: 'Plaza 12, Gulberg III, Lahore' }
+        body: { quantity: '3.00', delivery_address_id: buyer1AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(res.status, 409);
       assert.equal(res.body?.error?.code, 'INVALID_PURCHASE_INCREMENT');
@@ -393,13 +437,61 @@ async function runPart5FlashPoolGate() {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer1Token}`, 'X-Idempotency-Key': `idem_p5_b04_${ts}` },
-        body: { quantity: '4.00', delivery_address: 'Plaza 12, Gulberg III, Lahore' }
+        body: { quantity: '4.00', delivery_address_id: buyer1AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(res.status, 201);
+      assert.equal(Number(res.body.data.hold.delivery_fee),325);
+      assert.ok(Number(res.body.data.hold.total_amount)>0);
       buyer1HoldId = res.body.data.hold.id;
       buyer1OrderId = res.body.data.hold.order_id;
       cleanupFixtures.orderIds.push(buyer1OrderId);
       pass('B04 MULTI_BUYER hold request with valid increment succeeds (quantity: 4.00)');
+    }
+
+    // Delivery rejection: legacy raw addresses cannot bypass owned Lahore addresses.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_raw_addr_${ts}`},
+        body:{quantity:'4.00',delivery_address:'Unverified address, Lahore'}
+      });
+      assert.equal(res.status,422);
+      assert.equal(res.body?.error?.code,'FLASH_VERIFIED_ADDRESS_REQUIRED');
+      pass('B04A free-text address cannot bypass verified address requirement');
+    }
+    // Delivery rejection: a buyer cannot use another buyer's saved address.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_other_address_${ts}`},
+        body:{quantity:'4.00',delivery_address_id:buyer2AddressId,delivery_cluster_id:testClusterId}
+      });
+      assert.equal(res.status,422);
+      assert.equal(res.body?.error?.code,'BUYER_ADDRESS_NOT_VERIFIED');
+      pass('B04B buyer cannot use another buyer\'s Lahore address');
+    }
+    // Delivery rejection: selected cluster must match the verified destination.
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_wrong_cluster_${ts}`},
+        body:{quantity:'4.00',delivery_address_id:buyer1AddressId,delivery_cluster_id:testClusterId===1?2:1}
+      });
+      assert.equal(res.status,409);
+      assert.equal(res.body?.error?.code,'DELIVERY_CLUSTER_MISMATCH');
+      pass('B04C client cannot override the verified address cluster');
+    }
+    // Invalid client-side delivery mode must fail closed (no fallback).
+    {
+      const res=await api(`/api/v1/flash-pools/${draftPoolId}/hold`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_unknown_mode_${ts}`},
+        body:{quantity:'4.00',delivery_address_id:buyer1AddressId,
+          delivery_cluster_id:testClusterId,fulfillment_mode:'DRONE'}
+      });
+      assert.equal(res.status,422);
+      assert.equal(res.body?.error?.code,'FLASH_FULFILLMENT_UNSUPPORTED');
+      pass('B04D unknown delivery mode fails closed');
     }
 
     // B05 & B06: WHOLE_LOT mode
@@ -420,7 +512,7 @@ async function runPart5FlashPoolGate() {
       const resPartial = await api(`/api/v1/flash-pools/${wholeLotPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer2Token}`, 'X-Idempotency-Key': `idem_p5_b05_${ts}` },
-        body: { quantity: '10.00', delivery_address: 'MM Alam Road, Gulberg, Lahore' }
+        body: { quantity: '10.00', delivery_address_id: buyer2AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(resPartial.status, 409);
       pass('B05 WHOLE_LOT partial quantity hold fails with 409 WHOLE_LOT_REQUIRED');
@@ -428,7 +520,7 @@ async function runPart5FlashPoolGate() {
       const resFull = await api(`/api/v1/flash-pools/${wholeLotPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer2Token}`, 'X-Idempotency-Key': `idem_p5_b06_${ts}` },
-        body: { quantity: '30.00', delivery_address: 'MM Alam Road, Gulberg, Lahore' }
+        body: { quantity: '30.00', delivery_address_id: buyer2AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(resFull.status, 201);
       cleanupFixtures.orderIds.push(resFull.body.data.hold.order_id);
@@ -486,7 +578,7 @@ async function runPart5FlashPoolGate() {
         api(`/api/v1/flash-pools/${racePoolId}/hold`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'X-Idempotency-Key': `idem_p5_race_${ts}_${idx}` },
-          body: { quantity: '4.00', delivery_address: `Race address ${idx}, Lahore` }
+          body: { quantity: '4.00', delivery_address_id: idx%2===0?buyer1AddressId:buyer2AddressId, delivery_cluster_id: testClusterId }
         })
       );
       const results = await Promise.all(promises);
@@ -522,7 +614,7 @@ async function runPart5FlashPoolGate() {
       const res = await api(`/api/v1/flash-pools/${draftPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer2Token}`, 'X-Idempotency-Key': `idem_p5_d01_${ts}` },
-        body: { quantity: '6.00', delivery_address: 'Commercial Kitchen 4, DHA Phase 5, Lahore' }
+        body: { quantity: '6.00', delivery_address_id: buyer2AddressId, delivery_cluster_id: testClusterId }
       });
       assert.equal(res.status, 201);
       freshHoldId = res.body.data.hold.id;
@@ -601,7 +693,7 @@ async function runPart5FlashPoolGate() {
       const resHold = await api(`/api/v1/flash-pools/${soPoolId}/hold`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${buyer1Token}`, 'X-Idempotency-Key': `idem_p5_so_${ts}` },
-        body: { quantity: '2.00', delivery_address: 'Sold out test address, Lahore' }
+        body: { quantity: '2.00', delivery_address_id: buyer1AddressId, delivery_cluster_id: testClusterId }
       });
       const soOrderId = resHold.body.data.hold.order_id;
       cleanupFixtures.orderIds.push(soOrderId);
@@ -686,6 +778,72 @@ async function runPart5FlashPoolGate() {
       pass('E04 Countdown parseDeadline handles MySQL strings as UTC, ISO, offsets, and invalid inputs');
     }
 
+    // UCP Flash pickup / express full HTTP + disposable MySQL acceptance.
+    {
+      const modeDraft=await api('/api/v1/flash-pools',{method:'POST',
+        headers:{Authorization:`Bearer ${supplierToken}`},body:{
+          supplier_listing_id:listingId,total_stock:'10.00',
+          discounted_unit_price:'4100.00',original_unit_price:'5000.00',
+          selling_mode:'MULTI_BUYER',min_quantity:'2.00',max_quantity_per_buyer:'10.00',
+          expiry_time:new Date(Date.now()+3600000).toISOString(),clearance_reason:'Pickup and Express mode gate'
+        }});
+      assert.equal(modeDraft.status,201);
+      const modePoolId=modeDraft.body.data.flash_pool.id;
+      cleanupFixtures.flashPoolIds.push(modePoolId);
+      const modePublish=await api(`/api/v1/flash-pools/${modePoolId}/publish`,{method:'POST',
+        headers:{Authorization:`Bearer ${supplierToken}`}});
+      assert.equal(modePublish.status,200);
+      const pickupList=await api(`/api/v1/flash-pools/${modePoolId}/delivery-preview?mode=PICKUP`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}});
+      assert.equal(pickupList.status,200);
+      assert.equal(pickupList.body.data.pickup_points[0].id,testPickupPointId);
+      const pickupPreview=await api(`/api/v1/flash-pools/${modePoolId}/delivery-preview?mode=PICKUP&pickup_point_id=${testPickupPointId}`,{
+        headers:{Authorization:`Bearer ${buyer1Token}`}});
+      assert.equal(pickupPreview.status,200);
+      assert.equal(Number(pickupPreview.body.data.delivery_fee_pkr),75);
+      const pickupHold=await api(`/api/v1/flash-pools/${modePoolId}/hold`,{method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_pickup_${ts}`},
+        body:{quantity:'2.00',fulfillment_mode:'PICKUP',pickup_point_id:testPickupPointId,delivery_fee:'0.00'}});
+      assert.equal(pickupHold.status,201);
+      assert.equal(Number(pickupHold.body.data.hold.delivery_fee),75);
+      assert.equal(pickupHold.body.data.hold.delivery_mode,'PICKUP');
+      const pickupOrderId=pickupHold.body.data.hold.order_id;
+      cleanupFixtures.orderIds.push(pickupOrderId);
+      const [[pickupOrder]]=await db.query('SELECT delivery_type,delivery_fee,delivery_address FROM orders WHERE id=?',[pickupOrderId]);
+      assert.equal(pickupOrder.delivery_type,'SUPPLIER_PICKUP');
+      assert.equal(Number(pickupOrder.delivery_fee),75);
+      assert.ok(pickupOrder.delivery_address.includes('Gulberg Depot'));
+      const [[pickupTerms]]=await db.query('SELECT mode,pickup_point_id,delivery_address_id,delivery_fee_pkr FROM flash_order_delivery_terms WHERE order_id=?',[pickupOrderId]);
+      assert.equal(pickupTerms.mode,'PICKUP');
+      assert.equal(Number(pickupTerms.pickup_point_id),testPickupPointId);
+      assert.equal(pickupTerms.delivery_address_id,null);
+      assert.equal(Number(pickupTerms.delivery_fee_pkr),75);
+      pass('F01 Flash supplier pickup is selected, priced and snapshot-locked in real MySQL');
+      const expressPreview=await api(`/api/v1/flash-pools/${modePoolId}/delivery-preview?mode=EXPRESS&address_id=${buyer2AddressId}`,{
+        headers:{Authorization:`Bearer ${buyer2Token}`}});
+      assert.equal(expressPreview.status,200);
+      assert.equal(Number(expressPreview.body.data.delivery_fee_pkr),725);
+      const expressHold=await api(`/api/v1/flash-pools/${modePoolId}/hold`,{method:'POST',
+        headers:{Authorization:`Bearer ${buyer2Token}`,'X-Idempotency-Key':`idem_p5_express_${ts}`},
+        body:{quantity:'2.00',fulfillment_mode:'EXPRESS',delivery_address_id:buyer2AddressId,
+          delivery_cluster_id:testClusterId,delivery_fee:'1.00'}});
+      assert.equal(expressHold.status,201);
+      assert.equal(Number(expressHold.body.data.hold.delivery_fee),725);
+      const expressOrderId=expressHold.body.data.hold.order_id;
+      cleanupFixtures.orderIds.push(expressOrderId);
+      const [[expressTerms]]=await db.query('SELECT mode,delivery_address_id,pickup_point_id,delivery_fee_pkr FROM flash_order_delivery_terms WHERE order_id=?',[expressOrderId]);
+      assert.equal(expressTerms.mode,'EXPRESS');
+      assert.equal(Number(expressTerms.delivery_address_id),buyer2AddressId);
+      assert.equal(expressTerms.pickup_point_id,null);
+      assert.equal(Number(expressTerms.delivery_fee_pkr),725);
+      pass('F02 Flash Express buyer area/rate is snapshot-locked; injected fee ignored');
+      const conflicting=await api(`/api/v1/flash-pools/${modePoolId}/hold`,{method:'POST',
+        headers:{Authorization:`Bearer ${buyer1Token}`,'X-Idempotency-Key':`idem_p5_pickup_${ts}`},
+        body:{quantity:'2.00',fulfillment_mode:'EXPRESS',delivery_address_id:buyer1AddressId}});
+      assert.equal(conflicting.status,409);
+      assert.equal(conflicting.body.error.code,'IDEMPOTENCY_CONFLICT');
+      pass('F03 Flash idempotency replays cannot switch pickup to Express');
+    }
     console.log('\n=================================================================');
     console.log(`🎉 ALL PART 5 FLASH POOL GATE TESTS PASSED (${passed}/${passed})`);
     console.log('=================================================================\n');
@@ -698,6 +856,7 @@ async function runPart5FlashPoolGate() {
       if (cleanupFixtures.orderIds.length) {
         await db.query(`DELETE FROM payments WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
         await db.query(`DELETE FROM payment_attempts WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
+        await db.query(`DELETE FROM flash_order_delivery_terms WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
         await db.query(`DELETE FROM flash_purchase_holds WHERE order_id IN (?)`, [cleanupFixtures.orderIds]);
         await db.query(`DELETE FROM orders WHERE id IN (?)`, [cleanupFixtures.orderIds]);
       }
@@ -714,6 +873,13 @@ async function runPart5FlashPoolGate() {
       }
       if (cleanupFixtures.productIds.length) {
         await db.query(`DELETE FROM supplier_products WHERE id IN (?)`, [cleanupFixtures.productIds]);
+      }
+      // Remove dependent delivery fixtures before deleting supplier/buyers.
+      if (cleanupFixtures.userIds.length) {
+        await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id IN (?)', [cleanupFixtures.userIds]);
+        await db.query('DELETE FROM supplier_pickup_points WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
+        await db.query('DELETE FROM supplier_delivery_cluster_rates WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
+        await db.query('DELETE FROM supplier_delivery_configurations WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
       }
       if (cleanupFixtures.userIds.length) {
         await db.query(`DELETE FROM supplier_profiles WHERE supplier_id IN (?)`, [cleanupFixtures.userIds]);
