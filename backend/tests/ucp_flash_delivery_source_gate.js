@@ -18,7 +18,7 @@ assert.doesNotMatch(flash,/const address=verifiedDeliveryAddress\|\|/);
 assert.match(flash,/different delivery destination/);
 assert.match(discovery,/SUPPLIER_CLUSTER_RATE_AT_HOLD/);
 assert.match(discovery,/delivery_fee_pkr:null/);
-assert.match(card,/supplier-configured delivery fee/);
+assert.match(card,/Standard clustered delivery fee/);
 assert.match(supplier,/supplier cluster rates at buyer checkout/);
 assert.match(flash,/async previewDelivery/);
 assert.match(flash,/PREVIEW_ONLY_REVALIDATED_AT_HOLD/);
