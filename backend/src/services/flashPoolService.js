@@ -347,6 +347,20 @@ class FlashPoolService {
         if(Number(prior[0].flash_pool_id)!==Number(flashId) ||
           money.toCanonical(prior[0].quantity,2)!==money.toCanonical(payload.quantity,2))
           throw fail('IDEMPOTENCY_CONFLICT','This key belongs to a different purchase.',409);
+        // A retry with a reused key must not silently switch delivery address.
+        // Compare against the existing order before returning the previous hold.
+        const [priorOrder]=await conn.query(
+          'SELECT delivery_address FROM orders WHERE id=? AND buyer_id=?',
+          [prior[0].order_id,buyerId]);
+        if(!priorOrder.length)throw fail('FLASH_ORDER_MISSING','Existing Flash order cannot be reconciled.',409);
+        const requestedAddressId=Number(payload.delivery_address_id);
+        if(!Number.isSafeInteger(requestedAddressId)||requestedAddressId<1)
+          throw fail('IDEMPOTENCY_CONFLICT','The previous Flash hold requires its original verified destination.',409);
+        const [priorAddress]=await conn.query(
+          'SELECT full_address FROM buyer_delivery_addresses WHERE id=? AND user_id=?',
+          [requestedAddressId,buyerId]);
+        if(!priorAddress.length||String(priorAddress[0].full_address).trim()!==String(priorOrder[0].delivery_address).trim())
+          throw fail('IDEMPOTENCY_CONFLICT','This idempotency key belongs to a different delivery destination.',409);
         await conn.commit();
         return {id:prior[0].id,order_id:prior[0].order_id,quantity:prior[0].quantity,
           locked_unit_price:prior[0].locked_unit_price,status:prior[0].status,
