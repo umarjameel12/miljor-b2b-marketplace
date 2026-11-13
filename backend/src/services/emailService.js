@@ -319,7 +319,7 @@ class EmailService {
       .mj-pagepad { padding:15px 10px !important; }
       .mj-content { padding:25px 22px 22px !important; }
       .mj-card { border-radius:18px !important; }
-      .mj-accentbar { border-radius:17px 17px 0 0 !important; }
+      .mj-accentbar { border-radius:16px 16px 0 0 !important; }
       .mj-title { font-size:24px !important; }
       .mj-code { font-size:32px !important; letter-spacing:5px !important; }
     }
@@ -351,8 +351,8 @@ class EmailService {
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your MilJor code expires in 10 minutes.</div>
   <table class="mj-page" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f5f2eb" style="border-collapse:collapse;background-color:#f5f2eb;">
     <tr><td class="mj-pagepad" align="center" style="padding:30px 14px;">
-      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffdf8" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border:1px solid #e6dfd2;border-radius:18px;box-shadow:0 10px 28px rgba(35,32,24,0.08);">
-        <tr><td class="mj-accentbar" height="5" bgcolor="#c8b276" style="height:5px;line-height:0;font-size:0;background-color:#c8b276;border-radius:17px 17px 0 0;overflow:hidden;">&nbsp;</td></tr>
+      <table class="mj-card" role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffdf8" style="max-width:450px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border:1px solid #e6dfd2;border-radius:18px;overflow:hidden;box-shadow:0 10px 28px rgba(35,32,24,0.08);">
+        <tr><td style="padding:0;background-color:#fffdf8;border:0;"><div class="mj-accentbar" style="height:5px;line-height:5px;font-size:0;background-color:#c8b276;border-radius:16px 16px 0 0;overflow:hidden;background-clip:padding-box;">&nbsp;</div></td></tr>
         <tr><td class="mj-content" style="padding:30px 34px 27px;">
           <p class="mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;line-height:1.2;color:#282824;margin:0 0 27px;">MilJor<span class="mj-accent" style="color:#ab8850;">.</span></p>
           <h1 class="mj-title mj-heading" style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:700;letter-spacing:-0.6px;line-height:1.18;color:#282824;margin:0 0 12px;">${title}</h1>
