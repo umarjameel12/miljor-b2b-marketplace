@@ -70,6 +70,8 @@ jobs:
           node backend/tests/recurring_cycle_inputs_policy_gate.js
           node backend/tests/notification_transaction_gate.js
           node backend/tests/notification_projection_gate.js
+          node backend/tests/ucp_notification_catalog_gate.js
+          node backend/tests/ucp_transactional_notifications_gate.js
           node backend/tests/email_outbox_queue_gate.js
       - name: Smart Hub real MySQL counteroffers and delivery binding
         timeout-minutes: 8
