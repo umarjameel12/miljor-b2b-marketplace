@@ -108,7 +108,7 @@ export const SupplierSettlementsPage = () => {
               Payments, Earnings & Settlements
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
-              Transparent multi-milestone escrow ledger. Funds held securely until buyer confirmation or resolution.
+              Order earnings, holds and settlement status.
             </p>
           </div>
 
@@ -142,7 +142,7 @@ export const SupplierSettlementsPage = () => {
                 {formatPKR(summary.held_in_escrow)}
               </span>
               <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
-                Buyer paid into Safepay escrow. Held safely until order is confirmed delivered without open shortage disputes.
+                Recorded as held pending delivery acceptance and dispute resolution.
               </p>
             </div>
           </div>
@@ -171,7 +171,7 @@ export const SupplierSettlementsPage = () => {
           <div className="p-6 rounded-3xl border border-emerald-500/30 bg-emerald-500/5 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
-                Total Payouts Released
+                Recorded Payouts
               </span>
               <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600">
                 <CheckCircle2 className="w-4 h-4" />
@@ -182,7 +182,7 @@ export const SupplierSettlementsPage = () => {
                 {formatPKR(summary.completed_payouts)}
               </span>
               <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
-                Cumulative historical payouts successfully disbursed to supplier bank account upon full settlement.
+                Recorded payout status; bank transfer confirmation must be verified separately.
               </p>
             </div>
           </div>
