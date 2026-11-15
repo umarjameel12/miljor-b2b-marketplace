@@ -258,7 +258,7 @@ export const RegisterPage = () => {
           Register as
         </label>
         <div
-          className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+          className="auth-tabs-premium grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
           style={{
             backgroundColor: 'var(--bg-input)',
             borderColor: 'var(--border-subtle)',
