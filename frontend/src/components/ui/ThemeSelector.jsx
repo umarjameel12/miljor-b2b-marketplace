@@ -36,7 +36,7 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
           aria-label={`Theme setting: currently ${currentOption.label}`}
-          aria-haspopup="true"
+          aria-haspopup="menu"
           aria-expanded={dropdownOpen}
           className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] active:scale-95"
           style={{
@@ -46,7 +46,7 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
             boxShadow: dropdownOpen ? '0 0 0 2px var(--brand-accent-soft)' : 'none',
           }}
         >
-          <CurrentIcon className="w-4 h-4" style={{ color: "var(--text-primary)" }} />
+          <CurrentIcon className="w-4 h-4" style={{ color: isDark ? '#e4c78c' : '#4e4330' }} />
         </button>
 
         {dropdownOpen && (
@@ -65,14 +65,12 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
             {options.map(({ mode, label, icon: Icon }) => {
               const isSelected = theme === mode;
               const activeBg = 'var(--bg-sidebar-active)';
-              const activeBorder = isDark
-                ? '1px solid rgba(200, 178, 118, 0.35)'
-                : '1px solid rgba(169, 133, 67, 0.35)';
+              const activeBorder = '1px solid var(--border-strong)';
               const activeText = 'var(--text-primary)';
               const activeIcon = isDark ? '#dfbf85' : '#6c501e';
 
               const inactiveText = 'var(--text-secondary)';
-              const inactiveIcon = isDark ? '#a3b5af' : '#425047';
+              const inactiveIcon = isDark ? '#c5d1c9' : '#354c3f';
 
               return (
                 <button
@@ -81,8 +79,9 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
                     setTheme(mode);
                     setDropdownOpen(false);
                   }}
-                  role="menuitem"
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl transition-all duration-150 cursor-pointer ${
+                  role="menuitemradio"
+                  aria-checked={isSelected}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${
                     isSelected
                       ? 'font-semibold shadow-xs'
                       : isDark
