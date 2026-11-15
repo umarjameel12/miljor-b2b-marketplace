@@ -37,11 +37,18 @@ async function main(){
  const [clusters]=await db.query('SELECT id FROM geographic_clusters WHERE is_active=1 ORDER BY id LIMIT 1');assert.ok(clusters.length);
  const [address]=await db.query("INSERT INTO buyer_delivery_addresses(user_id,cluster_id,society_area,full_address,geographic_match_status) VALUES (?,?,'Fixture','Owned fixture address','VERIFIED')",[other,clusters[0].id]);
  await deny(()=>recurring.updateCycleInputs(buyer,contractId,first,{...payload,expected_revision:1,delivery_preference:{mode:'EXPRESS',address_id:address.insertId}},'rec-address-'+tag),'CYCLE_ADDRESS_UNAVAILABLE');pass('Another buyer address cannot become recurring preference');
+ const [ownedAddress]=await db.query("INSERT INTO buyer_delivery_addresses(user_id,cluster_id,society_area,full_address,geographic_match_status) VALUES (?,?,'Fixture','Own verified destination','VERIFIED')",[buyer,clusters[0].id]);
+ const otherInputs=await recurring.cycleInputs(buyer,contractId,second);
+ const preferenceEdit=await recurring.updateCycleInputs(buyer,contractId,second,{expected_revision:0,items:otherInputs.items.map(item=>({template_item_id:item.template_item_id,quantity:item.quantity})),delivery_preference:{mode:'EXPRESS',address_id:ownedAddress.insertId}},'rec-own-address-'+tag);
+ assert.equal(preferenceEdit.delivery_preference.address_id,ownedAddress.insertId);assert.ok(Number.isSafeInteger(preferenceEdit.delivery_preference.address_revision));assert.equal(preferenceEdit.delivery_requires_fresh_quote,true);pass('Own verified preference stores server address revision without approving fee');
  await db.query('UPDATE procurement_recurring_cycles SET due_at_utc=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR) WHERE id IN (?,?)',[second,third]);
  await db.query('UPDATE procurement_recurring_cycles SET due_at_utc=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 3 DAY) WHERE id=?',[first]);
  // Scope background candidate discovery to this test's own contract; actual SQL/locks/outbox remain real.
  const scoped={getConnection:()=>db.getConnection(),query:(sql,params)=>db.query(sql.replace("WHERE cy.status='SCHEDULED'","WHERE cy.contract_id="+Number(contractId)+" AND cy.status='SCHEDULED'"),params)};
  const worker=new ProcurementRecurringService(scoped);
+ const failingReminders=new ProcurementRecurringService(scoped,{enqueueEvent:async()=>{throw Error('outbox unavailable');}});
+ assert.equal((await failingReminders.runReminderBatch()).failed,2);
+ const [[reminderEvents]]=await db.query("SELECT COUNT(*) total FROM procurement_recurring_cycle_events WHERE cycle_id IN (?,?) AND event_key='UPCOMING_24H'",[second,third]);assert.equal(Number(reminderEvents.total),0);pass('Reminder enqueue failure rolls back durable reminder identity for retry');
  await db.query('UPDATE users SET is_verified=0 WHERE id=?',[buyer]);
  assert.equal((await worker.runReminderBatch({limit:1})).checked,0);
  await db.query('UPDATE users SET is_verified=1 WHERE id=?',[buyer]);pass('Ineligible buyers excluded before bounded reminder selection');
@@ -85,8 +92,8 @@ async function main(){
  await deny(()=>recurring.skipCycle(buyer,contractId,first),'CYCLE_ALREADY_COMMITTED');
  await recurring.skipCycle(buyer,contractId,third);await recurring.skipCycle(buyer,contractId,third);
  await deny(()=>recurring.skipCycle(other,contractId,fourth),'CONTRACT_NOT_FOUND');pass('Skip is owner-only, replay-safe and cannot cancel generated draft');
- const [notices]=await db.query("SELECT id,recipient_id,event_type,event_key FROM procurement_notifications WHERE recipient_id=? AND event_type IN ('CYCLE_QUANTITY_MODIFIED','CYCLE_DRAFT_READY','CYCLE_MISSED','CYCLE_CUTOFF_UPCOMING','CYCLE_SKIPPED','RECURRING_PAUSED','RECURRING_RESUMED')",[buyer]);
- for(const [type,expected] of [['CYCLE_QUANTITY_MODIFIED',1],['CYCLE_DRAFT_READY',1],['CYCLE_MISSED',1],['CYCLE_CUTOFF_UPCOMING',2],['CYCLE_SKIPPED',1],['RECURRING_PAUSED',1],['RECURRING_RESUMED',1]])assert.equal(notices.filter(n=>n.event_type===type).length,expected,type);
+ const [notices]=await db.query("SELECT id,recipient_id,event_type,event_key FROM procurement_notifications WHERE recipient_id=? AND event_type IN ('CYCLE_QUANTITY_MODIFIED','CYCLE_DELIVERY_PREFERENCE_UPDATED','CYCLE_DRAFT_READY','CYCLE_MISSED','CYCLE_CUTOFF_UPCOMING','CYCLE_SKIPPED','RECURRING_PAUSED','RECURRING_RESUMED')",[buyer]);
+ for(const [type,expected] of [['CYCLE_QUANTITY_MODIFIED',1],['CYCLE_DELIVERY_PREFERENCE_UPDATED',1],['CYCLE_DRAFT_READY',1],['CYCLE_MISSED',1],['CYCLE_CUTOFF_UPCOMING',2],['CYCLE_SKIPPED',1],['RECURRING_PAUSED',1],['RECURRING_RESUMED',1]])assert.equal(notices.filter(n=>n.event_type===type).length,expected,type);
  pass('Real backend events target only owner and do not duplicate under replay');
  const reminderIds=notices.filter(n=>n.event_type==='CYCLE_CUTOFF_UPCOMING').map(n=>n.id);
  const projected=await require('../src/services/notificationService').processPending({limit:2,eventIds:reminderIds,emailService:{enqueueEmail:async()=>{throw Error('Stale reminder must not queue email');}}});
