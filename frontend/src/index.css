@@ -1097,12 +1097,13 @@ h1, h2, h3, h4, h5, h6, .font-display {
   --pool-join-border: rgba(131, 94, 42, .48);
 }
 .dark {
-  --landing-live-offers-bg: linear-gradient(112deg, #3d3328 0%, #57442d 100%);
-  --landing-live-offers-ink: #f4db9f;
-  --landing-live-offers-border: rgba(223, 191, 133, .65);
-  --pool-join-gradient: linear-gradient(115deg, #705038 0%, #876447 52%, #62442f 100%);
-  --pool-join-ink: #f9e6bf;
-  --pool-join-border: rgba(230, 199, 137, .57);
+  /* Deep emerald with champagne highlights — deliberately no brown tones. */
+  --landing-live-offers-bg: linear-gradient(112deg, #153d31 0%, #20513f 56%, #173b30 100%);
+  --landing-live-offers-ink: #f1dfb6;
+  --landing-live-offers-border: rgba(207, 180, 119, .72);
+  --pool-join-gradient: linear-gradient(115deg, #1a4638 0%, #285844 54%, #173d32 100%);
+  --pool-join-ink: #f3e2bb;
+  --pool-join-border: rgba(218, 190, 131, .68);
 }
 .miljor-public-landing .landing-live-offers-link {
   background: var(--landing-live-offers-bg) !important;
