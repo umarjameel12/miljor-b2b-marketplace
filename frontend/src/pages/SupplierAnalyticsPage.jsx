@@ -133,13 +133,13 @@ export const SupplierAnalyticsPage = () => {
 
           <div className="p-6 rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xs">
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
-              Settlement Payout Total
+              Recorded Payouts
             </span>
             <span className="text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
               {formatPKR(kpis?.completed_payouts || 0)}
             </span>
             <p className="text-xs text-[var(--text-muted)] mt-2">
-              Escrow funds verified and disbursed to designated business bank account.
+              Amounts reflect recorded ledger status, not external bank confirmation.
             </p>
           </div>
         </div>
