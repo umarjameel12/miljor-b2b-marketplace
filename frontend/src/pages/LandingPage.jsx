@@ -132,7 +132,7 @@ export const LandingPage = () => {
           <div className="max-w-xl">
             <span className="inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}>Mil Kar Khareedo, Behtar Pao</span>
             <h1 className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
-              Buy better.<span className="block" style={{ color: 'var(--brand-accent)' }}>Together.</span>
+              Buy Better,<span className="block" style={{ color: 'var(--brand-accent)' }}>Together</span>
             </h1>
             <p className="mt-6 max-w-md text-sm leading-7 sm:text-base" style={{ color: 'var(--text-secondary)' }}>
               Wholesale procurement, made easier for growing food businesses.
