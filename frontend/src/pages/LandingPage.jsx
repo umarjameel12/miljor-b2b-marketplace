@@ -41,21 +41,21 @@ const PREVIEW_POOLS = [
   {
     id: 'example-flour', title: 'Fine Wheat Flour', variety: 'Fine Wheat Flour',
     category_name: 'Flour & Bakery', quality_grade: 'Commercial Milling Grade',
-    pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'bag',
+    pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'kg',
     target_quantity: 500, image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82',
     delivery_type: 'BOTH', pool_code: 'EXAMPLE-FLOUR', status: 'ACTIVE',
   },
   {
     id: 'example-oil', title: 'Refined Cooking Oil', variety: 'Refined Vegetable Cooking Oil',
     category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Grade',
-    pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'tin',
+    pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'L',
     target_quantity: 160, image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82',
     delivery_type: 'BOTH', pool_code: 'EXAMPLE-OIL', status: 'ACTIVE',
   },
   {
     id: 'example-daal', title: 'Daal Chana', variety: 'Chana Dal · Bold Grain',
     category_name: 'Pulses & Lentils', quality_grade: 'Special Polish',
-    pack_size: '25kg Bag', pack_unit: 'kg', pool_unit: 'bag',
+    pack_size: '25kg Bag', pack_unit: 'kg', pool_unit: 'kg',
     target_quantity: 250, image_url: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82',
     delivery_type: 'BOTH', pool_code: 'EXAMPLE-DAAL', status: 'ACTIVE',
   },
@@ -309,7 +309,7 @@ export const LandingPage = () => {
               type="button"
               aria-label="Scroll pools left"
               onClick={() => poolCarouselRef.current?.scrollBy({ left: -360, behavior: 'smooth' })}
-              className="grid h-9 w-9 place-items-center rounded-full border transition-opacity hover:opacity-75"
+              className="miljor-pool-nav grid h-9 w-9 place-items-center rounded-full border transition-colors"
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)' }}
             >
               <ChevronLeft size={17} aria-hidden="true" />
@@ -318,7 +318,7 @@ export const LandingPage = () => {
               type="button"
               aria-label="Scroll pools right"
               onClick={() => poolCarouselRef.current?.scrollBy({ left: 360, behavior: 'smooth' })}
-              className="grid h-9 w-9 place-items-center rounded-full border transition-opacity hover:opacity-75"
+              className="miljor-pool-nav grid h-9 w-9 place-items-center rounded-full border transition-colors"
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)' }}
             >
               <ChevronRight size={17} aria-hidden="true" />
@@ -329,7 +329,7 @@ export const LandingPage = () => {
             role="region"
             aria-label="Buying pools and procurement examples"
             tabIndex={0}
-            className="flex items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth snap-x snap-mandatory pb-4"
+            className="miljor-pool-rail flex items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth snap-x snap-mandatory pb-4"
           >
             {!loadingPools && featuredPools.map((pool) => (
               <div key={pool.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
