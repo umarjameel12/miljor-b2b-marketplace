@@ -36,13 +36,29 @@ const COMMODITIES = [
 ];
 
 
+// Visual examples only; never treated as published supplier listings or orders.
 const PREVIEW_POOLS = [
-  { title: 'Super Kernel Basmati Rice', category: 'Rice & grains', target: '300 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=960&q=82', icon: Layers, spec: 'Export Grade A · Old Crop Sella' },
-  { title: 'Fine Wheat Flour', category: 'Flour & bakery', target: '500 kg', pack: '20 kg bags', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag, spec: 'Fine wheat flour · commercial milling' },
-  { title: 'Refined Cooking Oil', category: 'Commercial essentials', target: '160 L', pack: '16 L tins', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82', icon: Store, spec: 'Refined vegetable oil · commercial grade' },
-  { title: 'Daal Chana', category: 'Pulses', target: '250 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82', icon: Layers, spec: 'Special polish · bold grain' },
-  { title: 'Refined White Sugar', category: 'Sweeteners', target: '500 kg', pack: '50 kg bags', image: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag, spec: 'Mill-packed · refined white' },
-  { title: 'Super White Maida', category: 'Bakery staples', target: '840 kg', pack: '84 kg bags', image: 'https://images.unsplash.com/photo-1601593768795-9ac27c0c9d71?auto=format&fit=crop&w=960&q=82', icon: Store, spec: 'Bakery grade · fine-milled' },
+  {
+    id: 'example-flour', title: 'Fine Wheat Flour', variety: 'Fine Wheat Flour',
+    category_name: 'Flour & Bakery', quality_grade: 'Commercial Milling Grade',
+    pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'bag',
+    target_quantity: 500, image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82',
+    delivery_type: 'BOTH', pool_code: 'EXAMPLE-FLOUR', status: 'ACTIVE',
+  },
+  {
+    id: 'example-oil', title: 'Refined Cooking Oil', variety: 'Refined Vegetable Cooking Oil',
+    category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Grade',
+    pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'tin',
+    target_quantity: 160, image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82',
+    delivery_type: 'BOTH', pool_code: 'EXAMPLE-OIL', status: 'ACTIVE',
+  },
+  {
+    id: 'example-daal', title: 'Daal Chana', variety: 'Chana Dal · Bold Grain',
+    category_name: 'Pulses & Lentils', quality_grade: 'Special Polish',
+    pack_size: '25kg Bag', pack_unit: 'kg', pool_unit: 'bag',
+    target_quantity: 250, image_url: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82',
+    delivery_type: 'BOTH', pool_code: 'EXAMPLE-DAAL', status: 'ACTIVE',
+  },
 ];
 
 function CommoditySlide({ item, active }) {
@@ -278,7 +294,7 @@ export const LandingPage = () => {
             <div>
               <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Supplier-led procurement</p>
               <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
-              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers, updated from the marketplace.</p>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers and clearly marked category examples.</p>
             </div>
             {isAuthenticated ? (
               <Link to={user?.role === 'SUPPLIER' ? '/supplier/pools' : '/pools'} className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">
@@ -320,39 +336,22 @@ export const LandingPage = () => {
                 <PoolCard pool={pool} />
               </div>
             ))}
-            {/* Examples remain explicitly marked and are never represented as published pools. */}
-              {PREVIEW_POOLS.slice(0, 3).map((item) => (
-                <article key={item.title} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                  <div className="relative h-28 sm:h-32 overflow-hidden" style={{ backgroundColor: 'var(--bg-subtle)' }}>
-                    <img src={item.image} alt={item.category} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-                    <span className="absolute right-2.5 top-2.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)' }}>Example</span>
-                  </div>
-                  <div className="flex flex-1 flex-col gap-3 p-4">
-                    <div>
-                      <h4 className="text-sm font-bold sm:text-base" style={{ color: 'var(--text-primary)' }}>{item.title}</h4>
-                      <p className="mt-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>{item.category}</p>
-                      <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--text-secondary)' }}>{item.spec} · {item.pack}</p>
-                    </div>
-                    <div className="mt-auto rounded-xl border p-3 text-[11px]" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span style={{ color: 'var(--text-secondary)' }}>Illustrative procurement window</span>
-                        <strong className="tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>15 days</strong>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span style={{ color: 'var(--text-secondary)' }}>Example closing (PKT)</span>
-                        <span className="text-right tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>
-                          {exampleDeadline.toLocaleString('en-PK', { timeZone: 'Asia/Karachi', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between border-t pt-2" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                        <span>Target quantity</span>
-                        <strong>{item.target}</strong>
-                      </div>
-                    </div>
-                    <Link to={isAuthenticated ? '/pools' : '/login'} state={isAuthenticated ? undefined : { from: { pathname: '/pools' } }} className="miljor-pool-join rounded-xl border px-3 py-2.5 text-center text-xs font-semibold">Explore Procurement</Link>
-                  </div>
-                </article>
-              ))}
+            {/* Same card component and 15-day countdown for category examples.
+                Nothing here changes the backend deadlines of real published pools. */}
+            {PREVIEW_POOLS.map((item) => (
+              <div key={item.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
+                <PoolCard
+                  isExample
+                  pool={{
+                    ...item,
+                    scheduled_close_at: exampleDeadline.toISOString(),
+                    promised_delivery_at: new Date(exampleDeadline.getTime() + 3 * 86400000).toISOString(),
+                    fill_percentage: 0,
+                    committed_quantity: 0,
+                  }}
+                />
+              </div>
+            ))}
           </div>
           {loadingPools && <p role="status" className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>Checking published pools…</p>}
           {!loadingPools && featuredPools.length === 0 && (
