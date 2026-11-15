@@ -51,4 +51,17 @@ router.patch('/mark-all-read', async (req, res) => {
   }
 });
 
+// Notification preferences are owned by the authenticated recipient only.
+router.get('/preferences', async (req,res)=>{
+  try { return res.json({success:true,data:await notificationService.getPreferences(req.user.id)}); }
+  catch { return res.status(500).json({success:false,error:{code:'PREFERENCES_UNAVAILABLE',message:'Unable to load notification preferences'}}); }
+});
+router.put('/preferences', async (req,res)=>{
+  try { return res.json({success:true,data:await notificationService.setPreferences(req.user.id,req.body)}); }
+  catch(e){ return res.status(e.statusCode||500).json({success:false,error:{
+    code:e.statusCode===400?'INVALID_NOTIFICATION_PREFERENCES':'PREFERENCES_UNAVAILABLE',
+    message:e.statusCode===400?e.message:'Unable to save notification preferences'
+  }}); }
+});
+
 module.exports = router;
