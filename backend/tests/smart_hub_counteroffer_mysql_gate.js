@@ -126,6 +126,9 @@ async function run(){
     console.log('SMART_HUB_MYSQL_INTEGRATION_PASS: migration, permissions, 2-item offers, replay, conflict, accept, re-counter, reject, expiry, stale-version and concurrency gates, history, no financial mutation');
   }finally{
     await database.end();
+    // Service module imports the canonical test-only pool; close it too to avoid
+    // indefinite GitHub Action handles after the isolated test assertions finish.
+    await require('../src/config/db').end();
     await admin.query('DROP DATABASE miljor_counteroffer_test_db');
     await admin.end();
   }
