@@ -218,7 +218,7 @@ export const RegisterPage = () => {
         )}
 
         {preferences.showBrandHeading && (
-          <h1 className="auth-heading text-xl sm:text-[26px] leading-tight" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="auth-heading text-xl sm:text-[26px] leading-tight" style={{ color: 'var(--auth-heading-color)' }}>
             Create your MilJor account
           </h1>
         )}
