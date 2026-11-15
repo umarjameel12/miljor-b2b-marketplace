@@ -381,23 +381,73 @@ class EmailService {
 </html>`;
   }
 
+  /** Trusted server configuration only; notification payloads cannot set an origin. */
+  _frontendEmailOrigin() {
+    const configured = process.env.APP_FRONTEND_URL || process.env.FRONTEND_URL;
+    let url;
+    try {
+      if (typeof configured !== 'string' || !/^https?:\/\/[^/?#]+\/?$/i.test(configured) || /[\s\\]/.test(configured)) throw new Error();
+      url = new URL(configured);
+      const localTestHttp = process.env.NODE_ENV === 'test' && url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+      if ((url.protocol !== 'https:' && !localTestHttp) || url.username || url.password ||
+          url.pathname !== '/' || url.search || url.hash) throw new Error();
+    } catch (_) {
+      const error = new Error('A trusted HTTPS frontend origin must be configured for email links');
+      error.code = 'INVALID_FRONTEND_URL';
+      error.statusCode = 500;
+      throw error;
+    }
+    return url.origin;
+  }
+
   /**
    * Render pre-built email templates.
    */
   _renderTemplate(templateName, payload) {
     switch (templateName) {
-      case 'platform_notification':
-      case 'UCP_NOTIFICATION': {
-        const title=String(payload?.title||'').trim();
-        const message=String(payload?.message||'').trim();
-        if(!title||!message||title.length>140||message.length>1000||
-           /[\r\n\x00-\x1f\x7f]/.test(title))throw Error('INVALID_NOTIFICATION_TEMPLATE');
+      case 'UCP_NOTIFICATION':
+      case 'platform_notification': {
+        const invalid = (message, code = 'INVALID_NOTIFICATION') => {
+          const error = new Error(message);
+          error.code = code;
+          error.statusCode = 400;
+          throw error;
+        };
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+            typeof payload.title !== 'string' || !payload.title.trim() ||
+            payload.title.length > 240 || /[\r\n\x00-\x1f\x7f]/.test(payload.title) ||
+            typeof payload.message !== 'string' || !payload.message.trim() ||
+            payload.message.length > 20000) {
+          invalid('Notification requires a title and plain text message');
+        }
+        const locale = payload.locale == null ? 'en' : payload.locale;
+        if (!['en', 'en-PK', 'ur', 'ur-PK'].includes(locale)) invalid('Unsupported notification locale');
+        const urdu = locale === 'ur' || locale === 'ur-PK';
+        let link = '';
+        if (payload.deepLink != null && payload.deepLink !== '') {
+          link = payload.deepLink;
+          // Only root-relative paths. Disallow ambiguous encodings, backslashes,
+          // controls and dot segments before any URL normalization takes place.
+          if (typeof link !== 'string' || link.length > 2048 || !/^\/(?!\/)/.test(link) ||
+              /[\s\\<>"'\x00-\x1f\x7f]/.test(link) ||
+              /%(?:2f|5c|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(link) ||
+              /%(?![0-9a-f]{2})/i.test(link)) invalid('Only safe internal links are allowed', 'INVALID_DEEP_LINK');
+          let decoded;
+          try { decoded = decodeURIComponent(link); } catch (_) { invalid('Invalid internal link encoding', 'INVALID_DEEP_LINK'); }
+          if (/(?:^|\/)\.{1,2}(?:\/|[?#]|$)/.test(decoded) ||
+              /[\\\x00-\x1f\x7f]/.test(decoded)) invalid('Unsafe internal link', 'INVALID_DEEP_LINK');
+          link = `${this._frontendEmailOrigin()}${link}`;
+        }
+        const title = this._escapeHtml(payload.title);
+        const message = this._escapeHtml(payload.message).replace(/\r?\n/g, '<br>');
         return {
-          subject: 'MilJor | '+title,
-          text: title+'\n\n'+message+'\n\nOpen MilJor to review this notification.',
-          html: '<h2>'+this._escapeHtml(title)+'</h2><p>'+this._escapeHtml(message)+'</p><p>Open MilJor to review this notification.</p>'
+          subject: `MilJor | ${payload.title}`,
+          text: `${payload.title}\n\n${payload.message}${link ? `\n\n${link}` : ''}`,
+          html: `<!doctype html><html lang="${urdu ? 'ur' : 'en'}" dir="${urdu ? 'rtl' : 'ltr'}"><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif"><h1>${title}</h1><p>${message}</p>${link ? `<p><a href="${this._escapeHtml(link)}">${urdu ? 'تفصیلات دیکھیں' : 'View details'}</a></p>` : ''}</body></html>`
         };
       }
+
       case 'REGISTRATION_OTP':
         return {
           subject: 'MilJor | Verify your email',
@@ -435,6 +485,77 @@ class EmailService {
     }
   }
 
+  /** Stable JSON for deduplication, independent of object property order. */
+  _canonicalEmailPayload(payload) {
+    const sort = value => {
+      if (Array.isArray(value)) return value.map(sort);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, sort(value[key])]));
+      }
+      return value;
+    };
+    // Serialize first to enforce JSON semantics (including toJSON) and reject cycles.
+    return JSON.stringify(sort(JSON.parse(JSON.stringify(payload))));
+  }
+
+  /**
+   * Validate/render and enqueue on the caller's connection; never dispatch.
+   * Caller owns begin/commit/rollback. An explicit key identifies one logical
+   * message; without one, identical recipient/template/JSON content deduplicates.
+   * @returns {Promise<{outbox_id: number, status: string, recipient: string}>}
+   */
+  async enqueueEmail(connection, { recipientEmail, recipientUserId = null, templateName, payload, idempotencyKey = null }) {
+    const invalid = (message, code) => {
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = 400;
+      throw error;
+    };
+    if (!connection || typeof connection.query !== 'function') invalid('Caller connection required', 'INVALID_CONNECTION');
+    if (typeof recipientEmail !== 'string' || recipientEmail.length > 100 ||
+        !/^[^\s<>@,;\x00-\x1f\x7f]+@[^\s<>@,;\x00-\x1f\x7f]+\.[^\s<>@,;\x00-\x1f\x7f]+$/.test(recipientEmail)) {
+      invalid('Valid recipient email address is required', 'INVALID_RECIPIENT');
+    }
+    if (recipientUserId !== null && (!Number.isSafeInteger(recipientUserId) || recipientUserId <= 0)) invalid('Invalid recipient user', 'INVALID_RECIPIENT');
+    if (typeof templateName !== 'string' || !/^[A-Za-z0-9_]{1,64}$/.test(templateName)) invalid('Invalid template name', 'INVALID_TEMPLATE');
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) invalid('JSON payload required', 'INVALID_PAYLOAD');
+    if (idempotencyKey !== null && (typeof idempotencyKey !== 'string' || !idempotencyKey.trim() ||
+        idempotencyKey.length > 100 || /[\x00-\x1f\x7f]/.test(idempotencyKey))) invalid('Invalid idempotency key', 'INVALID_IDEMPOTENCY_KEY');
+    let payloadJson;
+    try { payloadJson = this._canonicalEmailPayload(payload); } catch (_) { invalid('Serializable JSON payload required', 'INVALID_PAYLOAD'); }
+    const { subject } = this._renderTemplate(templateName, JSON.parse(payloadJson));
+    if (typeof subject !== 'string' || subject.length > 255 || /[\r\n\x00-\x1f\x7f]/.test(subject)) invalid('Invalid email subject', 'INVALID_PAYLOAD');
+    const key = idempotencyKey || `email_${crypto.createHash('sha256').update(JSON.stringify([recipientEmail, recipientUserId, templateName, payloadJson])).digest('hex')}`;
+    try {
+      const [result] = await connection.query(
+        `INSERT INTO transactional_email_outbox
+          (recipient_email, recipient_user_id, template_name, subject, payload_json, status, idempotency_key)
+         VALUES (?, ?, ?, ?, ?, 'QUEUED', ?)`,
+        [recipientEmail, recipientUserId, templateName, subject, payloadJson, key]
+      );
+      return { outbox_id: result.insertId, status: 'QUEUED', recipient: this._maskEmail(recipientEmail) };
+    } catch (error) {
+      if (error.code !== 'ER_DUP_ENTRY') throw error;
+      // Locking read sees concurrent inserts even under REPEATABLE READ.
+      const [rows] = await connection.query(
+        `SELECT id, recipient_email, recipient_user_id, template_name, subject, payload_json, status
+         FROM transactional_email_outbox WHERE idempotency_key = ? FOR UPDATE`, [key]
+      );
+      const existing = rows[0];
+      if (!existing) throw error;
+      const existingPayload = typeof existing.payload_json === 'string' ? JSON.parse(existing.payload_json) : existing.payload_json;
+      if (existing.recipient_email !== recipientEmail || existing.recipient_user_id !== recipientUserId ||
+          existing.template_name !== templateName || existing.subject !== subject ||
+          this._canonicalEmailPayload(existingPayload) !== payloadJson) {
+        const conflict = new Error('Email idempotency key already used for a different message');
+        conflict.code = 'IDEMPOTENCY_CONFLICT';
+        conflict.statusCode = 409;
+        throw conflict;
+      }
+      return { outbox_id: existing.id, status: existing.status, recipient: this._maskEmail(recipientEmail) };
+    }
+  }
+
   /**
    * Queue and dispatch a transactional email via the durable database outbox.
    *
@@ -444,30 +565,10 @@ class EmailService {
    * @param {string} params.templateName
    * @param {Object} params.payload
    * @param {string} [params.idempotencyKey]
-   * @returns {Promise<Object>} Outbox record with status
+   * @returns {Promise<Object>} Outbox record with status. Provider acceptance is
+   * not delivery confirmation. ACCEPTANCE_RECORDING_PENDING means acceptance
+   * could not be saved; recovery is at-least-once and may send a duplicate.
    */
-  // Queue a critical email on the caller's existing business transaction.
-  // Transport is deferred; no network request while MySQL row locks are held.
-  async enqueueEmail(connection,{recipientEmail,recipientUserId=null,templateName,payload,idempotencyKey}) {
-    if(!connection||typeof connection.query!=='function')throw Error('TRANSACTION_CONNECTION_REQUIRED');
-    if(typeof recipientEmail!=='string'||recipientEmail.length>120||
-       !/^[^\s<>@,;\x00-\x1f\x7f]+@[^\s<>@,;\x00-\x1f\x7f]+\.[^\s<>@,;\x00-\x1f\x7f]+$/.test(recipientEmail))
-      throw Error('INVALID_NOTIFICATION_RECIPIENT');
-    if(!Number.isSafeInteger(Number(recipientUserId))||Number(recipientUserId)<=0)
-      throw Error('INVALID_NOTIFICATION_USER');
-    if(!['platform_notification','UCP_NOTIFICATION'].includes(templateName))
-      throw Error('UNSUPPORTED_NOTIFICATION_TEMPLATE');
-    if(typeof idempotencyKey!=='string'||idempotencyKey.length<8||idempotencyKey.length>100)
-      throw Error('INVALID_NOTIFICATION_IDEMPOTENCY_KEY');
-    const {subject}=this._renderTemplate(templateName,payload);
-    return connection.query(
-      `INSERT INTO transactional_email_outbox
-       (recipient_email,recipient_user_id,template_name,subject,payload_json,status,idempotency_key)
-       VALUES (?,?,?,?,?,'QUEUED',?) ON DUPLICATE KEY UPDATE id=id`,
-      [recipientEmail,Number(recipientUserId),templateName,subject,JSON.stringify(payload),idempotencyKey]
-    );
-  }
-
   async queueAndSendEmail({ recipientEmail, recipientUserId = null, templateName, payload, idempotencyKey = null }) {
     if (!recipientEmail || !recipientEmail.includes('@')) {
       const err = new Error('Valid recipient email address is required');
@@ -478,16 +579,28 @@ class EmailService {
 
     const { subject, text, html } = this._renderTemplate(templateName, payload);
     const key = idempotencyKey || `email_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    const token = crypto.randomBytes(32).toString('hex');
 
-    // 1. Insert into durable outbox
+    // 1. Insert with an immediate-send lease so the retry worker cannot race
+    // the synchronous OTP API. The public result and dispatch timing are unchanged.
     const [outboxResult] = await db.query(
       `INSERT INTO transactional_email_outbox
-        (recipient_email, recipient_user_id, template_name, subject, payload_json, status, idempotency_key)
-       VALUES (?, ?, ?, ?, ?, 'QUEUED', ?)`,
-      [recipientEmail, recipientUserId, templateName, subject, JSON.stringify(payload), key]
+        (recipient_email, recipient_user_id, template_name, subject, payload_json, status, idempotency_key,
+         claim_token, claim_expires_at, attempt_count, last_attempted_at)
+       VALUES (?, ?, ?, ?, ?, 'SENDING', ?, ?, NOW() + INTERVAL 5 MINUTE, 1, NOW())`,
+      [recipientEmail, recipientUserId, templateName, subject, JSON.stringify(payload), key, token]
     );
 
     const outboxId = outboxResult.insertId;
+    let providerAccepted = false;
+    let providerMessageId = null;
+    const acceptancePending = () => ({
+      outbox_id: outboxId,
+      status: 'ACCEPTANCE_RECORDING_PENDING',
+      message_id: providerMessageId,
+      recipient: this._maskEmail(recipientEmail),
+      delivery_ambiguous: true
+    });
 
     // 2. Dispatch via transporter (Outside long database transactions)
     try {
@@ -499,19 +612,21 @@ class EmailService {
         html
       });
 
-      const providerMessageId = sendResult.messageId || null;
+      providerAccepted = true;
+      providerMessageId = sendResult.messageId || null;
 
-      // Update outbox as PROVIDER_ACCEPTED
-      await db.query(
+      // Expiry permits recovery, but does not revoke ownership on its own.
+      // A late completion can save only if no peer has replaced its token.
+      const [accepted] = await db.query(
         `UPDATE transactional_email_outbox
          SET status = 'PROVIDER_ACCEPTED',
              provider_message_id = ?,
-             attempt_count = attempt_count + 1,
-             last_attempted_at = NOW(),
+             claim_token = NULL, claim_expires_at = NULL, last_error = NULL,
              sent_at = NOW()
-         WHERE id = ?`,
-        [providerMessageId, outboxId]
+         WHERE id = ? AND status = 'SENDING' AND claim_token = ?`,
+        [providerMessageId, outboxId, token]
       );
+      if (!accepted.affectedRows) return acceptancePending();
 
       return {
         outbox_id: outboxId,
@@ -520,20 +635,24 @@ class EmailService {
         recipient: this._maskEmail(recipientEmail)
       };
     } catch (sendErr) {
+      // Never turn a persistence error after provider acceptance into a failed
+      // transport result. Leave recovery to the lease and expose the ambiguity.
+      if (providerAccepted) return acceptancePending();
       // Record failure in outbox
-      await db.query(
+      const [rejected] = await db.query(
         `UPDATE transactional_email_outbox
          SET status = 'FAILED',
-             attempt_count = attempt_count + 1,
              last_error = ?,
-             last_attempted_at = NOW()
-         WHERE id = ?`,
-        [sendErr.message, outboxId]
+             claim_token = NULL, claim_expires_at = NULL,
+             next_attempt_at = TIMESTAMPADD(MINUTE, 5 * POW(2, attempt_count - 1), NOW())
+         WHERE id = ? AND status = 'SENDING' AND claim_token = ?`,
+        ['EMAIL_DELIVERY_FAILED', outboxId, token]
       );
 
       return {
         outbox_id: outboxId,
-        status: 'FAILED',
+        status: rejected.affectedRows ? 'FAILED' : 'DELIVERY_AMBIGUOUS',
+        ...(!rejected.affectedRows ? { delivery_ambiguous: true } : {}),
         error: sendErr.message,
         recipient: this._maskEmail(recipientEmail)
       };
@@ -768,7 +887,9 @@ class EmailService {
    *
    * @param {Object} [options]
    * @param {number} [options.limit=10]
-   * @returns {Promise<Object>} { processed, succeeded, failed }
+   * At-least-once transport: a crash after provider acceptance can still result
+   * in another send. Token guards protect state, not external exactly-once delivery.
+   * @returns {Promise<Object>} { processed, succeeded, failed, ambiguous }
    */
   async processOutboxBatch({ limit = 10 } = {}) {
     const safeLimit = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
