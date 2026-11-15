@@ -394,7 +394,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
               border: '1px solid var(--pool-join-border, rgba(125, 93, 43, 0.28))',
             }}
           >
-            <span>{isExample ? 'Demo Pool · Preview Only' : isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
+            <span>{isExample ? 'Demo Pool · Preview Only' : isClosed ? 'Pool Concluded' : 'Join Pool'}</span>
           </button>
         </div>
       </div>
