@@ -1,263 +1,177 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AppShell } from '../components/layout/AppShell';
-import {
-  Check,
-  Shield,
-  Zap,
-  Crown,
-  ArrowRight,
-  Sparkles,
-  HelpCircle,
-  AlertTriangle
-} from 'lucide-react';
-import { toast } from 'react-toastify';
+import { useAuth } from '../context/AuthContext';
+import { Check, Clock3, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
+
+const TIER_NAMES = { STARTER: 'Starter', GROWTH: 'Growth', BUSINESS: 'Business' };
+const FAMILY_CAPS = { STARTER: 4, GROWTH: 13, BUSINESS: 25 };
+const order = ['STARTER', 'GROWTH', 'BUSINESS'];
+const formatPKR = (value) => new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', maximumFractionDigits: 0 }).format(Number(value || 0));
+const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' }) : null;
 
 export const SupplierSubscriptionPage = () => {
   const { token } = useAuth();
+  const [data, setData] = useState(null);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [subscription, setSubscription] = useState(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
-  const fetchSubscription = async () => {
+  const refresh = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const res = await fetch('/api/v1/supplier/subscription', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubscription(data.data.entitlements);
-      }
+      const headers = { Authorization: `Bearer ${token}` };
+      const [current, available] = await Promise.all([
+        fetch('/api/v1/supplier/subscription', { headers }),
+        fetch('/api/v1/supplier/subscription/plans', { headers })
+      ]);
+      if (!current.ok || !available.ok) throw new Error('Unable to load subscription details.');
+      const a = await current.json();
+      const b = await available.json();
+      if (!a.success || !b.success) throw new Error('Unable to load subscription details.');
+      setData(a.data);
+      setPlans(b.data.plans || []);
     } catch (err) {
-      toast.error('Failed to load subscription status');
+      setError(err.message || 'Unable to load subscription details.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (token) fetchSubscription();
   }, [token]);
 
-  const handleUpgrade = async (targetPlan) => {
-    if (targetPlan === subscription?.current_plan) return;
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const cancelRenewal = async () => {
+    setSubmitting(true);
+    setError('');
+    setNotice('');
     try {
-      setSubmitting(true);
-      const res = await fetch('/api/v1/supplier/subscription/upgrade', {
+      const response = await fetch('/api/v1/supplier/subscription/cancel-renewal', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ targetPlan })
+        headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (!res.ok) {
-        if (res.status === 402) {
-          throw new Error(data.error?.message || 'Paid subscription plans require Safepay payment verification. Please complete payment checkout.');
-        }
-        throw new Error(data.error?.message || 'Plan update failed');
-      }
-      toast.success(`Successfully updated subscription to ${targetPlan} plan!`);
-      await fetchSubscription();
+      const body = await response.json();
+      if (!response.ok || !body.success) throw new Error(body.error?.message || 'Unable to cancel renewal.');
+      setNotice('Renewal cancelled. Your current plan remains active until its period ends.');
+      setConfirmCancel(false);
+      await refresh();
     } catch (err) {
-      toast.error(err.message);
+      setError(err.message || 'Unable to cancel renewal.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const currentPlan = subscription?.plan_code || subscription?.current_plan || 'STARTER';
-  const usedFamilies = subscription?.active_families_count ?? subscription?.used_distinct_families ?? 0;
-  const maxFamilies = subscription?.max_allowed_families ?? subscription?.max_families ?? 4;
-  const remainingSlots = subscription?.remaining_family_slots ?? subscription?.remaining_slots ?? Math.max(0, maxFamilies - usedFamilies);
-
-  const plans = [
-    {
-      code: 'STARTER',
-      name: 'Starter Plan',
-      tagline: 'Ideal for independent producers & single-commodity millers',
-      price: 'Free',
-      period: 'Standard',
-      fee: '5.0%',
-      families: 4,
-      features: [
-        'Up to 4 active canonical product families',
-        'Unlimited physical SKUs within allowed families',
-        'Standard Lahore cluster order routing',
-        'Direct bank escrow settlement (T+2)',
-        'Basic operational metrics'
-      ],
-      icon: Shield,
-      popular: false
-    },
-    {
-      code: 'GROWTH',
-      name: 'Growth Plan',
-      tagline: 'For established distributors expanding bulk B2B restaurant reach',
-      price: 'Pricing pending confirmation',
-      period: '',
-      fee: 'Fee policy pending Phase B11',
-      families: 13,
-      features: [
-        'Up to 13 active canonical product families',
-        'Online automated subscription billing scheduled for Phase B11',
-        'Priority matching on buyer RFQs & Demand Requests',
-        'Flash pool clearance capability',
-        'Dedicated dispatch & multi-hub cluster routing',
-        'Comprehensive sales & demand forecasting analytics'
-      ],
-      icon: Zap,
-      popular: true
-    },
-    {
-      code: 'BUSINESS',
-      name: 'Business Enterprise',
-      tagline: 'For major mills, commodity importers & large-scale FMCG wholesalers',
-      price: 'Pricing pending confirmation',
-      period: '',
-      fee: 'Fee policy pending Phase B11',
-      families: 25,
-      features: [
-        'Up to 25 active canonical product families',
-        'Online automated subscription billing scheduled for Phase B11',
-        'Sponsored catalog placements & promotions',
-        'Dedicated Lahore account coordinator',
-        'Custom recurring procurement contracts',
-        'Standard escrow settlement & API catalog sync'
-      ],
-      icon: Crown,
-      popular: false
-    }
-  ];
+  const entitlement = data?.entitlements;
+  const history = data?.billing_history || [];
+  const latest = history[0] || null;
+  const currentPlan = entitlement?.plan_code || 'STARTER';
+  const paid = currentPlan !== 'STARTER';
+  const periodEnd = latest?.current_period_end;
+  const alreadyScheduled = latest?.pending_plan_code === 'STARTER';
+  const usage = entitlement?.active_families_count ?? 0;
+  const quota = entitlement?.max_allowed_families ?? FAMILY_CAPS[currentPlan];
+  const eligibleToCancel = paid && latest?.status === 'ACTIVE' && periodEnd && new Date(periodEnd).getTime() > Date.now() && !alreadyScheduled;
 
   return (
     <AppShell>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
-        {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-12">
-          <span className="text-xs uppercase tracking-wider font-semibold text-[var(--brand-accent)] block mb-2">
-            Supplier Subscription & Family Entitlements
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-serif font-bold text-[var(--text-primary)]">
-            Scale Your Wholesale Food Distribution
-          </h1>
-          <p className="text-sm text-[var(--text-muted)] mt-2">
-            Each plan grants distinct canonical product family slots. You can publish unlimited pack sizes, brands,
-            and SKUs within your authorized family quota.
-          </p>
-        </div>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12 space-y-8 text-[var(--text-primary)]">
+        <header className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-accent)]">Supplier account</p>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">Your subscription</h1>
+          <p className="text-sm text-[var(--text-muted)]">Manage your plan and product-family allowance.</p>
+        </header>
 
-        {/* Current status chip */}
-        <div className="max-w-xl mx-auto mb-10 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center">
-          <span className="text-xs text-[var(--text-muted)]">Active Allocation:</span>{' '}
-          <span className="font-semibold text-sm text-[var(--text-primary)]">
-            {usedFamilies} / {maxFamilies} canonical families active
-          </span>
-          <span className="text-xs text-[var(--text-muted)] ml-2">
-            ({remainingSlots} slots remaining)
-          </span>
-        </div>
-
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          {plans.map((p) => {
-            const isCurrent = currentPlan === p.code;
-            const Icon = p.icon;
-
-            return (
-              <div
-                key={p.code}
-                className={`relative rounded-3xl p-8 border transition-all duration-200 flex flex-col justify-between ${
-                  isCurrent
-                    ? 'border-[var(--brand-accent)] bg-[var(--bg-surface)] ring-2 ring-[var(--brand-accent)]/20 shadow-md'
-                    : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[var(--border-default)]'
-                }`}
-              >
-                {p.popular && !isCurrent && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold bg-[var(--brand-accent)] text-stone-900 shadow-xs flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Most Popular
-                  </div>
-                )}
-                {isCurrent && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs">
-                    Current Plan
-                  </div>
-                )}
-
+        {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-400/30 p-3 text-sm"><AlertCircle size={18} className="shrink-0 text-red-500"/>{error}</div>}
+        {notice && <div role="status" className="rounded-xl border border-[var(--brand-accent)]/40 p-3 text-sm">{notice}</div>}
+        {loading ? (
+          <div role="status" className="rounded-2xl border border-[var(--border-subtle)] p-8 text-sm text-[var(--text-muted)]">Loading subscription…</div>
+        ) : entitlement ? (
+          <>
+            <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-7 space-y-4" aria-label="Current subscription">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 rounded-2xl bg-[var(--bg-card)] text-[var(--brand-accent)]">
-                      <Icon className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs font-semibold text-[var(--text-muted)]">
-                      {p.fee} Platform Fee
-                    </span>
-                  </div>
-
-                  <h3 className="text-xl font-serif font-bold text-[var(--text-primary)] mb-1">
-                    {p.name}
-                  </h3>
-                  <p className="text-xs text-[var(--text-muted)] mb-6 h-10">
-                    {p.tagline}
-                  </p>
-
-                  <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-3xl font-serif font-bold text-[var(--text-primary)]">
-                      {p.price}
-                    </span>
-                    <span className="text-xs text-[var(--text-muted)]">{p.period}</span>
-                  </div>
-
-                  <div className="border-t border-[var(--border-subtle)] pt-6 mb-6">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
-                      Plan Highlights
-                    </div>
-                    <ul className="space-y-3">
-                      {p.features.map((feat, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-xs text-[var(--text-primary)]">
-                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">Current plan</p>
+                  <h2 className="font-display text-2xl font-semibold mt-1">{TIER_NAMES[currentPlan] || currentPlan}</h2>
                 </div>
-
-                <button
-                  type="button"
-                  disabled={isCurrent || submitting}
-                  onClick={() => handleUpgrade(p.code)}
-                  className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    isCurrent
-                      ? 'bg-[var(--bg-card)] text-[var(--text-muted)] cursor-not-allowed'
-                      : 'bg-[var(--brand-accent)] text-stone-900 hover:opacity-95 shadow-xs'
-                  }`}
-                >
-                  {isCurrent ? 'Active Plan' : submitting ? 'Processing...' : `Switch to ${p.name}`}
-                </button>
+                <span className="rounded-full border border-[var(--brand-accent)]/45 bg-[var(--brand-accent-soft)] px-3 py-1 text-xs font-medium">Active</span>
               </div>
-            );
-          })}
-        </div>
+              <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+                <div><p className="text-[var(--text-muted)] text-xs">Product families</p><p className="font-semibold mt-1">{usage} / {quota}</p></div>
+                {periodEnd && <div><p className="text-[var(--text-muted)] text-xs">Current period ends</p><p className="font-semibold mt-1">{formatDate(periodEnd)}</p></div>}
+                <div><p className="text-[var(--text-muted)] text-xs">Renewal</p><p className="font-semibold mt-1">{alreadyScheduled ? 'Cancelled' : paid ? 'Not configured' : 'Free plan'}</p></div>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--bg-card)] overflow-hidden" aria-label="Product-family quota usage">
+                <div className="h-full rounded-full bg-[var(--brand-accent)]" style={{width: `${quota ? Math.min(100, 100 * usage / quota) : 0}%`}}/>
+              </div>
+              {alreadyScheduled && <p className="flex gap-2 items-start text-sm text-[var(--text-secondary)]"><Clock3 size={16} className="shrink-0 mt-0.5"/>Your plan changes to Starter after {formatDate(periodEnd)}. Existing orders and historical records remain intact.</p>}
+              {entitlement.is_over_limit && <p className="text-sm text-[var(--text-secondary)]">You're above your plan's family allowance. Existing commitments remain; new families cannot be published until usage is within the limit.</p>}
+              {eligibleToCancel && (
+                <button type="button" onClick={() => setConfirmCancel(true)} className="text-sm font-medium underline underline-offset-4 hover:text-[var(--brand-accent)]">
+                  Cancel renewal
+                </button>
+              )}
+            </section>
 
-        {/* Business Rule Guarantee */}
-        <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] max-w-3xl mx-auto flex items-start gap-4">
-          <HelpCircle className="w-5 h-5 text-[var(--brand-accent)] shrink-0 mt-0.5" />
-          <div className="text-xs text-[var(--text-muted)] space-y-1">
-            <h5 className="font-semibold text-[var(--text-primary)]">
-              Historical Record Preservation Guarantee
-            </h5>
-            <p>
-              When upgrading, your new family limits take effect immediately without interrupting ongoing pools.
-              If you ever downgrade, MilJor never deletes or truncates existing products or historical records.
-              Any existing published families remain live, and only subsequent additions beyond the new cap are gated.
-            </p>
+            <section className="space-y-4" aria-label="Available plans">
+              <h2 className="font-display text-2xl font-semibold">Plans</h2>
+              <div className="grid gap-4 md:grid-cols-3">
+                {order.map(code => {
+                  const plan = plans.find(p => p.plan_code === code);
+                  const isCurrent = code === currentPlan;
+                  const fee = plan?.monthly_price_pkr;
+                  return <article key={code} className={`rounded-2xl border bg-[var(--bg-surface)] p-5 flex flex-col gap-4 ${isCurrent ? 'border-[var(--brand-accent)]' : 'border-[var(--border-subtle)]'}`}>
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-display text-xl font-semibold">{TIER_NAMES[code]}</h3>
+                      {isCurrent && <span className="text-xs text-[var(--brand-accent)] font-medium">Current</span>}
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold tabular-nums">{code === 'STARTER' ? 'Free' : fee != null ? formatPKR(fee) : 'Pricing unavailable'}</p>
+                      {code !== 'STARTER' && fee != null && <p className="text-xs text-[var(--text-muted)]">Monthly</p>}
+                    </div>
+                    <p className="flex gap-2 text-sm items-center"><Check size={17} className="text-[var(--brand-accent)]"/>{plan?.max_active_families ?? FAMILY_CAPS[code]} product families</p>
+                    <div className="mt-auto pt-2">
+                      {isCurrent ? <span className="block rounded-xl bg-[var(--bg-card)] p-3 text-center text-sm text-[var(--text-muted)]">Your active plan</span> :
+                        <span className="block rounded-xl border border-[var(--border-subtle)] p-3 text-center text-sm text-[var(--text-muted)]">
+                          {code === 'STARTER' && paid ? alreadyScheduled ? 'Scheduled for period end' : 'Use Cancel renewal above' :
+                            'Checkout not available yet'}
+                        </span>}
+                    </div>
+                  </article>;
+                })}
+              </div>
+              <p className="text-xs text-[var(--text-muted)]">Paid plan changes require verified Safepay subscription checkout. Until it is available, paid upgrades and paid-to-paid downgrades cannot be activated.</p>
+            </section>
+
+            {history.length > 0 && <section className="space-y-3" aria-label="Subscription history">
+              <h2 className="font-display text-xl font-semibold">History</h2>
+              <div className="overflow-x-auto rounded-2xl border border-[var(--border-subtle)]">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-[var(--bg-card)] text-[var(--text-muted)]"><tr><th className="p-3 font-medium">Plan</th><th className="p-3 font-medium">Status</th><th className="p-3 font-medium">Started</th></tr></thead>
+                  <tbody>{history.slice(0, 10).map(h => <tr key={h.id} className="border-t border-[var(--border-subtle)]"><td className="p-3">{TIER_NAMES[h.plan_code] || h.plan_code}</td><td className="p-3">{h.pending_plan_code ? 'Cancellation scheduled' : h.status}</td><td className="p-3">{formatDate(h.current_period_start) || '—'}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </section>}
+          </>
+        ) : null}
+
+        {confirmCancel && <div role="presentation" className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="cancel-renewal-title" className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-xl space-y-4">
+            <ShieldCheck size={24} className="text-[var(--brand-accent)]"/>
+            <h2 id="cancel-renewal-title" className="font-display text-2xl font-semibold">Cancel renewal?</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Your paid plan stays active until {formatDate(periodEnd)}. Then it becomes Starter. Existing orders, pools and records stay intact; new family publication follows Starter limits.</p>
+            <div className="flex flex-wrap gap-3 justify-end">
+              <button type="button" onClick={() => setConfirmCancel(false)} disabled={submitting} className="rounded-xl border border-[var(--border-subtle)] px-4 py-2.5 text-sm font-medium">Keep plan</button>
+              <button type="button" onClick={cancelRenewal} disabled={submitting} className="rounded-xl bg-[var(--brand-accent)] text-stone-900 px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{submitting ? 'Processing…' : 'Confirm cancellation'}</button>
+            </div>
           </div>
-        </div>
-      </div>
+        </div>}
+      </main>
     </AppShell>
   );
 };
+
+export default SupplierSubscriptionPage;
