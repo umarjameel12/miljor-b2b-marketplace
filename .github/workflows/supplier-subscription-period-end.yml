@@ -7,6 +7,10 @@ on:
       - 'backend/src/routes/v1/supplierRoutes.js'
       - 'backend/src/services/schedulerService.js'
       - 'backend/database/migrations/061_supplier_subscription_scheduled_changes.sql'
+      - 'backend/database/migrations/062_supplier_safepay_subscription_checkout.sql'
+      - 'backend/src/services/supplierSubscriptionCheckoutService.js'
+      - 'backend/tests/supplier_subscription_checkout_contract_gate.js'
+      - 'frontend/src/pages/SupplierSubscriptionPage.jsx'
       - 'backend/tests/subscription_period_end_contract_gate.js'
       - '.github/workflows/supplier-subscription-period-end.yml'
   push:
@@ -30,3 +34,5 @@ jobs:
           node --check backend/src/services/schedulerService.js
       - name: Supplier ownership, cancellation, and period-end idempotency
         run: node backend/tests/subscription_period_end_contract_gate.js
+      - name: Isolated Safepay subscription checkout and provider proof contract
+        run: node backend/tests/supplier_subscription_checkout_contract_gate.js
