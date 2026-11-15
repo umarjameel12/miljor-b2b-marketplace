@@ -1,0 +1,37 @@
+name: MilJor Notification and Email Outbox Reconciliation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/services/notificationService.js'
+      - 'backend/src/services/notificationEventPolicy.js'
+      - 'backend/src/services/emailService.js'
+      - 'backend/src/services/recurringReminderPolicy.js'
+      - 'backend/src/routes/v1/notificationRoutes.js'
+      - 'backend/tests/notification_projection_gate.js'
+      - 'backend/tests/notification_route_ownership_gate.js'
+      - 'backend/tests/email_outbox_queue_gate.js'
+      - '.github/workflows/notification-reconciliation.yml'
+  push:
+    branches: ['feature/miljor-release-reconciliation']
+jobs:
+  notification-lease:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source syntax and manifest
+        run: |
+          node backend/database/migrationManifest.js
+          node --check backend/src/services/notificationService.js
+          node --check backend/src/services/emailService.js
+          node --check backend/src/services/notificationEventPolicy.js
+          node --check backend/src/services/recurringReminderPolicy.js
+      - name: Recipient ownership, localization, durable queue and retry
+        run: |
+          node backend/tests/notification_route_ownership_gate.js
+          node backend/tests/notification_projection_gate.js
+          node backend/tests/email_outbox_queue_gate.js
