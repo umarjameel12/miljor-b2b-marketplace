@@ -148,7 +148,7 @@ export const SupplierDashboardPage = () => {
                 </span>
               )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text-primary)]">
               {profile?.business_name || user?.business_name || user?.full_name || 'Wholesale Supplier Operations'}
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
@@ -332,7 +332,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {formatPKR(kpis.total_sales)}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -350,7 +350,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {kpis.confirmed_paid_orders}
                 </span>
                 <Link to="/orders" className="text-[11px] text-[var(--brand-accent)] hover:underline mt-0.5 inline-flex items-center gap-0.5">
@@ -388,7 +388,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {kpis.active_unified_pools}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -406,7 +406,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {kpis.incoming_rfqs}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -424,7 +424,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {kpis.upcoming_recurring_commitments}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -442,7 +442,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {kpis.today_scheduled_deliveries}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -480,7 +480,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {formatPKR(kpis.held_earnings)}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -498,7 +498,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xl sm:text-2xl font-serif font-bold text-[var(--text-primary)] block">
+                <span className="text-xl sm:text-2xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                   {formatPKR(kpis.completed_payouts)}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -524,7 +524,7 @@ export const SupplierDashboardPage = () => {
               </span>
             </div>
             <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-3xl font-serif font-bold text-[var(--text-primary)]">
+              <span className="text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)]">
                 {usedFam}
               </span>
               <span className="text-sm text-[var(--text-muted)]">
