@@ -1,0 +1,13 @@
+{
+  "protectedTables": {
+    "users": 3366696221,
+    "pools": 2265355547,
+    "reservations": 0,
+    "orders": 0,
+    "payments": 0,
+    "platform_ledger": 0
+  },
+  "unchanged": true,
+  "originalServerPort": 3306,
+  "isolatedTestPort": 33317
+}

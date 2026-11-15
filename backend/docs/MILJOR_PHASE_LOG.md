@@ -1674,3 +1674,13 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - Database Safety: `miljor_db` confirmed 100% PRISTINE (`orders: 0`, `payments: 0`).
 - **Verdict: PASS (SAFEPAY SANDBOX PAYMENT & RETURN WORKFLOW 100% VERIFIED). CAN START NEXT PHASE: NO.**
 
+## 2026-11-15 — PR #54 UCP resilience / transactional notification implementation
+
+- **Implementation SHA:** `188c989f09f974bc24cfa2a491508c063d3c5677`; approved branch `plan/ucp-resilience-notification-coverage`. No merge to main.
+- **IMPLEMENTED:** Transactional domain inbox/critical-email receipts; persisted owner routing; webhook/reconciliation receipt dedupe; Flash leased/fair recovery and suspended-owner expiry; stale initiated payments retain stock; email claim/crash recovery; Regular/Flash fee queries reuse the active transaction connection.
+- **TESTED:** Stabilized `node tests/ucp_final_affected_gate.js`: seven gates PASS, exit 0 each, on an independent MySQL 8.0.45 instance with `miljor_test_db` at localhost:33317. Flash API gate 47/47; 50 distinct stock buyers yielded two successes and 48 safe conflicts. Mixed Regular/Flash publication races included 50 and 100 clients. Synthetic signed payment/refund concurrency and buyer-receipt-before-settlement checks passed. Three reviewer regressions passed; 100/80/20 pure quantity policy 14/14.
+- **FAILURE PRESERVED / FIXED:** Initial 50-buyer gate timed out at 180,044 ms due to a fee lookup requesting another connection while holding the parent stock lock. Narrow regression and affected Flash rerun passed after fixing connection reuse; the final complete affected gate then passed.
+- **DATABASE:** New migrations092/093 installed only on the isolated test instance; 56-entry journal passed. Shared test migration090 remains absent from this branch and unresolved; original shared schema was not migrated. Six protected `miljor_db` table checksums matched before/after. Backup completeness checked, restoration NOT_TESTED. Isolated server stopped. Zero external money movement.
+- **EVIDENCE:** [Implementation report](MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md), [gate results](evidence/ucp-resilience-2026-11-15.json), [protected checksums](evidence/ucp-protected-database-2026-11-15.json). Historical accepted evidence above remains unchanged; this increment's provider events were synthetic and do not re-certify actual provider settlement.
+- **RESULT:** PARTIAL implementation; full master-plan release BLOCKED. Remaining catalog/admin notification coverage, preference/localization/digest controls, Regular timer recovery, provider/real-email acceptance, clustered/partial delivery recovery and frontend/browser release gates are incomplete. **CAN START NEXT PHASE: NO.**
+

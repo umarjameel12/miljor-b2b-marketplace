@@ -8,7 +8,7 @@ async function main(){
   assertTestTarget(['node','audit','--test-only']);
   const history=await audit({argv:['node','audit','--test-only']}).catch(error=>({
     status:'BLOCKED',code:error.code,message:String(error.message).slice(0,250)}));
-  const connection=await mysql.createConnection({host:process.env.DB_HOST||'localhost',user:process.env.DB_USER||'root',
+  const connection=await mysql.createConnection({host:process.env.DB_HOST||'localhost',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER||'root',
     password:process.env.DB_PASSWORD||'',database:'miljor_test_db'});
   const directory=path.resolve(__dirname,'../database/backups');
   fs.mkdirSync(directory,{recursive:true});
@@ -26,7 +26,7 @@ async function main(){
     const file=path.join(directory,'ucp-test-'+Date.now()+'.sql');
     const fd=fs.openSync(file,'wx');
     let result;
-    try{result=spawnSync('mysqldump',['--host='+ (process.env.DB_HOST||'localhost'),
+    try{result=spawnSync('mysqldump',['--host='+ (process.env.DB_HOST||'localhost'),'--port='+ (process.env.DB_PORT||'3306'),
       '--user='+ (process.env.DB_USER||'root'),'--single-transaction','--skip-lock-tables','--no-tablespaces','miljor_test_db'],
       {env:{...process.env,MYSQL_PWD:process.env.DB_PASSWORD||''},stdio:['ignore',fd,'pipe'],timeout:60000});
     }finally{fs.closeSync(fd);}
