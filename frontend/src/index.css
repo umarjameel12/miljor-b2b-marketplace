@@ -801,46 +801,57 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 
 
-/* Public nav theme refinement — light = graphite/glass, dark = original forest/champagne. */
+/* Landing theme: warm espresso on ivory, forest/champagne in dark.
+   One semantic palette for Sign In, Register and theme-option focus/hover. */
 :root {
-  --landing-header-bg: rgba(235, 233, 228, .84);
-  --landing-nav-ink: #353a3d;
-  --landing-nav-hover: #1d252a;
-  --landing-button-bg: linear-gradient(118deg, #e6e7e7 0%, #c6c9cc 51%, #aeb4b8 100%);
-  --landing-button-ink: #20262a;
-  --landing-button-border: #9ca4a8;
-  --landing-button-shadow: 0 5px 16px rgba(43, 53, 61, .12);
-  --landing-menu-hover-bg: #c5c9cc;
-  --landing-menu-hover-ink: #20262a;
-  --theme-menu-bg: #f4f3f0;
-  --theme-menu-border: #c3c4c0;
-  --theme-menu-selected: #c3c8cb;
-  --theme-menu-hover: #d8dcde;
-  --theme-menu-ink: #30383c;
-  --theme-menu-selected-ink: #171e22;
+  --landing-header-bg: rgba(62, 51, 40, .93);
+  --landing-nav-ink: #f5ead5;
+  --landing-nav-hover: #f6d99e;
+  --landing-button-bg: linear-gradient(115deg, #755334 0%, #98734b 51%, #694c32 100%);
+  --landing-button-ink: #fff8e9;
+  --landing-button-border: rgba(235, 204, 148, .45);
+  --landing-button-shadow: 0 5px 16px rgba(76, 46, 23, .17);
+  --landing-menu-hover-bg: linear-gradient(112deg, #ead4ad, #c7a473);
+  --landing-menu-hover-ink: #392a1b;
+  --theme-menu-bg: #fbf6ed;
+  --theme-menu-border: #d4c3aa;
+  --theme-menu-selected: #dbc099;
+  --theme-menu-hover: #ead7b7;
+  --theme-menu-ink: #47382b;
+  --theme-menu-selected-ink: #35271b;
+  --pool-detail-accent: #99641f;
 }
 .dark {
-  --landing-header-bg: rgba(7, 42, 33, .88);
+  --landing-header-bg: rgba(7, 42, 33, .90);
   --landing-nav-ink: #f0e7d5;
   --landing-nav-hover: #e8cf95;
   --landing-button-bg: linear-gradient(112deg, #e2cc9c 0%, #c8b276 55%, #967748 100%);
   --landing-button-ink: #211c14;
   --landing-button-border: #c8b276;
   --landing-button-shadow: 0 6px 22px rgba(0, 0, 0, .25);
-  --landing-menu-hover-bg: #c8b276;
-  --landing-menu-hover-ink: #182a22;
+  --landing-menu-hover-bg: linear-gradient(112deg, #e2ce9e, #b99b60);
+  --landing-menu-hover-ink: #17291e;
   --theme-menu-bg: #072a21;
   --theme-menu-border: rgba(200, 178, 118, .35);
   --theme-menu-selected: #c8b276;
-  --theme-menu-hover: #304e3f;
+  --theme-menu-hover: #314e40;
   --theme-menu-ink: #f0e7d5;
   --theme-menu-selected-ink: #182a22;
+  --pool-detail-accent: #dfbf85;
 }
 .miljor-public-landing .landing-topbar {
   background-color: var(--landing-header-bg) !important;
-  backdrop-filter: blur(18px) saturate(125%);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
-  border-color: var(--border-subtle) !important;
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  border-color: rgba(208, 180, 128, .28) !important;
+}
+.miljor-public-landing .landing-top-link,
+.miljor-public-landing .landing-top-link .landing-nav-icon {
+  color: var(--landing-nav-ink);
+}
+.miljor-public-landing .landing-top-link:hover,
+.miljor-public-landing .landing-top-link:hover .landing-nav-icon {
+  color: var(--landing-nav-hover);
 }
 .miljor-public-landing .landing-gradient-cta {
   background: var(--landing-button-bg) !important;
@@ -848,58 +859,65 @@ h1, h2, h3, h4, h5, h6, .font-display {
   color: var(--landing-button-ink) !important;
   box-shadow: var(--landing-button-shadow);
 }
+.miljor-public-landing .landing-gradient-cta svg {
+  color: inherit !important;
+}
 .miljor-public-landing .landing-gradient-cta:hover {
-  background-position: 100% 80%;
-  filter: brightness(.97);
+  filter: brightness(1.075);
+  transform: translateY(-1px);
 }
-.dark .miljor-public-landing .landing-gradient-cta:hover {
-  filter: brightness(1.06);
-}
-.miljor-public-landing .landing-account-option,
-.miljor-public-landing .landing-account-option:link,
-.miljor-public-landing .landing-account-option:visited {
+.miljor-public-landing .landing-account-option {
+  display: block;
+  width: 100%;
   color: var(--text-primary);
+  transition: background 160ms ease, color 160ms ease;
 }
-.miljor-public-landing .landing-account-option:hover,
-.miljor-public-landing .landing-account-option:focus-visible,
-.miljor-public-landing .landing-account-option:active {
+.miljor-public-landing .landing-account-option:is(:hover, :focus-visible, :active) {
   background: var(--landing-menu-hover-bg) !important;
   color: var(--landing-menu-hover-ink) !important;
   font-weight: 600;
 }
 .miljor-public-landing .miljor-theme-trigger {
-  background-color: var(--theme-menu-bg) !important;
-  color: var(--theme-menu-ink) !important;
+  background: var(--theme-menu-bg) !important;
   border-color: var(--theme-menu-border) !important;
+  color: var(--theme-menu-ink) !important;
+}
+.miljor-public-landing .miljor-theme-trigger svg {
+  color: inherit !important;
 }
 .miljor-public-landing .miljor-theme-trigger:hover {
-  background-color: var(--theme-menu-hover) !important;
+  background: var(--theme-menu-hover) !important;
 }
 .miljor-public-landing .miljor-theme-menu {
-  background-color: var(--theme-menu-bg) !important;
+  background: var(--theme-menu-bg) !important;
   border-color: var(--theme-menu-border) !important;
 }
 .miljor-public-landing .miljor-theme-choice {
-  background-color: transparent;
+  background: transparent;
   color: var(--theme-menu-ink);
   border-color: transparent;
 }
 .miljor-public-landing .miljor-theme-choice:hover,
 .miljor-public-landing .miljor-theme-choice:focus-visible {
-  background-color: var(--theme-menu-hover);
-  color: var(--theme-menu-selected-ink);
-}
-.dark .miljor-public-landing .miljor-theme-choice:hover,
-.dark .miljor-public-landing .miljor-theme-choice:focus-visible {
+  background: var(--theme-menu-hover);
   color: var(--theme-menu-ink);
 }
 .miljor-public-landing .miljor-theme-choice-selected,
 .miljor-public-landing .miljor-theme-choice-selected:hover,
 .miljor-public-landing .miljor-theme-choice-selected:focus-visible {
-  background-color: var(--theme-menu-selected);
+  background: var(--theme-menu-selected);
   color: var(--theme-menu-selected-ink);
   border-color: var(--theme-menu-border);
 }
 .miljor-public-landing .miljor-theme-choice svg {
   color: inherit;
+}
+/* Keep auth tab active styles; remove grey hover mismatch for inactive tab. */
+.auth-tabs-premium .auth-tab-inactive:is(:hover, :focus-visible) {
+  background: #ead7b7;
+  color: #35271b !important;
+}
+.dark .auth-tabs-premium .auth-tab-inactive:is(:hover, :focus-visible) {
+  background: #c8b276;
+  color: #182a22 !important;
 }
