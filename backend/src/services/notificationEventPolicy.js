@@ -1,5 +1,6 @@
 'use strict';
 const definitions={
+  DELIVERY_CHOICE_RECORDED:['Delivery choice requires supplier confirmation','ترسیل کے انتخاب پر سپلائر کی منظوری درکار ہے','request'],
   REQUEST_CREATED:['Request created','درخواست بن گئی','request',false],
   REQUEST_PUBLISHED:['Request published','درخواست شائع ہو گئی','request'],
   SUPPLIER_MATCHED:['Supplier matched','سپلائر مل گیا','request',false],

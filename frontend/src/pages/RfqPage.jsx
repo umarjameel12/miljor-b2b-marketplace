@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { geoApi } from '../api/geo';
+import { deliveryApi } from '../api/delivery';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
@@ -79,6 +80,11 @@ export const RfqPage = () => {
   const [deliveryClusters,setDeliveryClusters]=useState([]);
   const [deliveryClusterId,setDeliveryClusterId]=useState(user?.base_cluster_id?String(user.base_cluster_id):'');
   const [deliveryOptionResults,setDeliveryOptionResults]=useState({});
+  const [deliveryAddresses,setDeliveryAddresses]=useState([]);
+  const [chosenAddress,setChosenAddress]=useState('');
+  const [deliveryChoices,setDeliveryChoices]=useState({});
+  const deliveryAccountRef=useRef(user?.id);
+  deliveryAccountRef.current=user?.id;
 
 
 
@@ -349,7 +355,9 @@ export const RfqPage = () => {
           request_item_id:Number(line.request_item_id),quote_id:Number(line.quote_id),
           version_number:Number(version),supplier_sku_id:Number(snapshot.supplier_sku_id),
           product_spec_id:Number(snapshot.product_spec_id),
-          physical_specifications_accepted:true
+          physical_specifications_accepted:true,
+          ...(buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id))?.quote_snapshot?.delivery_terms
+            ?{delivery_terms_hash:buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id)).quote_snapshot.delivery_terms.hash}:{})
         };
       });
       const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/checkout-preview`,{
@@ -402,10 +410,35 @@ export const RfqPage = () => {
     finally{setQuoteBusy(false);}
   };
   useEffect(()=>{
+    let active=true;
+    setDeliveryAddresses([]);setChosenAddress('');setDeliveryChoices({});
     if(user?.role!=='BUYER')return;
     geoApi.getClusters().then(result=>setDeliveryClusters(result?.data?.clusters||[]))
       .catch(()=>setDeliveryClusters([]));
-  },[user?.role]);
+    deliveryApi.getBuyerAddresses().then(result=>{if(active)setDeliveryAddresses(result.data||[]);}).catch(()=>{if(active)setDeliveryAddresses([]);});
+    return()=>{active=false;};
+  },[user?.id,user?.role,token]);
+  const chooseDelivery=async(quote,mode,pickupPointId=null)=>{
+    const owner=user?.id;
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-choice`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},body:JSON.stringify({cluster_id:Number(deliveryClusterId),mode,
+          ...(mode==='PICKUP'?{pickup_point_id:Number(pickupPointId)}:{address_id:Number(chosenAddress)})})});
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,[quote.id]:result.delivery_terms}));
+      toast.success('Delivery choice recorded. Supplier must publish a revised quote before your final approval.');
+    }catch(error){setShoppingError(error.message);}finally{setQuoteBusy(false);}
+  };
+  const loadSupplierDeliveryChoices=async invitation=>{
+    const owner=user?.id;
+    setQuoteBusy(true);
+    try{
+      const result=await procurementApi(`/api/v1/procurement/supplier/requests/${invitation.request_id}/delivery-choices`);
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,['supplier:'+invitation.invitation_id]:result.choices}));
+    }catch(error){toast.error(error.message);}finally{setQuoteBusy(false);}
+  };
   const viewSupplierDeliveryOptions=async quote=>{
     if(!deliveryClusterId){setShoppingError('Select your delivery area cluster first.');return;}
     setQuoteBusy(true);setShoppingError('');
@@ -469,7 +502,8 @@ export const RfqPage = () => {
           lines,delivery_fee:saved.delivery_fee||'0',
           delivery_lead_days:Number(saved.delivery_lead_days??2),
           valid_until:new Date(deadline).toISOString(),
-          supplier_notes:saved.supplier_notes||''
+          supplier_notes:saved.supplier_notes||'',
+          ...(saved.delivery_quote_code?{delivery_quote_code:saved.delivery_quote_code}:{})
         })
       });
       toast.success(`Quotation version ${result.quote.version_number} submitted`);
@@ -1282,18 +1316,30 @@ export const RfqPage = () => {
                       <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
                       <div className="space-y-1 text-xs">
                         <span>Current supplier delivery fee: Rs. {quote.delivery_fee} · Quoted lead time: {quote.delivery_lead_days} days</span>
+                        {quote.quote_snapshot?.delivery_terms&&<p>Supplier-approved {quote.quote_snapshot.delivery_terms.mode} · Rs. {quote.quote_snapshot.delivery_terms.fee} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.point_name||'saved destination'} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.address_line} · Review these terms together with the selected products.</p>}
                         <button type="button" disabled={quoteBusy||!deliveryClusterId}
                           onClick={()=>viewSupplierDeliveryOptions(quote)}
                           className="ml-2 underline disabled:opacity-40">Check Delivery Options</button>
                         {deliveryOptionResults[quote.id]&&(
                           <div className="rounded-lg p-2 bg-[var(--bg-card)] space-y-1">
                             <p className="font-semibold">Eligible delivery modes (not yet selected)</p>
+                            <label>Saved delivery address
+                              <select value={chosenAddress} onChange={event=>setChosenAddress(event.target.value)} className="block w-full p-2 border rounded">
+                                <option value="">Select saved address</option>
+                                {deliveryAddresses.map(address=><option key={address.id} value={address.id}>{address.full_address}</option>)}
+                              </select>
+                            </label>
                             {(deliveryOptionResults[quote.id].eligible_modes||[]).length
                               ?deliveryOptionResults[quote.id].eligible_modes.map(mode=>(
-                                <p key={mode.mode}>{mode.label||mode.mode}</p>
+                                <div key={mode.mode}>
+                                  <span>{mode.label||mode.mode}</span>
+                                  {mode.mode==='PICKUP'?(mode.pickup_points||[]).map(point=><button type="button" disabled={quoteBusy} key={point.id} onClick={()=>chooseDelivery(quote,mode.mode,point.id)} className="ml-2 underline">Request pickup at {point.point_name||point.id} · {point.address_line} · Rs. {point.handling_fee_pkr}</button>):
+                                    <button type="button" disabled={quoteBusy||!chosenAddress} onClick={()=>chooseDelivery(quote,mode.mode)} className="ml-2 underline">Request this mode · Rs. {mode.fee_pkr}</button>}
+                                </div>
                               ))
                               :<p>No eligible modes found for this supplier and cluster.</p>}
                             <p className="text-[var(--text-muted)]">Rates and modes require a confirmed supplier quotation and your approval before checkout.</p>
+                            {deliveryChoices[quote.id]&&<p>Requested {deliveryChoices[quote.id].mode} · Rs. {deliveryChoices[quote.id].fee} · awaiting supplier revised quote</p>}
                           </div>
                         )}
                       </div>
@@ -1583,6 +1629,12 @@ export const RfqPage = () => {
                     })}
                     <div className="grid sm:grid-cols-2 gap-2">
                       <label className="text-xs font-semibold">Delivery fee (Rs.)
+                        <button type="button" className="ml-2 underline" disabled={quoteBusy} onClick={()=>loadSupplierDeliveryChoices(invitation)}>Load buyer delivery choices</button>
+                        {(deliveryChoices['supplier:'+invitation.invitation_id]||[]).map(terms=><button key={terms.quote_code} type="button" className="block underline" onClick={()=>{
+                          const localTime=new Date(new Date(terms.expires_at).getTime()-new Date(terms.expires_at).getTimezoneOffset()*60000).toISOString().slice(0,16);
+                          updateQuoteDraft(invitation.invitation_id,{delivery_quote_code:terms.quote_code,delivery_fee:terms.fee,valid_until:localTime});
+                        }}>Confirm {terms.mode} · Rs. {terms.fee} · {terms.quote_code}</button>)}
+                        {(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_quote_code&&<span className="block">Delivery terms selected for revised quote</span>}
                         <input value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_fee??'0'}
                           onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_fee:event.target.value})}
                           className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>

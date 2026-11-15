@@ -35,6 +35,7 @@ jobs:
           node tests/notification_transaction_gate.js
           node tests/notification_route_ownership_gate.js
           node tests/canonical_migration_manifest_gate.js
+          node tests/procurement_delivery_binding_policy_gate.js
       - name: Install frontend
         run: npm ci --prefix ../frontend
       - name: Polling, account isolation and durable read tests

@@ -53,6 +53,8 @@ router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIE
 router.get('/procurement/requests/:id/quotes/:quoteId/delivery-options',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartDeliveryOptions(req,res));
 
 // Smart Hub product-wise numeric counteroffers (no free-text or chat).
+router.post('/procurement/requests/:id/quotes/:quoteId/delivery-choice',protect,authorizeStrict('BUYER'),(req,res)=>controller.chooseDelivery(req,res));
+router.get('/procurement/supplier/requests/:id/delivery-choices',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.supplierDeliveryChoices(req,res));
 router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitProductCounteroffers(req,res));
 router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerProductCounteroffers(req,res));
 router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierProductCounteroffers(req,res));

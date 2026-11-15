@@ -11,6 +11,7 @@ const procurementQuoteComparisonService = require('../services/procurementQuoteC
 const procurementNegotiationService = require('../services/procurementNegotiationService');
 const procurementProductCounterofferService = require('../services/procurementProductCounterofferService');
 const procurementDeliveryOptionsService = require('../services/procurementDeliveryOptionsService');
+const procurementDeliveryBindingService = require('../services/procurementDeliveryBindingService');
 const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 const procurementCollectiveService = require('../services/procurementCollectiveService');
 const procurementRecurringService = require('../services/procurementRecurringService');
@@ -19,6 +20,14 @@ const procurementCollectiveBidService = require('../services/procurementCollecti
 const procurementCollectiveApprovalService = require('../services/procurementCollectiveApprovalService');
 
 class ProcurementController {
+  async chooseDelivery(req,res){
+    try{res.status(201).json({success:true,data:await procurementDeliveryBindingService.choose(req.user.id,req.params.id,req.params.quoteId,req.body,req.headers['x-idempotency-key'])});}
+    catch(error){this._smartError(res,error);}
+  }
+  async supplierDeliveryChoices(req,res){
+    try{res.json({success:true,data:{choices:await procurementDeliveryBindingService.forSupplier(req.user.id,req.params.id)}});}
+    catch(error){this._smartError(res,error);}
+  }
 
   // B6: buyer-owned shopping lists (no checkout, inventory allocation or quotes).
   async createSmartRequest(req, res) {

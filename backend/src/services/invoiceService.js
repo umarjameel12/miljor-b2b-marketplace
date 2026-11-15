@@ -241,6 +241,7 @@ class InvoiceService {
       }];
 
       const snapshot = {
+        ...(o.procurement_delivery_snapshot?{delivery_terms:typeof o.procurement_delivery_snapshot==='string'?JSON.parse(o.procurement_delivery_snapshot):o.procurement_delivery_snapshot}:{}),
         invoice_number: invoiceNumber,
         order_id: o.id,
         order_code: o.order_code,

@@ -1676,6 +1676,8 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 # 2026-11-15 Smart Procurement Hub continuation
 
+Delivery-binding continuation: implemented scoped buyer choices, supplier immutable mode-specific revision, buyer delivery hash consent, gated award consumption and order/invoice snapshots. Backup + migration 094 verified on miljor_test_db (59/59 history). Real legacy B6 7/7 and bound pickup 10/10 HTTP/MySQL acceptance PASS; standalone ownership/concurrency/changed-destination binding test PASS. Full plan remains PARTIAL. Evidence: SMART_HUB_DELIVERY_BINDING_EXECUTION_2026_11_15.md.
+
 Execution update: SMART_HUB_NOTIFICATION_EXECUTION_2026_11_15.md supersedes earlier access/checksum blockers. Existing configuration safely established test-only access; canonical history verified and five pending migrations applied after backup. Backend 89/89 contracts, real request/inbox acceptance, nine-event inbox gate, real HTTP/MySQL G1–G9 and UCP source regression PASS. Complete scope, providers, full browser acceptance and remote CI remain BLOCKED; PR #53 stays draft.
 
 Mandatory notification plan amendment: notifications are required in all eight phases. SMART_HUB_NOTIFICATION_ACCEPTANCE.md records existing infrastructure, complete event/recipient/channel matrix, transactional reliability/privacy/localization requirements and action-driven tests. Planning coverage PASS; runtime notification/channel/integration gates BLOCKED pending implementation and isolated test access. No application code, provider delivery or database change in this amendment.

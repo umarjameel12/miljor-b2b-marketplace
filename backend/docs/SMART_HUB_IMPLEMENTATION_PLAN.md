@@ -40,6 +40,8 @@ Weekly, biweekly and monthly calendars use Asia/Karachi. Biweekly parity remains
 
 ## Phase 5: delivery terms, routes and fair pricing
 
+2026-11-15 execution: supplier-approved delivery-choice binding implemented for the existing pickup/clustered/express quotation modes, with pickup-to-paid-order/invoice real HTTP acceptance 10/10 and actual pickup/clustered price/destination tests. See SMART_HUB_DELIVERY_BINDING_EXECUTION_2026_11_15.md. Route compatibility/optimization, additional individual/collection-point contracts and full recurring/browser integration remain open; this does not mark all of Phase 5 complete.
+
 Notification gate N5: cluster created, route assigned, dispatch scheduled, out for delivery, ETA changed and delay. Supplier/authorized dispatcher sees assigned operational scope; each buyer sees only their own delivery stop and applicable charges. No other buyer's address/contact or full route is exposed in buyer notifications.
 
 Support clustered doorstep, individual doorstep, supplier pickup, agreed collection point and supplier-confirmed express independently from group membership. Route compatibility requires same supplier dispatch, verified addresses, intersecting dates/windows, product safety, weight/volume capacity and cheaper comparable route cost. Reuse authoritative delivery eligibility and fee services. Allocate exact base-drop/weight/distance charges with deterministic rounding; supplier must approve terms before buyer accepts. Gate: incompatible windows/products/capacity and unverified addresses rejected; fee sum equals route total; regrouping cannot silently alter locked amounts; browser mode choice matches immutable order and invoice. Existing B6 checkout remains gated until implemented and verified.
