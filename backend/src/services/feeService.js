@@ -55,8 +55,8 @@ class FeeService {
   }
   // Compatibility interfaces call the same exact-money engine as new B6 awards.
   // Legacy response shape retained for B4 callers, without floating point arithmetic.
-  async calculateBuyerFee(subtotalAmount) {
-    const result = await this.calculateBuyerFeeExact(subtotalAmount);
+  async calculateBuyerFee(subtotalAmount,connection=db) {
+    const result = await this.calculateBuyerFeeExact(subtotalAmount,connection);
     return {
       percentage: exact.exactDecimalGte(subtotalAmount, '1000.00', 2) ? Number(result.percentage) : 0,
       buyer_fee: result.buyer_fee

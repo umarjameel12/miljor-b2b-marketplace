@@ -15,6 +15,9 @@ const raw = [
  ['CATALOG','STOCK_SHORTAGE','CRITICAL'],['CATALOG','SERVICE_AREA_CHANGED','ACTION'],
  ['UCP','POOL_CREATED','INFO'],['UCP','POOL_PUBLISHED','ACTION'],
  ['UCP','RESERVATION_CREATED','ACTION'],['UCP','HOLD_CREATED','ACTION'],
+ ['UCP','RESERVATION_UPDATED','ACTION'],['UCP','RESERVATION_CANCELLED','ACTION'],
+ ['UCP','PRICE_LOCKED','ACTION'],
+ ['UCP','TIER_CHANGED','ACTION'],
  ['UCP','HOLD_EXPIRING','ACTION'],['UCP','HOLD_EXPIRED','ACTION'],
  ['UCP','CONFIRMATION_REQUIRED','ACTION'],['UCP','ORDER_CONFIRMED','ACTION'],
  ['UCP','PROGRESS_MILESTONE','INFO'],['UCP','TIER_ACHIEVED','ACTION'],
@@ -34,6 +37,7 @@ const raw = [
  ['FULFILLMENT','ASSIGNED','ACTION'],['FULFILLMENT','ACCEPTED','ACTION'],
  ['FULFILLMENT','REJECTED','CRITICAL'],['FULFILLMENT','PACKING','INFO'],
  ['FULFILLMENT','READY_FOR_PICKUP','ACTION'],['FULFILLMENT','PICKUP_CODE_ISSUED','ACTION'],
+ ['FULFILLMENT','READY_FOR_DISPATCH','ACTION'],
  ['FULFILLMENT','PICKED_UP','ACTION'],['FULFILLMENT','DISPATCHED','ACTION'],
  ['FULFILLMENT','CLUSTER_FORMED','ACTION'],['FULFILLMENT','CLUSTER_CUTOFF','ACTION'],
  ['FULFILLMENT','CLUSTER_REROUTED','ACTION'],['FULFILLMENT','ETA_CHANGED','ACTION'],
@@ -67,6 +71,7 @@ function buildEventKey({type,aggregateId,aggregateVersion,transitionId}) {
  if (!aggregateId || !transitionId || !Number.isSafeInteger(aggregateVersion) || aggregateVersion < 0)
    throw new Error('INVALID_NOTIFICATION_EVENT_IDENTITY');
  // No raw user information in dedupe keys; callers must use stable opaque IDs.
- return [type,String(aggregateId),String(aggregateVersion),String(transitionId)].join(':');
+ return type+':'+require('node:crypto').createHash('sha256')
+   .update(JSON.stringify([String(aggregateId),aggregateVersion,String(transitionId)])).digest('hex');
 }
 module.exports = Object.freeze({PRIORITIES,CHANNELS,definitions,getEventDefinition,buildEventKey});

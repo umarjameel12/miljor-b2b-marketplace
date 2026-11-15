@@ -99,6 +99,9 @@ class EmailService {
         host: this.smtpHost,
         port: this.smtpPort,
         secure: this.smtpPort === 465,
+        connectionTimeout: 30000,
+        greetingTimeout: 30000,
+        socketTimeout: 60000,
         auth: {
           user: this.smtpUser,
           pass: this.smtpPass
@@ -414,6 +417,13 @@ class EmailService {
           `
         };
 
+      case 'UCP_NOTIFICATION':
+        return {
+          subject: `MilJor | ${String(payload.title).replace(/[\r\n]/g, ' ')}`,
+          text: `${payload.title}\n\n${payload.message}\n\nOpen MilJor to review the record.`,
+          html: `<h2>${this._escapeHtml(payload.title)}</h2><p>${this._escapeHtml(payload.message)}</p><p>Open MilJor to review the record.</p>`
+        };
+
       default:
         return {
           subject: payload.subject || 'MilJor Notification',
@@ -434,6 +444,18 @@ class EmailService {
    * @param {string} [params.idempotencyKey]
    * @returns {Promise<Object>} Outbox record with status
    */
+  async enqueueEmail(connection, {recipientEmail,recipientUserId,templateName,payload,idempotencyKey}) {
+    if (!connection || typeof connection.query !== 'function') throw Error('TRANSACTION_CONNECTION_REQUIRED');
+    if (typeof recipientEmail !== 'string' || !recipientEmail.includes('@')) throw Error('INVALID_RECIPIENT');
+    if (typeof idempotencyKey !== 'string' || !idempotencyKey.length || idempotencyKey.length > 100) throw Error('INVALID_EMAIL_EVENT_KEY');
+    const {subject}=this._renderTemplate(templateName,payload);
+    return connection.query(
+      `INSERT INTO transactional_email_outbox
+       (recipient_email,recipient_user_id,template_name,subject,payload_json,status,idempotency_key)
+       VALUES (?,?,?,?,?,'QUEUED',?) ON DUPLICATE KEY UPDATE id=id`,
+      [recipientEmail,recipientUserId,templateName,subject,JSON.stringify(payload),idempotencyKey]);
+  }
+
   async queueAndSendEmail({ recipientEmail, recipientUserId = null, templateName, payload, idempotencyKey = null }) {
     if (!recipientEmail || !recipientEmail.includes('@')) {
       const err = new Error('Valid recipient email address is required');
@@ -448,8 +470,8 @@ class EmailService {
     // 1. Insert into durable outbox
     const [outboxResult] = await db.query(
       `INSERT INTO transactional_email_outbox
-        (recipient_email, recipient_user_id, template_name, subject, payload_json, status, idempotency_key)
-       VALUES (?, ?, ?, ?, ?, 'QUEUED', ?)`,
+        (recipient_email, recipient_user_id, template_name, subject, payload_json, status, idempotency_key, attempt_count, last_attempted_at)
+       VALUES (?, ?, ?, ?, ?, 'QUEUED', ?, 1, NOW())`,
       [recipientEmail, recipientUserId, templateName, subject, JSON.stringify(payload), key]
     );
 
@@ -472,7 +494,6 @@ class EmailService {
         `UPDATE transactional_email_outbox
          SET status = 'PROVIDER_ACCEPTED',
              provider_message_id = ?,
-             attempt_count = attempt_count + 1,
              last_attempted_at = NOW(),
              sent_at = NOW()
          WHERE id = ?`,
@@ -490,7 +511,6 @@ class EmailService {
       await db.query(
         `UPDATE transactional_email_outbox
          SET status = 'FAILED',
-             attempt_count = attempt_count + 1,
              last_error = ?,
              last_attempted_at = NOW()
          WHERE id = ?`,
@@ -737,14 +757,23 @@ class EmailService {
    * @returns {Promise<Object>} { processed, succeeded, failed }
    */
   async processOutboxBatch({ limit = 10 } = {}) {
+    if(process.env.NODE_ENV!=='test'&&!this.isConfigured)throw Error('EMAIL_TRANSPORT_UNAVAILABLE');
     const safeLimit = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
+
+    // A worker may die after claiming its final attempt. Once the claim lease
+    // expires, surface that row as a terminal failure instead of stranding it
+    // forever in QUEUED. Do not overwrite a provider-accepted receipt.
+    await db.query(
+      `UPDATE transactional_email_outbox SET status='FAILED',last_error='EMAIL_ATTEMPTS_EXHAUSTED'
+       WHERE status='QUEUED' AND attempt_count>=3
+       AND last_attempted_at < (NOW() - INTERVAL 5 MINUTE)`);
 
     // Fetch batch of QUEUED or retryable FAILED (attempt_count < 3) messages
     const [messages] = await db.query(
       `SELECT id, recipient_email, recipient_user_id, template_name, subject, payload_json, attempt_count
        FROM transactional_email_outbox
-       WHERE (status = 'QUEUED')
-          OR (status = 'FAILED' AND attempt_count < 3 AND (last_attempted_at IS NULL OR last_attempted_at < (NOW() - INTERVAL 5 MINUTE)))
+       WHERE status IN ('QUEUED','FAILED') AND attempt_count < 3
+         AND (last_attempted_at IS NULL OR last_attempted_at < (NOW() - INTERVAL 5 MINUTE))
        ORDER BY id ASC
        LIMIT ?`,
       [safeLimit]
@@ -759,8 +788,10 @@ class EmailService {
         `UPDATE transactional_email_outbox
          SET attempt_count = attempt_count + 1,
              last_attempted_at = NOW()
-         WHERE id = ? AND status IN ('QUEUED', 'FAILED')`,
-        [msg.id]
+         WHERE id = ? AND attempt_count = ? AND attempt_count < 3
+           AND status IN ('QUEUED', 'FAILED')
+           AND (last_attempted_at IS NULL OR last_attempted_at < (NOW() - INTERVAL 5 MINUTE))`,
+        [msg.id, msg.attempt_count]
       );
 
       if (claimResult.affectedRows === 0) continue; // Claimed by peer worker
@@ -789,8 +820,8 @@ class EmailService {
                provider_message_id = ?,
                sent_at = NOW(),
                last_error = NULL
-           WHERE id = ?`,
-          [sendResult.messageId || null, msg.id]
+           WHERE id = ? AND attempt_count = ? AND status IN ('QUEUED','FAILED')`,
+          [sendResult.messageId || null, msg.id, msg.attempt_count + 1]
         );
         succeeded++;
       } catch (sendErr) {
@@ -798,8 +829,8 @@ class EmailService {
           `UPDATE transactional_email_outbox
            SET status = 'FAILED',
                last_error = ?
-           WHERE id = ?`,
-          [sendErr.message, msg.id]
+           WHERE id = ? AND attempt_count = ? AND status IN ('QUEUED','FAILED')`,
+          ['EMAIL_DISPATCH_FAILED', msg.id, msg.attempt_count + 1]
         );
         failed++;
       }

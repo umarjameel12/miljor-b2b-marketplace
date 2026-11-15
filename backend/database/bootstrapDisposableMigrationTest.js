@@ -9,7 +9,7 @@ async function main(){
     target!=='miljor_test_db'||testDb!=='miljor_test_db')
    throw Error('TEST_BOOTSTRAP_PROTECTED_DB_BLOCKED: only disposable miljor_test_db in test mode');
  const db=await mysql.createConnection({
-   host:process.env.DB_HOST||'127.0.0.1',user:process.env.DB_USER||'root',
+   host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER||'root',
    password:process.env.DB_PASSWORD||'',database:target
  });
  try{

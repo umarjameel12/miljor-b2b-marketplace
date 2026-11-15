@@ -602,6 +602,8 @@ class SafepayCheckoutService {
         );
       }
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:'PAYMENT.CONFIRMED',transitionId:'paid'});
       await connection.commit();
 
       // B5 Flash pool stock transitions only AFTER an authentic confirmed
@@ -1023,6 +1025,9 @@ class SafepayCheckoutService {
       );
       }
 
+      // Same identity as webhook confirmation: either path produces one receipt.
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:'PAYMENT.CONFIRMED',transitionId:'paid'});
       await connection.commit();
 
       try {

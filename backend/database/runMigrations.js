@@ -26,6 +26,7 @@ async function runMigrations(targetDb) {
     throw new Error('MIGRATION_PARTIAL_RUN_FORBIDDEN: stop-before is restricted to disposable test database');
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: selectedDb,

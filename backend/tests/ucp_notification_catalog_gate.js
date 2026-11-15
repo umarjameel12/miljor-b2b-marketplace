@@ -17,6 +17,9 @@ const args={type:'UCP.ORDER_CONFIRMED',aggregateId:'opaque-order-17',aggregateVe
 assert.equal(buildEventKey(args),buildEventKey({...args}),'retry uses same key');
 assert.notEqual(buildEventKey(args),buildEventKey({...args,aggregateVersion:4}),'new version gets distinct key');
 assert.notEqual(buildEventKey(args),buildEventKey({...args,transitionId:'attempt-2'}),'new transition gets distinct key');
+assert.notEqual(buildEventKey({...args,aggregateId:'a:b',transitionId:'c'}),
+ buildEventKey({...args,aggregateId:'a',transitionId:'b:c'}),'delimiter ambiguity cannot collide');
+assert.ok(buildEventKey({...args,transitionId:'x'.repeat(1000)}).length<=120,'long idempotency keys fit the database column');
 console.log('UCP NOTIFICATION CATALOG SOURCE TEST: PASS ('+events.length+' events)');
 // NOTE: This tests ONLY registry behavior. Real notification delivery requires SQL transaction,
 // outbox integration, recipient isolation, email sandbox and browser tests.

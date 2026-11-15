@@ -1,0 +1,2 @@
+# Migration journals hash exact SQL bytes; Windows checkouts must preserve LF.
+backend/database/migrations/*.sql text eol=lf

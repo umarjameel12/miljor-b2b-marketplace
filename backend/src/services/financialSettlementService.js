@@ -856,6 +856,8 @@ class FinancialSettlementService {
         notes: `Assessed refund obligation: PKR ${totalRefundAmount} (${refundType})`
       });
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:'PAYMENT.REFUND_REQUESTED',transitionId:'refund-'+refundId});
       await connection.commit();
 
       const [createdRefund] = await connection.query('SELECT * FROM refund_obligations WHERE id = ?', [refundId]);
@@ -990,6 +992,8 @@ class FinancialSettlementService {
         notes: `Admin approved refund obligation of PKR ${refund.total_refund_amount}. External execution remains DISABLED.`
       });
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:refund.order_id,type:'PAYMENT.REFUND_APPROVED',transitionId:'refund-'+refundId});
       await connection.commit();
 
       const [updatedRefund] = await connection.query('SELECT * FROM refund_obligations WHERE id = ?', [refundId]);

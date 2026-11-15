@@ -573,12 +573,22 @@ async function runPart5FlashPoolGate() {
         headers: { Authorization: `Bearer ${supplierToken}` }
       });
 
-      const buyers = [buyer1Token, buyer2Token, buyer1Token, buyer2Token, buyer1Token];
-      const promises = buyers.map((token, idx) =>
+      const buyers=[];
+      for(let idx=0;idx<50;idx++){
+        const [buyer]=await db.query(
+          "INSERT INTO users(full_name,email,role,verification_status,is_verified,buyer_trust_status) VALUES (?,?,'BUYER','VERIFIED',1,'CONTACT_VERIFIED')",
+          ['UCP race buyer '+idx,`ucp-race-${ts}-${idx}@example.test`]);
+        cleanupFixtures.userIds.push(buyer.insertId);
+        const [address]=await db.query(
+          "INSERT INTO buyer_delivery_addresses(user_id,city,cluster_id,society_area,full_address,geographic_match_status,user_confirmation_status,manual_review_required) VALUES (?,'Lahore',?,'Gulberg','Synthetic race address, Lahore','VERIFIED','CONFIRMED',0)",
+          [buyer.insertId,testClusterId]);
+        buyers.push({token:generateToken(buyer.insertId,'BUYER'),addressId:address.insertId});
+      }
+      const promises = buyers.map(({token,addressId}, idx) =>
         api(`/api/v1/flash-pools/${racePoolId}/hold`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'X-Idempotency-Key': `idem_p5_race_${ts}_${idx}` },
-          body: { quantity: '4.00', delivery_address_id: idx%2===0?buyer1AddressId:buyer2AddressId, delivery_cluster_id: testClusterId }
+          body: { quantity: '4.00', delivery_address_id:addressId, delivery_cluster_id: testClusterId }
         })
       );
       const results = await Promise.all(promises);
@@ -586,8 +596,10 @@ async function runPart5FlashPoolGate() {
       const failures = results.filter(r => r.status === 409);
       for (const s of successes) cleanupFixtures.orderIds.push(s.body.data.hold.order_id);
       assert.equal(successes.length, 2);
-      assert.equal(failures.length, 3);
-      pass('C03 Concurrent buyer hold race test: exactly 8 units allocated, 0 oversell, invariant holds');
+      assert.equal(failures.length, 48);
+      const [[raceStock]]=await db.query('SELECT remaining_stock,held_stock,committed_stock FROM flash_pools WHERE id=?',[racePoolId]);
+      assert.deepEqual([raceStock.remaining_stock,raceStock.held_stock,raceStock.committed_stock].map(Number),[2,8,0]);
+      pass('C03 50 distinct concurrent buyers: 2 successes, 48 stock conflicts, exactly 8 units held, 0 oversell');
     }
 
     // C04: Expired hold stock reclamation
@@ -876,6 +888,8 @@ async function runPart5FlashPoolGate() {
       }
       // Remove dependent delivery fixtures before deleting supplier/buyers.
       if (cleanupFixtures.userIds.length) {
+        await db.query('DELETE FROM transactional_email_outbox WHERE recipient_user_id IN (?)',[cleanupFixtures.userIds]);
+        await db.query('DELETE FROM platform_notifications WHERE user_id IN (?)',[cleanupFixtures.userIds]);
         await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id IN (?)', [cleanupFixtures.userIds]);
         await db.query('DELETE FROM supplier_pickup_points WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);
         await db.query('DELETE FROM supplier_delivery_cluster_rates WHERE supplier_id IN (?)', [cleanupFixtures.userIds]);

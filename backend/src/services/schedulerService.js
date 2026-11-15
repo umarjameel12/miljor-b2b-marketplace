@@ -23,7 +23,7 @@ function startScheduler() {
     console.log(`[Scheduler] Running pool expiry check at ${new Date().toISOString()}`);
     try {
       await poolClosureService.processExpiredPools();
-      await poolClosureService.processExpiredFlashPools();
+      await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
     } catch (err) {
       console.error('[Scheduler] Pool expiry job failed:', err.message);
     }
@@ -41,6 +41,18 @@ function startScheduler() {
     }
   });
   activeTasks.push(cleanupTask);
+
+  // Email remains opt-in until transport configuration and runtime acceptance.
+  if(process.env.UCP_NOTIFICATION_EMAIL_WORKER_ENABLED==='true'){
+    let running=false;
+    activeTasks.push(cron.schedule('* * * * *',async()=>{
+      if(running)return;
+      running=true;
+      try{await require('./emailService').processOutboxBatch({limit:20});}
+      catch(error){console.error('[Scheduler] Notification email delivery requires review');}
+      finally{running=false;}
+    }));
+  }
 
   // B6-M recurring procurement draft worker, opt-in only.
   // Does NOT create orders, trigger Safepay or authorize standing charges.
