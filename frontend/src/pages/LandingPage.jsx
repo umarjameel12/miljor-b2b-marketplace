@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store, UserRound, ChevronDown, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
 import { Logo } from '../components/ui/Logo';
@@ -30,8 +30,8 @@ const COMMODITIES = [
   {
     title: 'Cooking oil',
     subtitle: 'Everyday kitchen essentials',
-    image: 'https://unsplash.com/photos/iNSFdfuw__A/download?force=true&w=1200',
-    alt: 'Groundnut cooking oil bottles displayed together',
+    image: 'https://images.pexels.com/photos/3737651/pexels-photo-3737651.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Unbranded clear glass bottle of golden cooking oil against a neutral backdrop',
   },
 ];
 
@@ -62,6 +62,8 @@ export const LandingPage = () => {
   const [slide, setSlide] = useState(0);
   const [paused, setPaused] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
 
@@ -70,6 +72,22 @@ export const LandingPage = () => {
     const timer = setInterval(() => setSlide((index) => (index + 1) % COMMODITIES.length), 5000);
     return () => clearInterval(timer);
   }, [paused]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const onOutside = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) setAccountMenuOpen(false);
+    };
+    const onEscape = (event) => {
+      if (event.key === 'Escape') setAccountMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [accountMenuOpen]);
 
   useEffect(() => {
     let mounted = true;
@@ -109,25 +127,48 @@ export const LandingPage = () => {
             {isAuthenticated ? (
               <Link to={dashboardPath} className="rounded-full px-5 py-2.5 text-xs font-semibold" style={buttonGold}>Open Marketplace</Link>
             ) : (
-              <div
-                className="inline-grid grid-cols-2 items-center rounded-xl border p-1 shadow-sm"
-                style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-                aria-label="Account access"
-              >
-                <Link
-                  to="/login"
-                  className="rounded-lg px-4 py-2 text-center text-xs font-semibold transition-all hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
-                  style={{ backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
+              <div className="relative" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setAccountMenuOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  aria-controls="landing-account-options"
+                  className="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
+                  style={{ borderColor: 'var(--brand-accent)', backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
                 >
-                  Sign In
-                </Link>
-                <Link
-                  to="/register"
-                  className="rounded-lg px-4 py-2 text-center text-xs font-semibold transition-all hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  Register
-                </Link>
+                  <UserRound size={16} aria-hidden="true" />
+                  Account
+                  <ChevronDown size={14} className={accountMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
+                </button>
+                {accountMenuOpen && (
+                  <div
+                    id="landing-account-options"
+                    role="menu"
+                    aria-label="Account options"
+                    className="absolute right-0 top-full z-50 mt-2 w-44 rounded-xl border p-1.5 shadow-xl"
+                    style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    <Link
+                      role="menuitem"
+                      to="/login"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <LogIn size={16} style={{ color: 'var(--text-secondary)' }} />
+                      Sign In
+                    </Link>
+                    <Link
+                      role="menuitem"
+                      to="/register"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <UserPlus size={16} style={{ color: 'var(--text-secondary)' }} />
+                      Register
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -137,8 +178,15 @@ export const LandingPage = () => {
           <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
             {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><link.icon size={16} style={{ color: "var(--brand-accent)" }} />{link.title}</a>)}
             <Link to={requestQuoteDestination} state={quoteState} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><FileText size={16} style={{ color: "var(--brand-accent)" }} />Request Quote</Link>
-            <Link to={isAuthenticated ? dashboardPath : '/login'} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>{isAuthenticated ? 'Open Marketplace' : 'Sign In'}</Link>
-            {!isAuthenticated && <Link to="/register" className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Register</Link>}
+            {isAuthenticated ? (
+              <Link to={dashboardPath} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Open Marketplace</Link>
+            ) : (
+              <div className="mt-2 border-t pt-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center gap-2 px-3 py-2 text-sm font-semibold"><UserRound size={16} style={{ color: 'var(--text-secondary)' }} />Account</div>
+                <Link to="/login" onClick={() => setMobileMenu(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"><LogIn size={15} />Sign In</Link>
+                <Link to="/register" onClick={() => setMobileMenu(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"><UserPlus size={15} />Register</Link>
+              </div>
+            )}
           </nav>
         )}
       </header>
