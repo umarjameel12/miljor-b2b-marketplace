@@ -66,7 +66,7 @@ const PREVIEW_POOLS = [
     supplier_business_name: 'Lahore Pulses Supply',
     buyer_min_qty: 1, estimated_unit_price: 6100,
     target_quantity: 150, committed_quantity: 45, fill_percentage: 30,
-    image_url: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Split_Chickpeas.jpg?width=960',
     delivery_type: 'BOTH', pool_code: 'DEMO-DAAL-01', status: 'ACTIVE',
   },
 ];
@@ -150,7 +150,7 @@ export const LandingPage = () => {
   const requestQuoteDestination = isAuthenticated ? '/rfqs' : '/login';
   const quoteState = isAuthenticated ? undefined : { from: { pathname: '/rfqs' } };
   const buttonGold = { color: 'var(--text-on-champagne)' };
-  const exploreDestination = isAuthenticated ? '/pools' : '#live-pools';
+  const exploreDestination = '#live-pools';
   const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
 
   return (
@@ -344,7 +344,7 @@ export const LandingPage = () => {
           >
             {!loadingPools && featuredPools.map((pool) => (
               <div key={pool.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
-                <PoolCard pool={pool} onSelect={() => navigate(isAuthenticated ? '/pools' : '/login', isAuthenticated ? {} : { state: { from: { pathname: '/pools' } } })} />
+                <PoolCard pool={pool} onSelect={() => navigate('/login', { state: { from: { pathname: '/pools' } } })} />
               </div>
             ))}
             {/* Same card component and 15-day countdown for category examples.
@@ -353,6 +353,7 @@ export const LandingPage = () => {
               <div key={item.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
                 <PoolCard
                   isExample
+                  onSelect={() => navigate('/login', { state: { from: { pathname: '/pools' } } })}
                   pool={{
                     ...item,
                     scheduled_close_at: exampleDeadline.toISOString(),
