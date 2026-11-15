@@ -36,17 +36,6 @@ const COMMODITIES = [
 ];
 
 
-// Illustrative examples are deliberately separate from real supplier pools.
-// No slideshow photography, invented live stock, order actions or real prices.
-const DEMO_POOLS = [
-  { category: 'Rice & grains', title: 'Super Kernel Basmati Rice', description: 'Restaurant-focused bulk rice procurement example.', target: '300 kg', pack: '25 kg bags', icon: Layers },
-  { category: 'Flour & bakery', title: 'Fine Wheat Flour', description: 'Volume-based flour sourcing for kitchens and bakeries.', target: '500 kg', pack: '20 kg bags', icon: ShoppingBag },
-  { category: 'Cooking essentials', title: 'Refined Cooking Oil', description: 'Consolidated commercial kitchen oil procurement.', target: '160 L', pack: '16 L tins', icon: Store },
-  { category: 'Pulses', title: 'Daal Chana', description: 'Shared procurement of quality-specified pulses.', target: '250 kg', pack: '25 kg bags', icon: Layers },
-  { category: 'Sweeteners', title: 'Refined White Sugar', description: 'Example order combining demand from multiple buyers.', target: '500 kg', pack: '50 kg bags', icon: ShoppingBag },
-  { category: 'Bakery staples', title: 'Super White Maida', description: 'Commercial bulk flour example for bakery operations.', target: '840 kg', pack: '84 kg bags', icon: Store },
-];
-
 function CommoditySlide({ item, active }) {
   return (
     <div
@@ -78,7 +67,6 @@ export const LandingPage = () => {
   const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
-  const [showAllExamples, setShowAllExamples] = useState(false);
 
   useEffect(() => {
     if (paused || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return undefined;
@@ -241,58 +229,40 @@ export const LandingPage = () => {
         <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Marketplace preview</p>
-              <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Explore collective buying</h2>
-              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Real opportunities when available, plus clearly marked examples of how pools work.</p>
+              <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Supplier-led procurement</p>
+              <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers, updated from the marketplace.</p>
             </div>
-            <a href="#pool-showcase" className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">View pool examples <ArrowRight size={16} /></a>
+            {isAuthenticated ? (
+              <Link to={user?.role === 'SUPPLIER' ? '/supplier/pools' : '/pools'} className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">
+                {user?.role === 'SUPPLIER' ? 'Manage your pools' : 'View All Pools'} <ArrowRight size={16} />
+              </Link>
+            ) : (
+              <a href="#live-pools" className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">Explore live offers</a>
+            )}
           </div>
-
           {loadingPools ? (
-            <p role="status" className="rounded-2xl border p-6 text-sm" style={panel}>Checking current opportunities…</p>
+            <p role="status" className="rounded-2xl border p-7 text-sm" style={panel}>Checking published pools…</p>
           ) : featuredPools.length > 0 ? (
-            <div className="mb-10">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="landing-section-title text-base font-semibold">Live supplier pools</h3>
-                {isAuthenticated ? <Link to="/pools" className="landing-top-link text-sm font-semibold">View All Pools <ArrowRight className="inline-block" size={15} /></Link> : <Link to="/login" className="landing-top-link text-sm font-semibold">Sign in to browse all <ArrowRight className="inline-block" size={15} /></Link>}
-              </div>
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}</div>
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}
             </div>
           ) : (
-            <p className="mb-9 text-sm" style={{ color: 'var(--text-secondary)' }}>No live public pools available right now. Explore the illustrative previews below.</p>
-          )}
-
-          <div id="pool-showcase" className="scroll-mt-24">
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col gap-4 rounded-[1.5rem] border p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9" style={panel}>
               <div>
-                <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.16em]">Illustrative only · Not available to order</p>
-                <h3 className="landing-section-title mt-2 text-xl font-semibold sm:text-2xl">What a pool could look like</h3>
+                <h3 className="landing-section-title text-lg font-semibold">No published pools available yet</h3>
+                <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+                  When verified suppliers publish active pools, their offers will appear here automatically.
+                </p>
               </div>
-              <span className="rounded-full border px-3 py-1.5 text-[11px] font-medium" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>Sample listings</span>
+              <Link
+                to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'}
+                className="landing-gradient-cta inline-flex shrink-0 items-center justify-center rounded-full px-5 py-3 text-sm font-semibold"
+              >
+                {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
+              </Link>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {(showAllExamples ? DEMO_POOLS : DEMO_POOLS.slice(0, 3)).map((pool) => (
-                <article key={pool.title} className="landing-demo-card flex flex-col rounded-[1.4rem] border p-5 sm:p-6" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="landing-demo-illustration grid h-14 w-14 place-items-center rounded-2xl" aria-hidden="true"><pool.icon size={26} strokeWidth={1.6}/></div>
-                    <span className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>Demo</span>
-                  </div>
-                  <p className="landing-eyebrow mt-5 text-[10px] font-semibold uppercase tracking-[0.15em]">{pool.category}</p>
-                  <h4 className="landing-section-title mt-1 text-lg font-semibold">{pool.title}</h4>
-                  <p className="mt-2 min-h-10 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>{pool.description}</p>
-                  <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Example target</p><p className="mt-1 text-sm font-semibold">{pool.target}</p></div>
-                    <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Purchase format</p><p className="mt-1 text-sm font-semibold">{pool.pack}</p></div>
-                  </div>
-                  <div className="mt-5 rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>Illustration only — no live stock, price or reservation</div>
-                </article>
-              ))}
-            </div>
-            <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
-              <button type="button" onClick={() => setShowAllExamples((value) => !value)} className="landing-outline-cta rounded-full border px-5 py-2.5 text-sm font-semibold">{showAllExamples ? 'Show fewer examples' : 'View all pool examples'}</button>
-              <Link to={isAuthenticated ? '/pools' : '/login'} className="landing-top-link text-sm font-semibold">{isAuthenticated ? 'Open live pool board' : 'Sign in for live pools'} <ArrowRight size={15} className="inline-block" /></Link>
-            </div>
-          </div>
+          )}
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
