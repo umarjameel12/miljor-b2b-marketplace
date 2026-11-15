@@ -227,7 +227,7 @@ export const RegisterPage = () => {
 
       {/* Segmented Quick-Switch Tabs [Sign In | Create Account] */}
       <div
-        className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+        className="auth-auth-tabs grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
         style={{
           backgroundColor: 'var(--bg-input)',
           borderColor: 'var(--border-subtle)',
@@ -255,7 +255,7 @@ export const RegisterPage = () => {
       {/* Account Type Selector: Buyer vs Supplier */}
       <div className="flex flex-col gap-1">
         <label className="text-[11px] font-sans font-medium" style={{ color: 'var(--text-secondary)' }}>
-          Account Type
+          Register as
         </label>
         <div
           className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
@@ -384,12 +384,11 @@ export const RegisterPage = () => {
               readOnly
               value="Lahore"
               aria-label="Launch City"
-              className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-not-allowed select-none h-[42px]"
+              className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-default select-none h-[42px]"
               style={{
                 backgroundColor: 'var(--bg-input)',
                 borderColor: 'var(--border-default)',
                 color: 'var(--text-primary)',
-                opacity: 0.9,
               }}
             />
           </div>
@@ -398,9 +397,10 @@ export const RegisterPage = () => {
           <LahoreClusterSelector
             value={formData.cluster_id}
             onChange={handleClusterChange}
-            label="Area Cluster"
+            label="Local Area"
             badge=""
             helperText=""
+            compact
           />
         </div>
 
