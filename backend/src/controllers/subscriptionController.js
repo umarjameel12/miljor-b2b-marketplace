@@ -100,6 +100,44 @@ class SubscriptionController {
     }
   }
 
+  async initiateCheckout(req,res) {
+    try {
+      const result = await require('../services/supplierSubscriptionCheckoutService').start({
+        actor: req.user, planCode: String(req.body?.plan_code||'').toUpperCase(),
+        idempotencyKey: req.get('X-Idempotency-Key')
+      });
+      return res.status(200).json({success:true,data:result});
+    } catch (e) {
+      return res.status(e.statusCode||500).json({success:false,error:{
+        code:e.code||'CHECKOUT_UNAVAILABLE',
+        message:e.statusCode ? e.message : 'Subscription checkout unavailable'
+      }});
+    }
+  }
+  async listCheckoutAttempts(req,res) {
+    try {
+      const attempts = await require('../services/supplierSubscriptionCheckoutService').list({actor:req.user});
+      return res.json({success:true,data:{attempts}});
+    } catch(e) {
+      return res.status(e.statusCode||500).json({success:false,error:{
+        code:e.code||'CHECKOUT_UNAVAILABLE',message:e.statusCode?e.message:'Checkout history unavailable'
+      }});
+    }
+  }
+  async reconcileCheckout(req,res) {
+    try {
+      const result = await require('../services/supplierSubscriptionCheckoutService').reconcile({
+        actor:req.user,attemptId:req.params.id
+      });
+      return res.json({success:true,data:result});
+    } catch(e) {
+      return res.status(e.statusCode||500).json({success:false,error:{
+        code:e.code||'CHECKOUT_RECONCILIATION_FAILED',
+        message:e.statusCode?e.message:'Unable to verify subscription payment'
+      }});
+    }
+  }
+
   // GET /api/v1/subscriptions/plans (Public / Authenticated)
   async getPlans(req, res) {
     try {
