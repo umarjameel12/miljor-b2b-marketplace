@@ -88,6 +88,16 @@ router.get('/procurement/recurring/:contractId/cycles',protect,authorizeStrict('
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/prepare',protect,authorizeStrict('BUYER'),(req,res)=>controller.prepareRecurringCycle(req,res));
 
 // B6-G/H — Fee-inclusive preview and server-gated real order acceptance.
+// PR53 numeric-only counteroffers and delivery intent; no direct checkout or payment.
+router.post('/procurement/requests/:id/quotes/:quoteId/delivery-choice',protect,authorizeStrict('BUYER'),(req,res)=>controller.chooseDelivery(req,res));
+router.get('/procurement/supplier/requests/:id/delivery-choices',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.supplierDeliveryChoices(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitProductCounteroffers(req,res));
+router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerProductCounteroffers(req,res));
+router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierProductCounteroffers(req,res));
+router.post('/procurement/supplier/counteroffers/:offerId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondProductCounteroffer(req,res));
+router.get('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.getRecurringCycleInputs(req,res));
+router.put('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.updateRecurringCycleInputs(req,res));
+
 router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartPayable(req,res));
 router.post('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptSmartAward(req,res));
 router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartAward(req,res));
