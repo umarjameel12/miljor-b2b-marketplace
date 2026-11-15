@@ -1,0 +1,45 @@
+name: Smart Hub notification contracts
+on:
+  pull_request:
+    paths:
+      - 'backend/src/services/*notification*'
+      - 'backend/src/services/procurement*'
+      - 'backend/src/services/emailService.js'
+      - 'backend/src/routes/v1/notificationRoutes.js'
+      - 'backend/database/migrations/09*.sql'
+      - 'backend/tests/notification*'
+      - 'backend/tests/email_outbox_queue_gate.js'
+      - 'frontend/src/api/notifications.js'
+      - 'frontend/src/components/layout/AppShell.jsx'
+      - 'frontend/tests/notifications.test.js'
+      - '.github/workflows/smart-hub-notifications.yml'
+  push:
+    branches: ['feature/smart-procurement-hub-unified-entry']
+jobs:
+  notification-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend
+        run: npm ci
+      - name: Notification service, action and channel contracts
+        run: |
+          node --test tests/notification_projection_gate.js tests/notification_request_action_gate.js tests/email_outbox_queue_gate.js tests/fulfillment_notification_hooks.test.js tests/financial_notification_action_gate.js
+          node tests/notification_transaction_gate.js
+          node tests/notification_route_ownership_gate.js
+          node tests/canonical_migration_manifest_gate.js
+      - name: Install frontend
+        run: npm ci --prefix ../frontend
+      - name: Polling, account isolation and durable read tests
+        working-directory: frontend
+        run: node --test tests/notifications.test.js
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build

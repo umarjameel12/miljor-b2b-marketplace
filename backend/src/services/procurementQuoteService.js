@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const db = require('../config/db');
 const exact = require('./exactDecimal');
 const matching = require('./procurementMatchingService');
+const notifications = require('./notificationService');
 
 const failure = (code,message,statusCode=400) => Object.assign(new Error(message),{code,statusCode});
 function positiveId(value){
@@ -80,7 +81,7 @@ class ProcurementQuoteService{
       await conn.beginTransaction();
       // Parent request is always locked before quote rows to serialize close/withdraw/revisions.
       const [requests]=await conn.query(
-        `SELECT id, status, quote_deadline, delivery_area
+        `SELECT id, buyer_id, status, quote_deadline, delivery_area
            FROM procurement_requests WHERE id=? FOR UPDATE`,[rid]);
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
       // Durable response replay precedes expiry and stock checks: retries must
@@ -236,6 +237,9 @@ class ProcurementQuoteService{
            AND requested_version < ?`,
         [version,quote.id,supplier,version]
       );
+      await notifications.enqueueEvent(conn,{userId:requests[0].buyer_id,role:'BUYER',
+        eventType:version===1?'QUOTE_RECEIVED':'QUOTE_REVISED',
+        eventKey:'quote:'+quote.id+':version:'+version,entityId:rid});
       await conn.commit();
       return {...response,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')

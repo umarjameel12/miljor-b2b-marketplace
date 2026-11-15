@@ -6,6 +6,8 @@ import { Logo } from '../ui/Logo';
 import { Drawer } from '../ui/Drawer';
 import FLAGS from '../../config/featureFlags';
 import { unifiedPoolsApi } from '../../api/unifiedPools';
+import { startNotificationInbox, startNotificationPreferences, safeNotificationLink, NOTIFICATION_PAGE_SIZE } from '../../api/notifications';
+import { parseDeadline } from '../../utils/parseDeadline';
 import {
   Layers,
   ClipboardList,
@@ -94,40 +96,174 @@ export const AppShell = ({ children }) => {
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNotificationsOpen, setMobileNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [readNotificationIds, setReadNotificationIds] = useState(new Set());
+  const accountKey = isAuthenticated && user?.id != null ? `${user.id}:${role}` : null;
+  const inboxRef = useRef(null);
+  const preferencesRef = useRef(null);
+  const [preferencesState, setPreferencesState] = useState(null);
+  const [inboxState, setInboxState] = useState(null);
+  const [legacyState, setLegacyState] = useState(null);
+  const inbox = inboxState?.owner === accountKey && accountKey ? inboxState : null;
+  const preferences = preferencesState?.owner === accountKey && accountKey ? preferencesState : null;
+  const notifications = inbox?.notifications || [];
+  const unreadCount = inbox?.unreadCount ?? null;
+  const legacyAlerts = legacyState?.owner === accountKey && accountKey ? legacyState.alerts : [];
 
-  // Genuine backend alerts/notifications loader
   useEffect(() => {
-    let isMounted = true;
-    async function loadNotifications() {
-      if (!isAuthenticated) {
-        if (isMounted) setNotifications([]);
-        return;
-      }
-      try {
-        if (role === 'SUPPLIER') {
-          const res = await unifiedPoolsApi.alerts();
-          if (isMounted && res?.alerts) {
-            setNotifications(res.alerts);
-          }
-        } else {
-          // For buyer / admin, genuine notifications come from backend events; if none, array remains empty
-          if (isMounted) setNotifications([]);
-        }
-      } catch {
-        if (isMounted) setNotifications([]);
-      }
+    setNotificationsOpen(false);
+    setMobileNotificationsOpen(false);
+    setInboxState(null);
+    setLegacyState(null);
+    setPreferencesState(null);
+    if (!accountKey) return undefined;
+    const session = startNotificationInbox({
+      onChange: state => setInboxState({ ...state, owner: accountKey }),
+    });
+    inboxRef.current = session;
+    const preferencesSession = startNotificationPreferences({
+      onChange: state => setPreferencesState({ ...state, owner: accountKey }),
+    });
+    preferencesRef.current = preferencesSession;
+    let active = true;
+    // UCP alerts are operational projections, not durable inbox entries.
+    if (role === 'SUPPLIER') {
+      unifiedPoolsApi.alerts().then(res => {
+        if (active) setLegacyState({ owner: accountKey, alerts: Array.isArray(res?.alerts) ? res.alerts : [], error: '' });
+      }).catch(() => {
+        if (active) setLegacyState({ owner: accountKey, alerts: [], error: 'Operational alerts unavailable.' });
+      });
     }
-    loadNotifications();
-  }, [isAuthenticated, role]);
+    const catchUp = () => { void session.refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') catchUp(); };
+    window.addEventListener('online', catchUp);
+    window.addEventListener('focus', catchUp);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      session.stop();
+      preferencesSession.stop();
+      if (preferencesRef.current === preferencesSession) preferencesRef.current = null;
+      if (inboxRef.current === session) inboxRef.current = null;
+      window.removeEventListener('online', catchUp);
+      window.removeEventListener('focus', catchUp);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [accountKey, role]);
 
-  const unreadNotifications = notifications.filter(n => !readNotificationIds.has(n.id));
-  const unreadCount = unreadNotifications.length;
+  useEffect(() => {
+    if (notificationsOpen || mobileNotificationsOpen) void inboxRef.current?.refresh();
+  }, [notificationsOpen, mobileNotificationsOpen]);
 
-  const markAllAsRead = () => {
-    setReadNotificationIds(new Set(notifications.map(n => n.id)));
+  const notificationLink = (notification) => {
+    let payload = notification.payload;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch { payload = null; }
+    }
+    return safeNotificationLink(notification.deep_link || payload?.deep_link || payload?.deepLink || payload?.url);
   };
+
+  const openNotification = (notification) => {
+    const link = notificationLink(notification);
+    if (link) {
+      setNotificationsOpen(false);
+      setMobileNotificationsOpen(false);
+      navigate(link);
+    }
+  };
+
+  const renderNotificationPanel = () => (
+    <div className="space-y-3 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">Notifications{unreadCount !== null ? ` (${unreadCount} unread)` : ''}</span>
+        {unreadCount > 0 && (
+          <button type="button" disabled={inbox?.loading} onClick={() => inboxRef.current?.markAllRead()}
+            className="text-[10px] underline disabled:opacity-50">Mark all read</button>
+        )}
+      </div>
+      {!accountKey ? <Link to="/login">Sign in to view notifications.</Link> : (
+        <>
+          {inbox?.error && <p role="alert">{inbox.error} <button type="button" disabled={inbox.loading}
+            className="underline" onClick={() => inboxRef.current?.refresh()}>Retry</button></p>}
+          {(!inbox || inbox.loading) && <p role="status">Updating notifications…</p>}
+          {inbox && !inbox.loading && !inbox.error && notifications.length === 0 && (
+            <div className="py-4 text-center"><BellOff className="w-4 h-4 mx-auto mb-2" />No notifications on this page.</div>
+          )}
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {notifications.map(n => {
+              const isRead = n.is_read === true || n.is_read === 1 || n.is_read === '1';
+              const timestamp = parseDeadline(n.created_at);
+              return (
+                <div key={n.id} className={`p-2.5 rounded-xl border ${isRead ? 'opacity-65' : ''}`}
+                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+                  <p className="font-semibold" dir="auto">{n.title || n.event_type || 'Notification'}{!isRead && <span className="sr-only"> — Unread</span>}</p>
+                  <p className="mt-1" dir="auto">{n.message}</p>
+                  {Number.isFinite(timestamp) && <time dateTime={new Date(timestamp).toISOString()}
+                    className="block mt-1 text-[10px]">{new Date(timestamp).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' })}</time>}
+                  <div className="flex gap-3 mt-2">
+                    {notificationLink(n) && <button type="button" className="underline" onClick={() => openNotification(n)}>View details</button>}
+                    {!isRead && <button type="button" className="underline disabled:opacity-50" disabled={inbox.loading}
+                      onClick={() => inboxRef.current?.markRead(n.id)}>Mark read</button>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between gap-3">
+            <button type="button" disabled={!inbox || inbox.loading || !inbox.offset}
+              className="disabled:opacity-40" onClick={() => inboxRef.current?.page(inbox.offset - NOTIFICATION_PAGE_SIZE)}>Newer</button>
+            <button type="button" disabled={!inbox || inbox.loading || notifications.length < NOTIFICATION_PAGE_SIZE}
+              className="disabled:opacity-40" onClick={() => inboxRef.current?.page(inbox.offset + NOTIFICATION_PAGE_SIZE)}>Older</button>
+          </div>
+          <details key={accountKey} className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+            <summary className="font-semibold cursor-pointer">Notification preferences</summary>
+            <div className="space-y-2 mt-2">
+              <p className="text-[10px]">Financial and security alerts are mandatory and cannot be disabled.</p>
+              {(!preferences || preferences.loading) && <p role="status">Loading preferences…</p>}
+              {preferences?.error && <p role="alert">{preferences.error}
+                {!preferences.values && <button type="button" className="underline ml-1" disabled={preferences.loading}
+                  onClick={() => preferencesRef.current?.load()}>Retry</button>}
+              </p>}
+              {preferences?.values && (
+                <form className="space-y-2" onSubmit={event => { event.preventDefault(); void preferencesRef.current?.save(); }}>
+                  <fieldset className="space-y-2" disabled={preferences.loading || preferences.pending}>
+                    <label className="flex items-center justify-between gap-2">
+                      <span>Notification language</span>
+                      <select value={preferences.values.locale} onChange={event => preferencesRef.current?.edit({ locale: event.target.value })}
+                        className="rounded border p-1" style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border-subtle)' }}>
+                        <option value="en">English</option>
+                        <option value="ur">Urdu / اردو</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={preferences.values.optional_email}
+                        onChange={event => preferencesRef.current?.edit({ optional_email: event.target.checked })} />
+                      Optional email notifications
+                    </label>
+                    <p className="text-[10px]">SMS delivery is unavailable: no provider is configured. SMS preferences are deferred.</p>
+                    <button type="submit" className="underline disabled:opacity-50">{preferences.pending ? 'Saving…' : 'Save preferences'}</button>
+                  </fieldset>
+                  {preferences.saved && <p role="status">Preferences saved.</p>}
+                </form>
+              )}
+            </div>
+          </details>
+          {role === 'SUPPLIER' && (
+            <section className="border-t pt-3 space-y-2" style={{ borderColor: 'var(--border-subtle)' }}>
+              <h3 className="font-semibold">Supplier operational alerts</h3>
+              <p className="text-[10px]">Current pool conditions, separate from inbox read status.</p>
+              {legacyState?.owner === accountKey && legacyState.error && <p role="status">{legacyState.error}</p>}
+              {legacyState?.owner === accountKey && !legacyState.error && legacyAlerts.length === 0 && <p>No operational alerts.</p>}
+              {legacyAlerts.map((alert, index) => <div key={`${alert.id ?? index}`} className="p-2 rounded-xl"
+                style={{ backgroundColor: 'var(--bg-elevated)' }}>
+                <p className="font-semibold">{alert.title || alert.type || 'Operational alert'}</p>
+                <p>{alert.message}</p>
+                {alert.source && <span className="text-[10px]">{String(alert.source).replace(/_/g, ' ')}</span>}
+              </div>)}
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   // Outside click listener: Close notifications dropdown when clicking outside
   useEffect(() => {
@@ -350,7 +486,8 @@ export const AppShell = ({ children }) => {
               <button
                 type="button"
                 onClick={() => setMobileNotificationsOpen(!mobileNotificationsOpen)}
-                aria-label="Notifications"
+                aria-label={unreadCount === null ? 'Notifications' : `Notifications, ${unreadCount} unread`}
+                aria-expanded={mobileNotificationsOpen}
                 title="Notifications"
                 className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95 relative"
                 style={{
@@ -362,9 +499,9 @@ export const AppShell = ({ children }) => {
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
                 {unreadCount > 0 && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
-                    aria-label={`${unreadCount} unread alerts`}
-                  />
+                    className="min-w-4 px-1 text-[9px] rounded-full bg-emerald-600 text-white absolute -top-1 -right-1"
+                    aria-label={`${unreadCount} unread notifications`}
+                  >{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
               </button>
 
@@ -378,78 +515,7 @@ export const AppShell = ({ children }) => {
                     boxShadow: 'var(--shadow-elevated)',
                   }}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
-                    {unreadCount > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                          {unreadCount} New
-                        </span>
-                        <button
-                          type="button"
-                          onClick={markAllAsRead}
-                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
-                        >
-                          Mark all read
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-stone-400">All caught up</span>
-                    )}
-                  </div>
-
-                  {notifications.length === 0 ? (
-                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
-                        style={{
-                          backgroundColor: 'var(--bg-elevated)',
-                          color: 'var(--brand-accent)',
-                        }}
-                      >
-                        <BellOff className="w-4 h-4 opacity-75" />
-                      </div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        You're all caught up.
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        No new notifications at this time.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
-                      {notifications.map((n) => {
-                        const isRead = readNotificationIds.has(n.id);
-                        return (
-                          <div
-                            key={n.id}
-                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
-                            style={{
-                              backgroundColor: 'var(--bg-elevated)',
-                              borderColor: 'var(--border-subtle)',
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                                {n.title || n.type || 'Alert'}
-                              </p>
-                              {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              )}
-                            </div>
-                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                              {n.message}
-                            </p>
-                            {n.source && (
-                              <span className="text-[9px] text-stone-400 mt-1 block">
-                                {n.source.replace(/_/g, ' ')}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {renderNotificationPanel()}
                 </div>
               )}
             </div>
@@ -889,7 +955,8 @@ export const AppShell = ({ children }) => {
               <button
                 type="button"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                aria-label="Notifications"
+                aria-label={unreadCount === null ? 'Notifications' : `Notifications, ${unreadCount} unread`}
+                aria-expanded={notificationsOpen}
                 title="Notifications"
                 className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95 relative"
                 style={{
@@ -901,9 +968,9 @@ export const AppShell = ({ children }) => {
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
                 {unreadCount > 0 && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
-                    aria-label={`${unreadCount} unread alerts`}
-                  />
+                    className="min-w-4 px-1 text-[9px] rounded-full bg-emerald-600 text-white absolute -top-1 -right-1"
+                    aria-label={`${unreadCount} unread notifications`}
+                  >{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
               </button>
 
@@ -916,78 +983,7 @@ export const AppShell = ({ children }) => {
                     boxShadow: 'var(--shadow-elevated)',
                   }}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
-                    {unreadCount > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                          {unreadCount} New
-                        </span>
-                        <button
-                          type="button"
-                          onClick={markAllAsRead}
-                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
-                        >
-                          Mark all read
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-stone-400">All caught up</span>
-                    )}
-                  </div>
-
-                  {notifications.length === 0 ? (
-                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
-                        style={{
-                          backgroundColor: 'var(--bg-elevated)',
-                          color: 'var(--brand-accent)',
-                        }}
-                      >
-                        <BellOff className="w-4 h-4 opacity-75" />
-                      </div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        You're all caught up.
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        No new notifications at this time.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
-                      {notifications.map((n) => {
-                        const isRead = readNotificationIds.has(n.id);
-                        return (
-                          <div
-                            key={n.id}
-                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
-                            style={{
-                              backgroundColor: 'var(--bg-elevated)',
-                              borderColor: 'var(--border-subtle)',
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                                {n.title || n.type || 'Alert'}
-                              </p>
-                              {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              )}
-                            </div>
-                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                              {n.message}
-                            </p>
-                            {n.source && (
-                              <span className="text-[9px] text-stone-400 mt-1 block">
-                                {n.source.replace(/_/g, ' ')}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {renderNotificationPanel()}
                 </div>
               )}
             </div>

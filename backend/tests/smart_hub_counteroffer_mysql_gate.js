@@ -20,6 +20,7 @@ async function run(){
   assert.equal(identity.db,'miljor_test_db');
   const database=mysql.createPool({...options,database:'miljor_test_db',connectionLimit:4,timezone:'Z'});
   const queries=[
+    'CREATE TABLE users (id INT NOT NULL PRIMARY KEY,role VARCHAR(20) NOT NULL,email VARCHAR(100)) ENGINE=InnoDB',
     'CREATE TABLE procurement_requests (id BIGINT NOT NULL PRIMARY KEY,buyer_id INT NOT NULL,status VARCHAR(20) NOT NULL,quote_deadline DATETIME NOT NULL) ENGINE=InnoDB',
     'CREATE TABLE procurement_quotes (id BIGINT NOT NULL PRIMARY KEY,request_id BIGINT NOT NULL,supplier_id INT NOT NULL,current_version INT NOT NULL,status VARCHAR(20) NOT NULL) ENGINE=InnoDB',
     'CREATE TABLE procurement_quote_versions (id BIGINT NOT NULL PRIMARY KEY,quote_id BIGINT NOT NULL,version_number INT NOT NULL,valid_until DATETIME NOT NULL) ENGINE=InnoDB',
@@ -33,6 +34,11 @@ async function run(){
       "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE()");
     assert.equal(preexisting.length,0,'Refuse to overwrite an existing test database');
     for(const sql of queries)await database.query(sql);
+    for(const filename of ['048_procurement_notification_outbox.sql','049_in_app_notifications.sql','092_notification_event_delivery.sql']){
+      const sql=fs.readFileSync(path.resolve(__dirname,'../database/migrations',filename),'utf8');
+      for(const statement of sql.split(';').filter(part=>part.trim()))await database.query(statement);
+    }
+    await database.query("INSERT INTO users VALUES (100,'BUYER','buyer@example.invalid'),(200,'SUPPLIER','supplier@example.invalid')");
     const migration=fs.readFileSync(path.resolve(__dirname,'../database/migrations/090_smart_procurement_product_counteroffers.sql'),'utf8');
     await database.query(migration);
     const [tables]=await database.query("SHOW TABLE STATUS LIKE 'procurement_product_counteroffers'");

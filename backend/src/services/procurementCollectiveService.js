@@ -1,4 +1,5 @@
 'use strict';
+const notifications=require('./notificationService');
 
 // B6-I: consent-first B2B collective invitation and joining.
 // No group bids, stock allocations, checkout, or payment in this service.
@@ -129,6 +130,8 @@ class ProcurementCollectiveService{
         'SELECT id,status FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?',
         [gid,invitee]
       );
+      if(rows[0].status==='INVITED')await notifications.enqueueEvent(conn,{userId:invitee,role:'BUYER',eventType:'GROUP_INVITED',
+        eventKey:'group:'+gid+':invite:'+rows[0].id,entityId:gid});
       await conn.commit();
       return {participant_id:rows[0].id,status:rows[0].status};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -197,6 +200,10 @@ class ProcurementCollectiveService{
          WHERE id=? AND status='INVITED'`,
         [key,payloadHash,JSON.stringify(consent),participant.id]
       );
+      for(const recipient of new Set([buyer,Number(group.organizer_buyer_id)])){
+        await notifications.enqueueEvent(conn,{userId:recipient,role:'BUYER',eventType:'GROUP_JOINED',
+          eventKey:'group:'+gid+':joined:'+participant.id,entityId:gid});
+      }
       await conn.commit();
       return {participant_id:participant.id,consent_snapshot:consent,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')

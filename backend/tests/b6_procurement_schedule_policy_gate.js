@@ -43,4 +43,19 @@ fails('INVALID_TIMEZONE',()=>normalizeSchedule({...weekly,
  timezone_name:'UTC'}));check('Unapproved timezone rejected',true);
 fails('INVALID_SCHEDULE_RANGE',()=>normalizeSchedule({...weekly,
  ends_on:'2026-10-01'}));check('Reversed schedule rejected',true);
+const biweekly={...weekly,cadence:'BIWEEKLY'};
+check('Biweekly anchored to first matching weekday after contract start',
+ nextCycles(biweekly,{from:'2026-11-01T00:00:00Z',limit:3})
+ .map(cycle=>cycle.local_date).join(',')==='2026-11-02,2026-11-16,2026-11-30');
+check('Later planning preserves biweekly parity',
+ nextCycles(biweekly,{from:'2026-11-09T00:00:00Z',limit:1})[0].local_date==='2026-11-16');
+check('Biweekly exact due instant included',
+ nextCycles(biweekly,{from:'2026-11-16T04:00:00Z',limit:1})[0].local_date==='2026-11-16');
+check('Biweekly elapsed instant skips fourteen days',
+ nextCycles(biweekly,{from:'2026-11-16T04:00:01Z',limit:1})[0].local_date==='2026-11-30');
+for(const invalid of [null,undefined,'',false,true,[],{}]){
+ fails('INVALID_WEEKDAY',()=>normalizeSchedule({...weekly,weekday_number:invalid}));
+ fails('INVALID_MONTH_DAY',()=>normalizeSchedule({...monthly,month_day:invalid}));
+}
+check('Missing, blank and coerced calendar selectors rejected',true);
 console.log('B6 RECURRING POLICY: '+total+'/'+total+' PASS (pure calendar only)');

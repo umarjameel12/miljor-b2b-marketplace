@@ -4,6 +4,7 @@
 const crypto=require('node:crypto');
 const db=require('../config/db');
 const {validateProductCounteroffers,validateSupplierDecision}=require('./procurementCounterofferPolicy');
+const notifications=require('./notificationService');
 const fail=(code,message,statusCode=409)=>Object.assign(new Error(message),{code,statusCode});
 const id=value=>{
   if(!/^[1-9]\d*$/.test(String(value))||!Number.isSafeInteger(Number(value)))
@@ -78,6 +79,10 @@ class ProcurementProductCounterofferService{
       const [saved]=await conn.query(
         'SELECT * FROM procurement_product_counteroffers WHERE buyer_id=? AND idempotency_key=? ORDER BY request_item_id',
         [buyer,idem]);
+      for(const recipient of [{userId:buyer,role:'BUYER'},{userId:current.supplier_id,role:'SUPPLIER'}]){
+        await notifications.enqueueEvent(conn,{...recipient,eventType:'COUNTEROFFER_SUBMITTED',
+          eventKey:'counteroffer:'+inserted[0]+':submitted',entityId:request});
+      }
       await conn.commit();return {counteroffers:saved,is_replay:false};
     }catch(e){await conn.rollback();
       if(e.code==='ER_DUP_ENTRY')throw fail('COUNTEROFFER_CONFLICT','Counteroffer already exists on this quote version');
@@ -121,6 +126,10 @@ class ProcurementProductCounterofferService{
       if(result.affectedRows!==1)throw fail('COUNTEROFFER_CONFLICT','Counteroffer changed concurrently');
       const [updated]=await conn.query(
         'SELECT * FROM procurement_product_counteroffers WHERE id=?',[offer]);
+      for(const recipient of [{userId:selected.buyer_id,role:'BUYER'},{userId:supplier,role:'SUPPLIER'}]){
+        await notifications.enqueueEvent(conn,{...recipient,eventType:'SUPPLIER_'+decision.decision,
+          eventKey:'counteroffer:'+offer+':'+decision.decision,entityId:selected.request_id});
+      }
       await conn.commit();
       return {counteroffer:updated[0],requires_revised_quote:decision.decision!=='REJECT'};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}

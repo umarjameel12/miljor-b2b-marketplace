@@ -556,8 +556,8 @@ export const RfqPage = () => {
         cadence,timezone_name:'Asia/Karachi',local_run_time:recurringTime,
         starts_on:recurringStart,ends_on:recurringEnd||null,
         payment_policy:'EXPLICIT_PER_CYCLE',pricing_policy:'REQUOTE_EACH_CYCLE',
-        ...(cadence==='WEEKLY'?{weekday_number:Number(recurringCadenceDay)}
-          :{month_day:Number(recurringCadenceDay),month_end_policy:'LAST_DAY'})
+        ...(cadence!=='MONTHLY'?{weekday_number:recurringCadenceDay}
+          :{month_day:recurringCadenceDay,month_end_policy:'LAST_DAY'})
       };
       await procurementApi(`/api/v1/procurement/requests/${request.id}/recurring`,{
         method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
@@ -790,6 +790,7 @@ export const RfqPage = () => {
                   className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
                   <option value="ONE_TIME">One-Time Purchase</option>
                   <option value="WEEKLY" disabled={buyerMode==='COLLECTIVE'}>Weekly Recurring</option>
+                  <option value="BIWEEKLY" disabled={buyerMode==='COLLECTIVE'}>Every Two Weeks</option>
                   <option value="MONTHLY" disabled={buyerMode==='COLLECTIVE'}>Monthly Recurring</option>
                 </select>
               </label>
@@ -815,9 +816,9 @@ export const RfqPage = () => {
             {buyerMode==='SINGLE_BUYER' && purchaseCadence!=='ONE_TIME' && (
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="text-xs font-semibold">
-                  {purchaseCadence==='WEEKLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
-                  <input type="number" min={purchaseCadence==='WEEKLY'?0:1}
-                    max={purchaseCadence==='WEEKLY'?6:31} value={recurringCadenceDay}
+                  {purchaseCadence!=='MONTHLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
+                  <input type="number" min={purchaseCadence!=='MONTHLY'?0:1}
+                    max={purchaseCadence!=='MONTHLY'?6:31} value={recurringCadenceDay}
                     onChange={e=>setRecurringCadenceDay(e.target.value)}
                     className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
                 </label>

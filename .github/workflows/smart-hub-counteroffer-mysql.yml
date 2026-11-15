@@ -5,6 +5,9 @@ on:
       - 'backend/src/services/procurementProductCounterofferService.js'
       - 'backend/src/services/procurementCounterofferPolicy.js'
       - 'backend/database/migrations/090_smart_procurement_product_counteroffers.sql'
+      - 'backend/database/migrations/092_notification_event_delivery.sql'
+      - 'backend/src/services/notificationService.js'
+      - 'backend/src/services/notificationEventPolicy.js'
       - 'backend/tests/smart_hub_counteroffer_mysql_gate.js'
       - '.github/workflows/smart-hub-counteroffer-mysql.yml'
   push:

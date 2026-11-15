@@ -5,6 +5,7 @@
 const crypto=require('node:crypto');
 const db=require('../config/db');
 const {normalizeSchedule,nextCycles}=require('./procurementSchedulePolicy');
+const notifications=require('./notificationService');
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=(value,label)=>{
   if(value==null||typeof value==='boolean'||!/^[1-9]\d*$/.test(String(value))||
@@ -137,6 +138,11 @@ class ProcurementRecurringService {
       }
       const [saved]=await conn.query(
         'SELECT * FROM procurement_recurring_contracts WHERE id=?',[cid]);
+      if(action==='PAUSE'||action==='RESUME'){
+        await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',
+          eventType:action==='PAUSE'?'RECURRING_PAUSED':'RECURRING_RESUMED',
+          eventKey:'contract:'+cid+':version:'+(version+1),entityId:cid});
+      }
       await conn.commit();
       return {...saved[0],is_replay:false};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -212,6 +218,8 @@ class ProcurementRecurringService {
          ON DUPLICATE KEY UPDATE id=id`,
         [cyid,JSON.stringify({buyer_id:buyer,skip_before_cutoff:true})]
       );
+      await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'CYCLE_SKIPPED',
+        eventKey:'cycle:'+cyid+':skipped',entityId:cid});
       await conn.commit();return {cycle_id:cyid,status:'SKIPPED',is_replay:false};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
@@ -460,6 +468,8 @@ class ProcurementRecurringService {
           [result.insertId,JSON.stringify({cycle_key:cycle.cycle_key,
             due_at_utc:cycle.due_at_utc,payment_authorized:false})]
         );
+        await notifications.enqueueEvent(conn,{userId:contract.buyer_id,role:'BUYER',eventType:'CYCLE_GENERATED',
+          eventKey:'cycle:'+result.insertId+':generated',entityId:cid});
         emitted.push({cycle_id:result.insertId,...cycle});
       }
       await conn.commit();

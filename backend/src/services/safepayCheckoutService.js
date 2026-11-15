@@ -21,6 +21,7 @@ const safepayAdapter = require('./safepayAdapter');
 const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
+const notificationService = require('./notificationService');
 
 class SafepayCheckoutService {
 
@@ -602,6 +603,14 @@ class SafepayCheckoutService {
         );
       }
 
+      // One order payment transition identity across webhook and reconciliation.
+      for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+        await notificationService.enqueueEvent(connection, {
+          userId, role, eventType: 'PAYMENT_VERIFIED',
+          eventKey: `order:${order.id}:payment:verified`, entityId: order.id
+        });
+      }
+
       await connection.commit();
 
       // B5 Flash pool stock transitions only AFTER an authentic confirmed
@@ -1021,6 +1030,13 @@ class SafepayCheckoutService {
           reconciliationEventId
         ]
       );
+      }
+
+      for (const [userId, role] of [[lockedOrder.buyer_id, 'BUYER'], [lockedOrder.supplier_id, 'SUPPLIER']]) {
+        await notificationService.enqueueEvent(connection, {
+          userId, role, eventType: 'PAYMENT_VERIFIED',
+          eventKey: `order:${lockedOrder.id}:payment:verified`, entityId: lockedOrder.id
+        });
       }
 
       await connection.commit();

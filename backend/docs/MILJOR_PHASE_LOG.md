@@ -1674,3 +1674,11 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - Database Safety: `miljor_db` confirmed 100% PRISTINE (`orders: 0`, `payments: 0`).
 - **Verdict: PASS (SAFEPAY SANDBOX PAYMENT & RETURN WORKFLOW 100% VERIFIED). CAN START NEXT PHASE: NO.**
 
+# 2026-11-15 Smart Procurement Hub continuation
+
+Execution update: SMART_HUB_NOTIFICATION_EXECUTION_2026_11_15.md supersedes earlier access/checksum blockers. Existing configuration safely established test-only access; canonical history verified and five pending migrations applied after backup. Backend 89/89 contracts, real request/inbox acceptance, nine-event inbox gate, real HTTP/MySQL G1–G9 and UCP source regression PASS. Complete scope, providers, full browser acceptance and remote CI remain BLOCKED; PR #53 stays draft.
+
+Mandatory notification plan amendment: notifications are required in all eight phases. SMART_HUB_NOTIFICATION_ACCEPTANCE.md records existing infrastructure, complete event/recipient/channel matrix, transactional reliability/privacy/localization requirements and action-driven tests. Planning coverage PASS; runtime notification/channel/integration gates BLOCKED pending implementation and isolated test access. No application code, provider delivery or database change in this amendment.
+
+PARTIAL: biweekly schedule/request/UI and forward migration 091 implemented; calendar validation hardened. Full phased plan: SMART_HUB_IMPLEMENTATION_PLAN.md. Execution evidence and blockers: SMART_HUB_EXECUTION_2026_11_15.md. No protected database mutation or main merge. PR #53 remains draft pending critical integration gates.
+

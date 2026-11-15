@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const ALLOWED_SUPPLIER_TRANSITIONS = {
   'AWAITING_SUPPLIER_ACKNOWLEDGEMENT': ['PREPARING'],
@@ -54,6 +55,20 @@ const VALID_BUYER_DISCREPANCY_REASONS = [
 ];
 
 class FulfillmentService {
+
+  // Use only the locked order's participants and immutable milestone identity.
+  // Enqueue errors propagate to the enclosing mutation's rollback.
+  async _enqueueOrderNotifications(connection, order, eventType, eventCode) {
+    for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+      await notificationService.enqueueEvent(connection, {
+        userId,
+        role,
+        eventType,
+        eventKey: `${eventCode}:${eventType}`,
+        entityId: order.id
+      });
+    }
+  }
 
   /**
    * Generates a deterministic event code for fulfillment milestone events
@@ -487,6 +502,15 @@ class FulfillmentService {
       );
       }
 
+      const notificationType = {
+        READY_FOR_DISPATCH: 'DISPATCH_SCHEDULED',
+        DISPATCHED: 'OUT_FOR_DELIVERY',
+        SUPPLIER_DELIVERED: 'DELIVERY_REPORTED'
+      }[toStatus];
+      if (notificationType) {
+        await this._enqueueOrderNotifications(connection, order, notificationType, eventCode);
+      }
+
       await connection.commit();
 
       return {
@@ -678,6 +702,15 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
+
+      const notificationType = {
+        SUPPLIER_DELIVERY_DELAYED: 'DELIVERY_DELAYED',
+        SUPPLIER_LOGISTICS_FAILURE: 'DELIVERY_FAILED'
+      }[reason];
+      // Inventory shortage does not establish partial delivery or a failed attempt.
+      if (notificationType) {
+        await this._enqueueOrderNotifications(connection, order, notificationType, eventCode);
       }
 
       await connection.commit();
@@ -1030,6 +1063,8 @@ class FulfillmentService {
       );
       }
 
+      await this._enqueueOrderNotifications(connection, order, 'RECEIPT_CONFIRMED', eventCode);
+
       await connection.commit();
 
       return {
@@ -1268,6 +1303,13 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
+
+      // Only a persisted, validated single-item shortage with some goods received
+      // establishes partial delivery. Other discrepancies and B6 aggregate claims
+      // cannot safely produce this event; no failure is inferred from non-receipt.
+      if (shortageEvidence && Number(shortageEvidence.received_quantity) > 0) {
+        await this._enqueueOrderNotifications(connection, order, 'PARTIAL_DELIVERY', eventCode);
       }
 
       await connection.commit();

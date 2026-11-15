@@ -9,6 +9,7 @@ const exact=require('./exactDecimal');
 const feeService=require('./feeService');
 const matching=require('./procurementMatchingService');
 const {buildAwardPreview}=require('./procurementAwardPolicy');
+const notifications=require('./notificationService');
 
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=(raw,label)=>{
@@ -381,6 +382,12 @@ class ProcurementAwardService{
         'UPDATE procurement_awards SET original_response_snapshot=? WHERE id=?',
         [JSON.stringify(snapshot),awardResult.insertId]
       );
+      await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'TERMS_LOCKED',
+        eventKey:'award:'+awardResult.insertId+':locked',entityId:rid});
+      for(const order of orderSummary){
+        await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'PAYMENT_PENDING',
+          eventKey:'order:'+order.order_id+':payment_pending',entityId:order.order_id});
+      }
       await conn.commit();
       return {award:snapshot,is_replay:false};
     }catch(e){

@@ -33,6 +33,7 @@ const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const DISPUTE_CATEGORIES = [
   'SHORT_QUANTITY',
@@ -110,6 +111,21 @@ class DisputeService {
     }
 
     return metadata;
+  }
+
+  async _enqueueDisputeNotification(connection, orderId, disputeId, eventType) {
+    // Resolve recipients from the order, never from a caller or dispute payload.
+    const [orders] = await connection.query(
+      'SELECT id, buyer_id, supplier_id FROM orders WHERE id = ?', [orderId]
+    );
+    if (!orders.length) throw new Error('Dispute notification order not found');
+    const order = orders[0];
+    const transition = eventType === 'DISPUTE_OPENED' ? 'opened' : 'resolved';
+    for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+      await notificationService.enqueueEvent(connection, {
+        userId, role, eventType, eventKey: `dispute:${disputeId}:${transition}`, entityId: order.id
+      });
+    }
   }
 
   /**
@@ -507,6 +523,7 @@ class DisputeService {
         [actor.id, disputeId, JSON.stringify({ dispute_code: disputeCode, category, claimed_amount: calculatedClaimStr })]
       );
 
+      await this._enqueueDisputeNotification(connection, order.id, disputeId, 'DISPUTE_OPENED');
       await connection.commit();
 
       return {
@@ -731,6 +748,7 @@ class DisputeService {
         ]
       );
 
+      await this._enqueueDisputeNotification(connection, order.id, disputeId, 'DISPUTE_OPENED');
       await connection.commit();
 
       return {
@@ -1202,6 +1220,7 @@ class DisputeService {
         orderResumed = true;
       }
 
+      await this._enqueueDisputeNotification(connection, dispute.order_id, dispute.id, 'DISPUTE_RESOLVED');
       await connection.commit();
 
       return {
@@ -1533,6 +1552,8 @@ class DisputeService {
         }
       }
 
+      // A later closure after confirmed remediation reuses the resolution key.
+      await this._enqueueDisputeNotification(connection, dispute.order_id, dispute.id, 'DISPUTE_RESOLVED');
       await connection.commit();
 
       return {

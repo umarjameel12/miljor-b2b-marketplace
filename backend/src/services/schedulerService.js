@@ -70,6 +70,20 @@ function startScheduler() {
     console.log('[Scheduler] B6 recurring draft worker enabled (no automatic payments)');
   }
 
+  if(process.env.NOTIFICATION_WORKER_ENABLED==='true'){
+    let notificationRunning=false;
+    const notificationTask=cron.schedule('* * * * *',async()=>{
+      if(notificationRunning)return;
+      notificationRunning=true;
+      try{
+        await require('./notificationService').processPending({limit:20});
+        if(process.env.NOTIFICATION_EMAIL_DELIVERY_ENABLED==='true')
+          await require('./emailService').processOutboxBatch({limit:20});
+      }catch(error){console.error('[Scheduler] Notification worker failed:',error.code||'NOTIFICATION_WORKER_FAILED');}
+      finally{notificationRunning=false;}
+    });
+    activeTasks.push(notificationTask);
+  }
   console.log('✅ Scheduler active: Pool expiry every 10 min | Cleanup every hour');
 }
 
