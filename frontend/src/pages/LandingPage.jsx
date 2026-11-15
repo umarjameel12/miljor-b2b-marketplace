@@ -109,10 +109,26 @@ export const LandingPage = () => {
             {isAuthenticated ? (
               <Link to={dashboardPath} className="rounded-full px-5 py-2.5 text-xs font-semibold" style={buttonGold}>Open Marketplace</Link>
             ) : (
-              <>
-                <Link to="/login" className="rounded-full border px-5 py-2.5 text-xs font-semibold transition hover:opacity-80" style={{ borderColor: "var(--brand-accent)", backgroundColor: "var(--brand-accent)", color: "var(--text-on-champagne)" }}>Sign In</Link>
-                <Link to="/register" className="rounded-full border px-5 py-2.5 text-xs font-semibold transition hover:opacity-80" style={{ borderColor: "var(--brand-accent)", backgroundColor: "var(--brand-accent)", color: "var(--text-on-champagne)" }}>Register</Link>
-              </>
+              <div
+                className="inline-grid grid-cols-2 items-center rounded-xl border p-1 shadow-sm"
+                style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
+                aria-label="Account access"
+              >
+                <Link
+                  to="/login"
+                  className="rounded-lg px-4 py-2 text-center text-xs font-semibold transition-all hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
+                  style={{ backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-lg px-4 py-2 text-center text-xs font-semibold transition-all hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  Register
+                </Link>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2 sm:hidden"><ThemeSelector minimal /><button type="button" onClick={() => setMobileMenu((open) => !open)} aria-expanded={mobileMenu} aria-label="Toggle navigation" className="rounded-lg border p-2" style={{ borderColor: 'var(--border-subtle)' }}>{mobileMenu ? <X size={19} /> : <Menu size={19} />}</button></div>
