@@ -1,0 +1,45 @@
+name: Smart Hub Isolated MySQL Counteroffers
+on:
+  pull_request:
+    paths:
+      - 'backend/src/services/procurementProductCounterofferService.js'
+      - 'backend/src/services/procurementCounterofferPolicy.js'
+      - 'backend/database/migrations/090_smart_procurement_product_counteroffers.sql'
+      - 'backend/tests/smart_hub_counteroffer_mysql_gate.js'
+      - '.github/workflows/smart-hub-counteroffer-mysql.yml'
+  push:
+    branches:
+      - 'feature/smart-procurement-hub-unified-entry'
+jobs:
+  mysql-counteroffers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_root_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=test_only_root_password"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+    env:
+      NODE_ENV: test
+      TEST_DB_NAME: miljor_test_db
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USER: root
+      DB_PASSWORD: test_only_root_password
+      JWT_SECRET: github_actions_test_only_secret_never_use_in_prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Execute migration 090 and real-MySQL counteroffer acceptance
+        run: node backend/tests/smart_hub_counteroffer_mysql_gate.js
