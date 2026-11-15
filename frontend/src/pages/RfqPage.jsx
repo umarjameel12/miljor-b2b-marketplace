@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -22,6 +22,13 @@ import { deliveryApi } from '../api/delivery';
 export const RfqPage = () => {
   const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState(user?.role === 'SUPPLIER' ? 'supplier' : 'buyer');
+  const location = useLocation();
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (user?.role !== 'SUPPLIER' || !['supplier-invitations', 'supplier-collective', 'supplier-counteroffers'].includes(id)) return;
+    const frame = requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, user?.role, activeTab]);
 
   // B6: Buyer-first multi-item shopping list, stored in the existing RFQ page.
   const emptyItem = () => ({ family_id: '', quantity: '', unit: 'kg', requirements: '' });
@@ -1459,7 +1466,7 @@ export const RfqPage = () => {
 
         {user?.role === 'SUPPLIER' && (
           <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3"
-            aria-label="Collective group supplier bidding">
+            id="supplier-collective" aria-label="Collective group supplier bidding">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-serif font-semibold">Collective Supplier Bids</h2>
               <button type="button" className="text-xs underline"
@@ -1535,7 +1542,7 @@ export const RfqPage = () => {
         )}
 
         {user?.role === 'SUPPLIER' && (
-          <section aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
+          <section id="supplier-invitations" aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
             <div className="flex justify-between items-center gap-3">
               <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
               <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
@@ -1543,7 +1550,7 @@ export const RfqPage = () => {
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
             <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Product Counteroffers</p>
+                <p id="supplier-counteroffers" className="text-sm font-semibold">Product Counteroffers</p>
                 <button type="button" className="text-xs underline" onClick={refreshSupplierCounteroffers}>Refresh</button>
               </div>
               {supplierCounteroffers.length===0&&<p className="text-xs text-[var(--text-muted)]">No product counteroffers yet.</p>}

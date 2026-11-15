@@ -137,6 +137,8 @@ for (const [name, order, options, invoke, code] of [
   ['unpaid', {payment_status:'PENDING'}, {}, h => transition(h,'READY_FOR_DISPATCH'), 'UNPAID_ORDER_NOT_IN_FULFILLMENT'],
   ['skipped transition', {}, {}, h => transition(h,'SUPPLIER_DELIVERED'), 'INVALID_FULFILLMENT_TRANSITION'],
   ['missing dispatch method', {fulfillment_status:'READY_FOR_DISPATCH'}, {}, h => transition(h,'DISPATCHED',{deliveryMethod:null}), 'DELIVERY_METHOD_REQUIRED'],
+  ['bound doorstep cannot become pickup', {fulfillment_status:'READY_FOR_DISPATCH',procurement_delivery_snapshot:'{"mode":"STANDARD_CLUSTERED"}'}, {}, h => transition(h,'DISPATCHED',{deliveryMethod:'BUYER_PICKUP'}), 'PROCUREMENT_DELIVERY_METHOD_MISMATCH'],
+  ['bound pickup cannot become courier', {fulfillment_status:'READY_FOR_DISPATCH',delivery_type:'SUPPLIER_PICKUP',procurement_delivery_snapshot:'{"mode":"PICKUP"}'}, {}, h => transition(h,'DISPATCHED',{deliveryMethod:'SUPPLIER_FLEET'}), 'PICKUP_DELIVERY_METHOD_MISMATCH'],
   ['receipt before supplier claim', {}, {}, receipt, 'PREREQUISITE_NOT_MET'],
   ['unresolved dispute', {fulfillment_status:'SUPPLIER_DELIVERED'}, {disputes:1}, receipt, 'UNRESOLVED_DISPUTE_EXISTS'],
   ['B6 per-line requirement', {fulfillment_status:'DISPATCHED'}, {lines:2}, discrepancy, 'LINE_ITEM_RECEIPT_REQUIRED'],

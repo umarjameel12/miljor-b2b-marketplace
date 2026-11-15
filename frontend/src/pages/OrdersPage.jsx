@@ -6,6 +6,7 @@ import {BuyerRegularReservationsPanel} from '../components/pools/BuyerRegularRes
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
+import { SupplierFulfillmentPanel } from '../components/supplier/SupplierFulfillmentPanel';
 import {
   ClipboardList,
   Layers,
@@ -34,7 +35,8 @@ export const OrdersPage = () => {
   const activeCommitmentCount=regularOrders.filter(o=>!['PAID','CANCELLED','REFUNDED'].includes(o.payment_status)).length+
     flashHolds.filter(h=>!['PAID','EXPIRED','RELEASED','FAILED'].includes(h.status)&&h.payment_status!=='PAID').length;
   useEffect(()=>{
-    if(!isAuthenticated) return;
+    setRealOrders([]); setFlashHolds([]); setOrdersError('');
+    if(!isAuthenticated || isSupplier) return;
     let mounted=true;
     setOrdersLoading(true);
     const promises = [apiClient.get('/orders',{params:{limit:100}})];
@@ -49,7 +51,12 @@ export const OrdersPage = () => {
     }).catch(e=>{if(mounted)setOrdersError(e.response?.data?.error?.message||'Could not load orders');})
       .finally(()=>{if(mounted)setOrdersLoading(false)});
     return()=>{mounted=false};
-  },[isAuthenticated,user?.role]);
+  },[isAuthenticated,user?.role,user?.id]);
+
+  if (isSupplier) return <AppShell><div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <h1 className="font-display font-bold text-2xl">Supplier Orders &amp; Fulfillment Queue</h1>
+    <SupplierFulfillmentPanel key={user.id} />
+  </div></AppShell>;
 
   return (
     <AppShell>

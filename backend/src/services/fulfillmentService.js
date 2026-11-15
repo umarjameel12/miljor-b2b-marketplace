@@ -408,6 +408,11 @@ class FulfillmentService {
       }
 
       // Update order state and timestamps
+      if(toStatus==='DISPATCHED' && order.procurement_delivery_snapshot &&
+         order.delivery_type!=='SUPPLIER_PICKUP' && deliveryMethod==='BUYER_PICKUP') {
+        const err=new Error('Bound procurement delivery requires the buyer-approved delivery type.');
+        err.code='PROCUREMENT_DELIVERY_METHOD_MISMATCH';err.statusCode=422;throw err;
+      }
       let updateSql = 'UPDATE orders SET fulfillment_status = ?, updated_at = NOW()';
       const updateParams = [toStatus];
 

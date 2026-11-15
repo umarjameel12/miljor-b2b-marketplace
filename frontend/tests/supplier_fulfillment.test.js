@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { nextSupplierMilestone, supplierDeliveryMethods, createSupplierIntentStore } from '../src/api/supplierFulfillment.js';
+assert.equal(nextSupplierMilestone({payment_status:'PAID',fulfillment_status:'PREPARING'}),'READY_FOR_DISPATCH');
+assert.equal(nextSupplierMilestone({payment_status:'AWAITING_PAYMENT',fulfillment_status:'PREPARING'}),null);
+assert.equal(nextSupplierMilestone({payment_status:'PAID',fulfillment_status:'EXCEPTION'}),null);
+assert.equal(nextSupplierMilestone({payment_status:'PAID',fulfillment_status:'SUPPLIER_DELIVERED'}),null);
+assert.deepEqual(supplierDeliveryMethods({delivery_type:'SUPPLIER_PICKUP'}),['BUYER_PICKUP']);
+assert.ok(!supplierDeliveryMethods({delivery_type:'DOORSTEP'}).includes('BUYER_PICKUP'));
+let sequence=0;const store=createSupplierIntentStore(()=>`intent-${++sequence}`);
+const body={to_status:'PREPARING'};
+assert.equal(store.get(11,21,'transition',body),store.get(11,21,'transition',{...body}));
+assert.notEqual(store.get(12,21,'transition',body),store.get(11,21,'transition',body));
+assert.notEqual(store.get(11,22,'transition',body),store.get(11,21,'transition',body));
+assert.notEqual(store.get(11,21,'transition',{to_status:'DISPATCHED'}),store.get(11,21,'transition',body));
+console.log('PASS supplier paid-only next actions, immutable pickup choices and stable retry intents isolated by account/order/payload');

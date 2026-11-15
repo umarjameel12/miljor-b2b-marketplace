@@ -4,6 +4,15 @@ on:
     paths:
       - 'backend/src/services/*notification*'
       - 'backend/src/services/procurement*'
+      - 'backend/src/services/supplierOperationsService.js'
+      - 'backend/src/services/fulfillmentService.js'
+      - 'backend/src/routes/v1/supplierRoutes.js'
+      - 'backend/tests/supplier_operations*'
+      - 'frontend/src/components/supplier/**'
+      - 'frontend/src/api/supplierFulfillment.js'
+      - 'frontend/src/pages/SupplierDashboardPage.jsx'
+      - 'frontend/src/pages/OrdersPage.jsx'
+      - 'frontend/tests/supplier_fulfillment.test.js'
       - 'backend/src/services/emailService.js'
       - 'backend/src/routes/v1/notificationRoutes.js'
       - 'backend/database/migrations/09*.sql'
@@ -36,11 +45,12 @@ jobs:
           node tests/notification_route_ownership_gate.js
           node tests/canonical_migration_manifest_gate.js
           node tests/procurement_delivery_binding_policy_gate.js
+          node --test tests/supplier_operations_overview_gate.js
       - name: Install frontend
         run: npm ci --prefix ../frontend
       - name: Polling, account isolation and durable read tests
         working-directory: frontend
-        run: node --test tests/notifications.test.js
+        run: node --test tests/notifications.test.js tests/supplier_fulfillment.test.js
       - name: Frontend build
         working-directory: frontend
         run: npm run build

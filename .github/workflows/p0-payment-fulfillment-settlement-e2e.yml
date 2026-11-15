@@ -77,6 +77,7 @@ jobs:
           node tests/notification_mysql_action_gate.js
           node tests/notification_events_verification.test.js
           node tests/procurement_delivery_binding_mysql_gate.js
+          node tests/supplier_operations_mysql_gate.js
       - name: Safepay synthetic payment, refund and 80 concurrent callback/retry stress checks
         timeout-minutes: 9
         env:
