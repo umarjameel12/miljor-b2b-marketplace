@@ -71,11 +71,30 @@ async function run(){
     await rejects(()=>svc.respond(200,created.counteroffers[1].id,{decision:'REJECT'}),'COUNTEROFFER_ALREADY_DECIDED');
     const buyerHistory=await svc.forBuyer(100,10);assert.equal(buyerHistory.length,2);
     await rejects(()=>svc.forBuyer(101,10),'REQUEST_NOT_FOUND');
+    // New supplier quotation version invalidates stale proposals and allows a fresh round.
+    await database.query('UPDATE procurement_quotes SET current_version=2 WHERE id=20');
+    await database.query('INSERT INTO procurement_quote_versions VALUES (31,20,2,?)',[stamp(7200000)]);
+    await database.query('INSERT INTO procurement_quote_lines (quote_version_id,request_item_id,unit_price) VALUES (31,11,285.00),(31,12,505.00)');
+    await rejects(()=>svc.submit(100,10,20,offer,'test-version-stale-123456'),'QUOTE_STALE');
+    const roundTwo={version_number:2,lines:[{request_item_id:11,proposed_unit_price:'260.00'}]};
+    const roundTwoOffer=await svc.submit(100,10,20,roundTwo,'test-round-two-123456');
+    assert.equal(roundTwoOffer.counteroffers.length,1);
+    const rejected=await svc.respond(200,roundTwoOffer.counteroffers[0].id,{decision:'REJECT'});
+    assert.equal(rejected.counteroffer.decision,'REJECT');
+    assert.equal(rejected.requires_revised_quote,false);
+    const concurrent={version_number:2,lines:[{request_item_id:12,proposed_unit_price:'470.00'}]};
+    const simultaneous=await Promise.allSettled([
+      svc.submit(100,10,20,concurrent,'test-race-first-123456'),
+      svc.submit(100,10,20,concurrent,'test-race-second-123456')
+    ]);
+    assert.equal(simultaneous.filter(r=>r.status==='fulfilled').length,1);
+    assert.equal(simultaneous.filter(r=>r.status==='rejected').length,1);
+    assert.equal(simultaneous.find(r=>r.status==='rejected').reason.code,'COUNTEROFFER_CONFLICT');
     // Legacy financial workflows are untouched: no order, payment, stock or settlement tables in this fixture.
     const [all]=await database.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('orders','payments','payment_ledger')");
     assert.equal(all.length,0);
-    console.log('SMART_HUB_MYSQL_INTEGRATION_PASS: migration, permissions, 2-item offers, replay, conflict, accept, re-counter, history, no financial mutation');
+    console.log('SMART_HUB_MYSQL_INTEGRATION_PASS: migration, permissions, 2-item offers, replay, conflict, accept, re-counter, reject, stale-version and concurrency gates, history, no financial mutation');
   }finally{
     await database.end();
     await admin.end();
