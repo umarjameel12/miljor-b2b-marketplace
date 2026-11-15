@@ -184,6 +184,37 @@ async function runE3Gate() {
       pass('Notification recipient isolation: supplier own receipt updates; buyer receipt remains unread');
     } catch(e) { fail('Notification recipient isolation',e); }
 
+    // Notification preference isolation, validation and persistence on real MySQL.
+    try {
+      const before = await api('/api/v1/notifications/preferences', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(before.status,200);
+      assert.strictEqual(before.body.data.locale,'en');
+      const saved = await api('/api/v1/notifications/preferences',{
+        method:'PUT', headers:{Authorization:`Bearer ${supplierToken}`},
+        body:{locale:'ur',optional_email:false,optional_sms:true}
+      });
+      assert.strictEqual(saved.status,200);
+      assert.strictEqual(saved.body.data.locale,'ur');
+      const buyer = await api('/api/v1/notifications/preferences',{
+        headers:{Authorization:`Bearer ${generateToken(testBuyerId,'BUYER')}`}
+      });
+      assert.strictEqual(buyer.status,200);
+      assert.strictEqual(buyer.body.data.locale,'en',
+        'Buyer notification preferences must not reflect supplier-owned settings');
+      const invalid = await api('/api/v1/notifications/preferences',{
+        method:'PUT', headers:{Authorization:`Bearer ${supplierToken}`},
+        body:{locale:'ur',optional_email:true,optional_sms:true,user_id:testBuyerId}
+      });
+      assert.strictEqual(invalid.status,400,'No cross-user preference override');
+      const reloaded = await api('/api/v1/notifications/preferences',{
+        headers:{Authorization:`Bearer ${supplierToken}`}
+      });
+      assert.strictEqual(reloaded.body.data.locale,'ur');
+      pass('Notification preferences: persisted Urdu locale, buyer isolation and cross-user override denial');
+    } catch(e) { fail('Notification preferences acceptance',e); }
+
     // Helper to create and publish a product and SKU in a family
     async function createAndPublishSkuInFamily(familyId, variety, packSize, packUnit, isUnbranded = false, brand = 'TestBrand') {
       const pRes = await api('/api/v1/catalog/supplier-products', {
@@ -719,6 +750,7 @@ async function runE3Gate() {
     }
     if (supplierId) {
       await db.query('DELETE FROM platform_notifications WHERE user_id IN (?,?)', [supplierId,testBuyerId || supplierId]);
+      await db.query('DELETE FROM notification_preferences WHERE user_id IN (?,?)',[supplierId,testBuyerId||supplierId]);
       await db.query(`DELETE FROM supplier_listings WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_subscriptions WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_profiles WHERE supplier_id = ?`, [supplierId]);
