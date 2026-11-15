@@ -145,7 +145,7 @@ export const LandingPage = () => {
                   aria-haspopup="menu"
                   aria-expanded={accountMenuOpen}
                   aria-controls="landing-account-options"
-                  className="landing-gradient-cta inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
+                  className="landing-gradient-cta landing-account-trigger inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
                   style={{ borderColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
                 >
                   <UserRound size={16} aria-hidden="true" />
@@ -164,7 +164,7 @@ export const LandingPage = () => {
                       role="menuitem"
                       to="/login"
                       onClick={() => setAccountMenuOpen(false)}
-                      className="landing-account-option flex items-center rounded-lg px-3 py-2.5 text-sm font-medium"
+                      className="landing-account-option block rounded-lg px-3 py-2.5 text-sm font-medium"
                     >
                       Sign In
                     </Link>
@@ -192,8 +192,8 @@ export const LandingPage = () => {
             ) : (
               <div className="mt-2 border-t pt-2" style={{ borderColor: 'var(--border-subtle)' }}>
                 <div className="px-3 py-2 text-sm font-semibold">Account</div>
-                <Link to="/login" onClick={() => setMobileMenu(false)} className="landing-account-option rounded-lg px-3 py-2.5 text-sm">Sign In</Link>
-                <Link to="/register" onClick={() => setMobileMenu(false)} className="landing-account-option rounded-lg px-3 py-2.5 text-sm">Register</Link>
+                <Link to="/login" onClick={() => setMobileMenu(false)} className="landing-account-option block rounded-lg px-3 py-2.5 text-sm">Sign In</Link>
+                <Link to="/register" onClick={() => setMobileMenu(false)} className="landing-account-option block rounded-lg px-3 py-2.5 text-sm">Register</Link>
               </div>
             )}
           </nav>
@@ -201,11 +201,11 @@ export const LandingPage = () => {
       </header>
 
       <main>
-        <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-12 sm:px-8 md:pt-16 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-20">
+        <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-12 sm:px-8 md:pt-16 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-12">
           <div className="max-w-xl">
-            <span className="inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}>Mil Kar Khareedo, Behtar Pao</span>
-            <h1 className="landing-display landing-display-gradient mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
-              Buy Better<span className="block">Together</span>
+            <span className="inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" className="landing-tagline" style={{ borderColor: 'var(--border-default)' }}>Mil Kar Khareedo, Behtar Pao</span>
+            <h1 className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
+              Buy Better<span className="landing-display-gradient block">Together</span>
             </h1>
             <p className="mt-6 max-w-md text-sm leading-7 sm:text-base" style={{ color: 'var(--text-secondary)' }}>
               Wholesale procurement, made easier for growing food businesses.
@@ -233,7 +233,7 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
+        <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 pt-8 pb-12 sm:px-8 sm:pt-10 sm:pb-14 lg:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Supplier-led procurement</p>
@@ -245,7 +245,7 @@ export const LandingPage = () => {
                 {user?.role === 'SUPPLIER' ? 'Manage your pools' : 'View All Pools'} <ArrowRight size={16} />
               </Link>
             ) : (
-              <a href="#live-pools" className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">Explore live offers</a>
+              <Link to="/login" state={{ from: { pathname: '/pools' } }} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers <ArrowRight size={15} aria-hidden="true" /></Link>
             )}
           </div>
           {loadingPools ? (
