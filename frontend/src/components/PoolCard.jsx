@@ -5,7 +5,7 @@
 // clean progress mechanics, and responsive card rhythm
 // =============================================================================
 import React, { useEffect, useState } from 'react';
-import { Package, Truck, Store, Zap, ShieldCheck, MapPin, Clock, Lock } from 'lucide-react';
+import { Package, Truck, Store, Zap, Clock, Lock } from 'lucide-react';
 import FLAGS from '../config/featureFlags';
 import { CountdownTimer } from './ui/CountdownTimer';
 
@@ -53,6 +53,7 @@ export const PoolCard = ({ pool, onSelect }) => {
   const buyerMoq = pool.min_order_qty || pool.buyer_min_qty || pool.moq_buyer || 1;
   const grade = pool.quality_spec_grade || pool.quality_grade || pool.grade || null;
   const brandLabel = pool.brand ? pool.brand : (pool.is_unbranded ? 'Unbranded' : null);
+  const specification = [pool.variety, pool.quality_spec_grade || pool.quality_grade || pool.grade, pool.pack_size ? `${pool.pack_size} ${pool.pack_unit || unit}` : null].filter(Boolean).join(' · ');
   const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : Math.round((progressPercent / 100) * (pool.target_quantity || pool.target_qty || 1000)));
   const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
@@ -130,14 +131,8 @@ export const PoolCard = ({ pool, onSelect }) => {
           <span
             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-md shadow-xs"
             style={{
-              backgroundColor: isClosed
-                ? 'rgba(163, 34, 34, 0.92)'
-                : FLAGS.dynamicDemandBadges && progressPercent >= 75
-                ? 'rgba(7, 42, 33, 0.92)'
-                : FLAGS.dynamicDemandBadges && progressPercent >= 50
-                ? 'rgba(180, 83, 9, 0.90)'
-                : 'rgba(7, 42, 33, 0.88)',
-              color: '#f7f3e8',
+              backgroundColor: isClosed ? 'rgba(95, 72, 62, 0.94)' : 'rgba(49, 39, 24, 0.9)',
+              color: '#f7edd7',
               border: `1px solid ${
                 FLAGS.dynamicDemandBadges && progressPercent >= 75
                   ? 'rgba(200, 178, 118, 0.6)'
@@ -151,7 +146,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                   ? 'bg-red-400'
                   : FLAGS.dynamicDemandBadges && progressPercent >= 50
                   ? 'bg-amber-400 animate-pulse'
-                  : 'bg-emerald-400'
+                  : 'bg-amber-300'
               }`}
             />
             <span>
@@ -189,7 +184,7 @@ export const PoolCard = ({ pool, onSelect }) => {
           {/* Supplier Info & Grade Line */}
           <div className="flex items-center justify-between text-[11px] font-sans text-stone-500 dark:text-stone-400 mt-0.5">
             <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
-              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Verified Lahore Mill'}
+              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Supplier details available on request'}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
               {brandLabel && (
@@ -207,6 +202,12 @@ export const PoolCard = ({ pool, onSelect }) => {
               <span>Min {buyerMoq} {unit}</span>
             </div>
           </div>
+
+          {specification && (
+            <div className="mt-2 rounded-lg px-2.5 py-2 text-[11px] leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Specification: </span>{specification}
+            </div>
+          )}
 
           {/* Participation Cutoff & Promised 1-3 Day Delivery SLA */}
           {(cutoffFormatted || promisedDeliveryFormatted) && (
@@ -230,7 +231,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 </div>
               )}
               {promisedDeliveryFormatted && (
-                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
+                <div className="flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
                   <span className="inline-flex items-center gap-1 font-medium">
                     <Truck className="w-3 h-3" />
                     <span>Promised Delivery:</span>
@@ -240,7 +241,7 @@ export const PoolCard = ({ pool, onSelect }) => {
               )}
               <div className="flex items-center justify-between text-[9px] text-stone-400 pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                 <span className="inline-flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5 text-emerald-600" />
+                  <Lock className="w-2.5 h-2.5" style={{ color: 'var(--landing-accent-text, var(--brand-accent))' }} />
                   <span>Immutable Published Terms</span>
                 </span>
                 <span>1–3 Day SLA</span>
@@ -260,7 +261,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Clustered doorstep delivery available across Lahore clusters"
               >
-                <Truck className="w-3 h-3 text-emerald-600" />
+                <Truck className="w-3 h-3" style={{ color: 'var(--brand-accent)' }} />
                 <span>Doorstep</span>
               </span>
             )}
@@ -326,7 +327,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 className="h-full rounded-full transition-all duration-300"
                 style={{
                   width: `${progressPercent}%`,
-                  backgroundColor: 'var(--brand-emerald)',
+                  background: 'linear-gradient(90deg, #b39156 0%, #d8c48e 100%)',
                 }}
               />
               {FLAGS.tierNotchesOnProgress && Array.isArray(pool.pricing_tiers) && pool.pricing_tiers.length > 0 && targetQty > 0 && (
@@ -359,11 +360,11 @@ export const PoolCard = ({ pool, onSelect }) => {
             type="button"
             onClick={() => onSelect && onSelect(pool)}
             disabled={isClosed}
-            className="w-full py-2 px-3 rounded-xl font-sans font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+            className="w-full py-2.5 px-3 rounded-xl font-sans font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs transition-all hover:brightness-105 hover:shadow-md"
             style={{
-              backgroundColor: 'var(--brand-primary)',
-              color: 'var(--text-on-emerald)',
-              border: '1px solid var(--border-subtle)',
+              background: 'linear-gradient(115deg, #e0cb94, #c8b276 55%, #b39357)',
+              color: '#172b24',
+              border: '1px solid rgba(125, 93, 43, 0.28)',
             }}
           >
             <span>{isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
