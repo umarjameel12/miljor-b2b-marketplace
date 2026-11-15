@@ -237,7 +237,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                     <Truck className="w-3 h-3" />
                     <span>Promised Delivery:</span>
                   </span>
-                  <strong className="font-mono">{promisedDeliveryFormatted}</strong>
+                  <strong className="font-sans font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{promisedDeliveryFormatted}</strong>
                 </div>
               )}
               <div className="flex items-center justify-between text-[9px] text-stone-400 pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
