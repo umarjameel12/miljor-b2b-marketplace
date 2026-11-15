@@ -14,8 +14,10 @@ router.use(protect);
 router.get('/', async (req, res) => {
   try {
     const unreadOnly = req.query.unread === 'true';
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isSafeInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isSafeInteger(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
     const notifications = await notificationService.listUserNotifications(req.user.id, { limit, offset, unreadOnly });
     const unreadCount = await notificationService.getUnreadCount(req.user.id);
     return res.status(200).json({ success: true, data: { notifications, unreadCount } });
@@ -35,7 +37,11 @@ router.get('/unread-count', async (req, res) => {
 
 router.patch('/:id/read', async (req, res) => {
   try {
-    const updated = await notificationService.markAsRead(req.params.id, req.user.id);
+    const notificationId = Number(req.params.id);
+    if (!Number.isSafeInteger(notificationId) || notificationId <= 0) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid notification ID' } });
+    }
+    const updated = await notificationService.markAsRead(req.user.id, notificationId);
     return res.status(200).json({ success: true, data: { updated } });
   } catch (err) {
     return res.status(500).json({ success: false, error: { message: err.message } });
