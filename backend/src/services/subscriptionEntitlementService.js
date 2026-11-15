@@ -275,6 +275,15 @@ class SubscriptionEntitlementService {
         throw err;
       }
 
+      // A supplier on a paid plan must not lose paid access immediately.
+      // Cancellation/downgrade uses the period-end endpoint exclusively.
+      if (normalizedPlan === 'STARTER' && profiles[0].subscription_plan !== 'STARTER') {
+        const error = new Error('Use cancel renewal to move to Starter at the paid period end');
+        error.code = 'SUBSCRIPTION_SCHEDULE_REQUIRED';
+        error.statusCode = 409;
+        throw error;
+      }
+
       const previousPlan = profiles[0].subscription_plan;
       const newStatus = normalizedPlan === 'STARTER' ? 'STARTER_ACTIVE' : 'ACTIVE';
 
