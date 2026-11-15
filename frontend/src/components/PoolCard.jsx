@@ -39,6 +39,7 @@ const DEFAULT_CARD_IMAGES = {
 export const PoolCard = ({ pool, onSelect }) => {
   const [imgError, setImgError] = useState(false);
   const [deadlineExpired, setDeadlineExpired] = useState(false);
+  const [showProductDetails, setShowProductDetails] = useState(false);
   useEffect(() => setDeadlineExpired(false), [pool.scheduled_close_at, pool.expires_at]);
 
   // Safe progress percentage clamped between 0 and 100
@@ -58,6 +59,13 @@ export const PoolCard = ({ pool, onSelect }) => {
   const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
   const promisedDeliveryFormatted = formatLahoreTimestamp(pool.promised_delivery_at);
+  const productName = pool.product_name || pool.title || 'Wholesale Commodity';
+  const productLower = productName.toLowerCase();
+  const categoryLabel = /rice|basmati|kainat|sella|grain/.test(productLower) ? 'Rice & Grains'
+    : /oil|ghee|olein/.test(productLower) ? 'Cooking Oil & Ghee'
+    : /flour|atta|maida|chakki|wheat/.test(productLower) ? 'Flour & Bakery'
+    : /daal|dal|lentil|masoor|chana|moong|pulse/.test(productLower) ? 'Pulses & Lentils'
+    : /sugar|shakar/.test(productLower) ? 'Sugar & Sweeteners' : 'Wholesale Essentials';
 
   // Fulfillment Availability Indicators (Phase 6D.3 / Package D Invariant)
   const hasStandard = Boolean(
@@ -178,10 +186,22 @@ export const PoolCard = ({ pool, onSelect }) => {
             style={{ color: 'var(--text-primary)' }}
             title={pool.product_name || pool.title}
           >
-            {pool.product_name || pool.title || 'Wholesale Commodity'}
+            {productName}
           </h3>
+          <span className="mt-1.5 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--pool-detail-accent)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>{categoryLabel}</span>
 
-          {/* Supplier Info & Grade Line */}
+          <button
+            type="button"
+            aria-expanded={showProductDetails}
+            onClick={() => setShowProductDetails((open) => !open)}
+            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold transition-opacity hover:opacity-80"
+            style={{ color: 'var(--pool-detail-accent)' }}
+          >
+            {showProductDetails ? 'Hide product details −' : 'View product details +'}
+          </button>
+          {showProductDetails && (
+            <div className="mt-1 rounded-xl border p-2.5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>
+          {/* Supplier specifications are opt-in; never clutter the pool overview. */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-sans mt-1" style={{ color: 'var(--text-secondary)' }}>
             <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
               {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Supplier details available on request'}
@@ -210,17 +230,15 @@ export const PoolCard = ({ pool, onSelect }) => {
             </div>
           )}
 
+            </div>
+          )}
+
           {/* Participation Cutoff & Promised 1-3 Day Delivery SLA */}
           {(cutoffFormatted || promisedDeliveryFormatted) && (
             <div className="mt-2 p-2 rounded-xl border text-[10px] space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
               {cutoffFormatted && (
-                <div className="flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
-                    <span>Closes (PKT):</span>
-                  </span>
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span style={{ color: 'var(--pool-detail-accent)' }}>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-end text-[10px] font-medium" style={{ color: 'var(--pool-detail-accent)' }}>
                     <CountdownTimer
                       deadline={pool.scheduled_close_at || pool.expires_at}
                       serverTime={pool.server_time || null}
@@ -228,8 +246,13 @@ export const PoolCard = ({ pool, onSelect }) => {
                       label="Closes in"
                       onExpire={() => setDeadlineExpired(true)}
                     />
-                  </span>
-                    <strong className="font-mono text-[10px]" style={{ color: 'var(--text-primary)' }}>{cutoffFormatted}</strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-2" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="inline-flex shrink-0 items-center gap-1 font-medium">
+                      <Clock className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} aria-hidden="true" />
+                      Closes (PKT):
+                    </span>
+                    <strong className="text-right font-sans font-semibold tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>{cutoffFormatted}</strong>
                   </div>
                 </div>
               )}
@@ -311,7 +334,7 @@ export const PoolCard = ({ pool, onSelect }) => {
             </div>
 
             {/* Percentage pill on right side */}
-            <span className="text-xs font-sans font-semibold tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+            <span className="text-xs font-sans font-semibold tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>
               {progressPercent}%
             </span>
           </div>
@@ -330,7 +353,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 className="h-full rounded-full transition-all duration-300"
                 style={{
                   width: `${progressPercent}%`,
-                  background: 'linear-gradient(90deg, #b39156 0%, #d8c48e 100%)',
+                  background: 'var(--pool-progress-gradient, linear-gradient(90deg, #b39156, #d8c48e))',
                 }}
               />
               {FLAGS.tierNotchesOnProgress && Array.isArray(pool.pricing_tiers) && pool.pricing_tiers.length > 0 && targetQty > 0 && (
@@ -361,13 +384,13 @@ export const PoolCard = ({ pool, onSelect }) => {
         <div className="pt-2">
           <button
             type="button"
-            onClick={() => onSelect && onSelect(pool)}
+            onClick={() => { if (onSelect) onSelect(pool); else setShowProductDetails(true); }}
             disabled={isClosed}
-            className="w-full py-2.5 px-3 rounded-xl font-sans font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs transition-all hover:brightness-105 hover:shadow-md"
+            className="miljor-pool-join w-full py-2.5 px-3 rounded-xl font-sans font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs transition-all hover:brightness-105 hover:shadow-md"
             style={{
-              background: 'linear-gradient(115deg, #e0cb94, #c8b276 55%, #b39357)',
-              color: '#172b24',
-              border: '1px solid rgba(125, 93, 43, 0.28)',
+              background: 'var(--pool-join-gradient, linear-gradient(115deg, #e0cb94, #c8b276 55%, #b39357))',
+              color: 'var(--pool-join-ink, #172b24)',
+              border: '1px solid var(--pool-join-border, rgba(125, 93, 43, 0.28))',
             }}
           >
             <span>{isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
