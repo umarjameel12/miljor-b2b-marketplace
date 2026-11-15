@@ -78,7 +78,7 @@ async function main(){
     // Preserve every pinned canonical version in the disposable adversarial fixture;
     // otherwise an early mismatch masks the competing finance collision we test.
     for(const name of [...new Set([...Object.values(CANONICAL),
-      ...manifest.map(item=>item.filename)])])
+      ...manifest.map(item=>item.filename)])].filter(name => name !== '049_in_app_notifications.sql'))
       fs.copyFileSync(path.join(root,'database/migrations',name),path.join(tmp,name));
     fs.writeFileSync(path.join(tmp,FINANCE_ALTERNATE['049']),'-- collision only\nSELECT 1;\n');
     assert.throws(()=>checkFinanceCompatibility(tmp),/FINANCE_MIGRATION_VERSION_COLLISION/);
