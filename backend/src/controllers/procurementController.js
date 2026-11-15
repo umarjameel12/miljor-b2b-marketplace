@@ -10,6 +10,7 @@ const procurementQuoteService = require('../services/procurementQuoteService');
 const procurementQuoteComparisonService = require('../services/procurementQuoteComparisonService');
 const procurementNegotiationService = require('../services/procurementNegotiationService');
 const procurementProductCounterofferService = require('../services/procurementProductCounterofferService');
+const procurementDeliveryOptionsService = require('../services/procurementDeliveryOptionsService');
 const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 const procurementCollectiveService = require('../services/procurementCollectiveService');
 const procurementRecurringService = require('../services/procurementRecurringService');
@@ -185,6 +186,14 @@ class ProcurementController {
     try{
       const negotiations=await procurementNegotiationService.forSupplier(req.user.id);
       res.json({success:true,data:{negotiations}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  async getSmartDeliveryOptions(req,res){
+    try{
+      const options=await procurementDeliveryOptionsService.forBuyer(
+        req.user.id,req.params.id,req.params.quoteId,req.query.cluster_id);
+      res.json({success:true,data:{options}});
     }catch(err){this._smartError(res,err);}
   }
 
