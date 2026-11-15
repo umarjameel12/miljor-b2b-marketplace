@@ -23,7 +23,8 @@ assert.deepEqual(validateSupplierDecision({decision:'ACCEPT'},{request_item_id:1
 assert.deepEqual(validateSupplierDecision({decision:'REJECT'},{request_item_id:12}),{decision:'REJECT',request_item_id:12});
 assert.deepEqual(validateSupplierDecision({decision:'COUNTER_AGAIN',proposed_unit_price:'280'},{request_item_id:12,buyer_proposed_unit_price:'270',quoted_unit_price:'290'}),
   {decision:'COUNTER_AGAIN',request_item_id:12,proposed_unit_price:'280.00'});
-bad(()=>validateSupplierDecision({decision:'CHAT',message:'hello'},{request_item_id:12}),'INVALID_COUNTER_DECISION');
+bad(()=>validateSupplierDecision({decision:'CHAT'},{request_item_id:12}),'INVALID_COUNTER_DECISION');
+bad(()=>validateSupplierDecision({decision:'CHAT',message:'hello'},{request_item_id:12}),'UNSUPPORTED_COUNTER_FIELD');
 bad(()=>validateSupplierDecision({decision:'ACCEPT',proposed_unit_price:'280'},{request_item_id:12}),'UNEXPECTED_COUNTER_PRICE');
 bad(()=>validateSupplierDecision({decision:'COUNTER_AGAIN',proposed_unit_price:'300'},{request_item_id:12,buyer_proposed_unit_price:'270',quoted_unit_price:'290'}),'COUNTER_PRICE_OUT_OF_RANGE');
 bad(()=>validateSupplierDecision({decision:'COUNTER_AGAIN',proposed_unit_price:'260'},{request_item_id:12,buyer_proposed_unit_price:'270',quoted_unit_price:'290'}),'COUNTER_PRICE_OUT_OF_RANGE');
