@@ -16,6 +16,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { geoApi } from '../api/geo';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
@@ -75,6 +76,9 @@ export const RfqPage = () => {
   const [buyerCounteroffers,setBuyerCounteroffers]=useState([]);
   const [supplierCounteroffers,setSupplierCounteroffers]=useState([]);
   const [supplierCounterDrafts,setSupplierCounterDrafts]=useState({});
+  const [deliveryClusters,setDeliveryClusters]=useState([]);
+  const [deliveryClusterId,setDeliveryClusterId]=useState(user?.base_cluster_id?String(user.base_cluster_id):'');
+  const [deliveryOptionResults,setDeliveryOptionResults]=useState({});
 
 
 
@@ -394,6 +398,22 @@ export const RfqPage = () => {
       setBuyerCounteroffers(data.counteroffers||[]);
       setCounterofferDrafts(old=>({...old,[quote.id]:{}}));
       toast.success('Product counteroffer submitted. No payment or order created.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  useEffect(()=>{
+    if(user?.role!=='BUYER')return;
+    geoApi.getClusters().then(result=>setDeliveryClusters(result?.data?.clusters||[]))
+      .catch(()=>setDeliveryClusters([]));
+  },[user?.role]);
+  const viewSupplierDeliveryOptions=async quote=>{
+    if(!deliveryClusterId){setShoppingError('Select your delivery area cluster first.');return;}
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(
+        `/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-options?cluster_id=${encodeURIComponent(deliveryClusterId)}`
+      );
+      setDeliveryOptionResults(old=>({...old,[quote.id]:data.options}));
     }catch(error){setShoppingError(error.message);}
     finally{setQuoteBusy(false);}
   };
@@ -1245,9 +1265,37 @@ export const RfqPage = () => {
                 )}
                 <div className="space-y-3" aria-label="Product-wise numeric counteroffers">
                   <p className="text-sm font-semibold">Product-wise Counteroffers (No Chat)</p>
+                  <label className="flex flex-col gap-1 text-xs">
+                    Check supplier delivery eligibility for your cluster
+                    <select value={deliveryClusterId} onChange={e=>{
+                      setDeliveryClusterId(e.target.value);setDeliveryOptionResults({});
+                    }} className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                      <option value="">Select delivery cluster</option>
+                      {deliveryClusters.map(cluster=>(
+                        <option key={cluster.id} value={cluster.id}>{cluster.name}</option>
+                      ))}
+                    </select>
+                  </label>
                   {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
                     <div key={quote.id} className="border border-[var(--border-subtle)] rounded-xl p-3 space-y-3">
                       <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
+                      <div className="space-y-1 text-xs">
+                        <span>Current supplier delivery fee: Rs. {quote.delivery_fee} · Quoted lead time: {quote.delivery_lead_days} days</span>
+                        <button type="button" disabled={quoteBusy||!deliveryClusterId}
+                          onClick={()=>viewSupplierDeliveryOptions(quote)}
+                          className="ml-2 underline disabled:opacity-40">Check Delivery Options</button>
+                        {deliveryOptionResults[quote.id]&&(
+                          <div className="rounded-lg p-2 bg-[var(--bg-card)] space-y-1">
+                            <p className="font-semibold">Eligible delivery modes (not yet selected)</p>
+                            {(deliveryOptionResults[quote.id].eligible_modes||[]).length
+                              ?deliveryOptionResults[quote.id].eligible_modes.map(mode=>(
+                                <p key={mode.mode}>{mode.label||mode.mode}</p>
+                              ))
+                              :<p>No eligible modes found for this supplier and cluster.</p>}
+                            <p className="text-[var(--text-muted)]">Rates and modes require a confirmed supplier quotation and your approval before checkout.</p>
+                          </div>
+                        )}
+                      </div>
                       {(quote.quote_snapshot?.lines||[]).map(line=>{
                         const already=buyerCounteroffers.some(o=>Number(o.quote_id)===Number(quote.id)&&
                           Number(o.quote_version)===Number(quote.current_version)&&Number(o.request_item_id)===Number(line.request_item_id));
