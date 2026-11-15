@@ -46,7 +46,7 @@ router.post('/procurement/supplier/quotes/:quoteId/withdraw',protect,authorizeSt
 
 // B6-F — Buyer comparison and non-binding improvement requests.
 router.get('/procurement/requests/:id/compare',protect,authorizeStrict('BUYER'),(req,res)=>controller.compareSmartQuotes(req,res));
-router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>controller.requestSmartBetterOffer(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>res.status(410).json({success:false,error:{code:'LEGACY_FREE_TEXT_NEGOTIATION_DISABLED',message:'Use selected-product numeric counteroffers in the Smart Procurement Hub.'}}));
 router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
 router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
 
