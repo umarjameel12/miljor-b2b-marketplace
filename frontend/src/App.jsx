@@ -7,6 +7,7 @@ import { Navbar } from './components/Navbar';
 import { OpeningTreatment } from './components/ui/OpeningTreatment';
 import { Logo } from './components/ui/Logo';
 import { LandingPage } from './pages/LandingPage';
+import { AuthenticatedHomePage } from './pages/AuthenticatedHomePage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
@@ -43,7 +44,7 @@ function RouteFallback() {
 const CURRENT_YEAR = new Date().getFullYear();
 
 function AppContent() {
-  const { loading: authLoading } = useAuth();
+  const { loading: authLoading, isAuthenticated } = useAuth();
   const { isDark } = useTheme();
   const location = useLocation();
 
@@ -69,7 +70,7 @@ function AppContent() {
       <div className="flex-1 flex flex-col">
         <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={isAuthenticated ? <AuthenticatedHomePage /> : <LandingPage />} />
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/checkout/:orderId" element={<CheckoutPage />} />
@@ -139,13 +140,13 @@ function AppContent() {
                 Explore Active Pools
               </Link>
               <span>•</span>
-              <a href="/#how-it-works" className="hover:underline">
-                How It Works
-              </a>
+              <Link to="/rfqs" className="hover:underline">
+                Request a Quote
+              </Link>
               <span>•</span>
-              <a href="/#collective-procurement" className="hover:underline">
-                Collective Buying
-              </a>
+              <Link to="/demand-requests" className="hover:underline">
+                Demand Requests
+              </Link>
             </div>
 
             <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
