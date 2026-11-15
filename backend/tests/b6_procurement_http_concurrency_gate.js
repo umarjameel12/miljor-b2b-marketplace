@@ -77,7 +77,6 @@ async function main() {
     // Verified Buyer A (owner), Buyer B (outsider), Verified Supplier, Admin
     const buyerAToken = makeToken({ id: 5, email: 'buyer.b6f.a@miljor.test', role: 'BUYER' });
     const buyerBToken = makeToken({ id: 6, email: 'buyer.b6f.b@miljor.test', role: 'BUYER' });
-    const supplierToken = makeToken({ id: 2, email: 'supplier.b6f@miljor.test', role: 'SUPPLIER' });
     const adminToken = makeToken({ id: 1, email: 'admin.b6f@miljor.test', role: 'ADMIN' });
 
     // Ensure fixture exists
@@ -90,11 +89,12 @@ async function main() {
         AND ps.is_active=1 AND ps.approval_status='APPROVED' AND ps.lifecycle_status='PUBLISHED'
       JOIN users u ON u.id=sl.supplier_id AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED'
       JOIN supplier_profiles sf ON sf.supplier_id=u.id AND sf.verification_status='VERIFIED'
-      WHERE sl.status='ACTIVE' AND sl.available_stock>=2 AND sl.currency='PKR'
+      WHERE sl.supplier_id=2 AND sl.status='ACTIVE' AND sl.available_stock>=2 AND sl.currency='PKR'
       LIMIT 1
     `);
     assert.ok(listings.length > 0, 'Supplier listing fixture missing in test DB');
     const fixture = listings[0];
+    const supplierToken = makeToken({ id: fixture.supplier_id, email: 'supplier.b6f@miljor.test', role: 'SUPPLIER' });
 
     // Create a request via API as Buyer A
     const tag = crypto.randomUUID().slice(0, 8);
@@ -219,187 +219,163 @@ async function main() {
     assert.equal(ownerCompare.body.data.platform_fees_calculated, false);
     pass('Owning Buyer A successfully retrieves quote comparison and transparent rankings');
 
-    // =========================================================================
-    // 2. HTTP Authorization & RBAC on Improvement / Negotiation Endpoint
-    // =========================================================================
-    // Missing JWT -> 401
-    const unauthImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
+    // Numeric product counteroffers replace deprecated free-text improvement.
+    const legacyPath = `/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`;
+    const counterPath = `/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/counteroffers`;
+    const buyerHistoryPath = `/api/v1/procurement/requests/${requestId}/counteroffers`;
+    const supplierInboxPath = '/api/v1/procurement/supplier/counteroffers';
+    const payload = { version_number: 1, lines: [{ request_item_id: requestItemId, proposed_unit_price: '420.00' }] };
+    const post = (path, token, key, body) => api(path, {
       method: 'POST',
-      body: { version_number: 1, message: 'Please offer discount' }
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(key ? { 'X-Idempotency-Key': key } : {}) },
+      body
     });
-    assert.equal(unauthImprove.status, 401);
-    pass('Unauthenticated improvement request rejected with 401');
-
-    // Supplier -> 403
-    const supImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${supplierToken}` },
-      body: { version_number: 1, message: 'Please offer discount' }
-    });
-    assert.equal(supImprove.status, 403);
-    pass('Supplier role blocked from requesting quote improvements with 403');
-
-    // Missing idempotency key -> 400
-    const noIdemImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${buyerAToken}` },
-      body: { version_number: 1, message: 'Please offer discount' }
-    });
-    assert.equal(noIdemImprove.status, 400);
-    assert.equal(noIdemImprove.body.error.code, 'INVALID_IDEMPOTENCY_KEY');
-    pass('Improvement request without X-Idempotency-Key rejected with 400');
-
-    // Off-platform contact sharing -> 400
-    const contactImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${buyerAToken}`,
-        'X-Idempotency-Key': `improve-contact-${tag}`
-      },
-      body: { version_number: 1, message: 'Email me at buyer@external.com or call 0300-9876543' }
-    });
-    assert.equal(contactImprove.status, 400);
-    assert.equal(contactImprove.body.error.code, 'DIRECT_CONTACT_NOT_ALLOWED');
-    pass('Direct phone/email sharing rejected with 400 DIRECT_CONTACT_NOT_ALLOWED');
-
-    // Stale version -> 409
-    const staleImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${buyerAToken}`,
-        'X-Idempotency-Key': `improve-stale-${tag}`
-      },
-      body: { version_number: 99, message: 'Improve delivery schedule please' }
-    });
-    assert.equal(staleImprove.status, 409);
-    assert.equal(staleImprove.body.error.code, 'QUOTE_VERSION_CHANGED');
-    pass('Stale quote version rejected with 409 QUOTE_VERSION_CHANGED');
-
-    // Valid improvement request -> 201
-    const validImproveKey = `improve-valid-${tag}`;
-    const validImprovePayload = {
-      version_number: 1,
-      message: 'Can you offer a bulk concession for ongoing weekly procurement?',
-      target_total: '720.00'
+    const expectError = (response, status, code) => {
+      assert.equal(response.status, status, JSON.stringify(response.body));
+      if (code) assert.equal(response.body.error.code, code);
     };
-    const validImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${buyerAToken}`,
-        'X-Idempotency-Key': validImproveKey
-      },
-      body: validImprovePayload
-    });
-    assert.equal(validImprove.status, 201);
-    assert.equal(validImprove.body.data.negotiation.status, 'OPEN');
-    assert.equal(validImprove.body.data.is_replay, false);
-    pass('Valid improvement request created with 201 and status OPEN');
+    const assertNoLegacy = async () => {
+      const [[legacy]] = await db.query('SELECT COUNT(*) AS c FROM procurement_quote_negotiations WHERE request_id=?', [requestId]);
+      assert.equal(legacy.c, 0, 'Legacy free-text negotiation was inserted');
+    };
+    expectError(await post(legacyPath, null, null, { version_number: 1, message: 'Please offer discount' }), 401);
+    expectError(await post(legacyPath, supplierToken, null, { version_number: 1, message: 'Please offer discount' }), 403);
+    for (const key of [null, `legacy-disabled-${tag}`]) {
+      expectError(await post(legacyPath, buyerAToken, key,
+        { version_number: 1, message: 'Please offer discount', target_total: '720.00' }),
+      410, 'LEGACY_FREE_TEXT_NEGOTIATION_DISABLED');
+    }
+    await assertNoLegacy();
+    pass('Legacy improve preserves authentication/RBAC and returns authenticated 410 without inserting negotiations');
 
-    // Replay with same idempotency key -> 200 is_replay: true
-    const replayImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${buyerAToken}`,
-        'X-Idempotency-Key': validImproveKey
-      },
-      body: validImprovePayload
-    });
-    assert.equal(replayImprove.status, 200);
-    assert.equal(replayImprove.body.data.is_replay, true);
-    assert.equal(replayImprove.body.data.negotiation.id, validImprove.body.data.negotiation.id);
-    pass('Idempotency replay returns 200 with identical immutable response');
+    expectError(await post(counterPath, null, null, payload), 401);
+    for (const token of [supplierToken, adminToken]) {
+      expectError(await post(counterPath, token, `counter-rbac-${tag}`, payload), 403);
+    }
+    expectError(await post(counterPath, buyerBToken, `counter-outsider-${tag}`, payload), 404, 'REQUEST_NOT_FOUND');
+    expectError(await post(counterPath, buyerAToken, null, payload), 400, 'INVALID_IDEMPOTENCY_KEY');
+    pass('Numeric counteroffers enforce authentication, strict buyer RBAC, ownership and idempotency keys');
 
-    // Conflict: same key with different payload -> 409
-    const conflictImprove = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${buyerAToken}`,
-        'X-Idempotency-Key': validImproveKey
-      },
-      body: { ...validImprovePayload, message: 'Changed negotiation text' }
-    });
-    assert.equal(conflictImprove.status, 409);
-    assert.equal(conflictImprove.body.error.code, 'IDEMPOTENCY_CONFLICT');
-    pass('Same key with different payload rejected with 409 IDEMPOTENCY_CONFLICT');
+    // All free text is forbidden, including off-platform contact fields at either level.
+    for (const body of [
+      { ...payload, message: 'Email me at buyer@external.com or call 0300-9876543' },
+      { ...payload, lines: [{ ...payload.lines[0], message: 'Call 0300-9876543' }] }
+    ]) {
+      expectError(await post(counterPath, buyerAToken, `counter-contact-${tag}`, body), 400, 'UNSUPPORTED_COUNTER_FIELD');
+    }
+    expectError(await post(counterPath, buyerAToken, `counter-invalid-${tag}`,
+      { ...payload, lines: [{ request_item_id: requestItemId, proposed_unit_price: 'Please offer discount' }] }),
+    400, 'INVALID_COUNTER_PRICE');
+    expectError(await post(counterPath, buyerAToken, `counter-stale-${tag}`, { ...payload, version_number: 99 }), 409, 'QUOTE_STALE');
+    const [[noOffers]] = await db.query('SELECT COUNT(*) AS c FROM procurement_product_counteroffers WHERE request_id=?', [requestId]);
+    assert.equal(noOffers.c, 0, 'Rejected submissions inserted counteroffers');
+    pass('Free text/contact sharing, nonnumeric prices and stale quote versions fail without inserting offers');
 
-    // =========================================================================
-    // 3. Concurrency & Overlapping Improvement Requests
-    // =========================================================================
-    // Concurrent second improvement attempt for the SAME quote version -> 409 NEGOTIATION_ALREADY_OPEN
-    const duplicateParallelKey = `improve-dupe-${tag}`;
-    const dupeRes = await api(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/improve`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${buyerAToken}`,
-        'X-Idempotency-Key': duplicateParallelKey
-      },
-      body: { version_number: 1, message: 'Second request while first is open' }
-    });
-    assert.equal(dupeRes.status, 409);
-    assert.ok(
-      ['NEGOTIATION_ALREADY_OPEN', 'NEGOTIATION_CONFLICT'].includes(dupeRes.body.error.code),
-      `Unexpected code: ${dupeRes.body.error.code}`
-    );
-    pass('Overlapping improvement request on same quote version rejected with 409');
+    // Real simultaneous submissions: exactly one row wins the per-product/version constraint.
+    const raceKeys = [`counter-race-a-${tag}`, `counter-race-b-${tag}`];
+    const submissions = await Promise.all(raceKeys.map(key => post(counterPath, buyerAToken, key, payload)));
+    assert.deepEqual(submissions.map(r => r.status).sort(), [201, 409]);
+    const winnerIndex = submissions.findIndex(r => r.status === 201);
+    const created = submissions[winnerIndex];
+    expectError(submissions[1 - winnerIndex], 409, 'COUNTEROFFER_CONFLICT');
+    assert.equal(created.body.data.is_replay, false);
+    assert.equal(created.body.data.counteroffers.length, 1);
+    const offer = created.body.data.counteroffers[0];
+    assert.equal(offer.decision, 'OPEN');
+    assert.equal(offer.buyer_proposed_unit_price, '420.00');
+    const [[oneOffer]] = await db.query('SELECT COUNT(*) AS c FROM procurement_product_counteroffers WHERE request_id=?', [requestId]);
+    assert.equal(oneOffer.c, 1);
+    pass('Concurrent numeric submissions create exactly one OPEN offer and reject the competing write');
 
-    // =========================================================================
-    // 4. Supplier Negotiation Inbox & Privacy
-    // =========================================================================
-    // Buyer accessing supplier inbox -> 403
-    const buyerSupplierInbox = await api('/api/v1/procurement/supplier/negotiations', {
-      headers: { Authorization: `Bearer ${buyerAToken}` }
-    });
-    assert.equal(buyerSupplierInbox.status, 403);
-    pass('Buyer role blocked from supplier negotiation inbox with 403');
+    const replay = await post(counterPath, buyerAToken, raceKeys[winnerIndex], payload);
+    assert.equal(replay.status, 200, JSON.stringify(replay.body));
+    assert.equal(replay.body.data.is_replay, true);
+    assert.deepEqual(replay.body.data.counteroffers, created.body.data.counteroffers);
+    expectError(await post(counterPath, buyerAToken, raceKeys[winnerIndex],
+      { ...payload, lines: [{ request_item_id: requestItemId, proposed_unit_price: '410.00' }] }),
+    409, 'IDEMPOTENCY_CONFLICT');
+    expectError(await post(counterPath, buyerAToken, `counter-dupe-${tag}`, payload), 409, 'COUNTEROFFER_CONFLICT');
+    pass('Replay preserves the immutable offer; changed payload and overlapping offers conflict');
 
-    // Supplier accessing own inbox -> 200
-    const supInbox = await api('/api/v1/procurement/supplier/negotiations', {
-      headers: { Authorization: `Bearer ${supplierToken}` }
-    });
-    assert.equal(supInbox.status, 200);
-    const item = supInbox.body.data.negotiations.find(n => n.id === validImprove.body.data.negotiation.id);
-    assert.ok(item, 'Negotiation item present in supplier inbox');
-    assert.equal(item.buyer_id, undefined, 'Privacy leak: buyer_id present in supplier inbox');
-    assert.equal(item.delivery_area, undefined, 'Privacy leak: delivery_area present in supplier inbox');
-    assert.equal(item.buyer_phone, undefined, 'Privacy leak: buyer_phone present in supplier inbox');
-    pass('Supplier inbox scoped correctly without buyer contact or delivery address leaks');
+    expectError(await api(supplierInboxPath, { headers: { Authorization: `Bearer ${buyerAToken}` } }), 403);
+    expectError(await api(buyerHistoryPath, { headers: { Authorization: `Bearer ${buyerBToken}` } }), 404, 'REQUEST_NOT_FOUND');
+    const inbox = await api(supplierInboxPath, { headers: { Authorization: `Bearer ${supplierToken}` } });
+    assert.equal(inbox.status, 200);
+    const item = inbox.body.data.counteroffers.find(n => n.id === offer.id);
+    assert.ok(item, 'Own counteroffer missing from supplier inbox');
+    for (const field of ['buyer_id', 'delivery_area', 'buyer_phone', 'buyer_email', 'buyer_name', 'delivery_address']) {
+      assert.equal(Object.hasOwn(item, field), false, `Privacy leak: ${field}`);
+    }
+    // Use an existing different supplier; never create or alter shared user fixtures.
+    const [otherSuppliers] = await db.query("SELECT id FROM users WHERE role='SUPPLIER' AND id<>? AND verification_status<>'BLOCKED' AND (buyer_trust_status IS NULL OR buyer_trust_status<>'SUSPENDED') LIMIT 1", [fixture.supplier_id]);
+    assert.ok(otherSuppliers.length, 'Different supplier fixture required for ownership checks');
+    const otherSupplierToken = makeToken({ id: otherSuppliers[0].id, email: 'outsider.b6f@miljor.test', role: 'SUPPLIER' });
+    const otherInbox = await api(supplierInboxPath, { headers: { Authorization: `Bearer ${otherSupplierToken}` } });
+    assert.equal(otherInbox.status, 200);
+    assert.equal(otherInbox.body.data.counteroffers.some(n => n.id === offer.id), false);
+    const responsePath = `/api/v1/procurement/supplier/counteroffers/${offer.id}/respond`;
+    expectError(await post(responsePath, null, null, { decision: 'ACCEPT' }), 401);
+    for (const token of [buyerAToken, adminToken]) {
+      expectError(await post(responsePath, token, null, { decision: 'ACCEPT' }), 403);
+    }
+    expectError(await post(responsePath, otherSupplierToken, null, { decision: 'ACCEPT' }), 404, 'COUNTEROFFER_NOT_FOUND');
+    expectError(await post(responsePath, supplierToken, null,
+      { decision: 'ACCEPT', message: 'Email supplier@external.com' }), 400, 'UNSUPPORTED_COUNTER_FIELD');
+    pass('Supplier inbox and response enforce role/owner isolation and hide buyer contact/address fields');
 
-    // =========================================================================
-    // 5. Quote Revision Atomically Resolves Open Negotiation
-    // =========================================================================
+    // Deterministic expiry fixtures only touch this test's request and quote version.
+    for (const kind of ['request', 'quote']) {
+      const sql = kind === 'request'
+        ? 'UPDATE procurement_requests SET quote_deadline=? WHERE id=?'
+        : 'UPDATE procurement_quote_versions SET valid_until=? WHERE quote_id=? AND version_number=1';
+      const id = kind === 'request' ? requestId : quoteId;
+      const [[saved]] = await db.query(kind === 'request'
+        ? 'SELECT quote_deadline AS deadline FROM procurement_requests WHERE id=?'
+        : 'SELECT valid_until AS deadline FROM procurement_quote_versions WHERE quote_id=? AND version_number=1', [id]);
+      await db.query(sql, [new Date(Date.now() - 3600000), id]);
+      try {
+        const code = kind === 'request' ? 'REQUEST_CLOSED' : 'QUOTE_EXPIRED';
+        expectError(await post(counterPath, buyerAToken, `counter-expiry-${kind}-${tag}`, payload), 409, code);
+        expectError(await post(responsePath, supplierToken, null, { decision: 'ACCEPT' }), 409, code);
+        const [[unchanged]] = await db.query('SELECT decision FROM procurement_product_counteroffers WHERE id=?', [offer.id]);
+        assert.equal(unchanged.decision, 'OPEN');
+      } finally {
+        await db.query(sql, [saved.deadline, id]);
+      }
+    }
+    pass('Expired requests and quotes reject both buyer submissions and supplier responses without resolving offers');
+
+    const decisions = await Promise.all(['ACCEPT', 'REJECT'].map(decision => post(responsePath, supplierToken, null, { decision })));
+    assert.deepEqual(decisions.map(r => r.status).sort(), [200, 409]);
+    const resolved = decisions.find(r => r.status === 200).body.data;
+    expectError(decisions.find(r => r.status === 409), 409, 'COUNTEROFFER_ALREADY_DECIDED');
+    assert.ok(['ACCEPT', 'REJECT'].includes(resolved.counteroffer.decision));
+    assert.equal(resolved.requires_revised_quote, resolved.counteroffer.decision === 'ACCEPT');
+    const history = await api(buyerHistoryPath, { headers: { Authorization: `Bearer ${buyerAToken}` } });
+    assert.equal(history.status, 200);
+    assert.equal(history.body.data.counteroffers.find(n => n.id === offer.id).decision, resolved.counteroffer.decision);
+    const unchangedCompare = await api(`/api/v1/procurement/requests/${requestId}/compare`, { headers: { Authorization: `Bearer ${buyerAToken}` } });
+    assert.equal(unchangedCompare.status, 200);
+    assert.equal(unchangedCompare.body.data.recommendations.lowest_supplier_quoted_cost.total_delivered_cost, '800.00');
+    pass('Concurrent supplier decisions resolve exactly once; nonbinding responses do not change quoted prices');
+
+    // Supplier must publish a new immutable quote before comparison prices change.
     const revRes = await api(`/api/v1/procurement/supplier/requests/${requestId}/quotes`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${supplierToken}`,
-        'X-Idempotency-Key': `quote-v2-${tag}`
-      },
+      headers: { Authorization: `Bearer ${supplierToken}`, 'X-Idempotency-Key': `quote-v2-${tag}` },
       body: {
-        delivery_fee: '250.00',
-        delivery_lead_days: 2,
+        delivery_fee: '250.00', delivery_lead_days: 2,
         valid_until: new Date(Date.now() + 24 * 3600000).toISOString(),
         supplier_notes: 'Revised quotation with bulk concession',
-        lines: [{
-          request_item_id: requestItemId,
-          supplier_listing_id: fixture.listing_id,
-          quantity: '1',
-          unit_price: '430.00'
-        }]
+        lines: [{ request_item_id: requestItemId, supplier_listing_id: fixture.listing_id, quantity: '1', unit_price: '430.00' }]
       }
     });
-    assert.equal(revRes.status, 201);
+    assert.equal(revRes.status, 201, JSON.stringify(revRes.body));
     assert.equal(revRes.body.data.quote.version_number, 2);
-    pass('Supplier submitted revised quote version 2 via HTTP');
-
-    // Verify buyer negotiation history reflects RESPONDED with version 2
-    const buyerNegs = await api(`/api/v1/procurement/requests/${requestId}/negotiations`, {
-      headers: { Authorization: `Bearer ${buyerAToken}` }
-    });
-    assert.equal(buyerNegs.status, 200);
-    const resolvedNeg = buyerNegs.body.data.negotiations.find(n => n.id === validImprove.body.data.negotiation.id);
-    assert.ok(resolvedNeg, 'Negotiation record found');
-    assert.equal(resolvedNeg.status, 'RESPONDED');
-    assert.equal(resolvedNeg.responded_version, 2);
-    pass('Open negotiation atomically transitioned to RESPONDED with version 2');
+    expectError(await post(counterPath, buyerAToken, `counter-old-version-${tag}`, payload), 409, 'QUOTE_STALE');
+    await assertNoLegacy();
+    pass('Supplier revision publishes version 2, invalidates old-version submissions and inserts no legacy negotiation');
 
     // Comparison reflects updated price
     const updatedCompare = await api(`/api/v1/procurement/requests/${requestId}/compare`, {
@@ -421,8 +397,10 @@ async function main() {
     pass('Zero orders, payments, or invoices created throughout entire negotiation lifecycle');
 
   } finally {
-    // Cleanup fixtures
+    // Cleanup only this run's request IDs; queued events must never outlive fixtures.
     for (const rid of createdRequestIds) {
+      await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=?", [String(rid)]);
+      await db.query('DELETE FROM procurement_product_counteroffers WHERE request_id=?', [rid]);
       await db.query('DELETE FROM procurement_quote_negotiations WHERE request_id=?', [rid]);
       const [quotes] = await db.query('SELECT id FROM procurement_quotes WHERE request_id=?', [rid]);
       for (const q of quotes) {
@@ -441,11 +419,14 @@ async function main() {
   console.log(`\n================================================================================`);
   console.log(`B6-F HTTP & CONCURRENCY GATE: ${count}/${count} PASSED (100% GREEN)`);
   console.log(`================================================================================\n`);
-  process.exit(0);
+
 }
 
 main().catch(err => {
   console.error('B6-F HTTP GATE FAIL:', err);
   if (server) server.close();
-  process.exit(1);
+  process.exitCode = 1;
+}).finally(async () => {
+  if (server?.listening) await new Promise(resolve => server.close(resolve));
+  await db.end();
 });

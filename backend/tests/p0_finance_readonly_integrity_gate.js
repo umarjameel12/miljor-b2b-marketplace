@@ -6,7 +6,13 @@ const path=require('node:path');
 const vm=require('node:vm');
 const exact=require('../src/services/exactDecimal');
 const code=fs.readFileSync(path.join(__dirname,'../src/services/financialConservationService.js'),'utf8');
-let fixture,queries=0,updates=0;
+let fixture,queries=0,updates=0,notificationAttempts=0;
+const readonlyNotifications={
+  async enqueueEvent(){
+    notificationAttempts++;
+    throw Error('READ_ONLY_NOTIFICATION_CONTRACT_VIOLATION');
+  }
+};
 const mockDb={getConnection:async()=>({
   beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{},release:()=>{},
   query:async(sql)=>{
@@ -23,6 +29,7 @@ const m={exports:{}};
 vm.runInNewContext(code,{module:m,exports:m.exports,require:name=>{
   if(name==='../config/db')return mockDb;
   if(name==='./exactDecimal')return exact;
+  if(name==='./notificationService')return readonlyNotifications;
   throw Error('Unexpected import: '+name);
 },BigInt,console},{timeout:5000});
 const audit=m.exports;
@@ -71,6 +78,7 @@ async function main(){
       if(name==='crypto')return require('node:crypto');
       if(name==='../config/db')return mockDb;
       if(name==='./exactDecimal')return exact;
+      if(name==='./notificationService')return readonlyNotifications;
       if(name==='./feeService'||name==='./reservationEventService')return {};
       throw Error('Unexpected financial import '+name);
     }
@@ -89,6 +97,7 @@ async function main(){
   }),e=>e.code==='UNAUTHORIZED_ROLE');
   assert.equal(queries,beforeFinancialQueries,'Provider evidence guards must reject without DB access');
   assert.equal(updates,0,'Audit must never mutate any financial data');
-  console.log('PASS FINANCE READ-ONLY CONTRACT: role denial, valid conservation, fee, commission, payable, refund, payout discrepancy; zero DB writes');
+  assert.equal(notificationAttempts,0,'Read-only audit and rejected provider confirmations must never enqueue notifications');
+  console.log('PASS FINANCE READ-ONLY CONTRACT: role denial, valid conservation, fee, commission, payable, refund, payout discrepancy; zero DB writes or notification attempts');
 }
 main().catch(e=>{console.error('FAIL FINANCE READ-ONLY CONTRACT',e.stack||e);process.exitCode=1});
