@@ -799,3 +799,107 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .miljor-public-landing .landing-topbar {
   border-color: var(--border-subtle);
 }
+
+
+/* Public nav theme refinement — light = graphite/glass, dark = original forest/champagne. */
+:root {
+  --landing-header-bg: rgba(235, 233, 228, .84);
+  --landing-nav-ink: #353a3d;
+  --landing-nav-hover: #1d252a;
+  --landing-button-bg: linear-gradient(118deg, #e6e7e7 0%, #c6c9cc 51%, #aeb4b8 100%);
+  --landing-button-ink: #20262a;
+  --landing-button-border: #9ca4a8;
+  --landing-button-shadow: 0 5px 16px rgba(43, 53, 61, .12);
+  --landing-menu-hover-bg: #c5c9cc;
+  --landing-menu-hover-ink: #20262a;
+  --theme-menu-bg: #f4f3f0;
+  --theme-menu-border: #c3c4c0;
+  --theme-menu-selected: #c3c8cb;
+  --theme-menu-hover: #d8dcde;
+  --theme-menu-ink: #30383c;
+  --theme-menu-selected-ink: #171e22;
+}
+.dark {
+  --landing-header-bg: rgba(7, 42, 33, .88);
+  --landing-nav-ink: #f0e7d5;
+  --landing-nav-hover: #e8cf95;
+  --landing-button-bg: linear-gradient(112deg, #e2cc9c 0%, #c8b276 55%, #967748 100%);
+  --landing-button-ink: #211c14;
+  --landing-button-border: #c8b276;
+  --landing-button-shadow: 0 6px 22px rgba(0, 0, 0, .25);
+  --landing-menu-hover-bg: #c8b276;
+  --landing-menu-hover-ink: #182a22;
+  --theme-menu-bg: #072a21;
+  --theme-menu-border: rgba(200, 178, 118, .35);
+  --theme-menu-selected: #c8b276;
+  --theme-menu-hover: #304e3f;
+  --theme-menu-ink: #f0e7d5;
+  --theme-menu-selected-ink: #182a22;
+}
+.miljor-public-landing .landing-topbar {
+  background-color: var(--landing-header-bg) !important;
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  border-color: var(--border-subtle) !important;
+}
+.miljor-public-landing .landing-gradient-cta {
+  background: var(--landing-button-bg) !important;
+  border-color: var(--landing-button-border) !important;
+  color: var(--landing-button-ink) !important;
+  box-shadow: var(--landing-button-shadow);
+}
+.miljor-public-landing .landing-gradient-cta:hover {
+  background-position: 100% 80%;
+  filter: brightness(.97);
+}
+.dark .miljor-public-landing .landing-gradient-cta:hover {
+  filter: brightness(1.06);
+}
+.miljor-public-landing .landing-account-option,
+.miljor-public-landing .landing-account-option:link,
+.miljor-public-landing .landing-account-option:visited {
+  color: var(--text-primary);
+}
+.miljor-public-landing .landing-account-option:hover,
+.miljor-public-landing .landing-account-option:focus-visible,
+.miljor-public-landing .landing-account-option:active {
+  background: var(--landing-menu-hover-bg) !important;
+  color: var(--landing-menu-hover-ink) !important;
+  font-weight: 600;
+}
+.miljor-public-landing .miljor-theme-trigger {
+  background-color: var(--theme-menu-bg) !important;
+  color: var(--theme-menu-ink) !important;
+  border-color: var(--theme-menu-border) !important;
+}
+.miljor-public-landing .miljor-theme-trigger:hover {
+  background-color: var(--theme-menu-hover) !important;
+}
+.miljor-public-landing .miljor-theme-menu {
+  background-color: var(--theme-menu-bg) !important;
+  border-color: var(--theme-menu-border) !important;
+}
+.miljor-public-landing .miljor-theme-choice {
+  background-color: transparent;
+  color: var(--theme-menu-ink);
+  border-color: transparent;
+}
+.miljor-public-landing .miljor-theme-choice:hover,
+.miljor-public-landing .miljor-theme-choice:focus-visible {
+  background-color: var(--theme-menu-hover);
+  color: var(--theme-menu-selected-ink);
+}
+.dark .miljor-public-landing .miljor-theme-choice:hover,
+.dark .miljor-public-landing .miljor-theme-choice:focus-visible {
+  color: var(--theme-menu-ink);
+}
+.miljor-public-landing .miljor-theme-choice-selected,
+.miljor-public-landing .miljor-theme-choice-selected:hover,
+.miljor-public-landing .miljor-theme-choice-selected:focus-visible {
+  background-color: var(--theme-menu-selected);
+  color: var(--theme-menu-selected-ink);
+  border-color: var(--theme-menu-border);
+}
+.miljor-public-landing .miljor-theme-choice svg {
+  color: inherit;
+}
