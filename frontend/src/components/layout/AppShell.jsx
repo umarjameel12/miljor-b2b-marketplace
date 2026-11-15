@@ -24,6 +24,11 @@ import {
   X,
   Building2,
   ShieldCheck,
+  Truck,
+  Wallet,
+  AlertTriangle,
+  BarChart3,
+  ShoppingBag,
 } from 'lucide-react';
 
 /**
@@ -220,10 +225,15 @@ export const AppShell = ({ children }) => {
       ]
     : isSupplier
     ? [
-        { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
-        { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
-        { label: 'Pool Management', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
-        { label: 'Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Overview', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
+        { label: 'Products & Inventory', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
+        { label: 'Unified Pools', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
+        { label: 'Smart Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Orders & Fulfillment', path: '/orders', icon: ShoppingBag, active: is('/orders') },
+        { label: 'Delivery & Logistics', path: '/supplier/deliveries', icon: Truck, active: is('/supplier/deliveries') },
+        { label: 'Payments & Earnings', path: '/supplier/settlements', icon: Wallet, active: is('/supplier/settlements') },
+        { label: 'Disputes & Returns', path: '/supplier/disputes', icon: AlertTriangle, active: is('/supplier/disputes') },
+        { label: 'Analytics & Reports', path: '/supplier/analytics', icon: BarChart3, active: is('/supplier/analytics') },
         { label: 'Subscription', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
         { label: 'Business Profile', path: '/supplier/profile', icon: User, active: is('/supplier/profile') || is('/supplier/onboarding') },
       ]
