@@ -101,9 +101,9 @@ export const LandingPage = () => {
 
   useEffect(() => {
     let mounted = true;
-    poolsApi.getActivePools({ limit: 3 })
+    poolsApi.getActivePools({ limit: 6 })
       .then((response) => {
-        if (mounted) setFeaturedPools(Array.isArray(response?.data?.pools) ? response.data.pools.slice(0, 3) : []);
+        if (mounted) setFeaturedPools(Array.isArray(response?.data?.pools) ? response.data.pools.slice(0, 6) : []);
       })
       .catch(() => { if (mounted) setFeaturedPools([]); })
       .finally(() => { if (mounted) setLoadingPools(false); });
@@ -265,12 +265,11 @@ export const LandingPage = () => {
               </div>
             </div>
           )}
-          {/* Development-only sample showcase remains visible separately from real published offers. */}
-          {import.meta.env.DEV && (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Clearly labelled illustrative product pool cards, shown in every environment. */}
+          <>
+                  <div className="mt-10 mb-5 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.17em]">Design preview · Development only</p>
+                      <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.17em]">Explore the range</p>
                       <h3 className="landing-section-title mt-2 text-lg font-semibold">Sample procurement cards</h3>
                     </div>
                     <span className="rounded-full border px-3 py-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>Not live offers</span>
@@ -295,8 +294,7 @@ export const LandingPage = () => {
                       </article>
                     ))}
                   </div>
-                </>
-              )}
+          </>
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
