@@ -462,3 +462,15 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .dark .auth-auth-tabs .auth-segment-active {
   box-shadow: 0 0 0 1px var(--brand-accent-soft), 0 0 20px 3px rgba(200, 178, 118, 0.20), 0 4px 14px rgba(0, 0, 0, 0.28);
 }
+
+/* Distinct selected Sign In/Create Account text, separate from Buyer/Supplier. */
+.auth-auth-tabs {
+  --auth-nav-selected-text: #89632b;
+}
+.dark .auth-auth-tabs {
+  --auth-nav-selected-text: #f0d9a2;
+}
+.auth-auth-tabs .auth-segment-active {
+  font-weight: 700;
+  letter-spacing: 0.005em;
+}
