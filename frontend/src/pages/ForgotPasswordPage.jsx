@@ -390,7 +390,7 @@ export const ForgotPasswordPage = () => {
           className="text-xs font-sans mt-0.5"
           style={{ color: 'var(--text-muted)' }}
         >
-          {step === 1 && 'We'll email you a reset code.'}
+          {step === 1 && "We'll email you a reset code."}
           {step === 2 && `Enter the 6-digit code dispatched to ${email || 'your email'}.`}
           {step === 3 && 'Choose a new password.'}
           {step === 4 && 'You can now sign in.'}
