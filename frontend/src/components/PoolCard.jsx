@@ -180,7 +180,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
             <span>
               {isClosed
                 ? 'Concluded'
-                : isExample ? 'Example Pool'
+                : isExample ? 'Demo Pool'
                 : FLAGS.dynamicDemandBadges && progressPercent >= 75
                 ? 'Wholesale Tier 2'
                 : FLAGS.dynamicDemandBadges && progressPercent >= 50
@@ -385,8 +385,8 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
         <div className="mt-auto pt-2">
           <button
             type="button"
-            onClick={() => { if (!isExample && onSelect) onSelect(pool); else if (!isExample) setShowProductDetails(true); }}
-            disabled={isClosed || isExample}
+            onClick={() => { if (onSelect) onSelect(pool); else if (!isExample) setShowProductDetails(true); }}
+            disabled={isClosed}
             className="miljor-pool-join w-full py-2.5 px-3 rounded-xl font-sans font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs transition-all hover:brightness-105 hover:shadow-md"
             style={{
               background: 'var(--pool-join-gradient, linear-gradient(115deg, #e0cb94, #c8b276 55%, #b39357))',
@@ -394,7 +394,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
               border: '1px solid var(--pool-join-border, rgba(125, 93, 43, 0.28))',
             }}
           >
-            <span>{isExample ? 'Demo Pool · Preview Only' : isClosed ? 'Pool Concluded' : 'Join Pool'}</span>
+            <span>{isClosed ? 'Pool Concluded' : 'Join Pool'}</span>
           </button>
         </div>
       </div>
