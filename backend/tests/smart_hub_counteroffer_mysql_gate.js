@@ -96,6 +96,18 @@ async function run(){
     assert.equal(simultaneous.filter(r=>r.status==='fulfilled').length,1);
     assert.equal(simultaneous.filter(r=>r.status==='rejected').length,1);
     assert.equal(simultaneous.find(r=>r.status==='rejected').reason.code,'COUNTEROFFER_CONFLICT');
+    // Supplier is not allowed to decide on closed/expired procurement even with an OPEN offer.
+    await database.query('UPDATE procurement_quotes SET current_version=3 WHERE id=20');
+    await database.query('INSERT INTO procurement_quote_versions VALUES (32,20,3,?)',[stamp(7200000)]);
+    await database.query('INSERT INTO procurement_quote_lines (quote_version_id,request_item_id,unit_price) VALUES (32,11,280.00)');
+    const expiryOffer=await svc.submit(100,10,20,
+      {version_number:3,lines:[{request_item_id:11,proposed_unit_price:'250.00'}]},
+      'test-request-expiry-123456');
+    await database.query('UPDATE procurement_requests SET quote_deadline=? WHERE id=10',[stamp(-3600000)]);
+    await rejects(()=>svc.respond(200,expiryOffer.counteroffers[0].id,{decision:'ACCEPT'}),'REQUEST_CLOSED');
+    await database.query('UPDATE procurement_requests SET quote_deadline=? WHERE id=10',[stamp(86400000)]);
+    await database.query('UPDATE procurement_quote_versions SET valid_until=? WHERE id=32',[stamp(-3600000)]);
+    await rejects(()=>svc.respond(200,expiryOffer.counteroffers[0].id,{decision:'REJECT'}),'QUOTE_EXPIRED');
     // Legacy financial workflows are untouched: no order, payment, stock or settlement tables in this fixture.
     const [all]=await database.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('orders','payments','payment_ledger')");
