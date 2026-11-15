@@ -37,7 +37,11 @@ router.get('/unread-count', async (req, res) => {
 
 router.patch('/:id/read', async (req, res) => {
   try {
-    const updated = await notificationService.markAsRead(req.user.id, req.params.id);
+    const notificationId = Number(req.params.id);
+    if (!Number.isSafeInteger(notificationId) || notificationId <= 0) {
+      return res.status(400).json({success:false,error:{message:'Invalid notification ID'}});
+    }
+    const updated = await notificationService.markAsRead(req.user.id, notificationId);
     return res.status(200).json({ success: true, data: { updated } });
   } catch (err) {
     return res.status(500).json({ success: false, error: { message: err.message } });
