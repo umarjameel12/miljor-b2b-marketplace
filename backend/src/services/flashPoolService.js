@@ -823,7 +823,7 @@ class FlashPoolService {
       await conn.query(
         "UPDATE flash_pools SET status='EXPIRED',version_number=version_number+1 WHERE id=?",[id]);
       // Critical in-app receipts are committed atomically with pool expiry.
-      await require('./ucpExpiryNotificationService').recordFlashExpiryOnConnection(conn,id);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:id,type:'UCP.POOL_EXPIRED',transitionId:'expired'});
       await conn.commit();
       return {id,status:'EXPIRED',preserved_unsettled_quantity:outstanding};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
