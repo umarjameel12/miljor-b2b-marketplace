@@ -32,8 +32,8 @@ export function AuthHeroPanel({
     ? {
         bg: '#072A21',
         borderRight: '1px solid rgba(200, 178, 118, 0.15)',
-        heading: '#FBF8F1',
-        supporting: '#E4EDE7',
+        heading: '#EAD5A6',
+        supporting: '#D4C5A8',
         secondary: '#C8D4CD',
         accent: '#C8B276',
         badgeBg: 'rgba(7, 42, 33, 0.65)',
@@ -49,8 +49,8 @@ export function AuthHeroPanel({
     : {
         bg: '#EADDC7',
         borderRight: '1px solid rgba(169, 133, 67, 0.25)',
-        heading: '#1C1C19',
-        supporting: '#38342C',
+        heading: '#735124',
+        supporting: '#675540',
         secondary: '#4A443A',
         accent: '#967434',
         badgeBg: 'rgba(255, 255, 255, 0.65)',
@@ -80,6 +80,8 @@ export function AuthHeroPanel({
     : role === 'SUPPLIER'
     ? 'Connect with buyers and manage orders.'
     : 'Discover suppliers and better prices.';
+
+  const isCompactTopHero = pageType === 'signin' || pageType === 'forgot-password';
 
   const highlights = pageType !== 'register'
     ? []
@@ -117,7 +119,8 @@ export function AuthHeroPanel({
         </div>
       )}
 
-      <div className="relative z-10 flex flex-1 flex-col justify-center gap-3">
+      <div className={`relative z-10 flex flex-1 flex-col gap-3 ${isCompactTopHero ? "justify-start pt-2 sm:pt-3" : "justify-center"}`}>
+        {isCompactTopHero && <div className="w-11 h-0.5 rounded-full mb-1" style={{ backgroundColor: colors.accent }} aria-hidden="true" />}
         <h2 className="auth-heading text-2xl sm:text-[27px] leading-tight" style={{ color: colors.heading }}>
           {heading}
         </h2>
