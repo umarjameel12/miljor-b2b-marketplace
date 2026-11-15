@@ -125,8 +125,8 @@ class SupplierSubscriptionCheckoutService {
         amount_pkr: price, currency: 'PKR', status: 'INITIATED', checkout_url: checkoutUrl }};
     } catch (e) {
       await this.db.query(
-        "UPDATE supplier_subscription_checkout_attempts SET status='UNKNOWN' WHERE id=? AND supplier_id=? AND status='INITIATING'",
-        [attemptId, supplierId]
+        "UPDATE supplier_subscription_checkout_attempts SET status='UNKNOWN',tracker_token=COALESCE(tracker_token,?) WHERE id=? AND supplier_id=? AND status='INITIATING'",
+        [tracker?.trackerToken || null,attemptId,supplierId]
       );
       throw e;
     }
@@ -147,7 +147,7 @@ class SupplierSubscriptionCheckoutService {
     if (!rows.length) throw error('ATTEMPT_NOT_FOUND', 404, 'Subscription checkout not found');
     const attempt = rows[0];
     if (attempt.status === 'PAID') return { reconciled: true, replay: true, plan_code: attempt.plan_code };
-    if (attempt.status !== 'INITIATED' || !attempt.tracker_token) {
+    if (!['INITIATED','UNKNOWN'].includes(attempt.status) || !attempt.tracker_token) {
       throw error('TRACKER_RECONCILIATION_REQUIRED', 409, 'Checkout tracker is not ready for reconciliation');
     }
     if (process.env.SAFEPAY_ENV !== 'sandbox' || process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT === 'true') {
@@ -183,7 +183,7 @@ class SupplierSubscriptionCheckoutService {
         await connection.commit();
         return { reconciled:true, replay:true, plan_code:locked[0].plan_code };
       }
-      if (locked[0].status !== 'INITIATED' || locked[0].tracker_token !== attempt.tracker_token) {
+      if (!['INITIATED','UNKNOWN'].includes(locked[0].status) || locked[0].tracker_token !== attempt.tracker_token) {
         throw error('ATTEMPT_CHANGED', 409, 'Attempt changed while reconciling');
       }
       if (!profiles.length || profiles[0].subscription_plan !== 'STARTER') {
