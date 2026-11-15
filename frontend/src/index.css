@@ -677,3 +677,95 @@ h1, h2, h3, h4, h5, h6, .font-display {
   color: var(--text-primary) !important;
   background: var(--bg-sidebar-active);
 }
+
+
+/* MilJor public landing polish: warm-neutral light theme, consistent gold interactions. */
+:root {
+  --landing-header-bg: #f4f0e8;
+  --landing-nav-ink: #38372f;
+  --landing-nav-hover: #805a26;
+  --landing-tagline-ink: #755323;
+  --landing-offers-surface: #f3ead7;
+  --landing-offers-ink: #68491e;
+  --landing-account-hover-bg: linear-gradient(112deg, #f2e5c7, #dec590);
+  --landing-account-hover-ink: #342b1c;
+}
+.dark {
+  --landing-header-bg: #1d2723;
+  --landing-nav-ink: #f1e8d6;
+  --landing-nav-hover: #ead198;
+  --landing-tagline-ink: #ead198;
+  --landing-offers-surface: #342f25;
+  --landing-offers-ink: #f0d9a5;
+  --landing-account-hover-bg: linear-gradient(112deg, #59492f, #78603a);
+  --landing-account-hover-ink: #fff1cc;
+}
+.miljor-public-landing .landing-topbar {
+  box-shadow: 0 1px 8px rgba(48, 37, 22, .04);
+}
+.miljor-public-landing .landing-top-link,
+.miljor-public-landing .landing-top-link .landing-nav-icon {
+  color: var(--landing-nav-ink);
+}
+.miljor-public-landing .landing-top-link:hover,
+.miljor-public-landing .landing-top-link:hover .landing-nav-icon {
+  color: var(--landing-nav-hover);
+}
+.miljor-public-landing .landing-tagline {
+  color: var(--landing-tagline-ink);
+  background: rgba(200,178,118,.09);
+}
+.dark .miljor-public-landing .landing-tagline {
+  background: rgba(200,178,118,.13);
+}
+.miljor-public-landing .landing-display {
+  color: var(--text-primary);
+}
+.miljor-public-landing .landing-display .landing-display-gradient {
+  background: linear-gradient(110deg,#8a642a 0%,#b78b48 55%,#8b6633 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.dark .miljor-public-landing .landing-display .landing-display-gradient {
+  background: linear-gradient(110deg,#f5e4bb 0%,#c8b276 55%,#e0c78c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.miljor-public-landing .landing-live-offers-link {
+  color: var(--landing-offers-ink);
+  border-color: rgba(157,121,61,.32);
+  background: var(--landing-offers-surface);
+  transition: background-color .18s, border-color .18s, transform .18s;
+}
+.miljor-public-landing .landing-live-offers-link:hover {
+  border-color: var(--brand-accent);
+  transform: translateY(-1px);
+}
+.miljor-public-landing .landing-account-option:hover,
+.miljor-public-landing .landing-account-option:focus-visible {
+  background: var(--landing-account-hover-bg);
+  color: var(--landing-account-hover-ink);
+}
+.miljor-public-landing .landing-gradient-cta {
+  background: linear-gradient(112deg,#f0dfb7,#c8b276 55%,#b7985e);
+  color: #332c1d !important;
+}
+.dark .miljor-public-landing .landing-gradient-cta {
+  background: linear-gradient(112deg,#e2cc9c,#c8b276 55%,#967748);
+  color: #211c14 !important;
+}
+.miljor-public-landing .landing-account-trigger svg {
+  color: inherit;
+}
+.auth-tabs-premium .auth-role-active {
+  background: linear-gradient(115deg,#e5d2a2,#c8b276) !important;
+  border: 1px solid rgba(130,96,42,.38) !important;
+  color: #28362f !important;
+  box-shadow: 0 3px 9px rgba(95,67,22,.13);
+}
+.dark .auth-tabs-premium .auth-role-active {
+  background: linear-gradient(115deg,#ddc68f,#b89b5f) !important;
+  color: #172c24 !important;
+}
