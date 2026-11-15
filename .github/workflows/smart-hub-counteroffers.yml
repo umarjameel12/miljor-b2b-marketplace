@@ -30,6 +30,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Product-wise numeric counteroffer policy tests
         run: node backend/tests/smart_hub_counteroffer_policy_gate.js
+      - name: Install backend dependencies for delivery eligibility tests
+        run: npm ci --prefix backend
       - name: Authenticated procurement delivery-options policy tests
         run: node backend/tests/smart_hub_delivery_options_gate.js
       - name: Install frontend dependencies
