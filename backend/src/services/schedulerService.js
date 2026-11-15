@@ -58,6 +58,25 @@ function startScheduler() {
   });
   activeTasks.push(subscriptionTask);
 
+  // Run bounded Flash expiry recovery only after migration 095 and rollout approval.
+  // MySQL advisory lock serializes multiple app instances. No automatic payments.
+  if (process.env.UCP_FLASH_RECOVERY_WORKER_ENABLED === 'true' &&
+      process.env.UCP_FLASH_RECOVERY_RUNTIME_APPROVED === 'true') {
+    let recoveryRunning=false;
+    const recoveryTask=cron.schedule('*/5 * * * *',async()=>{
+      if(recoveryRunning)return;
+      recoveryRunning=true;
+      try{
+        const result=await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
+        if(result.failed)console.error('[UCP recovery] Flash items require review',{failed:result.failed});
+      }catch(error){
+        console.error('[UCP recovery] Worker failed',{code:error.code||'RECOVERY_ERROR'});
+      }finally{recoveryRunning=false;}
+    });
+    activeTasks.push(recoveryTask);
+    console.log('[Scheduler] UCP Flash recovery enabled (no provider payments)');
+  }
+
   // B6-M recurring procurement draft worker, opt-in only.
   // Does NOT create orders, trigger Safepay or authorize standing charges.
   // Locking and retry backoff are maintained in procurementRecurringService.
