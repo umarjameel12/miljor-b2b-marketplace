@@ -150,7 +150,7 @@ export const LandingPage = () => {
                 >
                   <UserRound size={16} aria-hidden="true" />
                   Account
-                  <ChevronDown size={14} className={accountMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
+
                 </button>
                 {accountMenuOpen && (
                   <div
@@ -172,7 +172,7 @@ export const LandingPage = () => {
                       role="menuitem"
                       to="/register"
                       onClick={() => setAccountMenuOpen(false)}
-                      className="landing-account-option flex items-center rounded-lg px-3 py-2.5 text-sm font-medium"
+                      className="landing-account-option block rounded-lg px-3 py-2.5 text-sm font-medium"
                     >
                       Register
                     </Link>
@@ -245,7 +245,7 @@ export const LandingPage = () => {
                 {user?.role === 'SUPPLIER' ? 'Manage your pools' : 'View All Pools'} <ArrowRight size={16} />
               </Link>
             ) : (
-              <Link to="/login" state={{ from: { pathname: '/pools' } }} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers <ArrowRight size={15} aria-hidden="true" /></Link>
+              <Link to="/login" state={{ from: { pathname: '/pools' } }} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers</Link>
             )}
           </div>
           {loadingPools ? (
