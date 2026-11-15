@@ -5,11 +5,14 @@ on:
     paths:
       - 'backend/src/services/flashPoolService.js'
       - 'backend/src/services/ucpRecoveryService.js'
-      - 'backend/src/services/ucpExpiryNotificationService.js'
+      - 'backend/src/services/ucpTransactionalNotifications.js'
+      - 'backend/src/services/ucpNotificationEventCatalog.js'
       - 'backend/src/services/schedulerService.js'
       - 'backend/database/migrations/095_ucp_recovery_cursor.sql'
       - 'backend/tests/ucp_flash_recovery_gate.js'
       - 'backend/tests/ucp_recovery_policy_gate.js'
+      - 'backend/tests/ucp_notification_catalog_gate.js'
+      - 'backend/tests/ucp_transactional_notifications_gate.js'
       - '.github/workflows/ucp-flash-recovery-reconciliation.yml'
   push:
     branches: ['feature/miljor-release-reconciliation']
@@ -27,9 +30,12 @@ jobs:
           node backend/database/migrationManifest.js
           node --check backend/src/services/flashPoolService.js
           node --check backend/src/services/ucpRecoveryService.js
-          node --check backend/src/services/ucpExpiryNotificationService.js
+          node --check backend/src/services/ucpTransactionalNotifications.js
+          node --check backend/src/services/ucpNotificationEventCatalog.js
           node --check backend/src/services/schedulerService.js
       - name: Recovery lease and suspended supplier safety
         run: |
           node backend/tests/ucp_flash_recovery_gate.js
           node backend/tests/ucp_recovery_policy_gate.js
+          node backend/tests/ucp_notification_catalog_gate.js
+          node backend/tests/ucp_transactional_notifications_gate.js
