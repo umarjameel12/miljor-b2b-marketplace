@@ -72,6 +72,19 @@ router.get('/subscription/checkout-attempts', authorizeStrict('SUPPLIER'), (req,
 router.post('/subscription/checkout/:id/reconcile', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.reconcileCheckout(req,res));
 
 
+// Read-only, supplier-isolated delivery run list. Never marks fulfillment/settlement.
+router.get('/delivery-runs', authorizeStrict('SUPPLIER'), async(req,res)=>{
+  try {
+    const data=await require('../../services/supplierDeliveryRunsService').list(req.user.id);
+    return res.json({success:true,data:{runs:data}});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({success:false,error:{
+      code:error.statusCode?error.code:'DELIVERY_RUNS_UNAVAILABLE',
+      message:error.statusCode?error.message:'Unable to load delivery runs'
+    }});
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 3. Supplier Delivery Settings & Pickup Points (Special Phase G2 Backward Compatibility)
 // ---------------------------------------------------------------------------
