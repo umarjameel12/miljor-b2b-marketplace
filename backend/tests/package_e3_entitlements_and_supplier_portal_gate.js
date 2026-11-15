@@ -402,12 +402,51 @@ async function runE3Gate() {
       pass('10. Upgraded supplier successfully publishes 5th family (5/13 used, 8 remaining)');
     } catch (e) { fail('10. Publish 5th family under GROWTH', e); }
 
-    // 11. Downgrade safety: Downgrading to STARTER marks over-limit but does NOT delete records
+    // 11. Paid-plan safety: immediate downgrade prohibited; cancellation is scheduled.
+    // Verify the actual HTTP contract, MySQL period-end transition, and historical data.
     try {
-      const downRes = await api('/api/v1/supplier/subscription/upgrade', {
+      await db.query(
+        `INSERT INTO supplier_subscriptions
+         (supplier_id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr)
+         VALUES (?, 'GROWTH', 'ACTIVE', NOW(), DATE_ADD(NOW(), INTERVAL 1 DAY), 'MONTHLY', 3500.00)`,
+        [supplierId]
+      );
+      const immediate = await api('/api/v1/supplier/subscription/upgrade', {
         method: 'POST',
         headers: { Authorization: `Bearer ${supplierToken}` },
         body: { plan_code: 'STARTER', billing_cycle: 'FREE' }
+      });
+      assert.strictEqual(immediate.status, 409);
+      assert.strictEqual(immediate.body.error.code, 'SUBSCRIPTION_SCHEDULE_REQUIRED');
+
+      const schedule = await api('/api/v1/supplier/subscription/cancel-renewal', {
+        method: 'POST', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(schedule.status, 200);
+      assert.strictEqual(schedule.body.data.pending_plan_code, 'STARTER');
+      const replay = await api('/api/v1/supplier/subscription/cancel-renewal', {
+        method: 'POST', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(replay.status, 200);
+      assert.strictEqual(replay.body.data.already_scheduled, true);
+
+      const beforeExpiry = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(beforeExpiry.body.data.entitlements.plan_code, 'GROWTH',
+        'Paid entitlements must remain until the period ends');
+      assert.strictEqual(beforeExpiry.body.data.billing_history[0].pending_plan_code, 'STARTER');
+
+      await db.query(
+        `UPDATE supplier_subscriptions SET current_period_end = DATE_SUB(NOW(), INTERVAL 1 SECOND)
+         WHERE supplier_id = ? AND pending_plan_code = 'STARTER'`, [supplierId]
+      );
+      const worker = require('../src/services/subscriptionEntitlementService');
+      assert.strictEqual((await worker.processScheduledStarterChanges(20)).processed, 1);
+      assert.strictEqual((await worker.processScheduledStarterChanges(20)).processed, 0,
+        'Repeated worker invocations must never insert another Starter period');
+      const downRes = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
       });
       assert.strictEqual(downRes.status, 200);
       assert.strictEqual(downRes.body.data.entitlements.plan_code, 'STARTER');
@@ -416,8 +455,8 @@ async function runE3Gate() {
       assert.strictEqual(downRes.body.data.entitlements.is_over_limit, true);
       assert.strictEqual(downRes.body.data.entitlements.remaining_family_slots, 0);
       assert.strictEqual(downRes.body.data.entitlements.can_publish_new_family, false);
-      pass('11. Downgrade preserves all 5 existing families, marks is_over_limit=true, and blocks new families');
-    } catch (e) { fail('11. Downgrade safety', e); }
+      pass('11. Paid access preserved until expiry; scheduled downgrade preserves all five families and blocks new ones');
+    } catch (e) { fail('11. Scheduled downgrade safety', e); }
 
     // 12. E2 Deadline Integrity check: Schedule where buyer deadline > promised delivery returns 422 with timeline
     let ownListingId;
