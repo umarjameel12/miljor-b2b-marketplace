@@ -35,6 +35,18 @@ const COMMODITIES = [
   },
 ];
 
+
+// Illustrative examples are deliberately separate from real supplier pools.
+// No slideshow photography, invented live stock, order actions or real prices.
+const DEMO_POOLS = [
+  { category: 'Rice & grains', title: 'Super Kernel Basmati Rice', description: 'Restaurant-focused bulk rice procurement example.', target: '300 kg', pack: '25 kg bags', icon: Layers },
+  { category: 'Flour & bakery', title: 'Fine Wheat Flour', description: 'Volume-based flour sourcing for kitchens and bakeries.', target: '500 kg', pack: '20 kg bags', icon: ShoppingBag },
+  { category: 'Cooking essentials', title: 'Refined Cooking Oil', description: 'Consolidated commercial kitchen oil procurement.', target: '160 L', pack: '16 L tins', icon: Store },
+  { category: 'Pulses', title: 'Daal Chana', description: 'Shared procurement of quality-specified pulses.', target: '250 kg', pack: '25 kg bags', icon: Layers },
+  { category: 'Sweeteners', title: 'Refined White Sugar', description: 'Example order combining demand from multiple buyers.', target: '500 kg', pack: '50 kg bags', icon: ShoppingBag },
+  { category: 'Bakery staples', title: 'Super White Maida', description: 'Commercial bulk flour example for bakery operations.', target: '840 kg', pack: '84 kg bags', icon: Store },
+];
+
 function CommoditySlide({ item, active }) {
   return (
     <div
@@ -66,6 +78,7 @@ export const LandingPage = () => {
   const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
+  const [showAllExamples, setShowAllExamples] = useState(false);
 
   useEffect(() => {
     if (paused || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return undefined;
@@ -110,7 +123,8 @@ export const LandingPage = () => {
   const navClass = 'landing-top-link inline-flex items-center gap-2 text-xs sm:text-sm font-semibold transition-colors';
   const requestQuoteDestination = isAuthenticated ? '/rfqs' : '/login';
   const quoteState = isAuthenticated ? undefined : { from: { pathname: '/rfqs' } };
-  const buttonGold = { backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' };
+  const buttonGold = { color: 'var(--text-on-champagne)' };
+  const exploreDestination = isAuthenticated ? '/pools' : '#live-pools';
   const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
 
   return (
@@ -134,8 +148,8 @@ export const LandingPage = () => {
                   aria-haspopup="menu"
                   aria-expanded={accountMenuOpen}
                   aria-controls="landing-account-options"
-                  className="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
-                  style={{ borderColor: 'var(--brand-accent)', backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
+                  className="landing-gradient-cta inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
+                  style={{ borderColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
                 >
                   <UserRound size={16} aria-hidden="true" />
                   Account
@@ -153,7 +167,7 @@ export const LandingPage = () => {
                       role="menuitem"
                       to="/login"
                       onClick={() => setAccountMenuOpen(false)}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10"
+                      className="landing-account-option flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
                     >
                       <LogIn size={16} style={{ color: 'var(--text-secondary)' }} />
                       Sign In
@@ -196,14 +210,14 @@ export const LandingPage = () => {
           <div className="max-w-xl">
             <span className="inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}>Mil Kar Khareedo, Behtar Pao</span>
             <h1 className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
-              Buy Better,<span className="block" style={{ color: 'var(--brand-accent)' }}>Together</span>
+              Buy Better<span className="block" style={{ color: 'var(--brand-accent)' }}>Together</span>
             </h1>
             <p className="mt-6 max-w-md text-sm leading-7 sm:text-base" style={{ color: 'var(--text-secondary)' }}>
               Wholesale procurement, made easier for growing food businesses.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link to="/pools" className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Explore Pools</Link>
-              <Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Request a Quote</Link>
+              <Link to={exploreDestination} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Explore Pools</Link>
+              <Link to={requestQuoteDestination} state={quoteState} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Request a Quote</Link>
             </div>
           </div>
 
@@ -227,15 +241,58 @@ export const LandingPage = () => {
         <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--landing-accent-text)' }}>Live opportunities</p>
-              <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
-              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Regular and flash opportunities, when available.</p>
+              <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Marketplace preview</p>
+              <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Explore collective buying</h2>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Real opportunities when available, plus clearly marked examples of how pools work.</p>
             </div>
-            <Link to="/pools" className="inline-flex items-center gap-2 text-sm font-semibold hover:opacity-75">View All Pools <ArrowRight size={16} /></Link>
+            <a href="#pool-showcase" className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">View pool examples <ArrowRight size={16} /></a>
           </div>
-          {loadingPools ? <div role="status" className="rounded-2xl border p-9 text-sm" style={panel}>Loading current pools…</div>
-            : featuredPools.length ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}</div>
-            : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
+
+          {loadingPools ? (
+            <p role="status" className="rounded-2xl border p-6 text-sm" style={panel}>Checking current opportunities…</p>
+          ) : featuredPools.length > 0 ? (
+            <div className="mb-10">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="landing-section-title text-base font-semibold">Live supplier pools</h3>
+                {isAuthenticated ? <Link to="/pools" className="landing-top-link text-sm font-semibold">View All Pools <ArrowRight className="inline-block" size={15} /></Link> : <Link to="/login" className="landing-top-link text-sm font-semibold">Sign in to browse all <ArrowRight className="inline-block" size={15} /></Link>}
+              </div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}</div>
+            </div>
+          ) : (
+            <p className="mb-9 text-sm" style={{ color: 'var(--text-secondary)' }}>No live public pools available right now. Explore the illustrative previews below.</p>
+          )}
+
+          <div id="pool-showcase" className="scroll-mt-24">
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.16em]">Illustrative only · Not available to order</p>
+                <h3 className="landing-section-title mt-2 text-xl font-semibold sm:text-2xl">What a pool could look like</h3>
+              </div>
+              <span className="rounded-full border px-3 py-1.5 text-[11px] font-medium" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>Sample listings</span>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {(showAllExamples ? DEMO_POOLS : DEMO_POOLS.slice(0, 3)).map((pool) => (
+                <article key={pool.title} className="landing-demo-card flex flex-col rounded-[1.4rem] border p-5 sm:p-6" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="landing-demo-illustration grid h-14 w-14 place-items-center rounded-2xl" aria-hidden="true"><pool.icon size={26} strokeWidth={1.6}/></div>
+                    <span className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>Demo</span>
+                  </div>
+                  <p className="landing-eyebrow mt-5 text-[10px] font-semibold uppercase tracking-[0.15em]">{pool.category}</p>
+                  <h4 className="landing-section-title mt-1 text-lg font-semibold">{pool.title}</h4>
+                  <p className="mt-2 min-h-10 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>{pool.description}</p>
+                  <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Example target</p><p className="mt-1 text-sm font-semibold">{pool.target}</p></div>
+                    <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Purchase format</p><p className="mt-1 text-sm font-semibold">{pool.pack}</p></div>
+                  </div>
+                  <div className="mt-5 rounded-xl px-3 py-2.5 text-xs leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>Illustration only — no live stock, price or reservation</div>
+                </article>
+              ))}
+            </div>
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-4">
+              <button type="button" onClick={() => setShowAllExamples((value) => !value)} className="landing-outline-cta rounded-full border px-5 py-2.5 text-sm font-semibold">{showAllExamples ? 'Show fewer examples' : 'View all pool examples'}</button>
+              <Link to={isAuthenticated ? '/pools' : '/login'} className="landing-top-link text-sm font-semibold">{isAuthenticated ? 'Open live pool board' : 'Sign in for live pools'} <ArrowRight size={15} className="inline-block" /></Link>
+            </div>
+          </div>
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -248,7 +305,7 @@ export const LandingPage = () => {
                   <p className="mt-5 max-w-md text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>
                     Bring business demand and supplier offers together, with clear pricing and coordinated fulfillment.
                   </p>
-                  <Link to="/register" className="mt-7 inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Join MilJor</Link>
+                  <Link to="/register" className="landing-gradient-cta mt-7 inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Join MilJor</Link>
                 </div>
                 <div className="grid gap-3">
                   {[
