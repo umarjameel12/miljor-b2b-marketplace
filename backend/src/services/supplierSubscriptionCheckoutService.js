@@ -162,6 +162,11 @@ class SupplierSubscriptionCheckoutService {
     const captured = ['TRACKER_ENDED','COMPLETED','PAID'].includes(tracker.state) &&
       tracker.transaction && typeof tracker.transaction === 'object';
     if (!captured) return { reconciled: false, provider_state: tracker.state || 'UNKNOWN' };
+    const transactionState = String(tracker.transaction.status || tracker.transaction.state || '').toUpperCase();
+    if (['FAILED','DECLINED','CANCELLED','REFUNDED','VOIDED','REVERSED'].includes(transactionState)) {
+      return {reconciled: false, provider_state: transactionState};
+    }
+
     const currency = tracker.currency || tracker.transaction.currency;
     if (currency !== 'PKR') throw error('CURRENCY_MISMATCH', 422, 'Provider currency mismatch');
     const amountValue = tracker.amount ?? tracker.transaction.amount;
