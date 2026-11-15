@@ -86,7 +86,7 @@ export const SupplierAnalyticsPage = () => {
                 <BarChart3 className="w-3.5 h-3.5" /> Authentic Data Only
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text-primary)]">
               Supplier Analytics & Business Reports
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
@@ -111,7 +111,7 @@ export const SupplierAnalyticsPage = () => {
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
               All-Time Gross Sales
             </span>
-            <span className="text-3xl font-serif font-bold text-[var(--text-primary)] block">
+            <span className="text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
               {formatPKR(kpis?.total_sales || 0)}
             </span>
             <p className="text-xs text-[var(--text-muted)] mt-2">
@@ -123,7 +123,7 @@ export const SupplierAnalyticsPage = () => {
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
               Active Unified Pools
             </span>
-            <span className="text-3xl font-serif font-bold text-[var(--text-primary)] block">
+            <span className="text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
               {kpis?.active_unified_pools || 0}
             </span>
             <p className="text-xs text-[var(--text-muted)] mt-2">
@@ -135,7 +135,7 @@ export const SupplierAnalyticsPage = () => {
             <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
               Settlement Payout Total
             </span>
-            <span className="text-3xl font-serif font-bold text-[var(--text-primary)] block">
+            <span className="text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
               {formatPKR(kpis?.completed_payouts || 0)}
             </span>
             <p className="text-xs text-[var(--text-muted)] mt-2">
