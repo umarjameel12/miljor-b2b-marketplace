@@ -13,12 +13,17 @@ const stamp=offset=>new Date(Date.now()+offset).toISOString().slice(0,19).replac
 async function run(){
   const options={host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),
     user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||''};
+  if(process.env.NODE_ENV!=='test' || process.env.DB_NAME!=='miljor_test_db' ||
+    process.env.MILJOR_TEST_ONLY_MIGRATIONS!=='1' || process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT!=='false') {
+    throw new Error('COUNTEROFFER_TEST_ISOLATION_REQUIRED');
+  }
+  // Separate disposable schema: never touch E3's already-migrated miljor_test_db.
+  const isolated='miljor_counteroffer_test_db';
   const admin=await mysql.createConnection({...options,multipleStatements:false});
-  // A hard-coded disposable name, not a user-provided target.
-  await admin.query('CREATE DATABASE IF NOT EXISTS miljor_test_db');
-  const [[identity]]=await admin.query("SELECT 'miljor_test_db' AS db");
-  assert.equal(identity.db,'miljor_test_db');
-  const database=mysql.createPool({...options,database:'miljor_test_db',connectionLimit:4,timezone:'Z'});
+  const [existing]=await admin.query('SHOW DATABASES LIKE ?',[isolated]);
+  assert.equal(existing.length,0,'Refuse to reuse or destroy a pre-existing database');
+  await admin.query('CREATE DATABASE '+isolated);
+  const database=mysql.createPool({...options,database:isolated,connectionLimit:4,timezone:'Z'});
   const queries=[
     'CREATE TABLE users (id INT NOT NULL PRIMARY KEY,role VARCHAR(20) NOT NULL,email VARCHAR(100)) ENGINE=InnoDB',
     'CREATE TABLE procurement_requests (id BIGINT NOT NULL PRIMARY KEY,buyer_id INT NOT NULL,status VARCHAR(20) NOT NULL,quote_deadline DATETIME NOT NULL) ENGINE=InnoDB',
@@ -28,13 +33,13 @@ async function run(){
   ];
   try{
     const [[current]]=await database.query('SELECT DATABASE() AS name');
-    assert.equal(current.name,'miljor_test_db','FAIL CLOSED: cannot run outside isolated test database');
+    assert.equal(current.name,'miljor_counteroffer_test_db','Must use the dedicated disposable counteroffer schema');
     // Fresh disposable schema: refuse to overwrite any pre-existing tables.
     const [preexisting]=await database.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE()");
     assert.equal(preexisting.length,0,'Refuse to overwrite an existing test database');
     for(const sql of queries)await database.query(sql);
-    for(const filename of ['048_procurement_notification_outbox.sql','049_in_app_notifications.sql','092_notification_event_delivery.sql']){
+    for(const filename of ['048_procurement_notification_outbox.sql','049_in_app_notifications.sql','095_notification_schema_reconciliation.sql']){
       const sql=fs.readFileSync(path.resolve(__dirname,'../database/migrations',filename),'utf8');
       for(const statement of sql.split(';').filter(part=>part.trim()))await database.query(statement);
     }
@@ -121,6 +126,7 @@ async function run(){
     console.log('SMART_HUB_MYSQL_INTEGRATION_PASS: migration, permissions, 2-item offers, replay, conflict, accept, re-counter, reject, expiry, stale-version and concurrency gates, history, no financial mutation');
   }finally{
     await database.end();
+    await admin.query('DROP DATABASE miljor_counteroffer_test_db');
     await admin.end();
   }
 }
