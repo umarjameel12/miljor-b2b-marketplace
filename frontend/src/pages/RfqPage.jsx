@@ -71,10 +71,6 @@ export const RfqPage = () => {
   const [quoteHistory,setQuoteHistory] = useState(null);
   const [quoteComparison,setQuoteComparison]=useState(null);
   const [compareRequestId,setCompareRequestId]=useState(null);
-  const [improvementNotes,setImprovementNotes]=useState({});
-  const [improvementTargets,setImprovementTargets]=useState({});
-  const [buyerNegotiations,setBuyerNegotiations]=useState([]);
-  const [supplierNegotiations,setSupplierNegotiations]=useState([]);
   const [counterofferDrafts,setCounterofferDrafts]=useState({});
   const [buyerCounteroffers,setBuyerCounteroffers]=useState([]);
   const [supplierCounteroffers,setSupplierCounteroffers]=useState([]);
@@ -309,7 +305,7 @@ export const RfqPage = () => {
         body:JSON.stringify({})
       });
       await refreshMySmartQuotes();
-      await refreshSupplierNegotiations();
+      await refreshSupplierCounteroffers();
       toast.success('Quotation withdrawn; historical versions retained');
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -366,15 +362,13 @@ export const RfqPage = () => {
     setQuoteBusy(true);
     setShoppingError('');
     try{
-      const [compared,negotiations,currentQuotes,productOffers]=await Promise.all([
+      const [compared,currentQuotes,productOffers]=await Promise.all([
         procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`),
         procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`),
         procurementApi(`/api/v1/procurement/requests/${requestId}/counteroffers`)
       ]);
       setCompareRequestId(requestId);
       setQuoteComparison(compared);
-      setBuyerNegotiations(negotiations.negotiations||[]);
       setBuyerCounteroffers(productOffers.counteroffers||[]);
       setBuyerQuotes(currentQuotes.quotes||[]);
       setReviewedAwardLines({});
@@ -427,31 +421,6 @@ export const RfqPage = () => {
     if(token&&user?.role==='SUPPLIER')refreshSupplierCounteroffers();
   },[token,user?.role]);
 
-  const requestBetterSmartOffer = async (quoteId,versionNumber) => {
-    if(!compareRequestId)return;
-    const message=improvementNotes[quoteId]?.trim()||'';
-    if(message.length<5){setShoppingError('Describe the requested improvement (at least 5 characters).');return;}
-    setQuoteBusy(true);
-    setShoppingError('');
-    try{
-      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quoteId}/improve`,{
-        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
-        body:JSON.stringify({message,target_total:improvementTargets[quoteId]||null,
-          version_number:versionNumber})
-      });
-      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/negotiations`);
-      setBuyerNegotiations(data.negotiations||[]);
-      toast.success('Request for a better quote sent. No order or payment created.');
-    }catch(e){setShoppingError(e.message);}
-    finally{setQuoteBusy(false);}
-  };
-
-  const refreshSupplierNegotiations = async () => {
-    if(!token||user?.role!=='SUPPLIER')return;
-    const data=await procurementApi('/api/v1/procurement/supplier/negotiations');
-    setSupplierNegotiations(data.negotiations||[]);
-  };
-
   const updateQuoteDraft = (invitationId,patch) => {
     setSupplierQuoteDrafts(old=>({
       ...old,[invitationId]:{...(old[invitationId]||{}),...patch}
@@ -485,7 +454,7 @@ export const RfqPage = () => {
       });
       toast.success(`Quotation version ${result.quote.version_number} submitted`);
       await refreshMySmartQuotes();
-      await refreshSupplierNegotiations();
+      await refreshSupplierCounteroffers();
       setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -494,7 +463,7 @@ export const RfqPage = () => {
   useEffect(()=>{
     if(token && user?.role==='SUPPLIER'){
       refreshMySmartQuotes().catch(error=>toast.error(error.message));
-      refreshSupplierNegotiations().catch(error=>toast.error(error.message));
+      refreshSupplierCounteroffers().catch(error=>toast.error(error.message));
     }
   },[token,user?.role]);
 
