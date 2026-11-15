@@ -38,7 +38,7 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
           aria-label={`Theme setting: currently ${currentOption.label}`}
           aria-haspopup="menu"
           aria-expanded={dropdownOpen}
-          className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] active:scale-95"
+          className="miljor-theme-trigger w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] active:scale-95"
           style={{
             backgroundColor: 'var(--bg-surface)',
             borderColor: dropdownOpen ? 'var(--brand-accent)' : 'var(--border-default)',
@@ -51,10 +51,10 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
 
         {dropdownOpen && (
           <div
-            className="absolute right-0 mt-2 w-40 rounded-2xl border p-1.5 shadow-xl z-50 animate-fade-in space-y-1"
+            className="miljor-theme-menu absolute right-0 mt-2 w-40 rounded-2xl border p-1.5 shadow-xl z-50 animate-fade-in space-y-1"
             style={{
-              backgroundColor: isDark ? '#072a21' : '#fcfbf7',
-              borderColor: isDark ? 'rgba(200, 178, 118, 0.28)' : 'rgba(169, 133, 67, 0.25)',
+              backgroundColor: 'var(--theme-menu-bg, var(--bg-surface))',
+              borderColor: 'var(--theme-menu-border, var(--border-default))',
               boxShadow: isDark
                 ? '0 12px 30px -4px rgba(0, 0, 0, 0.70)'
                 : '0 12px 30px -4px rgba(12, 43, 36, 0.12)',
@@ -64,14 +64,6 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
           >
             {options.map(({ mode, label, icon: Icon }) => {
               const isSelected = theme === mode;
-              const activeBg = 'var(--bg-sidebar-active)';
-              const activeBorder = '1px solid var(--border-strong)';
-              const activeText = 'var(--text-primary)';
-              const activeIcon = isDark ? '#dfbf85' : '#6c501e';
-
-              const inactiveText = 'var(--text-secondary)';
-              const inactiveIcon = isDark ? '#c5d1c9' : '#354c3f';
-
               return (
                 <button
                   key={mode}
@@ -81,22 +73,14 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
                   }}
                   role="menuitemradio"
                   aria-checked={isSelected}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${
-                    isSelected
-                      ? 'font-semibold shadow-xs'
-                      : isDark
-                      ? 'font-medium hover:bg-white/5'
-                      : 'font-medium hover:bg-[rgba(169,133,67,0.08)]'
-                  }`}
+                  className={`miljor-theme-choice w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl border transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${isSelected ? 'miljor-theme-choice-selected font-semibold shadow-xs' : 'font-medium'}`}
                   style={{
-                    backgroundColor: isSelected ? activeBg : 'transparent',
-                    color: isSelected ? activeText : inactiveText,
-                    border: isSelected ? activeBorder : '1px solid transparent',
+                    borderColor: 'transparent',
                   }}
                 >
                   <Icon
                     className="w-3.5 h-3.5 shrink-0 transition-colors"
-                    style={{ color: isSelected ? activeIcon : inactiveIcon }}
+                    aria-hidden="true"
                   />
                   <span>{label}</span>
                 </button>
