@@ -91,7 +91,7 @@ export const NotificationsPage = () => {
                 Communications Hub
               </span>
             </div>
-            <h1 className="text-2xl font-serif font-bold text-[var(--text-primary)]">
+            <h1 className="text-2xl font-display font-bold text-[var(--text-primary)]">
               Notifications & Alerts
             </h1>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
