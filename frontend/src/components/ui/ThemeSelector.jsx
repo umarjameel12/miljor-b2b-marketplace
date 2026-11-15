@@ -74,9 +74,6 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
                   role="menuitemradio"
                   aria-checked={isSelected}
                   className={`miljor-theme-choice w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl border transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${isSelected ? 'miljor-theme-choice-selected font-semibold shadow-xs' : 'font-medium'}`}
-                  style={{
-                    borderColor: 'transparent',
-                  }}
                 >
                   <Icon
                     className="w-3.5 h-3.5 shrink-0 transition-colors"
