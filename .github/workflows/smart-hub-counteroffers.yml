@@ -6,6 +6,8 @@ on:
       - 'frontend/src/App.jsx'
       - 'frontend/src/components/layout/AppShell.jsx'
       - 'backend/src/services/procurementCounterofferPolicy.js'
+      - 'backend/src/services/procurementDeliveryOptionsService.js'
+      - 'backend/tests/smart_hub_delivery_options_gate.js'
       - 'backend/src/services/procurementProductCounterofferService.js'
       - 'backend/src/controllers/procurementController.js'
       - 'backend/src/routes/v1/procurementRoutes.js'
@@ -28,6 +30,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Product-wise numeric counteroffer policy tests
         run: node backend/tests/smart_hub_counteroffer_policy_gate.js
+      - name: Authenticated procurement delivery-options policy tests
+        run: node backend/tests/smart_hub_delivery_options_gate.js
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
       - name: Frontend production build
