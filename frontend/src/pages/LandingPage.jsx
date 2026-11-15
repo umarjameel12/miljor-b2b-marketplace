@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store, UserRound, ChevronDown, LogIn, UserPlus } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
 import { Logo } from '../components/ui/Logo';
@@ -148,9 +148,7 @@ export const LandingPage = () => {
                   className="landing-gradient-cta landing-account-trigger inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
                   style={{ borderColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
                 >
-                  
                   Account
-
                 </button>
                 {accountMenuOpen && (
                   <div
@@ -256,7 +254,19 @@ export const LandingPage = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {import.meta.env.DEV && (
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] border p-6 sm:p-8" style={panel}>
+                <div>
+                  <h3 className="landing-section-title text-base font-semibold">No published pools available yet</h3>
+                  <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>Actual supplier offers will appear here automatically after publication.</p>
+                </div>
+                <Link to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold">
+                  {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
+                </Link>
+              </div>
+            </div>
+          )}
+          {/* Development-only sample showcase remains visible separately from real published offers. */}
+          {import.meta.env.DEV && (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -287,17 +297,6 @@ export const LandingPage = () => {
                   </div>
                 </>
               )}
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] border p-6 sm:p-8" style={panel}>
-                <div>
-                  <h3 className="landing-section-title text-base font-semibold">No published pools available yet</h3>
-                  <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>Actual supplier offers will appear here automatically after publication.</p>
-                </div>
-                <Link to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold">
-                  {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
-                </Link>
-              </div>
-            </div>
-          )}
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
