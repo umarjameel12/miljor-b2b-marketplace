@@ -121,7 +121,7 @@ export const LoginPage = () => {
           className="py-1.5 text-center rounded-lg transition-all hover:text-[var(--text-primary)]"
           style={{ color: 'var(--text-muted)' }}
         >
-          Create Account
+          Register
         </Link>
       </div>
 
