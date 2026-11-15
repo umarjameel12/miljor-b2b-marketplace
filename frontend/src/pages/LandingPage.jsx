@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, Home, FileText, Store } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
 import { Logo } from '../components/ui/Logo';
 import { PoolCard } from '../components/PoolCard';
@@ -21,21 +20,18 @@ const COMMODITIES = [
     subtitle: 'Basmati and everyday staples',
     image: riceImage,
     alt: 'Premium rice packaged for wholesale food supply',
-    tag: '01 / Essentials',
   },
   {
     title: 'Wheat & flour',
     subtitle: 'Everyday supplies for busy kitchens',
     image: 'https://images.unsplash.com/photo-1624565019871-16a8d90ad749?auto=format&fit=crop&w=1200&q=82',
     alt: 'Golden wheat in a field',
-    tag: '02 / Essentials',
   },
   {
     title: 'Cooking oil',
     subtitle: 'Everyday kitchen essentials',
     image: 'https://images.unsplash.com/photo-1552592074-ea7a91b851b3?auto=format&fit=crop&w=1200&q=82',
     alt: 'Cooking oil dispenser bottle',
-    tag: '03 / Essentials',
   },
 ];
 
@@ -54,7 +50,6 @@ function CommoditySlide({ item, active }) {
       />
       <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(6,30,24,0.06), rgba(6,30,24,0.08) 35%, rgba(6,30,24,0.78))' }} />
       <div className="absolute bottom-0 left-0 right-0 p-7 sm:p-10 text-[#F9F4E9]">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#E2C88D]">{item.tag}</p>
         <h3 className="font-sans text-3xl sm:text-4xl font-semibold tracking-tight">{item.title}</h3>
         <p className="mt-2 text-sm text-[#E9E2D5]">{item.subtitle}</p>
       </div>
@@ -63,7 +58,6 @@ function CommoditySlide({ item, active }) {
 }
 
 export const LandingPage = () => {
-  const { isDark } = useTheme();
   const { isAuthenticated, user } = useAuth();
   const [slide, setSlide] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -92,7 +86,6 @@ export const LandingPage = () => {
   const dashboardPath = user?.role === 'SUPPLIER' ? '/supplier/dashboard' : ['ADMIN', 'SUPER_ADMIN'].includes(user?.role) ? '/admin/dashboard' : '/pools';
 
   const navLinks = [
-    { title: 'Home', to: '#top', icon: Home },
     { title: 'Browse Pools', to: '#live-pools', icon: Layers },
     { title: 'For Suppliers', to: '#suppliers', icon: Store },
   ];
@@ -103,7 +96,7 @@ export const LandingPage = () => {
   const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
 
   return (
-    <div id="top" className="min-h-screen font-sans" style={{ backgroundColor: 'var(--bg-page)', color: 'var(--text-primary)' }}>
+    <div id="top" className="miljor-public-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
       <header className="sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-3 sm:px-8 lg:px-10">
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
@@ -118,7 +111,7 @@ export const LandingPage = () => {
             ) : (
               <>
                 <Link to="/login" className="rounded-full border px-5 py-2.5 text-xs font-semibold transition hover:opacity-80" style={{ borderColor: "var(--brand-accent)", backgroundColor: "var(--brand-accent)", color: "var(--text-on-champagne)" }}>Sign In</Link>
-                <Link to="/register" className="rounded-full border px-5 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-surface)", color: "var(--text-primary)" }}>Register</Link>
+                <Link to="/register" className="rounded-full border px-5 py-2.5 text-xs font-semibold transition hover:opacity-80" style={{ borderColor: "var(--brand-accent)", backgroundColor: "var(--brand-accent)", color: "var(--text-on-champagne)" }}>Register</Link>
               </>
             )}
           </div>
@@ -138,7 +131,7 @@ export const LandingPage = () => {
         <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-12 sm:px-8 md:pt-16 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-20">
           <div className="max-w-xl">
             <span className="inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}>Mil Kar Khareedo, Behtar Pao</span>
-            <h1 className="mt-7 font-sans text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
+            <h1 className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
               Buy better.<span className="block" style={{ color: 'var(--brand-accent)' }}>Together.</span>
             </h1>
             <p className="mt-6 max-w-md text-sm leading-7 sm:text-base" style={{ color: 'var(--text-secondary)' }}>
@@ -160,7 +153,7 @@ export const LandingPage = () => {
               onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
               onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
               {COMMODITIES.map((item, index) => <CommoditySlide key={item.title} item={item} active={index === slide} />)}
-              <div className="absolute right-5 top-5 z-20 rounded-full border border-white/30 bg-black/25 px-3 py-1.5 text-[10px] font-semibold tracking-widest text-white backdrop-blur-md">MILJOR / ESSENTIALS</div>
+              
               <div className="absolute right-5 bottom-6 z-20 flex gap-2">
                 <button type="button" aria-label="Previous commodity" onClick={() => changeSlide(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-white/40 bg-black/30 text-white backdrop-blur-md hover:bg-black/50"><ChevronLeft size={18} /></button>
                 <button type="button" aria-label="Next commodity" onClick={() => changeSlide(1)} className="grid h-9 w-9 place-items-center rounded-full border border-white/40 bg-black/30 text-white backdrop-blur-md hover:bg-black/50"><ChevronRight size={18} /></button>
@@ -176,7 +169,7 @@ export const LandingPage = () => {
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Live opportunities</p>
-              <h2 className="mt-2 font-sans text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
+              <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
               <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Regular and flash opportunities, when available.</p>
             </div>
             <Link to="/pools" className="inline-flex items-center gap-2 text-sm font-semibold hover:opacity-75">View All Pools <ArrowRight size={16} /></Link>
@@ -190,7 +183,7 @@ export const LandingPage = () => {
           <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Built for the food trade</p>
-              <h2 className="mt-3 max-w-lg font-sans text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">More buying power. Less back-and-forth.</h2>
+              <h2 className="landing-section-title mt-3 max-w-lg text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">More buying power. Less back-and-forth.</h2>
               <p className="mt-5 max-w-lg text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>MilJor connects business procurement with supplier-led offers, group demand and clearer order coordination.</p>
               <Link to="/register" className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Join MilJor <ArrowRight size={15} /></Link>
             </div>
