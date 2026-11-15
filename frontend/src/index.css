@@ -465,10 +465,10 @@ h1, h2, h3, h4, h5, h6, .font-display {
 
 /* Distinct selected Sign In/Create Account text, separate from Buyer/Supplier. */
 .auth-auth-tabs {
-  --auth-nav-selected-text: #89632b;
+  --auth-nav-selected-text: #96743b;
 }
 .dark .auth-auth-tabs {
-  --auth-nav-selected-text: #f0d9a2;
+  --auth-nav-selected-text: #ddc58d;
 }
 .auth-auth-tabs .auth-segment-active {
   font-weight: 700;
