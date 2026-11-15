@@ -44,7 +44,7 @@ function CommoditySlide({ item, active }) {
       <img
         src={item.image}
         alt={item.alt}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover object-center"
         loading={active ? 'eager' : 'lazy'}
         onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = riceHero; }}
       />
@@ -149,7 +149,7 @@ export const LandingPage = () => {
           </div>
 
           <div className="relative">
-            <div className="relative aspect-[5/4] overflow-hidden rounded-[1.75rem] border shadow-2xl sm:aspect-[6/5]" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+            <div className="miljor-commodity-frame relative aspect-[5/4] overflow-hidden rounded-[1.75rem] border shadow-2xl sm:aspect-[6/5]" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
               onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
               onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
               {COMMODITIES.map((item, index) => <CommoditySlide key={item.title} item={item} active={index === slide} />)}
@@ -179,7 +179,7 @@ export const LandingPage = () => {
             : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
         </section>
 
-        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-page)' }}>
+        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--card-glass)' }}>
           <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Built for the food trade</p>
@@ -192,7 +192,7 @@ export const LandingPage = () => {
                 { icon: Layers, title: 'Pooled procurement', text: 'Volume-based tiers within supplier-defined terms.' },
                 { icon: ShieldCheck, title: 'Clear commitments', text: 'Review order and payment details before confirming.' },
                 { icon: Truck, title: 'Delivery coordination', text: 'Follow delivery progress and report issues in one place.' },
-              ].map((item) => <div key={item.title} className="flex items-start gap-4 rounded-2xl border p-5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-page)' }}><span className="rounded-xl border p-3" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}><item.icon size={19} /></span><div><h3 className="text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-6" style={{ color: 'var(--text-secondary)' }}>{item.text}</p></div></div>)}
+              ].map((item) => <div key={item.title} className="flex items-start gap-4 rounded-2xl border p-5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--card-glass)' }}><span className="rounded-xl border p-3" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}><item.icon size={19} /></span><div><h3 className="text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-6" style={{ color: 'var(--text-secondary)' }}>{item.text}</p></div></div>)}
             </div>
           </div>
         </section>
