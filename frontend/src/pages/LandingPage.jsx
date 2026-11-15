@@ -115,12 +115,12 @@ export const LandingPage = () => {
 
   return (
     <div id="top" className="miljor-public-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
-      <header className="landing-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+      <header className="landing-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-sidebar)', color: 'var(--text-primary)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-3 sm:px-8 lg:px-10">
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
           <nav className="hidden lg:flex items-center gap-7" aria-label="Public navigation">
-            {navLinks.map((link) => <a key={link.title} href={link.to} className={navClass}><link.icon size={15} style={{ color: "var(--brand-accent)" }} />{link.title}</a>)}
-            <Link to={requestQuoteDestination} state={quoteState} className={navClass}><FileText size={15} style={{ color: "var(--brand-accent)" }} />Request Quote</Link>
+            {navLinks.map((link) => <a key={link.title} href={link.to} className={navClass}><link.icon size={15} style={{ color: "var(--landing-accent-text)" }} />{link.title}</a>)}
+            <Link to={requestQuoteDestination} state={quoteState} className={navClass}><FileText size={15} style={{ color: "var(--landing-accent-text)" }} />Request Quote</Link>
           </nav>
           <div className="hidden sm:flex items-center gap-3">
             <ThemeSelector minimal />
@@ -176,8 +176,8 @@ export const LandingPage = () => {
         </div>
         {mobileMenu && (
           <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
-            {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><link.icon size={16} style={{ color: "var(--brand-accent)" }} />{link.title}</a>)}
-            <Link to={requestQuoteDestination} state={quoteState} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><FileText size={16} style={{ color: "var(--brand-accent)" }} />Request Quote</Link>
+            {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><link.icon size={16} style={{ color: "var(--landing-accent-text)" }} />{link.title}</a>)}
+            <Link to={requestQuoteDestination} state={quoteState} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><FileText size={16} style={{ color: "var(--landing-accent-text)" }} />Request Quote</Link>
             {isAuthenticated ? (
               <Link to={dashboardPath} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Open Marketplace</Link>
             ) : (
@@ -227,7 +227,7 @@ export const LandingPage = () => {
         <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Live opportunities</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--landing-accent-text)' }}>Live opportunities</p>
               <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
               <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Regular and flash opportunities, when available.</p>
             </div>
