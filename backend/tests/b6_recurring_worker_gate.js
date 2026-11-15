@@ -40,7 +40,13 @@ const db={
   async getConnection(){return conn}
 };
 async function main(){
-  const svc=new ProcurementRecurringService(db);
+  const emitted=[];
+  const notifications={enqueueEvent:async(connection,event)=>{
+    assert.equal(connection,conn,'Notifications must be written in the worker transaction');
+    assert.equal(event.role,'BUYER','Only the cycle owner gets notified');
+    emitted.push(event);return {created:true};
+  }};
+  const svc=new ProcurementRecurringService(db,notifications);
   svc.prepareDueCycle=async(_buyer,_contract,id)=>{
     if(id===1){cycles[0].status='AWAITING_BUYER_APPROVAL';
       return {request_id:123,status:'AWAITING_BUYER_APPROVAL',is_replay:false};}
@@ -56,6 +62,7 @@ async function main(){
   ok('No order created',result.created_orders===0);
   ok('No payment created',result.created_payments===0);
   ok('One durable retry/terminal event recorded',events.length===1);
+  ok('Terminal cycle notification is transaction-scoped and recipient-correct',emitted.length===1 && emitted[0].userId===103 && emitted[0].eventType==='CYCLE_MISSED');
   await assert.rejects(()=>svc.runDueBatch({limit:101}),e=>e.code==='INVALID_WORKER_LIMIT');
   ok('Unbounded worker batch rejected',true);
   console.log('B6 RECURRING WORKER GATE: '+passed+'/'+passed+' PASS');
