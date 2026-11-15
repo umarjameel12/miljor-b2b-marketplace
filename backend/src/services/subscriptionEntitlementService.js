@@ -399,7 +399,7 @@ class SubscriptionEntitlementService {
    */
   async processScheduledStarterChanges(limit = 50) {
     const [candidates] = await db.query(
-      "SELECT supplier_id FROM supplier_subscriptions WHERE pending_plan_code = 'STARTER' AND current_period_end <= NOW() ORDER BY current_period_end, id LIMIT ?",
+      "SELECT supplier_id FROM supplier_subscriptions WHERE plan_code IN ('GROWTH','BUSINESS') AND status='ACTIVE' AND current_period_end <= NOW() ORDER BY current_period_end, id LIMIT ?",
       [Math.min(50, Math.max(1, Number(limit) || 50))]
     );
     let processed = 0;
@@ -417,7 +417,7 @@ class SubscriptionEntitlementService {
           [candidate.supplier_id]
         );
         const row = rows[0];
-        if (profiles.length && row && row.pending_plan_code === 'STARTER' &&
+        if (profiles.length && row && ['GROWTH','BUSINESS'].includes(row.plan_code) &&
             row.status === 'ACTIVE' && row.current_period_end &&
             new Date(row.current_period_end).getTime() <= Date.now() &&
             profiles[0].subscription_plan === row.plan_code) {
