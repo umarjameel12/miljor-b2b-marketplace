@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
@@ -95,6 +95,7 @@ function CommoditySlide({ item, active }) {
 
 export const LandingPage = () => {
   const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const [slide, setSlide] = useState(0);
   const [paused, setPaused] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -343,7 +344,7 @@ export const LandingPage = () => {
           >
             {!loadingPools && featuredPools.map((pool) => (
               <div key={pool.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
-                <PoolCard pool={pool} />
+                <PoolCard pool={pool} onSelect={() => navigate(isAuthenticated ? '/pools' : '/login', isAuthenticated ? {} : { state: { from: { pathname: '/pools' } } })} />
               </div>
             ))}
             {/* Same card component and 15-day countdown for category examples.
