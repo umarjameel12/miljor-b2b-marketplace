@@ -1,5 +1,17 @@
 # MilJor — Phase Execution Log
 
+## PR #59 — UCP Recovery, Notifications and Migration Reconciliation (2026-11-16)
+
+- Branch: `feature/miljor-release-reconciliation` (draft PR #59, not merged).
+- Qualified application + test SHA: `a478d28eeef5fd524d15bc821e96685f7a06a036`.
+- Implemented: reviewed canonical 090–095 migration sequence, opt-in Flash expiry recovery, transaction-bound UCP receipt hooks, EN/Urdu inbox preferences, durable/leased email notifications, supplier UI Chromium navigation.
+- Exact-head acceptance: 9/9 scoped GitHub Actions workflows SUCCESS — disposable MySQL migration, source/frontend build, Chromium buyer/supplier journey, UCP/P0, subscriptions, quantity safety, inbox/email/OTP and recovery.
+- Report and direct CI links: `backend/docs/MILJOR_PR59_RELEASE_RECONCILIATION_REPORT_2026_11_16.md`.
+- Still unverified: genuine Safepay provider-origin transaction/refund/payout and recurring subscription charges; complete grouped delivery and full RFQ/recurring-to-settlement browser E2E; remaining PR #53 Smart Hub work; external transport, old migration ledger reconcile, backup/restore, credential rotation.
+- Protected shared databases were not mutated in this session; test writes isolated to disposable `miljor_test_db`.
+- Phase verdict: **PARTIAL / RELEASE BLOCKED**. CAN START NEXT PHASE: **NO**.
+
+
 ## Supplier Subscription Sandbox Checkout and Release Hardening — 2026-11-16
 
 - Branch: `feature/supplier-provider-billing-hardening`; PR #58 (draft).
