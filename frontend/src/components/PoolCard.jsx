@@ -190,16 +190,16 @@ export const PoolCard = ({ pool, onSelect }) => {
           </h3>
           <span className="mt-1.5 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--pool-detail-accent)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>{categoryLabel}</span>
 
-          <button
-            type="button"
-            aria-expanded={showProductDetails}
-            onClick={() => setShowProductDetails((open) => !open)}
-            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold transition-opacity hover:opacity-80"
-            style={{ color: 'var(--pool-detail-accent)' }}
-          >
-            {showProductDetails ? 'Hide product details −' : 'View product details +'}
-          </button>
           {showProductDetails && (
+            <> 
+              <button
+                type="button"
+                onClick={() => setShowProductDetails(false)}
+                className="mt-2 text-[11px] font-semibold hover:opacity-80"
+                style={{ color: 'var(--pool-detail-accent)' }}
+              >
+                Hide product details −
+              </button>
             <div className="mt-1 rounded-xl border p-2.5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>
           {/* Supplier specifications are opt-in; never clutter the pool overview. */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-sans mt-1" style={{ color: 'var(--text-secondary)' }}>
@@ -231,6 +231,7 @@ export const PoolCard = ({ pool, onSelect }) => {
           )}
 
             </div>
+            </>
           )}
 
           {/* Participation Cutoff & Promised 1-3 Day Delivery SLA */}
