@@ -782,12 +782,22 @@ class FlashPoolService {
   }
 
   async closeExpiredOffer(supplierId,id) {
+    return this._closeExpiredOffer(supplierId,id,false);
+  }
+
+  // Internal system-only entrypoint. HTTP suppliers remain subject to verification.
+  async expireOfferForRecovery(id) {
+    return this._closeExpiredOffer(null,id,true);
+  }
+
+  async _closeExpiredOffer(supplierId,id,systemRecovery) {
     const conn=await db.getConnection();
     try {
       await conn.beginTransaction();
-      await this._lockVerifiedSupplier(conn,supplierId);
+      if(!systemRecovery)await this._lockVerifiedSupplier(conn,supplierId);
       const [rows]=await conn.query(
-        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+        systemRecovery?'SELECT * FROM flash_pools WHERE id=? FOR UPDATE':
+          'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',systemRecovery?[id]:[id,supplierId]);
       let pool=rows[0];
       if(!pool)throw fail('FLASH_NOT_FOUND','Flash Pool not found.',404);
       await this.reclaimExpiredUninitiatedHolds(id,conn);
@@ -812,6 +822,8 @@ class FlashPoolService {
       }
       await conn.query(
         "UPDATE flash_pools SET status='EXPIRED',version_number=version_number+1 WHERE id=?",[id]);
+      // Critical in-app receipts are committed atomically with pool expiry.
+      await require('./ucpExpiryNotificationService').recordFlashExpiryOnConnection(conn,id);
       await conn.commit();
       return {id,status:'EXPIRED',preserved_unsettled_quantity:outstanding};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
