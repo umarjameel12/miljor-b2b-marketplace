@@ -1,5 +1,16 @@
 # MilJor — Phase Execution Log
 
+## Supplier Subscription Safe Lifecycle — 2026-11-16
+
+- Branch: `feature/supplier-subscription-safe-lifecycle` (draft PR #56).
+- Changes: scheduled cancellation to Starter, period-end processor, ownership and idempotency checks, truthful premium subscription UI, auth build repair.
+- Evidence: `backend/docs/MILJOR_SUPPLIER_SUBSCRIPTION_SAFE_LIFECYCLE_REPORT.md`.
+- Tests: focused subscription CI PASS; supplier/admin frontend build PASS; delivery quantity PASS; P0 finance combined E2E PASS (as reported by GitHub CI).
+- Gate: **PARTIAL / BLOCKED** until isolated MySQL subscription acceptance, provider billing, browser E2E and PR #55/53/54 reconciliation.
+- Protected DB: unchanged by this session; no direct database access or mutation.
+- CAN START NEXT PHASE: NO
+
+
 ## Post Master-E2E Gap Closure & Final Demo Acceptance (Production Hardened) — 2026-11-12
 
 - **Active Branch:** `feature/frontend-redesign-20261112`
