@@ -637,7 +637,7 @@ export const AppShell = ({ children }) => {
                               style={{
                                 backgroundColor: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
                                 color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                border: isSelected ? '1px solid var(--border-default)' : '1px solid transparent',
+                                border: isSelected ? '1px solid var(--brand-accent)' : '1px solid transparent',
                               }}
                             >
                               <OptionIcon
@@ -646,7 +646,7 @@ export const AppShell = ({ children }) => {
                                     ? 'text-emerald-900 dark:text-champagne'
                                     : ''
                                 }`}
-                                style={{ color: isSelected ? undefined : 'var(--text-secondary)' }}
+                                style={{ color: isSelected ? (isDark ? '#dfbf85' : '#6c501e') : 'var(--text-secondary)' }}
                               />
                               <span className="truncate">{label}</span>
                             </button>
@@ -739,7 +739,7 @@ export const AppShell = ({ children }) => {
                                     className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                                       isSelected ? 'text-emerald-900 dark:text-champagne' : ''
                                     }`}
-                                    style={{ color: isSelected ? undefined : 'var(--text-secondary)' }}
+                                    style={{ color: isSelected ? (isDark ? '#dfbf85' : '#6c501e') : 'var(--text-secondary)' }}
                                   />
                                   <span>{label}</span>
                                 </button>
@@ -1305,8 +1305,8 @@ export const AppShell = ({ children }) => {
                           }`}
                           style={{
                             backgroundColor: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
-                            color: 'var(--text-primary)',
-                            border: isSelected ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                            color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            border: isSelected ? '1px solid var(--brand-accent)' : '1px solid transparent',
                           }}
                         >
                           <div className="flex items-center gap-2.5">
@@ -1314,7 +1314,7 @@ export const AppShell = ({ children }) => {
                               className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                                 isSelected ? 'text-emerald-800 dark:text-champagne' : ''
                               }`}
-                              style={{ color: isSelected ? undefined : 'var(--text-secondary)' }}
+                              style={{ color: isSelected ? (isDark ? '#dfbf85' : '#6c501e') : 'var(--text-secondary)' }}
                             />
                             <span style={{ color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{label}</span>
                           </div>
