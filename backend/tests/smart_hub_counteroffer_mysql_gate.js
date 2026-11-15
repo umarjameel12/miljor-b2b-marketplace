@@ -48,6 +48,12 @@ async function run(){
     await rejects(()=>svc.submit(101,10,20,offer,'test-other-buyer-123456'),'REQUEST_NOT_FOUND');
     await rejects(()=>svc.submit(100,10,20,{...offer,message:'free text'},'test-message-123456'),'UNSUPPORTED_COUNTER_FIELD');
     await rejects(()=>svc.submit(100,10,20,{...offer,version_number:9},'test-stale-123456'),'QUOTE_STALE');
+    await database.query('UPDATE procurement_requests SET quote_deadline=? WHERE id=10',[stamp(-60000)]);
+    await rejects(()=>svc.submit(100,10,20,offer,'test-expired-request-123456'),'REQUEST_CLOSED');
+    await database.query('UPDATE procurement_requests SET quote_deadline=? WHERE id=10',[stamp(86400000)]);
+    await database.query('UPDATE procurement_quote_versions SET valid_until=? WHERE id=30',[stamp(-60000)]);
+    await rejects(()=>svc.submit(100,10,20,offer,'test-expired-quote-123456'),'QUOTE_EXPIRED');
+    await database.query('UPDATE procurement_quote_versions SET valid_until=? WHERE id=30',[stamp(7200000)]);
     const created=await svc.submit(100,10,20,offer,'test-buyer-123456');
     assert.equal(created.is_replay,false);assert.equal(created.counteroffers.length,2);
     const replay=await svc.submit(100,10,20,offer,'test-buyer-123456');
@@ -94,7 +100,7 @@ async function run(){
     const [all]=await database.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('orders','payments','payment_ledger')");
     assert.equal(all.length,0);
-    console.log('SMART_HUB_MYSQL_INTEGRATION_PASS: migration, permissions, 2-item offers, replay, conflict, accept, re-counter, reject, stale-version and concurrency gates, history, no financial mutation');
+    console.log('SMART_HUB_MYSQL_INTEGRATION_PASS: migration, permissions, 2-item offers, replay, conflict, accept, re-counter, reject, expiry, stale-version and concurrency gates, history, no financial mutation');
   }finally{
     await database.end();
     await admin.end();
