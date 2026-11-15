@@ -248,19 +248,42 @@ export const LandingPage = () => {
               {featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}
             </div>
           ) : (
-            <div className="flex flex-col gap-4 rounded-[1.5rem] border p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9" style={panel}>
-              <div>
+            <div className="grid gap-5 lg:grid-cols-[1fr_0.95fr]">
+              {import.meta.env.DEV && (
+                <article className="landing-demo-card flex flex-col rounded-[1.5rem] border p-6 sm:p-7" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.17em]">Pool design preview</span>
+                    <span className="rounded-full border px-3 py-1 text-[10px] font-semibold" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>Preview only</span>
+                  </div>
+                  <div className="mt-6 flex items-start gap-4">
+                    <span className="landing-demo-illustration grid h-16 w-16 shrink-0 place-items-center rounded-2xl"><Layers size={28} strokeWidth={1.5} /></span>
+                    <div>
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Rice & grains</p>
+                      <h3 className="landing-section-title mt-1 text-xl font-bold">Super Kernel Basmati Rice</h3>
+                      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>Illustrative supplier pool card with a clean, compact procurement layout.</p>
+                    </div>
+                  </div>
+                  <div className="mt-6 grid grid-cols-2 gap-4 border-t pt-5" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <div><p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sample target</p><p className="mt-1 font-semibold">300 kg</p></div>
+                    <div><p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sample packing</p><p className="mt-1 font-semibold">25 kg bags</p></div>
+                  </div>
+                  <p className="mt-5 rounded-xl p-3 text-xs leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+                    Visual preview in development only. Not published, purchasable, or connected to supplier inventory.
+                  </p>
+                </article>
+              )}
+              <div className="flex flex-col justify-center gap-4 rounded-[1.5rem] border p-7 sm:p-9" style={panel}>
                 <h3 className="landing-section-title text-lg font-semibold">No published pools available yet</h3>
-                <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
-                  When verified suppliers publish active pools, their offers will appear here automatically.
+                <p className="max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+                  As soon as an approved supplier publishes a live pool, its actual stock, pricing and progress will appear here automatically.
                 </p>
+                <Link
+                  to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'}
+                  className="landing-gradient-cta inline-flex w-fit items-center justify-center rounded-full px-5 py-3 text-sm font-semibold"
+                >
+                  {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
+                </Link>
               </div>
-              <Link
-                to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'}
-                className="landing-gradient-cta inline-flex shrink-0 items-center justify-center rounded-full px-5 py-3 text-sm font-semibold"
-              >
-                {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
-              </Link>
             </div>
           )}
         </section>
