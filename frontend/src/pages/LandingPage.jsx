@@ -76,6 +76,7 @@ export const LandingPage = () => {
   const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
+  const poolCarouselRef = useRef(null);
   const [exampleDeadline] = useState(() => new Date(Date.now() + 15 * 24 * 60 * 60 * 1000));
 
   useEffect(() => {
@@ -287,31 +288,41 @@ export const LandingPage = () => {
               <Link to="/login" state={{ from: { pathname: '/pools' } }} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers</Link>
             )}
           </div>
-          {loadingPools ? (
-            <p role="status" className="rounded-2xl border p-7 text-sm" style={panel}>Checking published pools…</p>
-          ) : featuredPools.length > 0 ? (
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] border p-6 sm:p-8" style={panel}>
-                <div>
-                  <h3 className="landing-section-title text-base font-semibold">No published pools available yet</h3>
-                  <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>Actual supplier offers will appear here automatically after publication.</p>
-                </div>
-                <Link to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold">
-                  {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
-                </Link>
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              aria-label="Scroll pools left"
+              onClick={() => poolCarouselRef.current?.scrollBy({ left: -360, behavior: 'smooth' })}
+              className="grid h-9 w-9 place-items-center rounded-full border transition-opacity hover:opacity-75"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)' }}
+            >
+              <ChevronLeft size={17} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label="Scroll pools right"
+              onClick={() => poolCarouselRef.current?.scrollBy({ left: 360, behavior: 'smooth' })}
+              className="grid h-9 w-9 place-items-center rounded-full border transition-opacity hover:opacity-75"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)' }}
+            >
+              <ChevronRight size={17} aria-hidden="true" />
+            </button>
+          </div>
+          <div
+            ref={poolCarouselRef}
+            role="region"
+            aria-label="Buying pools and procurement examples"
+            tabIndex={0}
+            className="flex items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth snap-x snap-mandatory pb-4"
+          >
+            {!loadingPools && featuredPools.map((pool) => (
+              <div key={pool.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
+                <PoolCard pool={pool} />
               </div>
-            </div>
-          )}
-          {/* Product procurement examples are illustrative, not published or joinable supplier offers. */}
-          <div className="mt-8">
-            <h3 className="mb-4 text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Procurement</h3>
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            ))}
+            {/* Examples remain explicitly marked and are never represented as published pools. */}
               {PREVIEW_POOLS.slice(0, 3).map((item) => (
-                <article key={item.title} className="flex flex-col overflow-hidden rounded-3xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <article key={item.title} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
                   <div className="relative h-28 sm:h-32 overflow-hidden" style={{ backgroundColor: 'var(--bg-subtle)' }}>
                     <img src={item.image} alt={item.category} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
                     <span className="absolute right-2.5 top-2.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)' }}>Example</span>
@@ -342,8 +353,11 @@ export const LandingPage = () => {
                   </div>
                 </article>
               ))}
-            </div>
           </div>
+          {loadingPools && <p role="status" className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>Checking published pools…</p>}
+          {!loadingPools && featuredPools.length === 0 && (
+            <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>No published supplier offers currently. The cards above are examples.</p>
+          )}
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
