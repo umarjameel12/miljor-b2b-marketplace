@@ -432,3 +432,33 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border-left: 1px solid var(--border-default);
   border-bottom: 1px solid var(--border-default);
 }
+
+/* Authentication-only segmented controls: selected gold focus glow in both themes. */
+.auth-segment-active {
+  box-shadow: 0 0 0 1px var(--border-default), 0 0 14px 1px var(--brand-accent-soft), 0 3px 9px rgba(20, 30, 25, 0.10);
+}
+.dark .auth-segment-active {
+  box-shadow: 0 0 0 1px var(--border-default), 0 0 18px 2px rgba(200, 178, 118, 0.18), 0 4px 12px rgba(0, 0, 0, 0.32);
+}
+
+/* Auth-only heading refinement and a consistent Champagne Gold required marker. */
+.auth-heading {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.auth-box-enhanced label .text-amber-600,
+.auth-box-enhanced label .text-red-500 {
+  color: var(--brand-accent);
+}
+
+/* Clear selected auth navigation tabs with the same champagne focus as Buyer/Supplier. */
+.auth-auth-tabs .auth-segment-active {
+  color: var(--brand-accent);
+  border-color: var(--brand-accent) !important;
+  box-shadow: 0 0 0 1px var(--border-default), 0 0 15px 2px var(--brand-accent-soft), 0 4px 12px rgba(20, 30, 25, 0.09);
+}
+.dark .auth-auth-tabs .auth-segment-active {
+  box-shadow: 0 0 0 1px var(--brand-accent-soft), 0 0 20px 3px rgba(200, 178, 118, 0.20), 0 4px 14px rgba(0, 0, 0, 0.28);
+}

@@ -15,7 +15,8 @@ export default function LahoreClusterSelector({
   label = 'Marketplace Cluster',
   badge = 'Local District Only',
   required = true,
-  helperText = ''
+  helperText = '',
+  compact = false
 }) {
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +80,7 @@ export default function LahoreClusterSelector({
             color: 'var(--text-muted)'
           }}
         >
-          <span>Loading authorized Lahore clusters...</span>
+          <span>Loading areas...</span>
           <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-400" />
         </div>
       ) : fetchError ? (
@@ -120,10 +121,10 @@ export default function LahoreClusterSelector({
               color: value ? 'var(--text-primary)' : 'var(--text-muted)'
             }}
           >
-            <option value="" disabled>Select predefined Lahore cluster...</option>
+            <option value="" disabled>Select your area</option>
             {clusters.map((c) => (
               <option key={c.id} value={c.id} className="py-1">
-                {c.name} ({c.cluster_code}){c.hub_name ? ` · Hub: ${c.hub_name}` : ''}
+                {compact ? c.name : `${c.name} (${c.cluster_code})${c.hub_name ? ` · Hub: ${c.hub_name}` : ''}`}
               </option>
             ))}
           </select>
