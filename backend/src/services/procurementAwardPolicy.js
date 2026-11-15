@@ -94,6 +94,7 @@ function buildAwardPreview({requestItems,quoteVersions,selections,now=new Date()
       throw failure('SPECIFICATION_REAPPROVAL_REQUIRED','Physical SKU/spec changed; buyer must review and reapprove.');
     if(selection.physical_specifications_accepted!==true)
       throw failure('EXPLICIT_SPEC_CONSENT_REQUIRED','Buyer must review and accept the exact grade and packaging.');
+    if(quote.delivery_terms)require('./procurementDeliveryBindingPolicy').assertDeliveryConsent(quote.delivery_terms,selection.delivery_terms_hash);
     const unitPrice=amount(line.unit_price,'Quotation unit price');
     if(!exact.exactDecimalGte(unitPrice,'0.01',2))
       throw failure('INVALID_AWARD_AMOUNT','Unit price must be positive.');
@@ -103,6 +104,7 @@ function buildAwardPreview({requestItems,quoteVersions,selections,now=new Date()
       throw failure('MULTIPLE_QUOTES_SAME_SUPPLIER','Select one authoritative quote per supplier.');
     if(!group){
       group={supplier_id:quote.supplier_id,quote_id:quoteId,
+        ...(quote.delivery_terms?{delivery_terms:quote.delivery_terms}:{}),
         version_number:quote.version_number,delivery_fee:quote.fee,lines:[]};
       bySupplier.set(quote.supplier_id,group);
     }
@@ -184,7 +186,7 @@ async function previewForBuyer(buyerId,requestId,selections,database=require('..
       :String(q.valid_until).replace(' ','T')+'Z';
     return {quote_id:q.quote_id,supplier_id:q.supplier_id,status:q.status,
       version_number:q.current_version,valid_until:deadline,
-      delivery_fee:q.delivery_fee,lines:snapshot.lines||[]};
+      delivery_fee:q.delivery_fee,lines:snapshot.lines||[],...(snapshot.delivery_terms?{delivery_terms:snapshot.delivery_terms}:{})};
   });
   return {request_id:request,...buildAwardPreview({requestItems:items,
     quoteVersions:versions,selections,now})};
