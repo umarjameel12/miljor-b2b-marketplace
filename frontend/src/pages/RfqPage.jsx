@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -16,10 +16,20 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { geoApi } from '../api/geo';
+import { deliveryApi } from '../api/delivery';
+import { RecurringCycleControls } from '../components/procurement/RecurringCycleControls';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
   const [activeTab, setActiveTab] = useState(user?.role === 'SUPPLIER' ? 'supplier' : 'buyer');
+  const location = useLocation();
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (user?.role !== 'SUPPLIER' || !['supplier-invitations', 'supplier-collective', 'supplier-counteroffers'].includes(id)) return;
+    const frame = requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, user?.role, activeTab]);
 
   // B6: Buyer-first multi-item shopping list, stored in the existing RFQ page.
   const emptyItem = () => ({ family_id: '', quantity: '', unit: 'kg', requirements: '' });
@@ -71,10 +81,18 @@ export const RfqPage = () => {
   const [quoteHistory,setQuoteHistory] = useState(null);
   const [quoteComparison,setQuoteComparison]=useState(null);
   const [compareRequestId,setCompareRequestId]=useState(null);
-  const [improvementNotes,setImprovementNotes]=useState({});
-  const [improvementTargets,setImprovementTargets]=useState({});
-  const [buyerNegotiations,setBuyerNegotiations]=useState([]);
-  const [supplierNegotiations,setSupplierNegotiations]=useState([]);
+  const [counterofferDrafts,setCounterofferDrafts]=useState({});
+  const [buyerCounteroffers,setBuyerCounteroffers]=useState([]);
+  const [supplierCounteroffers,setSupplierCounteroffers]=useState([]);
+  const [supplierCounterDrafts,setSupplierCounterDrafts]=useState({});
+  const [deliveryClusters,setDeliveryClusters]=useState([]);
+  const [deliveryClusterId,setDeliveryClusterId]=useState(user?.base_cluster_id?String(user.base_cluster_id):'');
+  const [deliveryOptionResults,setDeliveryOptionResults]=useState({});
+  const [deliveryAddresses,setDeliveryAddresses]=useState([]);
+  const [chosenAddress,setChosenAddress]=useState('');
+  const [deliveryChoices,setDeliveryChoices]=useState({});
+  const deliveryAccountRef=useRef(user?.id);
+  deliveryAccountRef.current=user?.id;
 
 
 
@@ -305,7 +323,7 @@ export const RfqPage = () => {
         body:JSON.stringify({})
       });
       await refreshMySmartQuotes();
-      await refreshSupplierNegotiations();
+      await refreshSupplierCounteroffers();
       toast.success('Quotation withdrawn; historical versions retained');
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -345,7 +363,9 @@ export const RfqPage = () => {
           request_item_id:Number(line.request_item_id),quote_id:Number(line.quote_id),
           version_number:Number(version),supplier_sku_id:Number(snapshot.supplier_sku_id),
           product_spec_id:Number(snapshot.product_spec_id),
-          physical_specifications_accepted:true
+          physical_specifications_accepted:true,
+          ...(buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id))?.quote_snapshot?.delivery_terms
+            ?{delivery_terms_hash:buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id)).quote_snapshot.delivery_terms.hash}:{})
         };
       });
       const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/checkout-preview`,{
@@ -362,14 +382,14 @@ export const RfqPage = () => {
     setQuoteBusy(true);
     setShoppingError('');
     try{
-      const [compared,negotiations,currentQuotes]=await Promise.all([
+      const [compared,currentQuotes,productOffers]=await Promise.all([
         procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`)
+        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/counteroffers`)
       ]);
       setCompareRequestId(requestId);
       setQuoteComparison(compared);
-      setBuyerNegotiations(negotiations.negotiations||[]);
+      setBuyerCounteroffers(productOffers.counteroffers||[]);
       setBuyerQuotes(currentQuotes.quotes||[]);
       setReviewedAwardLines({});
       setAwardPreview(null);
@@ -377,30 +397,90 @@ export const RfqPage = () => {
     finally{setQuoteBusy(false);}
   };
 
-  const requestBetterSmartOffer = async (quoteId,versionNumber) => {
-    if(!compareRequestId)return;
-    const message=improvementNotes[quoteId]?.trim()||'';
-    if(message.length<5){setShoppingError('Describe the requested improvement (at least 5 characters).');return;}
-    setQuoteBusy(true);
-    setShoppingError('');
+  const submitProductCounteroffers=async quote=>{
+    const fields=counterofferDrafts[quote.id]||{};
+    const lines=(quote.quote_snapshot?.lines||[])
+      .filter(line=>String(fields[line.request_item_id]||'').trim())
+      .map(line=>({request_item_id:Number(line.request_item_id),
+        proposed_unit_price:String(fields[line.request_item_id]).trim()}));
+    if(!lines.length){setShoppingError('Enter a numeric offer on at least one selected product.');return;}
+    setQuoteBusy(true);setShoppingError('');
     try{
-      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quoteId}/improve`,{
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/counteroffers`,{
         method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
-        body:JSON.stringify({message,target_total:improvementTargets[quoteId]||null,
-          version_number:versionNumber})
+        body:JSON.stringify({version_number:Number(quote.current_version),lines})
       });
-      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/negotiations`);
-      setBuyerNegotiations(data.negotiations||[]);
-      toast.success('Request for a better quote sent. No order or payment created.');
-    }catch(e){setShoppingError(e.message);}
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/counteroffers`);
+      setBuyerCounteroffers(data.counteroffers||[]);
+      setCounterofferDrafts(old=>({...old,[quote.id]:{}}));
+      toast.success('Product counteroffer submitted. No payment or order created.');
+    }catch(error){setShoppingError(error.message);}
     finally{setQuoteBusy(false);}
   };
-
-  const refreshSupplierNegotiations = async () => {
-    if(!token||user?.role!=='SUPPLIER')return;
-    const data=await procurementApi('/api/v1/procurement/supplier/negotiations');
-    setSupplierNegotiations(data.negotiations||[]);
+  useEffect(()=>{
+    let active=true;
+    setDeliveryAddresses([]);setChosenAddress('');setDeliveryChoices({});
+    if(user?.role!=='BUYER')return;
+    geoApi.getClusters().then(result=>setDeliveryClusters(result?.data?.clusters||[]))
+      .catch(()=>setDeliveryClusters([]));
+    deliveryApi.getBuyerAddresses().then(result=>{if(active)setDeliveryAddresses(result.data||[]);}).catch(()=>{if(active)setDeliveryAddresses([]);});
+    return()=>{active=false;};
+  },[user?.id,user?.role,token]);
+  const chooseDelivery=async(quote,mode,pickupPointId=null)=>{
+    const owner=user?.id;
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-choice`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},body:JSON.stringify({cluster_id:Number(deliveryClusterId),mode,
+          ...(mode==='PICKUP'?{pickup_point_id:Number(pickupPointId)}:{address_id:Number(chosenAddress)})})});
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,[quote.id]:result.delivery_terms}));
+      toast.success('Delivery choice recorded. Supplier must publish a revised quote before your final approval.');
+    }catch(error){setShoppingError(error.message);}finally{setQuoteBusy(false);}
   };
+  const loadSupplierDeliveryChoices=async invitation=>{
+    const owner=user?.id;
+    setQuoteBusy(true);
+    try{
+      const result=await procurementApi(`/api/v1/procurement/supplier/requests/${invitation.request_id}/delivery-choices`);
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,['supplier:'+invitation.invitation_id]:result.choices}));
+    }catch(error){toast.error(error.message);}finally{setQuoteBusy(false);}
+  };
+  const viewSupplierDeliveryOptions=async quote=>{
+    if(!deliveryClusterId){setShoppingError('Select your delivery area cluster first.');return;}
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(
+        `/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-options?cluster_id=${encodeURIComponent(deliveryClusterId)}`
+      );
+      setDeliveryOptionResults(old=>({...old,[quote.id]:data.options}));
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  const refreshSupplierCounteroffers=async()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    try{
+      const data=await procurementApi('/api/v1/procurement/supplier/counteroffers');
+      setSupplierCounteroffers(data.counteroffers||[]);
+    }catch(error){toast.error(error.message);}
+  };
+  const respondProductCounteroffer=async(offer,decision)=>{
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const proposed=String(supplierCounterDrafts[offer.id]||'').trim();
+      await procurementApi(`/api/v1/procurement/supplier/counteroffers/${offer.id}/respond`,{
+        method:'POST',body:JSON.stringify(decision==='COUNTER_AGAIN'
+          ?{decision,proposed_unit_price:proposed}:{decision})
+      });
+      await refreshSupplierCounteroffers();
+      toast.success('Decision saved. Publish a revised supplier quotation before buyer checkout.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  useEffect(()=>{
+    if(token&&user?.role==='SUPPLIER')refreshSupplierCounteroffers();
+  },[token,user?.role]);
 
   const updateQuoteDraft = (invitationId,patch) => {
     setSupplierQuoteDrafts(old=>({
@@ -430,12 +510,13 @@ export const RfqPage = () => {
           lines,delivery_fee:saved.delivery_fee||'0',
           delivery_lead_days:Number(saved.delivery_lead_days??2),
           valid_until:new Date(deadline).toISOString(),
-          supplier_notes:saved.supplier_notes||''
+          supplier_notes:saved.supplier_notes||'',
+          ...(saved.delivery_quote_code?{delivery_quote_code:saved.delivery_quote_code}:{})
         })
       });
       toast.success(`Quotation version ${result.quote.version_number} submitted`);
       await refreshMySmartQuotes();
-      await refreshSupplierNegotiations();
+      await refreshSupplierCounteroffers();
       setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -444,7 +525,7 @@ export const RfqPage = () => {
   useEffect(()=>{
     if(token && user?.role==='SUPPLIER'){
       refreshMySmartQuotes().catch(error=>toast.error(error.message));
-      refreshSupplierNegotiations().catch(error=>toast.error(error.message));
+      refreshSupplierCounteroffers().catch(error=>toast.error(error.message));
     }
   },[token,user?.role]);
 
@@ -517,8 +598,8 @@ export const RfqPage = () => {
         cadence,timezone_name:'Asia/Karachi',local_run_time:recurringTime,
         starts_on:recurringStart,ends_on:recurringEnd||null,
         payment_policy:'EXPLICIT_PER_CYCLE',pricing_policy:'REQUOTE_EACH_CYCLE',
-        ...(cadence==='WEEKLY'?{weekday_number:Number(recurringCadenceDay)}
-          :{month_day:Number(recurringCadenceDay),month_end_policy:'LAST_DAY'})
+        ...(cadence!=='MONTHLY'?{weekday_number:recurringCadenceDay}
+          :{month_day:recurringCadenceDay,month_end_policy:'LAST_DAY'})
       };
       await procurementApi(`/api/v1/procurement/requests/${request.id}/recurring`,{
         method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
@@ -539,6 +620,7 @@ export const RfqPage = () => {
       });
       await refreshProcurementModes();
       toast.success('Recurring schedule updated without an automatic payment.');
+      if(recurringCyclesContract===contract.id)await loadActualRecurringCycles(contract.id);
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
@@ -708,10 +790,10 @@ export const RfqPage = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
             <span className="text-xs uppercase tracking-wider font-semibold text-[var(--brand-accent)] block mb-1">
-              Custom Procurement Desk
+              One Unified Procurement Experience
             </span>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
-              Get Best Quotes
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text-primary)]">
+              Smart Procurement Hub
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">
               One shopping list, flexible suppliers, clearer wholesale comparisons. Start by creating a multi-product request below.
@@ -722,10 +804,10 @@ export const RfqPage = () => {
         </div>
 
         {user?.role === 'BUYER' && (
-          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Get Best Quotes">
+          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Smart Procurement Hub">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent)]">Smart Procurement Hub</p>
-              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Get Best Quotes — Your Shopping List</h2>
+              <h2 className="text-xl font-display font-bold text-[var(--text-primary)]">Your Procurement Shopping List</h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">Choose solo or group purchasing, one product or a complete shopping list, and one-time or recurring procurement. Payments require a later explicit buyer confirmation.</p>
             </div>
             {user?.role === 'BUYER' && (!user.is_verified || !['VERIFIED', 'EMAIL_VERIFIED'].includes(user.verification_status)) && (
@@ -751,6 +833,7 @@ export const RfqPage = () => {
                   className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
                   <option value="ONE_TIME">One-Time Purchase</option>
                   <option value="WEEKLY" disabled={buyerMode==='COLLECTIVE'}>Weekly Recurring</option>
+                  <option value="BIWEEKLY" disabled={buyerMode==='COLLECTIVE'}>Every Two Weeks</option>
                   <option value="MONTHLY" disabled={buyerMode==='COLLECTIVE'}>Monthly Recurring</option>
                 </select>
               </label>
@@ -776,9 +859,9 @@ export const RfqPage = () => {
             {buyerMode==='SINGLE_BUYER' && purchaseCadence!=='ONE_TIME' && (
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="text-xs font-semibold">
-                  {purchaseCadence==='WEEKLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
-                  <input type="number" min={purchaseCadence==='WEEKLY'?0:1}
-                    max={purchaseCadence==='WEEKLY'?6:31} value={recurringCadenceDay}
+                  {purchaseCadence!=='MONTHLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
+                  <input type="number" min={purchaseCadence!=='MONTHLY'?0:1}
+                    max={purchaseCadence!=='MONTHLY'?6:31} value={recurringCadenceDay}
                     onChange={e=>setRecurringCadenceDay(e.target.value)}
                     className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
                 </label>
@@ -1105,6 +1188,7 @@ export const RfqPage = () => {
                           <button type="button" disabled={shoppingBusy}
                             onClick={()=>prepareRecurringDraft(recurringCyclesContract,cycle.id)}
                             className="text-xs underline">Prepare Due Shopping Draft</button>}
+                        <RecurringCycleControls key={`${user.id}:${cycle.id}`} contractId={recurringCyclesContract} cycle={cycle} onChanged={()=>loadActualRecurringCycles(recurringCyclesContract)} />
                       </div>
                     ))}
                     <p className="text-xs text-amber-700">
@@ -1224,46 +1308,93 @@ export const RfqPage = () => {
                     </p>
                   </section>
                 )}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold">Ask a supplier for a better offer</p>
+                <div className="space-y-3" aria-label="Product-wise numeric counteroffers">
+                  <p className="text-sm font-semibold">Product-wise Counteroffers (No Chat)</p>
+                  <label className="flex flex-col gap-1 text-xs">
+                    Check supplier delivery eligibility for your cluster
+                    <select value={deliveryClusterId} onChange={e=>{
+                      setDeliveryClusterId(e.target.value);setDeliveryOptionResults({});
+                    }} className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                      <option value="">Select delivery cluster</option>
+                      {deliveryClusters.map(cluster=>(
+                        <option key={cluster.id} value={cluster.id}>{cluster.name}</option>
+                      ))}
+                    </select>
+                  </label>
                   {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
-                    <div key={quote.id} className="border-t border-[var(--border-subtle)] pt-2 space-y-2">
+                    <div key={quote.id} className="border border-[var(--border-subtle)] rounded-xl p-3 space-y-3">
                       <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
-                      <div className="grid sm:grid-cols-2 gap-2">
-                        <input value={improvementNotes[quote.id]||''}
-                          onChange={e=>setImprovementNotes(old=>({...old,[quote.id]:e.target.value}))}
-                          maxLength={1000} placeholder="e.g. Can you improve the delivery fee?"
-                          aria-label={`Requested improvement for quote ${quote.id}`}
-                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
-                        <input value={improvementTargets[quote.id]||''}
-                          onChange={e=>setImprovementTargets(old=>({...old,[quote.id]:e.target.value}))}
-                          placeholder="Optional target total (Rs.)" inputMode="decimal"
-                          aria-label={`Optional target for quote ${quote.id}`}
-                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      <div className="space-y-1 text-xs">
+                        <span>Current supplier delivery fee: Rs. {quote.delivery_fee} · Quoted lead time: {quote.delivery_lead_days} days</span>
+                        {quote.quote_snapshot?.delivery_terms&&<p>Supplier-approved {quote.quote_snapshot.delivery_terms.mode} · Rs. {quote.quote_snapshot.delivery_terms.fee} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.point_name||'saved destination'} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.address_line} · Review these terms together with the selected products.</p>}
+                        <button type="button" disabled={quoteBusy||!deliveryClusterId}
+                          onClick={()=>viewSupplierDeliveryOptions(quote)}
+                          className="ml-2 underline disabled:opacity-40">Check Delivery Options</button>
+                        {deliveryOptionResults[quote.id]&&(
+                          <div className="rounded-lg p-2 bg-[var(--bg-card)] space-y-1">
+                            <p className="font-semibold">Eligible delivery modes (not yet selected)</p>
+                            <label>Saved delivery address
+                              <select value={chosenAddress} onChange={event=>setChosenAddress(event.target.value)} className="block w-full p-2 border rounded">
+                                <option value="">Select saved address</option>
+                                {deliveryAddresses.map(address=><option key={address.id} value={address.id}>{address.full_address}</option>)}
+                              </select>
+                            </label>
+                            {(deliveryOptionResults[quote.id].eligible_modes||[]).length
+                              ?deliveryOptionResults[quote.id].eligible_modes.map(mode=>(
+                                <div key={mode.mode}>
+                                  <span>{mode.label||mode.mode}</span>
+                                  {mode.mode==='PICKUP'?(mode.pickup_points||[]).map(point=><button type="button" disabled={quoteBusy} key={point.id} onClick={()=>chooseDelivery(quote,mode.mode,point.id)} className="ml-2 underline">Request pickup at {point.point_name||point.id} · {point.address_line} · Rs. {point.handling_fee_pkr}</button>):
+                                    <button type="button" disabled={quoteBusy||!chosenAddress} onClick={()=>chooseDelivery(quote,mode.mode)} className="ml-2 underline">Request this mode · Rs. {mode.fee_pkr}</button>}
+                                </div>
+                              ))
+                              :<p>No eligible modes found for this supplier and cluster.</p>}
+                            <p className="text-[var(--text-muted)]">Rates and modes require a confirmed supplier quotation and your approval before checkout.</p>
+                            {deliveryChoices[quote.id]&&<p>Requested {deliveryChoices[quote.id].mode} · Rs. {deliveryChoices[quote.id].fee} · awaiting supplier revised quote</p>}
+                          </div>
+                        )}
                       </div>
-                      <button type="button" disabled={quoteBusy ||
-                        buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
-                          Number(n.requested_version)===Number(quote.current_version))}
-                        onClick={()=>requestBetterSmartOffer(quote.id,quote.current_version)}
-                        className="text-xs underline disabled:opacity-40">
-                        {buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
-                          Number(n.requested_version)===Number(quote.current_version))
-                          ? 'Improvement already requested for this version' : 'Request Better Offer'}
+                      {(quote.quote_snapshot?.lines||[]).map(line=>{
+                        const already=buyerCounteroffers.some(o=>Number(o.quote_id)===Number(quote.id)&&
+                          Number(o.quote_version)===Number(quote.current_version)&&Number(o.request_item_id)===Number(line.request_item_id));
+                        return (
+                          <label key={line.request_item_id} className="grid sm:grid-cols-2 gap-2 items-center text-xs">
+                            <span>{line.snapshot?.product_title||'Selected product'} · Supplier Rs. {line.unit_price} per unit
+                              {already&&<span className="ml-2 text-[var(--brand-accent)]">Counteroffer recorded</span>}
+                            </span>
+                            <input type="number" step="0.01" min="0.01" inputMode="decimal"
+                              disabled={quoteBusy||already} placeholder="Your proposed unit price (PKR)"
+                              aria-label={`Counteroffer price for product ${line.request_item_id}`}
+                              value={counterofferDrafts[quote.id]?.[line.request_item_id]||''}
+                              onChange={event=>setCounterofferDrafts(old=>({
+                                ...old,[quote.id]:{...(old[quote.id]||{}),[line.request_item_id]:event.target.value}
+                              }))}
+                              className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                          </label>
+                        );
+                      })}
+                      <button type="button" disabled={quoteBusy}
+                        onClick={()=>submitProductCounteroffers(quote)}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold bg-[var(--brand-accent)] text-stone-900 disabled:opacity-40">
+                        Submit Selected Product Counteroffers
                       </button>
                     </div>
                   ))}
+                  {buyerCounteroffers.length>0&&(
+                    <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
+                      <p className="text-xs font-semibold">Product Counteroffer History</p>
+                      {buyerCounteroffers.map(offer=>(
+                        <p key={offer.id} className="text-xs text-[var(--text-muted)]">
+                          Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                          Rs. {offer.quoted_unit_price} → Rs. {offer.buyer_proposed_unit_price} · {offer.decision}
+                          {offer.supplier_proposed_unit_price&&` · Supplier Rs. ${offer.supplier_proposed_unit_price}`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--text-muted)]">
+                    All offers are nonbinding. Supplier must publish a revised quotation and buyer must explicitly approve it.
+                  </p>
                 </div>
-                {buyerNegotiations.length>0 && (
-                  <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
-                    <p className="text-xs font-semibold">Negotiation history</p>
-                    {buyerNegotiations.map(n=>(
-                      <p key={n.id} className="text-xs text-[var(--text-muted)]">
-                        Quote #{n.quote_id} · v{n.requested_version} · {n.status} · {n.buyer_message}
-                        {n.responded_version ? ` · Supplier revised to v${n.responded_version}`:''}
-                      </p>
-                    ))}
-                  </div>
-                )}
               </section>
             )}
             {selectedQuotesRequest && (
@@ -1338,9 +1469,9 @@ export const RfqPage = () => {
 
         {user?.role === 'SUPPLIER' && (
           <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3"
-            aria-label="Collective group supplier bidding">
+            id="supplier-collective" aria-label="Collective group supplier bidding">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-serif font-semibold">Collective Supplier Bids</h2>
+              <h2 className="text-lg font-display font-semibold">Collective Supplier Bids</h2>
               <button type="button" className="text-xs underline"
                 onClick={refreshCollectiveSellerInbox}>Refresh invitations</button>
             </div>
@@ -1414,28 +1545,42 @@ export const RfqPage = () => {
         )}
 
         {user?.role === 'SUPPLIER' && (
-          <section aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
+          <section id="supplier-invitations" aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
             <div className="flex justify-between items-center gap-3">
-              <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
+              <h2 className="text-lg font-display font-semibold">Procurement Invitations</h2>
               <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
-            {supplierNegotiations.length>0 && (
-              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
-                <p className="text-sm font-semibold">Requests for Better Offers</p>
-                {supplierNegotiations.map(n=>(
-                  <div key={n.id} className="border-t border-[var(--border-subtle)] pt-2">
-                    <p className="text-xs font-semibold">Quote #{n.quote_id} · Request #{n.request_id} · {n.status}</p>
-                    <p className="text-xs">{n.buyer_message}</p>
-                    {n.buyer_target_total && <p className="text-xs">Buyer suggested total: Rs. {n.buyer_target_total}</p>}
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {n.status==='OPEN'?'To respond, submit a revised quote using the existing invitation quotation form.':
-                        `Responded with quote version ${n.responded_version||'pending'}.`}
-                    </p>
-                  </div>
-                ))}
+            <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+              <div className="flex items-center justify-between">
+                <p id="supplier-counteroffers" className="text-sm font-semibold">Product Counteroffers</p>
+                <button type="button" className="text-xs underline" onClick={refreshSupplierCounteroffers}>Refresh</button>
               </div>
-            )}
+              {supplierCounteroffers.length===0&&<p className="text-xs text-[var(--text-muted)]">No product counteroffers yet.</p>}
+              {supplierCounteroffers.map(offer=>(
+                <div key={offer.id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                  <p className="text-xs">Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                    Your price Rs. {offer.quoted_unit_price} · Buyer offers Rs. {offer.buyer_proposed_unit_price}</p>
+                  <p className="text-xs font-semibold">{offer.decision}</p>
+                  {offer.decision==='OPEN'&&(
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'ACCEPT')} className="text-xs underline">Accept</button>
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'REJECT')} className="text-xs underline">Reject</button>
+                      <input type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="Your new unit price"
+                        aria-label={`Supplier counter price for product ${offer.request_item_id}`}
+                        value={supplierCounterDrafts[offer.id]||''}
+                        onChange={e=>setSupplierCounterDrafts(old=>({...old,[offer.id]:e.target.value}))}
+                        className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      <button type="button" disabled={quoteBusy||!supplierCounterDrafts[offer.id]}
+                        onClick={()=>respondProductCounteroffer(offer,'COUNTER_AGAIN')} className="text-xs underline">Counter Again</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-[var(--text-muted)]">
+                Accept/Counter Again records a nonbinding decision. Send a revised quotation for buyer approval.
+              </p>
+            </div>
             {mySmartQuotes.length>0 && (
               <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
                 <p className="text-sm font-semibold">My submitted quotations</p>
@@ -1494,6 +1639,12 @@ export const RfqPage = () => {
                     })}
                     <div className="grid sm:grid-cols-2 gap-2">
                       <label className="text-xs font-semibold">Delivery fee (Rs.)
+                        <button type="button" className="ml-2 underline" disabled={quoteBusy} onClick={()=>loadSupplierDeliveryChoices(invitation)}>Load buyer delivery choices</button>
+                        {(deliveryChoices['supplier:'+invitation.invitation_id]||[]).map(terms=><button key={terms.quote_code} type="button" className="block underline" onClick={()=>{
+                          const localTime=new Date(new Date(terms.expires_at).getTime()-new Date(terms.expires_at).getTimezoneOffset()*60000).toISOString().slice(0,16);
+                          updateQuoteDraft(invitation.invitation_id,{delivery_quote_code:terms.quote_code,delivery_fee:terms.fee,valid_until:localTime});
+                        }}>Confirm {terms.mode} · Rs. {terms.fee} · {terms.quote_code}</button>)}
+                        {(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_quote_code&&<span className="block">Delivery terms selected for revised quote</span>}
                         <input value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_fee??'0'}
                           onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_fee:event.target.value})}
                           className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
