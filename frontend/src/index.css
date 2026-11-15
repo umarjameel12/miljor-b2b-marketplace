@@ -1031,3 +1031,58 @@ h1, h2, h3, h4, h5, h6, .font-display {
   background: var(--landing-menu-hover-bg) !important;
   color: var(--landing-menu-hover-ink) !important;
 }
+
+/* MILJOR POOL AND NAV REFINEMENT 2026-11-16 */
+:root {
+  --pool-progress-gradient: linear-gradient(90deg, #a57938, #d1b274);
+  --pool-join-gradient: linear-gradient(115deg, #e9d19d 0%, #c9aa6b 58%, #b39154 100%);
+  --pool-join-ink: #302619;
+  --pool-join-border: rgba(139, 100, 44, .46);
+  --pool-detail-accent: #9b702d;
+  --miljor-theme-trigger-bg: #ead8b3;
+  --miljor-theme-trigger-ink: #48351d;
+}
+.dark {
+  --pool-progress-gradient: linear-gradient(90deg, #c9a46a, #ecd49c);
+  --pool-join-gradient: linear-gradient(115deg, #6e5136 0%, #8b6748 52%, #62432f 100%);
+  --pool-join-ink: #fff1d2;
+  --pool-join-border: rgba(223, 191, 133, .55);
+  --pool-detail-accent: #dfbf85;
+  --miljor-theme-trigger-bg: #163b2e;
+  --miljor-theme-trigger-ink: #e8d4a5;
+}
+/* Both selected and hovered menu rows behave identically in each theme. */
+.miljor-public-landing #landing-account-options a.landing-account-option,
+.miljor-public-landing #landing-account-options a.landing-account-option:visited {
+  display: block;
+  width: 100%;
+  color: var(--text-primary) !important;
+}
+.miljor-public-landing #landing-account-options a.landing-account-option:is(:hover,:focus,:focus-visible,:active) {
+  background: var(--landing-menu-hover-bg) !important;
+  color: var(--landing-menu-hover-ink) !important;
+}
+.miljor-public-landing .miljor-theme-trigger {
+  background: var(--miljor-theme-trigger-bg) !important;
+  color: var(--miljor-theme-trigger-ink) !important;
+  border-color: var(--theme-menu-border) !important;
+}
+.miljor-public-landing .miljor-theme-trigger svg {
+  color: inherit !important;
+}
+.miljor-public-landing .miljor-theme-choice:is(:hover,:focus,:focus-visible) {
+  background: var(--theme-menu-hover) !important;
+  color: var(--theme-menu-ink) !important;
+}
+.miljor-public-landing .miljor-theme-choice-selected,
+.miljor-public-landing .miljor-theme-choice-selected:is(:hover,:focus,:focus-visible) {
+  background: var(--theme-menu-selected) !important;
+  color: var(--theme-menu-selected-ink) !important;
+  border-color: var(--theme-menu-border) !important;
+}
+/* Apply the same progress/fulfillment color tokens throughout pool cards. */
+.miljor-pool-join {
+  background: var(--pool-join-gradient) !important;
+  color: var(--pool-join-ink) !important;
+  border-color: var(--pool-join-border) !important;
+}
