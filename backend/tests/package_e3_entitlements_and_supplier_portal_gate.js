@@ -129,6 +129,23 @@ async function runE3Gate() {
       pass('1. Supplier retrieves own STARTER entitlements (0/4 families used, 4 remaining)');
     } catch (e) { fail('1. Initial Entitlements Check', e); }
 
+    // Supplier dashboard must be usable with an actual freshly onboarded supplier.
+    // Real MySQL queries are exercised, not a source-only or mocked check.
+    try {
+      const metrics = await api('/api/v1/supplier/dashboard-kpis', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(metrics.status, 200,
+        `Supplier KPI read must succeed: ${JSON.stringify(metrics.body)}`);
+      assert.ok(metrics.body.data?.kpis, 'Live KPIs missing');
+      assert.strictEqual(Number(metrics.body.data.kpis.active_unified_pools), 0);
+      const forbidden = await api('/api/v1/supplier/dashboard-kpis', {
+        headers: { Authorization: `Bearer ${generateToken(adminId, 'BUYER')}` }
+      });
+      assert.strictEqual(forbidden.status, 403, 'Buyer must not access supplier KPI API');
+      pass('Supplier dashboard: live MySQL aggregation and buyer role isolation');
+    } catch (e) { fail('Supplier dashboard KPI real MySQL gate', e); }
+
     // Helper to create and publish a product and SKU in a family
     async function createAndPublishSkuInFamily(familyId, variety, packSize, packUnit, isUnbranded = false, brand = 'TestBrand') {
       const pRes = await api('/api/v1/catalog/supplier-products', {
