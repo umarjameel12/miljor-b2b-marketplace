@@ -1194,3 +1194,35 @@ h1, h2, h3, h4, h5, h6, .font-display {
   background: var(--pool-nav-hover) !important;
   color: var(--pool-nav-ink) !important;
 }
+
+/* MILJOR JOIN POOL BUTTON FINAL THEME */
+:root {
+  --pool-join-gradient: linear-gradient(112deg, #f3e3b8 0%, #dfc58d 52%, #c5a567 100%);
+  --pool-join-ink: #352a18;
+  --pool-join-border: #c29f61;
+  --pool-join-shadow: 0 4px 12px rgba(110, 83, 39, .13);
+}
+.dark {
+  /* Clean champagne gold on forest-green cards; no muddy brown or neon green. */
+  --pool-join-gradient: linear-gradient(110deg, #ecd7a8 0%, #cfb779 52%, #ad9456 100%);
+  --pool-join-ink: #142a22;
+  --pool-join-border: #d4be87;
+  --pool-join-shadow: 0 5px 16px rgba(0, 0, 0, .22);
+}
+.miljor-pool-join:not(:disabled) {
+  background: var(--pool-join-gradient) !important;
+  color: var(--pool-join-ink) !important;
+  border-color: var(--pool-join-border) !important;
+  box-shadow: var(--pool-join-shadow);
+}
+.miljor-pool-join:not(:disabled):hover {
+  filter: brightness(1.045);
+}
+.miljor-pool-join:disabled {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-secondary) !important;
+  opacity: .82;
+  box-shadow: none;
+  cursor: not-allowed;
+}
