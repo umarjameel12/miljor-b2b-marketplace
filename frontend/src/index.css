@@ -1086,3 +1086,66 @@ h1, h2, h3, h4, h5, h6, .font-display {
   color: var(--pool-join-ink) !important;
   border-color: var(--pool-join-border) !important;
 }
+
+/* MILJOR FINAL POOL BUTTON AND NO-HOVER ACCOUNT CORRECTION */
+:root {
+  --landing-live-offers-bg: linear-gradient(112deg, #f3e6cc 0%, #dec695 100%);
+  --landing-live-offers-ink: #60431e;
+  --landing-live-offers-border: #c3a268;
+  --pool-join-gradient: linear-gradient(115deg, #ecd8aa 0%, #d2b577 55%, #b99553 100%);
+  --pool-join-ink: #332619;
+  --pool-join-border: rgba(131, 94, 42, .48);
+}
+.dark {
+  --landing-live-offers-bg: linear-gradient(112deg, #3d3328 0%, #57442d 100%);
+  --landing-live-offers-ink: #f4db9f;
+  --landing-live-offers-border: rgba(223, 191, 133, .65);
+  --pool-join-gradient: linear-gradient(115deg, #705038 0%, #876447 52%, #62442f 100%);
+  --pool-join-ink: #f9e6bf;
+  --pool-join-border: rgba(230, 199, 137, .57);
+}
+.miljor-public-landing .landing-live-offers-link {
+  background: var(--landing-live-offers-bg) !important;
+  color: var(--landing-live-offers-ink) !important;
+  border-color: var(--landing-live-offers-border) !important;
+  box-shadow: 0 3px 12px rgba(70, 49, 24, .08);
+}
+.miljor-public-landing .landing-live-offers-link:hover {
+  background: var(--landing-live-offers-bg) !important;
+  color: var(--landing-live-offers-ink) !important;
+  border-color: var(--landing-live-offers-border) !important;
+  transform: none !important;
+  filter: brightness(1.04);
+}
+.miljor-pool-join {
+  background: var(--pool-join-gradient) !important;
+  color: var(--pool-join-ink) !important;
+  border-color: var(--pool-join-border) !important;
+}
+/* Remove ALL hover background/foreground effects from public Account menu entries.
+   Keep focus-visible outline for keyboard navigation, not a hover fill. */
+.miljor-public-landing #landing-account-options .landing-account-option,
+.miljor-public-landing #landing-account-options .landing-account-option:hover,
+.miljor-public-landing #landing-account-options .landing-account-option:active,
+.miljor-public-landing #landing-account-options .landing-account-option:focus,
+.miljor-public-landing #landing-account-options .landing-account-option:focus-visible,
+.miljor-public-landing #landing-account-options .landing-account-option:visited,
+.miljor-public-landing #landing-account-options a.landing-account-option:hover,
+.miljor-public-landing #landing-account-options a.landing-account-option:active {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  font-weight: 500 !important;
+  transform: none !important;
+}
+.miljor-public-landing #landing-account-options .landing-account-option:focus-visible {
+  outline: 2px solid var(--landing-live-offers-border);
+  outline-offset: -2px;
+}
+/* Both timing labels and values share one theme-aware color. */
+.miljor-public-landing .miljor-pool-join:focus-visible {
+  outline: 2px solid var(--pool-detail-accent);
+  outline-offset: 3px;
+}
