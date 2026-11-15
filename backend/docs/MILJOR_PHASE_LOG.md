@@ -1,5 +1,16 @@
 # MilJor — Phase Execution Log
 
+## PR #61 Canonical Smart Hub + UCP Release Integration — 2026-11-16
+
+- Branch `feature/pr60-canonical-release-hardening`, draft PR #61; qualified source/test SHA `973a8fe403ab7c85b97fb536d7dcfb450d43d3b4`.
+- Implemented PR53 numeric counteroffers, recurring cycle inputs, delivery binding and email-lease journal (090/091/094/097); preserved PR60 reconciled notification/Flash migrations 095/096 and canonical supplier dashboard.
+- Integrated transactional notification event policies/registry, recipient ownership validation, premium supplier/Smart Procurement typography and role-scoped APIs.
+- Exact-head CI: **8/8 SUCCESS** (E3 disposable MySQL, UCP, P0 financial, buyer frontend/auth, admin, OTP, subscription, delivery quantity).
+- Evidence: `backend/docs/MILJOR_PR61_CANONICAL_RELEASE_INTEGRATION_2026_11_16.md`.
+- Missing mandatory gates: real Safepay-origin Sandbox provider transaction/refund/renewal, complete multi-origin clustered delivery browser proof, unresolved PR53/54 domain-notification hooks, historical secret rotation, staging restore/email transport.
+- Phase result: **PARTIAL / RELEASE BLOCKED**. CAN START NEXT PHASE: NO. Protected DB and main unchanged.
+
+
 ## PR #60 Supplier Reconciliation — 2026-11-16
 
 - Branch: `feature/pr58-release-integration-reconciliation`; draft PR #60.
