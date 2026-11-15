@@ -75,6 +75,10 @@ export const RfqPage = () => {
   const [improvementTargets,setImprovementTargets]=useState({});
   const [buyerNegotiations,setBuyerNegotiations]=useState([]);
   const [supplierNegotiations,setSupplierNegotiations]=useState([]);
+  const [counterofferDrafts,setCounterofferDrafts]=useState({});
+  const [buyerCounteroffers,setBuyerCounteroffers]=useState([]);
+  const [supplierCounteroffers,setSupplierCounteroffers]=useState([]);
+  const [supplierCounterDrafts,setSupplierCounterDrafts]=useState({});
 
 
 
@@ -362,20 +366,66 @@ export const RfqPage = () => {
     setQuoteBusy(true);
     setShoppingError('');
     try{
-      const [compared,negotiations,currentQuotes]=await Promise.all([
+      const [compared,negotiations,currentQuotes,productOffers]=await Promise.all([
         procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
         procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`)
+        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/counteroffers`)
       ]);
       setCompareRequestId(requestId);
       setQuoteComparison(compared);
       setBuyerNegotiations(negotiations.negotiations||[]);
+      setBuyerCounteroffers(productOffers.counteroffers||[]);
       setBuyerQuotes(currentQuotes.quotes||[]);
       setReviewedAwardLines({});
       setAwardPreview(null);
     }catch(e){setShoppingError(e.message);}
     finally{setQuoteBusy(false);}
   };
+
+  const submitProductCounteroffers=async quote=>{
+    const fields=counterofferDrafts[quote.id]||{};
+    const lines=(quote.quote_snapshot?.lines||[])
+      .filter(line=>String(fields[line.request_item_id]||'').trim())
+      .map(line=>({request_item_id:Number(line.request_item_id),
+        proposed_unit_price:String(fields[line.request_item_id]).trim()}));
+    if(!lines.length){setShoppingError('Enter a numeric offer on at least one selected product.');return;}
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/counteroffers`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({version_number:Number(quote.current_version),lines})
+      });
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/counteroffers`);
+      setBuyerCounteroffers(data.counteroffers||[]);
+      setCounterofferDrafts(old=>({...old,[quote.id]:{}}));
+      toast.success('Product counteroffer submitted. No payment or order created.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  const refreshSupplierCounteroffers=async()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    try{
+      const data=await procurementApi('/api/v1/procurement/supplier/counteroffers');
+      setSupplierCounteroffers(data.counteroffers||[]);
+    }catch(error){toast.error(error.message);}
+  };
+  const respondProductCounteroffer=async(offer,decision)=>{
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const proposed=String(supplierCounterDrafts[offer.id]||'').trim();
+      await procurementApi(`/api/v1/procurement/supplier/counteroffers/${offer.id}/respond`,{
+        method:'POST',body:JSON.stringify(decision==='COUNTER_AGAIN'
+          ?{decision,proposed_unit_price:proposed}:{decision})
+      });
+      await refreshSupplierCounteroffers();
+      toast.success('Decision saved. Publish a revised supplier quotation before buyer checkout.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  useEffect(()=>{
+    if(token&&user?.role==='SUPPLIER')refreshSupplierCounteroffers();
+  },[token,user?.role]);
 
   const requestBetterSmartOffer = async (quoteId,versionNumber) => {
     if(!compareRequestId)return;
@@ -1224,46 +1274,53 @@ export const RfqPage = () => {
                     </p>
                   </section>
                 )}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold">Ask a supplier for a better offer</p>
+                <div className="space-y-3" aria-label="Product-wise numeric counteroffers">
+                  <p className="text-sm font-semibold">Product-wise Counteroffers (No Chat)</p>
                   {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
-                    <div key={quote.id} className="border-t border-[var(--border-subtle)] pt-2 space-y-2">
+                    <div key={quote.id} className="border border-[var(--border-subtle)] rounded-xl p-3 space-y-3">
                       <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
-                      <div className="grid sm:grid-cols-2 gap-2">
-                        <input value={improvementNotes[quote.id]||''}
-                          onChange={e=>setImprovementNotes(old=>({...old,[quote.id]:e.target.value}))}
-                          maxLength={1000} placeholder="e.g. Can you improve the delivery fee?"
-                          aria-label={`Requested improvement for quote ${quote.id}`}
-                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
-                        <input value={improvementTargets[quote.id]||''}
-                          onChange={e=>setImprovementTargets(old=>({...old,[quote.id]:e.target.value}))}
-                          placeholder="Optional target total (Rs.)" inputMode="decimal"
-                          aria-label={`Optional target for quote ${quote.id}`}
-                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
-                      </div>
-                      <button type="button" disabled={quoteBusy ||
-                        buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
-                          Number(n.requested_version)===Number(quote.current_version))}
-                        onClick={()=>requestBetterSmartOffer(quote.id,quote.current_version)}
-                        className="text-xs underline disabled:opacity-40">
-                        {buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
-                          Number(n.requested_version)===Number(quote.current_version))
-                          ? 'Improvement already requested for this version' : 'Request Better Offer'}
+                      {(quote.quote_snapshot?.lines||[]).map(line=>{
+                        const already=buyerCounteroffers.some(o=>Number(o.quote_id)===Number(quote.id)&&
+                          Number(o.quote_version)===Number(quote.current_version)&&Number(o.request_item_id)===Number(line.request_item_id));
+                        return (
+                          <label key={line.request_item_id} className="grid sm:grid-cols-2 gap-2 items-center text-xs">
+                            <span>{line.snapshot?.product_title||'Selected product'} · Supplier Rs. {line.unit_price} per unit
+                              {already&&<span className="ml-2 text-[var(--brand-accent)]">Counteroffer recorded</span>}
+                            </span>
+                            <input type="number" step="0.01" min="0.01" inputMode="decimal"
+                              disabled={quoteBusy||already} placeholder="Your proposed unit price (PKR)"
+                              aria-label={`Counteroffer price for product ${line.request_item_id}`}
+                              value={counterofferDrafts[quote.id]?.[line.request_item_id]||''}
+                              onChange={event=>setCounterofferDrafts(old=>({
+                                ...old,[quote.id]:{...(old[quote.id]||{}),[line.request_item_id]:event.target.value}
+                              }))}
+                              className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                          </label>
+                        );
+                      })}
+                      <button type="button" disabled={quoteBusy}
+                        onClick={()=>submitProductCounteroffers(quote)}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold bg-[var(--brand-accent)] text-stone-900 disabled:opacity-40">
+                        Submit Selected Product Counteroffers
                       </button>
                     </div>
                   ))}
+                  {buyerCounteroffers.length>0&&(
+                    <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
+                      <p className="text-xs font-semibold">Product Counteroffer History</p>
+                      {buyerCounteroffers.map(offer=>(
+                        <p key={offer.id} className="text-xs text-[var(--text-muted)]">
+                          Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                          Rs. {offer.quoted_unit_price} → Rs. {offer.buyer_proposed_unit_price} · {offer.decision}
+                          {offer.supplier_proposed_unit_price&&` · Supplier Rs. ${offer.supplier_proposed_unit_price}`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--text-muted)]">
+                    All offers are nonbinding. Supplier must publish a revised quotation and buyer must explicitly approve it.
+                  </p>
                 </div>
-                {buyerNegotiations.length>0 && (
-                  <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
-                    <p className="text-xs font-semibold">Negotiation history</p>
-                    {buyerNegotiations.map(n=>(
-                      <p key={n.id} className="text-xs text-[var(--text-muted)]">
-                        Quote #{n.quote_id} · v{n.requested_version} · {n.status} · {n.buyer_message}
-                        {n.responded_version ? ` · Supplier revised to v${n.responded_version}`:''}
-                      </p>
-                    ))}
-                  </div>
-                )}
               </section>
             )}
             {selectedQuotesRequest && (
@@ -1420,22 +1477,36 @@ export const RfqPage = () => {
               <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
-            {supplierNegotiations.length>0 && (
-              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
-                <p className="text-sm font-semibold">Requests for Better Offers</p>
-                {supplierNegotiations.map(n=>(
-                  <div key={n.id} className="border-t border-[var(--border-subtle)] pt-2">
-                    <p className="text-xs font-semibold">Quote #{n.quote_id} · Request #{n.request_id} · {n.status}</p>
-                    <p className="text-xs">{n.buyer_message}</p>
-                    {n.buyer_target_total && <p className="text-xs">Buyer suggested total: Rs. {n.buyer_target_total}</p>}
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {n.status==='OPEN'?'To respond, submit a revised quote using the existing invitation quotation form.':
-                        `Responded with quote version ${n.responded_version||'pending'}.`}
-                    </p>
-                  </div>
-                ))}
+            <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Product Counteroffers</p>
+                <button type="button" className="text-xs underline" onClick={refreshSupplierCounteroffers}>Refresh</button>
               </div>
-            )}
+              {supplierCounteroffers.length===0&&<p className="text-xs text-[var(--text-muted)]">No product counteroffers yet.</p>}
+              {supplierCounteroffers.map(offer=>(
+                <div key={offer.id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                  <p className="text-xs">Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                    Your price Rs. {offer.quoted_unit_price} · Buyer offers Rs. {offer.buyer_proposed_unit_price}</p>
+                  <p className="text-xs font-semibold">{offer.decision}</p>
+                  {offer.decision==='OPEN'&&(
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'ACCEPT')} className="text-xs underline">Accept</button>
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'REJECT')} className="text-xs underline">Reject</button>
+                      <input type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="Your new unit price"
+                        aria-label={`Supplier counter price for product ${offer.request_item_id}`}
+                        value={supplierCounterDrafts[offer.id]||''}
+                        onChange={e=>setSupplierCounterDrafts(old=>({...old,[offer.id]:e.target.value}))}
+                        className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      <button type="button" disabled={quoteBusy||!supplierCounterDrafts[offer.id]}
+                        onClick={()=>respondProductCounteroffer(offer,'COUNTER_AGAIN')} className="text-xs underline">Counter Again</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-[var(--text-muted)]">
+                Accept/Counter Again records a nonbinding decision. Send a revised quotation for buyer approval.
+              </p>
+            </div>
             {mySmartQuotes.length>0 && (
               <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
                 <p className="text-sm font-semibold">My submitted quotations</p>
