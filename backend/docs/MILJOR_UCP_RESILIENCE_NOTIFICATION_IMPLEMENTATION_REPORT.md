@@ -2,6 +2,7 @@
 
 Date: 2026-11-15 (Asia/Karachi). PR: #54. Branch: `plan/ucp-resilience-notification-coverage`.
 Implementation commit: `188c989f09f974bc24cfa2a491508c063d3c5677`.
+CI-qualified source/test commit: `62fd793a1d46cd2baf789ea35165b9976aec55a7`.
 Starting approved branch SHA: `fb9cbc037bc40cbf7218e3a69617098ba278e8d5`.
 
 **RESULT: PARTIAL. This implementation increment passed its affected gate; the complete master-plan release remains BLOCKED.**
@@ -73,7 +74,15 @@ GitHub Actions independently passed the production frontend build, real Chromium
 
 Two CI failures were investigated from actual job logs:
 - Demo delivery's in-memory VM adapter rejected the newly added notification dependency. Its allowlist now records the notification boundary, checks the same connection and pre-commit ordering, and includes a notification-storage failure rollback test. Targeted local results: fulfillment 5/5, dispute/refund 11/11, B6 fulfillment/invoice source 9/9, B6 paid fulfillment 4/4, invoice exactness 3/3; all exit 0. Production notification behavior was not disabled to satisfy the adapter.
-- Canonical MySQL's clean historical B6 fixture saw six rice variants instead of five because this increment had inserted an extra Flash acceptance invocation before the historical suite. The existing later Flash acceptance already runs the strengthened 50-buyer test. The duplicate early invocation was removed, preserving the strict five-variant assertion and the existing later Flash gate. No business data or migration was rewritten to force that test through. CI re-run is required after this workflow-only ordering correction.
+- Canonical MySQL's clean historical B6 fixture saw six rice variants instead of five because this increment had inserted an extra Flash acceptance invocation before the historical suite. The existing later Flash acceptance already runs the strengthened 50-buyer test. The duplicate early invocation was removed, preserving the strict five-variant assertion and the existing later Flash gate. No business data or migration was rewritten to force that test through. The corrected run at `62fd793` passed.
+
+### Final observed GitHub Actions results at `62fd793`
+
+All six workflows completed successfully: [canonical UCP](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43725438891), [P0 payment/fulfillment/settlement](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43725438825), [demo delivery](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43725439046), [buyer auth/frontend](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43725438818), [admin approval](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43725438838), [OTP quality](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43725438952).
+
+The canonical workflow's production build, disposable MySQL and real Chromium jobs all passed. Its actual SQL/API checks include B4/B5/B6 regression, migration second-run idempotency, shared-SKU concurrency, paid supplier delivery to 100/80/20 buyer dispute/refund hold/invoice, B6 paid fulfillment/invoice, and admin denial/audit. This upgrades those named checks from pending to observed PASS, while provider settlement and the remaining master-plan features remain unverified/incomplete. Machine-readable snapshot: [`evidence/ucp-ci-2026-11-15.json`](evidence/ucp-ci-2026-11-15.json).
+
+The final evidence-only commit records these results without changing application code, tests or workflows. Its CI-skip marker avoids another full build/regression solely to record already-observed evidence; the tested source/test commit above is the verification identity.
 
 | Master-plan area | Current status / remaining work |
 |---|---|
@@ -82,9 +91,9 @@ Two CI failures were investigated from actual job logs:
 | 2 Timers/recovery | PARTIAL: Flash lease/cursor/expiry hardened; Regular automated closure remains contained; all timer thresholds and crash/restart journeys are not implemented/proven. |
 | 3 Notifications | PARTIAL: connected paths listed above; remaining catalog/identity/admin actions, full recipient matrix, normal-email preferences, localization, quiet hours/digests, retention/rate controls, missing-address escalation and admin delivery-failure alerts remain unfinished. Terminal email failures are persisted, not a complete support/DLQ console. |
 | 4 Finance | PARTIAL: synthetic HTTP/SQL conservation/idempotency passed. Actual independently verified Safepay sandbox checkout/reconciliation/refund and provider fee evidence remain NOT_TESTED. External payouts remain DISABLED. |
-| 5 Delivery | PARTIAL: Standard/Pickup/Express API and snapshots passed; geographic cluster cutoff/manifests/re-routing and full partial delivery settlement/browser acceptance remain incomplete. |
+| 5 Delivery | PARTIAL: Standard/Pickup/Express API/snapshots and CI SQL/API 100/80/20 dispute/refund-hold/invoice passed; geographic cluster cutoff/manifests/re-routing and full partial delivery provider-settlement/browser acceptance remain incomplete. |
 | 6 Supplier failure/admin | NOT_COMPLETE: automatic failure SLA, buyer-consented replacement, support/escalation and authorized recovery matrix remain unfinished. |
-| 7 Frontend/release | NOT_TESTED in this increment: no UI changes/build/browser journeys or full release certification. Inbox/settings/payment-return full master-plan acceptance remains pending. |
+| 7 Frontend/release | PARTIAL: no UI changes; production build and named real Chromium buyer/supplier auth/retry/offline journeys passed in CI at `62fd793`. Inbox/settings/payment-return full master-plan acceptance remains pending. |
 
 Do not deploy this increment into the shared schema until migration history and remaining release requirements are reconciled. Worker rollout must follow migrations and accepted email transport configuration. Rollback should disable the new worker and revert application changes while preserving inbox/outbox/history; do not narrow the event column after new event values exist or delete commercial evidence.
 
@@ -96,7 +105,7 @@ Services under `backend/src/services/`: `ucpTransactionalNotifications.js`, `ucp
 
 Tests under `backend/tests/`: `part5_flash_pool_gate.js`, `ucp_notification_catalog_gate.js`, `ucp_domain_notifications_gate.js`, `ucp_email_claim_gate.js`, `ucp_fee_connection_gate.js`, `ucp_final_affected_gate.js`, `ucp_flash_recovery_gate.js`, `ucp_notification_mysql_gate.js`, `ucp_payment_expiry_race_gate.js`, `ucp_recovery_review_gate.js`, `ucp_runtime_preflight.js`, `demo_fulfillment_discrepancy_service_gate.js`, `demo_dispute_refund_safety_gate.js`. The demo delivery workflow's case label was updated to five.
 
-Documentation: this report, `MILJOR_PHASE_LOG.md`, `evidence/ucp-resilience-2026-11-15.json`, `evidence/ucp-protected-database-2026-11-15.json`.
+Documentation: this report, `MILJOR_PHASE_LOG.md`, `evidence/ucp-resilience-2026-11-15.json`, `evidence/ucp-protected-database-2026-11-15.json`, `evidence/ucp-ci-2026-11-15.json`.
 
 Skills applied: `using-superpowers` (instruction selection), `using-git-worktrees` (isolated native checkout), `executing-plans` (existing approved plan), `test-driven-development` (failure reproduction), `systematic-debugging` (line endings, payment expiry, pool starvation), `verification-before-completion` (actual gates/checksums), `requesting-code-review` (one independent review), `receiving-code-review` (three verified corrections). Project consolidated testing and database safety rules took precedence over generic skill suggestions.
 
