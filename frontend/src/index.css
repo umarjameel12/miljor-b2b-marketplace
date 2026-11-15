@@ -921,3 +921,113 @@ h1, h2, h3, h4, h5, h6, .font-display {
   background: #c8b276;
   color: #182a22 !important;
 }
+
+
+
+/* MILJOR FINAL LANDING THEME POLISH 2026-11-16 */
+:root {
+  --landing-header-bg: rgba(225, 214, 193, .94);
+  --landing-nav-ink: #403729;
+  --landing-nav-hover: #805b25;
+  --landing-button-bg: linear-gradient(115deg, #f0dfb8 0%, #d7bd83 52%, #c5a66b 100%);
+  --landing-button-ink: #352817;
+  --landing-button-border: rgba(151, 113, 53, .48);
+  --landing-button-shadow: 0 5px 16px rgba(91, 66, 31, .13);
+  --landing-menu-hover-bg: linear-gradient(112deg, #f0dfb8, #d7bd83);
+  --landing-menu-hover-ink: #352817;
+  --theme-menu-bg: #fbf7ef;
+  --theme-menu-border: #cbb997;
+  --theme-menu-selected: #dfc895;
+  --theme-menu-hover: #eee2ca;
+  --theme-menu-ink: #403729;
+  --theme-menu-selected-ink: #352817;
+  --pool-detail-accent: #9b702d;
+}
+.dark {
+  --landing-header-bg: rgba(7, 42, 33, .92);
+  --landing-nav-ink: #f0e7d5;
+  --landing-nav-hover: #e8cf95;
+  --landing-button-bg: linear-gradient(112deg, #e2cc9c 0%, #c8b276 55%, #967748 100%);
+  --landing-button-ink: #211c14;
+  --landing-button-border: #c8b276;
+  --landing-button-shadow: 0 6px 22px rgba(0, 0, 0, .25);
+  --landing-menu-hover-bg: linear-gradient(112deg, #e2ce9e, #b99b60);
+  --landing-menu-hover-ink: #17291e;
+  --theme-menu-bg: #072a21;
+  --theme-menu-border: rgba(200, 178, 118, .35);
+  --theme-menu-selected: #c8b276;
+  --theme-menu-hover: #314e40;
+  --theme-menu-ink: #f0e7d5;
+  --theme-menu-selected-ink: #182a22;
+  --pool-detail-accent: #dfbf85;
+}
+.miljor-public-landing .landing-topbar {
+  background: var(--landing-header-bg) !important;
+  border-color: var(--landing-button-border) !important;
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+.miljor-public-landing .landing-gradient-cta {
+  background: var(--landing-button-bg) !important;
+  color: var(--landing-button-ink) !important;
+  border: 1px solid var(--landing-button-border) !important;
+  box-shadow: var(--landing-button-shadow);
+}
+.miljor-public-landing .landing-gradient-cta svg { color: inherit !important; }
+.miljor-public-landing .landing-gradient-cta:hover {
+  filter: brightness(1.045);
+  transform: translateY(-1px);
+}
+.miljor-public-landing #landing-account-options .landing-account-option,
+.miljor-public-landing #landing-account-options .landing-account-option:link,
+.miljor-public-landing #landing-account-options .landing-account-option:visited {
+  display: block;
+  width: 100%;
+  color: var(--text-primary) !important;
+  background: transparent;
+  border-radius: .5rem;
+  transition: background 150ms ease, color 150ms ease;
+}
+.miljor-public-landing #landing-account-options .landing-account-option:hover,
+.miljor-public-landing #landing-account-options .landing-account-option:focus,
+.miljor-public-landing #landing-account-options .landing-account-option:focus-visible,
+.miljor-public-landing #landing-account-options .landing-account-option:active {
+  background: var(--landing-menu-hover-bg) !important;
+  color: var(--landing-menu-hover-ink) !important;
+  font-weight: 600;
+}
+.miljor-public-landing .miljor-theme-trigger {
+  background: var(--theme-menu-bg) !important;
+  border-color: var(--theme-menu-border) !important;
+  color: var(--theme-menu-ink) !important;
+}
+.miljor-public-landing .miljor-theme-trigger svg { color: inherit !important; }
+.miljor-public-landing .miljor-theme-menu {
+  background: var(--theme-menu-bg) !important;
+  border-color: var(--theme-menu-border) !important;
+}
+.miljor-public-landing .miljor-theme-choice {
+  background: transparent !important;
+  color: var(--theme-menu-ink) !important;
+  border-color: transparent !important;
+}
+.miljor-public-landing .miljor-theme-choice:hover,
+.miljor-public-landing .miljor-theme-choice:focus,
+.miljor-public-landing .miljor-theme-choice:focus-visible {
+  background: var(--theme-menu-hover) !important;
+  color: var(--theme-menu-ink) !important;
+}
+.miljor-public-landing .miljor-theme-choice-selected,
+.miljor-public-landing .miljor-theme-choice-selected:hover,
+.miljor-public-landing .miljor-theme-choice-selected:focus,
+.miljor-public-landing .miljor-theme-choice-selected:focus-visible {
+  background: var(--theme-menu-selected) !important;
+  color: var(--theme-menu-selected-ink) !important;
+  border-color: var(--theme-menu-border) !important;
+  font-weight: 700;
+}
+.miljor-public-landing .miljor-theme-choice svg { color: inherit !important; }
+.auth-tabs-premium .auth-tab-inactive:is(:hover, :focus, :focus-visible) {
+  background: var(--landing-menu-hover-bg) !important;
+  color: var(--landing-menu-hover-ink) !important;
+}
