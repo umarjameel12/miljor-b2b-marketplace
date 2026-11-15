@@ -110,7 +110,7 @@ export const LoginPage = () => {
           className="auth-segment-active py-1.5 text-center rounded-lg transition-all cursor-default"
           style={{
             backgroundColor: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
+            color: 'var(--auth-nav-selected-text)',
             border: '1px solid var(--border-default)',
           }}
         >
