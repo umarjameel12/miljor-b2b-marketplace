@@ -258,7 +258,7 @@ export const RegisterPage = () => {
           Register as
         </label>
         <div
-          className="auth-tabs-premium grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+          className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
           style={{
             backgroundColor: 'var(--bg-input)',
             borderColor: 'var(--border-subtle)',
@@ -268,11 +268,11 @@ export const RegisterPage = () => {
             type="button"
             onClick={() => handleRoleChange('BUYER')}
             className={`py-1.5 text-center rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              role === 'BUYER' ? 'auth-segment-active auth-role-active font-semibold' : 'auth-tab-inactive'
+              role === 'BUYER' ? 'auth-segment-active font-semibold' : 'hover:text-[var(--text-primary)]'
             }`}
             style={{
               backgroundColor: role === 'BUYER' ? 'var(--bg-surface)' : 'transparent',
-              color: role === 'BUYER' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              color: role === 'BUYER' ? 'var(--brand-accent)' : 'var(--text-muted)',
               border: role === 'BUYER' ? '1px solid var(--border-default)' : '1px solid transparent',
             }}
           >
@@ -283,11 +283,11 @@ export const RegisterPage = () => {
             type="button"
             onClick={() => handleRoleChange('SUPPLIER')}
             className={`py-1.5 text-center rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              role === 'SUPPLIER' ? 'auth-segment-active auth-role-active font-semibold' : 'auth-tab-inactive'
+              role === 'SUPPLIER' ? 'auth-segment-active font-semibold' : 'hover:text-[var(--text-primary)]'
             }`}
             style={{
               backgroundColor: role === 'SUPPLIER' ? 'var(--bg-surface)' : 'transparent',
-              color: role === 'SUPPLIER' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              color: role === 'SUPPLIER' ? 'var(--brand-accent)' : 'var(--text-muted)',
               border: role === 'SUPPLIER' ? '1px solid var(--border-default)' : '1px solid transparent',
             }}
           >
