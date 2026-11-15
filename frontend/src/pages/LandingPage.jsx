@@ -37,12 +37,12 @@ const COMMODITIES = [
 
 
 const PREVIEW_POOLS = [
-  { title: 'Super Kernel Basmati Rice', category: 'Rice & grains', target: '300 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=960&q=82', icon: Layers },
-  { title: 'Fine Wheat Flour', category: 'Flour & bakery', target: '500 kg', pack: '20 kg bags', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag },
-  { title: 'Refined Cooking Oil', category: 'Commercial essentials', target: '160 L', pack: '16 L tins', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82', icon: Store },
-  { title: 'Daal Chana', category: 'Pulses', target: '250 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82', icon: Layers },
-  { title: 'Refined White Sugar', category: 'Sweeteners', target: '500 kg', pack: '50 kg bags', image: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag },
-  { title: 'Super White Maida', category: 'Bakery staples', target: '840 kg', pack: '84 kg bags', image: 'https://images.unsplash.com/photo-1601593768795-9ac27c0c9d71?auto=format&fit=crop&w=960&q=82', icon: Store },
+  { title: 'Super Kernel Basmati Rice', category: 'Rice & grains', target: '300 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=960&q=82', icon: Layers, spec: 'Export Grade A · Old Crop Sella' },
+  { title: 'Fine Wheat Flour', category: 'Flour & bakery', target: '500 kg', pack: '20 kg bags', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag, spec: 'Fine wheat flour · commercial milling' },
+  { title: 'Refined Cooking Oil', category: 'Commercial essentials', target: '160 L', pack: '16 L tins', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82', icon: Store, spec: 'Refined vegetable oil · commercial grade' },
+  { title: 'Daal Chana', category: 'Pulses', target: '250 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82', icon: Layers, spec: 'Special polish · bold grain' },
+  { title: 'Refined White Sugar', category: 'Sweeteners', target: '500 kg', pack: '50 kg bags', image: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag, spec: 'Mill-packed · refined white' },
+  { title: 'Super White Maida', category: 'Bakery staples', target: '840 kg', pack: '84 kg bags', image: 'https://images.unsplash.com/photo-1601593768795-9ac27c0c9d71?auto=format&fit=crop&w=960&q=82', icon: Store, spec: 'Bakery grade · fine-milled' },
 ];
 
 function CommoditySlide({ item, active }) {
@@ -275,6 +275,7 @@ export const LandingPage = () => {
                         <div className="flex flex-1 flex-col p-5 sm:p-6">
                           <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.16em]">{pool.category}</p>
                           <h4 className="landing-section-title mt-2 text-lg font-semibold">{pool.title}</h4>
+                          <p className="mt-2 rounded-lg px-3 py-2 text-xs leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Sample specification: </span>{pool.spec}</p>
                           <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
                             <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Sample target</p><p className="mt-1 text-sm font-semibold">{pool.target}</p></div>
                             <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Pack size</p><p className="mt-1 text-sm font-semibold">{pool.pack}</p></div>
