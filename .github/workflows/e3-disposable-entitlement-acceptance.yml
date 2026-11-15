@@ -63,6 +63,20 @@ jobs:
       - name: Run E3 entitlement and supplier SKU acceptance against disposable MySQL
         timeout-minutes: 10
         run: cd backend && node tests/package_e3_entitlements_and_supplier_portal_gate.js
+      - name: Smart Hub numeric counteroffer and delivery consent policies
+        run: |
+          node backend/tests/smart_hub_counteroffer_policy_gate.js
+          node backend/tests/procurement_delivery_binding_policy_gate.js
+          node backend/tests/recurring_cycle_inputs_policy_gate.js
+          node backend/tests/notification_transaction_gate.js
+          node backend/tests/notification_projection_gate.js
+          node backend/tests/email_outbox_queue_gate.js
+      - name: Smart Hub real MySQL counteroffers and delivery binding
+        timeout-minutes: 8
+        run: |
+          cd backend
+          node tests/smart_hub_counteroffer_mysql_gate.js
+          node tests/procurement_delivery_binding_mysql_gate.js
       - name: Real MySQL subscription checkout and synthetic provider tracker gate
         timeout-minutes: 5
         run: cd backend && node tests/supplier_subscription_checkout_mysql_gate.js
