@@ -59,9 +59,9 @@ export function AuthHeroPanel({
         benefitIconBg: 'rgba(169, 133, 67, 0.12)',
         benefitBorder: 'rgba(169, 133, 67, 0.18)',
         divider: 'rgba(169, 133, 67, 0.20)',
-        imageOpacity: 0.25,
+        imageOpacity: 0.36,
         imageBlend: 'multiply',
-        imageOverlay: 'linear-gradient(180deg, rgba(246,240,230,0.82) 0%, rgba(234,221,199,0.92) 100%)',
+        imageOverlay: 'linear-gradient(180deg, rgba(246,240,230,0.69) 0%, rgba(234,221,199,0.81) 100%)',
       };
 
   // Minimal, role-aware copy; original illustration and theme colors stay unchanged.
@@ -95,6 +95,7 @@ export function AuthHeroPanel({
       style={{
         backgroundColor: colors.bg,
         borderRight: colors.borderRight,
+        boxShadow: isDark ? 'inset 0 0 0 1px rgba(200, 178, 118, 0.14)' : 'inset 0 0 0 1px rgba(150, 116, 52, 0.20)',
       }}
     >
       {/* Background Hero Layer */}
@@ -120,7 +121,6 @@ export function AuthHeroPanel({
       )}
 
       <div className={`relative z-10 flex flex-1 flex-col gap-3 ${isCompactTopHero ? "justify-start pt-2 sm:pt-3" : "justify-center"}`}>
-        {isCompactTopHero && <div className="w-11 h-0.5 rounded-full mb-1" style={{ backgroundColor: colors.accent }} aria-hidden="true" />}
         <h2 className="auth-heading text-2xl sm:text-[27px] leading-tight" style={{ color: colors.heading }}>
           {heading}
         </h2>
