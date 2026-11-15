@@ -81,6 +81,7 @@ async function runE3Gate() {
   const testSupplierEmail = `e3_supplier_${ts}@miljor.com`;
   let supplierId;
   let supplierToken;
+  let testBuyerId;
   let adminId;
   let adminToken;
 
@@ -107,6 +108,14 @@ async function runE3Gate() {
     );
     adminId = aRes.insertId;
     adminToken = generateToken(adminId, 'ADMIN', 'VERIFIED');
+
+    // Dedicated genuine BUYER identity for tenant/role-isolation acceptance.
+    const [buyerRes] = await db.query(
+      `INSERT INTO users (full_name, email, phone, password_hash, role, verification_status, buyer_trust_status)
+       VALUES (?, ?, ?, 'testhash', 'BUYER', 'VERIFIED', 'CONTACT_VERIFIED')`,
+      [`E3 Isolation Buyer ${ts}`, `e3_buyer_${ts}@miljor.com`, `+92302${String(ts).slice(-7)}`]
+    );
+    testBuyerId = buyerRes.insertId;
 
     // Create supplier profile with STARTER plan (4-family entitlement; legacy listing column retained).
     await db.query(
@@ -140,7 +149,7 @@ async function runE3Gate() {
       assert.ok(metrics.body.data?.kpis, 'Live KPIs missing');
       assert.strictEqual(Number(metrics.body.data.kpis.active_unified_pools), 0);
       const forbidden = await api('/api/v1/supplier/dashboard-kpis', {
-        headers: { Authorization: `Bearer ${generateToken(adminId, 'BUYER')}` }
+        headers: { Authorization: `Bearer ${generateToken(testBuyerId, 'BUYER')}` }
       });
       assert.strictEqual(forbidden.status, 403, 'Buyer must not access supplier KPI API');
       pass('Supplier dashboard: live MySQL aggregation and buyer role isolation');
@@ -684,6 +693,9 @@ async function runE3Gate() {
       await db.query(`DELETE FROM supplier_subscriptions WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_profiles WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM users WHERE id = ?`, [supplierId]);
+    }
+    if (testBuyerId) {
+      await db.query(`DELETE FROM users WHERE id = ?`, [testBuyerId]);
     }
     if (adminId) {
       await db.query(`DELETE FROM users WHERE id = ?`, [adminId]);
