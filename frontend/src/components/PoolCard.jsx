@@ -214,9 +214,9 @@ export const PoolCard = ({ pool, onSelect }) => {
           {(cutoffFormatted || promisedDeliveryFormatted) && (
             <div className="mt-2 p-2 rounded-xl border text-[10px] space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
               {cutoffFormatted && (
-                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400">
+                <div className="flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
                   <span className="inline-flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-600" />
+                    <Clock className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
                     <span>Closes (PKT):</span>
                   </span>
                   <div className="flex flex-col items-end gap-0.5">
@@ -227,22 +227,22 @@ export const PoolCard = ({ pool, onSelect }) => {
                       label="Closes in"
                       onExpire={() => setDeadlineExpired(true)}
                     />
-                    <strong className="font-mono text-[10px] text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                    <strong className="font-mono text-[10px]" style={{ color: 'var(--text-primary)' }}>{cutoffFormatted}</strong>
                   </div>
                 </div>
               )}
               {promisedDeliveryFormatted && (
                 <div className="flex items-center justify-between gap-3" style={{ color: 'var(--text-secondary)' }}>
                   <span className="inline-flex items-center gap-1.5 font-medium">
-                    <Truck className="w-3 h-3 shrink-0" style={{ color: 'var(--landing-accent-text, var(--brand-accent))' }} aria-hidden="true" />
+                    <Truck className="w-3 h-3 shrink-0" style={{ color: 'var(--pool-detail-accent)' }} aria-hidden="true" />
                     <span>Promised Delivery:</span>
                   </span>
                   <strong className="font-sans font-semibold tabular-nums text-right" style={{ color: 'var(--text-primary)' }}>{promisedDeliveryFormatted}</strong>
                 </div>
               )}
-              <div className="flex items-center justify-between text-[9px] text-stone-400 pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center justify-between text-[9px] pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
                 <span className="inline-flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5" style={{ color: 'var(--landing-accent-text, var(--brand-accent))' }} />
+                  <Lock className="w-2.5 h-2.5" style={{ color: 'var(--pool-detail-accent)' }} />
                   <span>Immutable Published Terms</span>
                 </span>
                 <span>1–3 Day SLA</span>
@@ -262,7 +262,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Clustered doorstep delivery available across Lahore clusters"
               >
-                <Truck className="w-3 h-3" style={{ color: 'var(--brand-accent)' }} />
+                <Truck className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
                 <span>Doorstep</span>
               </span>
             )}
@@ -276,7 +276,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Self-collection available from authorized supplier depots"
               >
-                <Store className="w-3 h-3 text-amber-600" />
+                <Store className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
                 <span>Pickup</span>
               </span>
             )}
@@ -290,7 +290,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Expedited dedicated dispatch available"
               >
-                <Zap className="w-3 h-3 text-indigo-500" />
+                <Zap className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
                 <span>Express</span>
               </span>
             )}
