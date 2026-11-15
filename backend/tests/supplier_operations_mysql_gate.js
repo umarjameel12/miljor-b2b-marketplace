@@ -33,6 +33,8 @@ async function main(){
     assert.ok(Object.values((await service.get({id:other,role:'SUPPLIER'})).counts).every(value=>value===0));
     await connection.query('UPDATE procurement_requests SET quote_deadline=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE) WHERE id=?',[request.insertId]);
     const expired=(await service.get(actor)).counts;assert.equal(expired.rfq_invitations,0);assert.equal(expired.collective_requests,0);
+    await connection.query("UPDATE procurement_requests SET status='CANCELLED',quote_deadline=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR) WHERE id=?",[request.insertId]);
+    const cancelled=(await service.get(actor)).counts;assert.equal(cancelled.rfq_invitations,0);assert.equal(cancelled.collective_requests,0);
     await connection.query('UPDATE users SET is_verified=0 WHERE id=?',[supplier]);
     await assert.rejects(()=>service.get(actor),error=>error.statusCode===403);
     console.log('PASS supplier operations real MySQL: query schema, live/expired invitations, paid-only states, tenant isolation, verification revocation; all fixtures rolled back');

@@ -14,7 +14,7 @@ class SupplierOperationsService{
         (SELECT COUNT(*) FROM procurement_supplier_invitations i JOIN procurement_requests r ON r.id=i.request_id
           WHERE i.supplier_id=? AND i.status='INVITED' AND r.status='OPEN' AND r.quote_deadline>UTC_TIMESTAMP()) AS rfq_invitations,
         (SELECT COUNT(*) FROM procurement_collective_supplier_invitations i JOIN procurement_collective_groups g ON g.id=i.group_id
-          JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.quote_deadline>UTC_TIMESTAMP()) AS collective_requests,
+          JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.status='OPEN' AND r.quote_deadline>UTC_TIMESTAMP()) AS collective_requests,
         (SELECT COUNT(*) FROM procurement_product_counteroffers c JOIN procurement_quotes q ON q.id=c.quote_id
           JOIN procurement_quote_versions v ON v.quote_id=q.id AND v.version_number=q.current_version
           JOIN procurement_requests r ON r.id=q.request_id WHERE c.supplier_id=? AND q.supplier_id=c.supplier_id
