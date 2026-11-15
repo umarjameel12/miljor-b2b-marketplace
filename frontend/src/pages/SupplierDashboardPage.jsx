@@ -370,7 +370,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className={`text-xl sm:text-2xl font-serif font-bold block ${kpis.orders_awaiting_acknowledgment > 0 ? 'text-amber-600' : 'text-[var(--text-primary)]'}`}>
+                <span className={`text-xl sm:text-2xl font-sans tabular-nums font-bold block ${kpis.orders_awaiting_acknowledgment > 0 ? 'text-amber-600' : 'text-[var(--text-primary)]'}`}>
                   {kpis.orders_awaiting_acknowledgment}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
@@ -462,7 +462,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <span className={`text-xl sm:text-2xl font-serif font-bold block ${kpis.pending_disputes > 0 ? 'text-red-600' : 'text-[var(--text-primary)]'}`}>
+                <span className={`text-xl sm:text-2xl font-sans tabular-nums font-bold block ${kpis.pending_disputes > 0 ? 'text-red-600' : 'text-[var(--text-primary)]'}`}>
                   {kpis.pending_disputes}
                 </span>
                 <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
