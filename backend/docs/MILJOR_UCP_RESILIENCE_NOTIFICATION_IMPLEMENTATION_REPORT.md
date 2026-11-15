@@ -67,6 +67,14 @@ Source synchronization is ancestry/reachability plus preservation of the existin
 
 ## Master-plan status and remaining acceptance
 
+### CI follow-up at evidence commit `80d0ca1`
+
+GitHub Actions independently passed the production frontend build, real Chromium buyer/supplier auth/retry/offline journey, P0 payment/fulfillment/settlement workflow, Buyer B6 Auth, Admin Supplier Approval, and Branded OTP Email workflow. These are the named CI journeys, not full master-plan browser/provider acceptance.
+
+Two CI failures were investigated from actual job logs:
+- Demo delivery's in-memory VM adapter rejected the newly added notification dependency. Its allowlist now records the notification boundary, checks the same connection and pre-commit ordering, and includes a notification-storage failure rollback test. Targeted local results: fulfillment 5/5, dispute/refund 11/11, B6 fulfillment/invoice source 9/9, B6 paid fulfillment 4/4, invoice exactness 3/3; all exit 0. Production notification behavior was not disabled to satisfy the adapter.
+- Canonical MySQL's clean historical B6 fixture saw six rice variants instead of five because this increment had inserted an extra Flash acceptance invocation before the historical suite. The existing later Flash acceptance already runs the strengthened 50-buyer test. The duplicate early invocation was removed, preserving the strict five-variant assertion and the existing later Flash gate. No business data or migration was rewritten to force that test through. CI re-run is required after this workflow-only ordering correction.
+
 | Master-plan area | Current status / remaining work |
 |---|---|
 | 0 Snapshot/gap audit | PARTIAL: source/history/backup/protected checks recorded; shared migration090 integration and restore/replay remain unresolved. |
@@ -86,7 +94,7 @@ Do not deploy this increment into the shared schema until migration history and 
 
 Services under `backend/src/services/`: `ucpTransactionalNotifications.js`, `ucpNotificationEventCatalog.js`, `ucpRecoveryService.js`, `reservationEventService.js`, `orderService.js`, `flashPoolService.js`, `safepayCheckoutService.js`, `fulfillmentService.js`, `disputeService.js`, `financialSettlementService.js`, `emailService.js`, `feeService.js`, `schedulerService.js`.
 
-Tests under `backend/tests/`: `part5_flash_pool_gate.js`, `ucp_notification_catalog_gate.js`, `ucp_domain_notifications_gate.js`, `ucp_email_claim_gate.js`, `ucp_fee_connection_gate.js`, `ucp_final_affected_gate.js`, `ucp_flash_recovery_gate.js`, `ucp_notification_mysql_gate.js`, `ucp_payment_expiry_race_gate.js`, `ucp_recovery_review_gate.js`, `ucp_runtime_preflight.js`.
+Tests under `backend/tests/`: `part5_flash_pool_gate.js`, `ucp_notification_catalog_gate.js`, `ucp_domain_notifications_gate.js`, `ucp_email_claim_gate.js`, `ucp_fee_connection_gate.js`, `ucp_final_affected_gate.js`, `ucp_flash_recovery_gate.js`, `ucp_notification_mysql_gate.js`, `ucp_payment_expiry_race_gate.js`, `ucp_recovery_review_gate.js`, `ucp_runtime_preflight.js`, `demo_fulfillment_discrepancy_service_gate.js`, `demo_dispute_refund_safety_gate.js`. The demo delivery workflow's case label was updated to five.
 
 Documentation: this report, `MILJOR_PHASE_LOG.md`, `evidence/ucp-resilience-2026-11-15.json`, `evidence/ucp-protected-database-2026-11-15.json`.
 

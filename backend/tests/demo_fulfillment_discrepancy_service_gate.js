@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/services/fulfillmentService.js'),'utf8');
 function instantiate(options={}){
-  const events=[],updates=[],businessEvents=[];
+  const events=[],updates=[],businessEvents=[],notifications=[];
   const order={
     id:70, order_code:'TEST-ORDER-70', buyer_id:11, supplier_id:12,
     payment_status:'PAID', fulfillment_status:'SUPPLIER_DELIVERED',
@@ -40,10 +40,16 @@ function instantiate(options={}){
       if(name==='./reservationEventService')return {generateEventId:()=> 'TEST-EVENT-70'};
       if(name==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
       if(name==='./deliveryQuantityPolicy')return policy;
+      if(name==='./ucpTransactionalNotifications')return {recordOrderOnConnection:async(conn,event)=>{
+        assert.equal(conn,connection,'notification must share the business transaction');
+        assert.equal(tx.commit,0,'notification must be persisted before commit');
+        if(options.notificationFailure)throw Error('NOTIFICATION_STORAGE_FAILED');
+        notifications.push(event);
+      }};
       throw Error('Unexpected dependency: '+name);
     }
   },{filename:'fulfillmentService.js'});
-  return {service:moduleRef.exports,events,updates,businessEvents,tx};
+  return {service:moduleRef.exports,events,updates,businessEvents,notifications,tx};
 }
 async function execute(){
   let passed=0;
@@ -72,6 +78,9 @@ async function execute(){
     const outbox=JSON.parse(x.businessEvents[0].find(v=>typeof v==='string'&&v.includes('"short_quantity"')));
     assert.equal(outbox.short_quantity,'20.00');
     assert.equal(x.updates.length,1);
+    assert.equal(x.notifications.length,1);
+    assert.equal(x.notifications[0].orderId,70);
+    assert.equal(x.notifications[0].type,'FULFILLMENT.PARTIAL_DELIVERY');
   });
   await check('over-delivery refuses mutation and rolls back',async()=>{
     const x=instantiate();
@@ -80,6 +89,7 @@ async function execute(){
     assert.equal(x.tx.rollback,1);
     assert.equal(x.events.length,0);
     assert.equal(x.updates.length,0);
+    assert.equal(x.notifications.length,0);
   });
   await check('B6 awarded order requires line-specific evidence',async()=>{
     const x=instantiate({awardLines:2});
@@ -95,6 +105,12 @@ async function execute(){
       e=>e.code==='FORBIDDEN');
     assert.equal(x.tx.rollback,1);
     assert.equal(x.events.length,0);
+  });
+  await check('notification storage failure prevents the business transaction commit',async()=>{
+    const x=instantiate({notificationFailure:true});
+    await assert.rejects(x.service.reportBuyerDiscrepancy(payload),/NOTIFICATION_STORAGE_FAILED/);
+    assert.equal(x.tx.commit,0);
+    assert.equal(x.tx.rollback,1);
   });
   console.log('FULFILLMENT DISCREPANCY SERVICE: '+passed+'/'+passed+' PASS (in-memory transactions only)');
 }

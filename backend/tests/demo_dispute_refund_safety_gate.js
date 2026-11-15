@@ -21,6 +21,10 @@ function service(name, sql) {
     if (id==='./feeService')return {};
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
+    if (id==='./ucpTransactionalNotifications')return {recordOrderOnConnection:async(conn,event)=>{
+      assert.equal(conn,sql,'notice must use the dispute/refund transaction');
+      sql.recordedNotifications.push(event);
+    }};
     return require(id);
   };
   const fn = new Function('require','module','exports','__filename','__dirname',source(name));
@@ -28,7 +32,7 @@ function service(name, sql) {
   return m.exports;
 }
 function fixture(cfg={}) {
-  const trace={writes:[],commits:0,rollbacks:0};
+  const trace={writes:[],commits:0,rollbacks:0,notifications:[]};
   const order={
     id:31,order_code:'DEMO-31',buyer_id:4,supplier_id:8,
     payment_status:'PAID',fulfillment_status:'SUPPLIER_DELIVERED',
@@ -37,6 +41,7 @@ function fixture(cfg={}) {
     delivery_fee:'0.00',buyer_platform_fee:'0.00',currency:'PKR'
   };
   const sql={
+    recordedNotifications:trace.notifications,
     async query(query,args) {
       if(query.startsWith('SET TRANSACTION'))return [[]];
       if(query.includes('SELECT * FROM orders WHERE id = ? FOR UPDATE'))return [[order]];

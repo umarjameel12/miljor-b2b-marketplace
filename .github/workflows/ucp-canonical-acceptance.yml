@@ -128,8 +128,6 @@ jobs:
         run: cd backend && node tests/p0_finance_historical_upgrade_gate.js verify
       - name: Verify UCP notifications and email outbox in actual MySQL transactions
         run: cd backend && npm run test:ucp:notifications:mysql
-      - name: Verify Flash delivery and 50 concurrent buyers without overselling
-        run: cd backend && node tests/part5_flash_pool_gate.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
         run: |
           cd backend
