@@ -19,6 +19,7 @@ const positiveId=value=>{
 function validateProductCounteroffers(input,quotedLines){
   if(!input||typeof input!=='object'||Array.isArray(input)||!Array.isArray(input.lines))
     throw error('INVALID_COUNTEROFFER','Selected product counteroffers are required');
+  if(Object.keys(input).some(field=>field!=='lines'))throw error('UNSUPPORTED_COUNTER_FIELD','Only selected product prices are allowed; chat and free-text messages are disabled');
   if(!Array.isArray(quotedLines)||quotedLines.length===0)throw error('EMPTY_QUOTATION','A current quotation is required');
   if(input.lines.length<1||input.lines.length>quotedLines.length)
     throw error('INVALID_COUNTEROFFER','Choose one or more quoted products');
@@ -26,6 +27,7 @@ function validateProductCounteroffers(input,quotedLines){
   const seen=new Set();
   return input.lines.map(line=>{
     if(!line||typeof line!=='object'||Array.isArray(line))throw error('INVALID_COUNTEROFFER','Invalid product counteroffer');
+    if(Object.keys(line).some(field=>!['request_item_id','proposed_unit_price'].includes(field)))throw error('UNSUPPORTED_COUNTER_FIELD','Counteroffers support product ID and numeric price only');
     const requestItemId=positiveId(line.request_item_id);
     if(seen.has(requestItemId))throw error('DUPLICATE_COUNTER_ITEM','Only one counteroffer per selected product is allowed');
     seen.add(requestItemId);
