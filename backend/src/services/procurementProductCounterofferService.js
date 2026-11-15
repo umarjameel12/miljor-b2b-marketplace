@@ -97,11 +97,22 @@ class ProcurementProductCounterofferService{
       if(selected.decision!=='OPEN')throw fail('COUNTEROFFER_ALREADY_DECIDED','Counteroffer already resolved');
       const decision=validateSupplierDecision(payload,selected);
       const [quotes]=await conn.query(
-        "SELECT current_version,status FROM procurement_quotes WHERE id=? AND supplier_id=? FOR UPDATE",
+        `SELECT q.current_version,q.status,r.status AS request_status,
+                (r.quote_deadline>UTC_TIMESTAMP()) AS request_open,
+                (v.valid_until>UTC_TIMESTAMP()) AS quote_valid
+         FROM procurement_quotes q
+         JOIN procurement_requests r ON r.id=q.request_id
+         JOIN procurement_quote_versions v ON v.quote_id=q.id
+           AND v.version_number=q.current_version
+         WHERE q.id=? AND q.supplier_id=? FOR UPDATE`,
         [selected.quote_id,supplier]);
       if(!quotes.length||quotes[0].status!=='ACTIVE'||
         Number(quotes[0].current_version)!==Number(selected.quote_version))
-        throw fail('QUOTE_STALE','Publish a revised quotation for the latest version');
+        throw fail('QUOTE_STALE','Refresh the latest active supplier quotation');
+      if(quotes[0].request_status!=='OPEN'||Number(quotes[0].request_open)!==1)
+        throw fail('REQUEST_CLOSED','The buyer procurement request has closed');
+      if(Number(quotes[0].quote_valid)!==1)
+        throw fail('QUOTE_EXPIRED','The supplier quotation is no longer valid');
       const [result]=await conn.query(
         `UPDATE procurement_product_counteroffers
          SET decision=?,supplier_proposed_unit_price=?,responded_at=UTC_TIMESTAMP()
