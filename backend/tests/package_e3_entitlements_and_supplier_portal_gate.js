@@ -155,6 +155,35 @@ async function runE3Gate() {
       pass('Supplier dashboard: live MySQL aggregation and buyer role isolation');
     } catch (e) { fail('Supplier dashboard KPI real MySQL gate', e); }
 
+    // Notification ownership regression: supplier may only mark its own receipt read.
+    try {
+      const [own] = await db.query(
+        "INSERT INTO platform_notifications (user_id,role,event_type,event_key,title,message) VALUES (?,'SUPPLIER','ORDER_CREATED',?,'Supplier test event','Supplier-owned receipt')",
+        [supplierId, `E3_OWN_${ts}`]
+      );
+      const [other] = await db.query(
+        "INSERT INTO platform_notifications (user_id,role,event_type,event_key,title,message) VALUES (?,'BUYER','ORDER_CREATED',?,'Buyer test event','Buyer-owned receipt')",
+        [testBuyerId, `E3_BUYER_${ts}`]
+      );
+      const denied = await api(`/api/v1/notifications/${other.insertId}/read`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(denied.status, 200);
+      assert.strictEqual(denied.body.data.updated, false);
+      const ownRead = await api(`/api/v1/notifications/${own.insertId}/read`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(ownRead.status, 200);
+      assert.strictEqual(ownRead.body.data.updated, true);
+      const [statuses] = await db.query(
+        "SELECT id,is_read FROM platform_notifications WHERE id IN (?,?)", [own.insertId, other.insertId]
+      );
+      const readById = Object.fromEntries(statuses.map(x=>[x.id,Number(x.is_read)]));
+      assert.strictEqual(readById[own.insertId],1);
+      assert.strictEqual(readById[other.insertId],0);
+      pass('Notification recipient isolation: supplier own receipt updates; buyer receipt remains unread');
+    } catch(e) { fail('Notification recipient isolation',e); }
+
     // Helper to create and publish a product and SKU in a family
     async function createAndPublishSkuInFamily(familyId, variety, packSize, packUnit, isUnbranded = false, brand = 'TestBrand') {
       const pRes = await api('/api/v1/catalog/supplier-products', {
@@ -689,6 +718,7 @@ async function runE3Gate() {
       await db.query(`DELETE FROM supplier_products WHERE id IN (${createdProductIds.join(',')})`);
     }
     if (supplierId) {
+      await db.query('DELETE FROM platform_notifications WHERE user_id IN (?,?)', [supplierId,testBuyerId || supplierId]);
       await db.query(`DELETE FROM supplier_listings WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_subscriptions WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_profiles WHERE supplier_id = ?`, [supplierId]);
