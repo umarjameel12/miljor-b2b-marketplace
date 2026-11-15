@@ -51,6 +51,21 @@ async function main(){
       'Premium UI must not advertise the obsolete dead-end checkout');
     pass('Supplier subscription loads premium plan UI and authoritative active entitlement');
 
+    // Verify the supplier operations pages via actual authenticated Chromium UI.
+    for(const [route,title] of [
+      ['/supplier/deliveries','Delivery Modes & Cluster Pricing'],
+      ['/supplier/settlements','Payments, Earnings & Settlements'],
+      ['/supplier/disputes','Disputes & Discrepancies'],
+      ['/supplier/analytics','Supplier Analytics & Business Reports'],
+      ['/notifications','Notifications & Alerts']
+    ]){
+      await s.page.goto(base+route,{waitUntil:'domcontentloaded'});
+      await s.page.getByRole('heading',{name:title,exact:true}).waitFor({timeout:15000});
+      assert.equal(await s.page.getByText(/supplier access required/i).count(),0,
+        'Verified supplier lost access on '+route);
+    }
+    pass('Supplier delivery, earnings, disputes, analytics and notification pages render in real Chromium');
+
     await s.page.goto(base+'/supplier/pools',{waitUntil:'domcontentloaded'});
     await s.page.getByRole('heading',{name:'Pool Management'}).waitFor({timeout:15000});
     await s.page.reload({waitUntil:'domcontentloaded'});
