@@ -107,7 +107,7 @@ export const LandingPage = () => {
     { title: 'Browse Pools', to: '#live-pools', icon: Layers },
     { title: 'For Suppliers', to: '#suppliers', icon: Store },
   ];
-  const navClass = 'inline-flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors hover:opacity-75';
+  const navClass = 'landing-top-link inline-flex items-center gap-2 text-xs sm:text-sm font-semibold transition-colors';
   const requestQuoteDestination = isAuthenticated ? '/rfqs' : '/login';
   const quoteState = isAuthenticated ? undefined : { from: { pathname: '/rfqs' } };
   const buttonGold = { backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' };
@@ -115,7 +115,7 @@ export const LandingPage = () => {
 
   return (
     <div id="top" className="miljor-public-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
-      <header className="sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+      <header className="landing-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-3 sm:px-8 lg:px-10">
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
           <nav className="hidden lg:flex items-center gap-7" aria-label="Public navigation">
@@ -238,29 +238,37 @@ export const LandingPage = () => {
             : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
         </section>
 
-        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--card-glass)' }}>
-          <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Built for the food trade</p>
-              <h2 className="landing-section-title mt-3 max-w-lg text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">More buying power. Less back-and-forth.</h2>
-              <p className="mt-5 max-w-lg text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>MilJor connects business procurement with supplier-led offers, group demand and clearer order coordination.</p>
-              <Link to="/register" className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Join MilJor <ArrowRight size={15} /></Link>
-            </div>
-            <div className="grid gap-3">
-              {[
-                { icon: Layers, title: 'Pooled procurement', text: 'Volume-based tiers within supplier-defined terms.' },
-                { icon: ShieldCheck, title: 'Clear commitments', text: 'Review order and payment details before confirming.' },
-                { icon: Truck, title: 'Delivery coordination', text: 'Follow delivery progress and report issues in one place.' },
-              ].map((item) => <div key={item.title} className="flex items-start gap-4 rounded-2xl border p-5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--card-glass)' }}><span className="rounded-xl border p-3" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}><item.icon size={19} /></span><div><h3 className="text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-6" style={{ color: 'var(--text-secondary)' }}>{item.text}</p></div></div>)}
+        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+            <div className="rounded-[1.75rem] border p-7 sm:p-10 lg:p-12" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--card-glass)', boxShadow: 'var(--shadow-card)' }}>
+              <div className="grid items-center gap-10 lg:grid-cols-[1fr_0.85fr] lg:gap-16">
+                <div>
+                  <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">For buyers and suppliers</p>
+                  <h2 className="landing-section-title mt-4 max-w-xl text-3xl leading-tight font-bold sm:text-[2.6rem]">Better sourcing. Simpler selling.</h2>
+                  <p className="mt-5 max-w-md text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>
+                    Bring business demand and supplier offers together, with clear pricing and coordinated fulfillment.
+                  </p>
+                  <Link to="/register" className="mt-7 inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Join MilJor</Link>
+                </div>
+                <div className="grid gap-3">
+                  {[
+                    { icon: Layers, title: 'Buy collectively', text: 'Join available pools and view quantity-based pricing.' },
+                    { icon: ShieldCheck, title: 'Purchase clearly', text: 'See terms before you confirm and pay.' },
+                    { icon: Truck, title: 'Stay informed', text: 'Follow delivery progress and confirm receipt.' },
+                  ].map((item) => <div key={item.title} className="flex items-center gap-4 rounded-2xl border p-4 sm:p-5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-card)' }}>
+                    <span className="shrink-0 rounded-xl border p-3" style={{ borderColor: 'var(--border-default)', color: 'var(--landing-accent-text)' }}><item.icon size={18} /></span>
+                    <div><h3 className="landing-section-title text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>{item.text}</p></div>
+                  </div>)}
+                </div>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
       <footer className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-xs sm:px-8 lg:px-10">
-          <span style={{ color: 'var(--text-secondary)' }}>© {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.</span>
-          <div className="flex flex-wrap gap-5"><Link to="/pools">Pools</Link><Link to={requestQuoteDestination} state={quoteState}>Request Quote</Link><Link to="/demand-requests">Demand Requests</Link><Link to="/login">Sign In</Link></div>
+        <div className="mx-auto max-w-7xl px-5 py-6 text-center text-xs sm:px-8" style={{ color: 'var(--text-secondary)' }}>
+          © {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.
         </div>
       </footer>
     </div>
