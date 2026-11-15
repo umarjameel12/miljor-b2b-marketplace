@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, Home, FileText, Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
@@ -26,23 +26,17 @@ const COMMODITIES = [
   {
     title: 'Wheat & flour',
     subtitle: 'Everyday supplies for busy kitchens',
-    image: 'https://images.unsplash.com/photo-1501436513145-30f24e19fcc4?auto=format&fit=crop&w=1100&q=80',
+    image: 'https://images.unsplash.com/photo-1624565019871-16a8d90ad749?auto=format&fit=crop&w=1200&q=82',
     alt: 'Golden wheat in a field',
     tag: '02 / Essentials',
   },
   {
-    title: 'Cooking essentials',
-    subtitle: 'Oils, pulses and core ingredients',
-    image: 'https://images.unsplash.com/photo-1601593768795-5c1fdb7dce9c?auto=format&fit=crop&w=1100&q=80',
-    alt: 'Agricultural food ingredients',
+    title: 'Cooking oil',
+    subtitle: 'Everyday kitchen essentials',
+    image: 'https://images.unsplash.com/photo-1552592074-ea7a91b851b3?auto=format&fit=crop&w=1200&q=82',
+    alt: 'Cooking oil dispenser bottle',
     tag: '03 / Essentials',
   },
-];
-
-const STEPS = [
-  { number: '01', title: 'Find what you need', text: 'Browse available supplier pools or request a tailored quote.' },
-  { number: '02', title: 'Buy with clarity', text: 'Review quantities, price tiers and delivery terms before confirming.' },
-  { number: '03', title: 'Track your order', text: 'Follow fulfillment, confirm receipt and resolve issues through MilJor.' },
 ];
 
 function CommoditySlide({ item, active }) {
@@ -72,7 +66,6 @@ export const LandingPage = () => {
   const { isDark } = useTheme();
   const { isAuthenticated, user } = useAuth();
   const [slide, setSlide] = useState(0);
-  const [stepIndex, setStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [featuredPools, setFeaturedPools] = useState([]);
@@ -83,12 +76,6 @@ export const LandingPage = () => {
     const timer = setInterval(() => setSlide((index) => (index + 1) % COMMODITIES.length), 5000);
     return () => clearInterval(timer);
   }, [paused]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-    const timer = setInterval(() => setStepIndex((index) => (index + 1) % STEPS.length), 5500);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -105,23 +92,24 @@ export const LandingPage = () => {
   const dashboardPath = user?.role === 'SUPPLIER' ? '/supplier/dashboard' : ['ADMIN', 'SUPER_ADMIN'].includes(user?.role) ? '/admin/dashboard' : '/pools';
 
   const navLinks = [
-    { title: 'Home', to: '#top' },
-    { title: 'Browse Pools', to: '#live-pools' },
-    { title: 'How it works', to: '#how-it-works' },
-    { title: 'For Suppliers', to: '#suppliers' },
+    { title: 'Home', to: '#top', icon: Home },
+    { title: 'Browse Pools', to: '#live-pools', icon: Layers },
+    { title: 'For Suppliers', to: '#suppliers', icon: Store },
   ];
-  const navClass = 'text-xs sm:text-sm font-medium transition-colors hover:text-[var(--brand-accent)]';
+  const navClass = 'inline-flex items-center gap-2 text-xs sm:text-sm font-medium transition-colors hover:opacity-75';
+  const requestQuoteDestination = isAuthenticated ? '/rfqs' : '/login';
+  const quoteState = isAuthenticated ? undefined : { from: { pathname: '/rfqs' } };
   const buttonGold = { backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' };
   const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
 
   return (
     <div id="top" className="min-h-screen font-sans" style={{ backgroundColor: 'var(--bg-page)', color: 'var(--text-primary)' }}>
-      <header className="sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: isDark ? 'rgba(7, 42, 33, 0.94)' : 'rgba(250, 247, 239, 0.95)', borderColor: 'var(--border-subtle)' }}>
+      <header className="sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-3 sm:px-8 lg:px-10">
-          <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center gap-2"><Logo variant="monogram" size="md" /><span className="hidden sm:inline text-sm font-semibold tracking-tight">MilJor</span></Link>
+          <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
           <nav className="hidden lg:flex items-center gap-7" aria-label="Public navigation">
-            {navLinks.map((link) => <a key={link.title} href={link.to} className={navClass}>{link.title}</a>)}
-            <Link to="/rfqs" className={navClass}>Request Quote</Link>
+            {navLinks.map((link) => <a key={link.title} href={link.to} className={navClass}><link.icon size={15} style={{ color: "var(--brand-accent)" }} />{link.title}</a>)}
+            <Link to={requestQuoteDestination} state={quoteState} className={navClass}><FileText size={15} style={{ color: "var(--brand-accent)" }} />Request Quote</Link>
           </nav>
           <div className="hidden sm:flex items-center gap-3">
             <ThemeSelector minimal />
@@ -129,8 +117,8 @@ export const LandingPage = () => {
               <Link to={dashboardPath} className="rounded-full px-5 py-2.5 text-xs font-semibold" style={buttonGold}>Open Marketplace</Link>
             ) : (
               <>
-                <Link to="/login" className="px-2 text-xs font-semibold hover:opacity-70">Sign In</Link>
-                <Link to="/register" className="rounded-full px-5 py-2.5 text-xs font-semibold" style={buttonGold}>Register</Link>
+                <Link to="/login" className="rounded-full border px-5 py-2.5 text-xs font-semibold transition hover:opacity-80" style={{ borderColor: "var(--brand-accent)", backgroundColor: "var(--brand-accent)", color: "var(--text-on-champagne)" }}>Sign In</Link>
+                <Link to="/register" className="rounded-full border px-5 py-2.5 text-xs font-semibold" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-surface)", color: "var(--text-primary)" }}>Register</Link>
               </>
             )}
           </div>
@@ -138,8 +126,8 @@ export const LandingPage = () => {
         </div>
         {mobileMenu && (
           <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
-            {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="rounded-lg px-3 py-2 text-sm">{link.title}</a>)}
-            <Link to="/rfqs" onClick={() => setMobileMenu(false)} className="rounded-lg px-3 py-2 text-sm">Request Quote</Link>
+            {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><link.icon size={16} style={{ color: "var(--brand-accent)" }} />{link.title}</a>)}
+            <Link to={requestQuoteDestination} state={quoteState} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><FileText size={16} style={{ color: "var(--brand-accent)" }} />Request Quote</Link>
             <Link to={isAuthenticated ? dashboardPath : '/login'} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>{isAuthenticated ? 'Open Marketplace' : 'Sign In'}</Link>
             {!isAuthenticated && <Link to="/register" className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Register</Link>}
           </nav>
@@ -158,7 +146,7 @@ export const LandingPage = () => {
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link to="/pools" className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Explore Pools <ArrowUpRight size={16} /></Link>
-              <Link to="/rfqs" className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition-colors hover:opacity-75" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>Request a Quote <ArrowRight size={16} /></Link>
+              <Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition-colors hover:opacity-75" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>Request a Quote <ArrowRight size={16} /></Link>
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
               <span className="flex items-center gap-2"><Layers size={15} style={{ color: 'var(--brand-accent)' }} /> Pooled buying</span>
@@ -184,31 +172,6 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        <section id="how-it-works" className="border-y py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }}>
-          <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-            <div className="mb-9 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Simple by design</p><h2 className="mt-2 font-sans text-2xl font-semibold tracking-tight sm:text-3xl">One place to procure.</h2></div>
-              <Link to="/register" className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-70">Get Started <ArrowRight size={15} /></Link>
-            </div>
-            <div className="relative overflow-hidden rounded-[1.6rem] border p-7 sm:p-11" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-page)' }}>
-              <div className="flex flex-wrap items-center justify-between gap-5">
-                <div className="max-w-2xl" aria-live="off">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--brand-accent)' }}>Step {STEPS[stepIndex].number} / 03</span>
-                  <h3 className="mt-5 font-sans text-2xl font-semibold tracking-tight sm:text-3xl">{STEPS[stepIndex].title}</h3>
-                  <p className="mt-3 max-w-xl text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>{STEPS[stepIndex].text}</p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" onClick={() => setStepIndex((stepIndex + STEPS.length - 1) % STEPS.length)} aria-label="Previous procurement step" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: 'var(--border-default)' }}><ChevronLeft size={17} /></button>
-                  <button type="button" onClick={() => setStepIndex((stepIndex + 1) % STEPS.length)} aria-label="Next procurement step" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: 'var(--border-default)' }}><ChevronRight size={17} /></button>
-                </div>
-              </div>
-              <div className="mt-10 flex gap-2" role="group" aria-label="Procurement steps">
-                {STEPS.map((item, index) => <button type="button" key={item.number} onClick={() => setStepIndex(index)} aria-label={'Show step ' + item.number} aria-current={stepIndex === index ? 'step' : undefined} className="h-1.5 flex-1 rounded-full transition-colors" style={{ backgroundColor: stepIndex === index ? 'var(--brand-accent)' : 'var(--border-default)' }} />)}
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -220,10 +183,10 @@ export const LandingPage = () => {
           </div>
           {loadingPools ? <div role="status" className="rounded-2xl border p-9 text-sm" style={panel}>Loading current pools…</div>
             : featuredPools.length ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}</div>
-            : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to="/rfqs" className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
+            : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
         </section>
 
-        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }}>
+        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-page)' }}>
           <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:px-10">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Built for the food trade</p>
@@ -245,7 +208,7 @@ export const LandingPage = () => {
       <footer className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-xs sm:px-8 lg:px-10">
           <span style={{ color: 'var(--text-secondary)' }}>© {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.</span>
-          <div className="flex flex-wrap gap-5"><Link to="/pools">Pools</Link><Link to="/rfqs">Request Quote</Link><Link to="/demand-requests">Demand Requests</Link><Link to="/login">Sign In</Link></div>
+          <div className="flex flex-wrap gap-5"><Link to="/pools">Pools</Link><Link to={requestQuoteDestination} state={quoteState}>Request Quote</Link><Link to="/demand-requests">Demand Requests</Link><Link to="/login">Sign In</Link></div>
         </div>
       </footer>
     </div>
