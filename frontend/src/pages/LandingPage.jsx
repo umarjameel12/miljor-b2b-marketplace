@@ -37,27 +37,37 @@ const COMMODITIES = [
 
 
 // Visual examples only; never treated as published supplier listings or orders.
+// Showcase data: these are fictional examples, NOT published supplier offers.
 const PREVIEW_POOLS = [
   {
-    id: 'example-flour', title: 'Fine Wheat Flour', variety: 'Fine Wheat Flour',
-    category_name: 'Flour & Bakery', quality_grade: 'Commercial Milling Grade',
-    pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'kg',
-    target_quantity: 500, image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82',
-    delivery_type: 'BOTH', pool_code: 'EXAMPLE-FLOUR', status: 'ACTIVE',
+    id: 'example-flour', product_name: 'Premium Fine Wheat Flour', variety: 'Fine Wheat Flour · Bakery & Restaurant Use',
+    category_name: 'Flour & Bakery', quality_grade: 'Commercial Fine-Milled',
+    pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'bag',
+    supplier_business_name: 'Punjab Flour Traders',
+    buyer_min_qty: 2, estimated_unit_price: 2650,
+    target_quantity: 120, committed_quantity: 36, fill_percentage: 30,
+    image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82',
+    delivery_type: 'BOTH', pool_code: 'DEMO-FLOUR-01', status: 'ACTIVE',
   },
   {
-    id: 'example-oil', title: 'Refined Cooking Oil', variety: 'Refined Vegetable Cooking Oil',
-    category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Grade',
-    pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'L',
-    target_quantity: 160, image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82',
-    delivery_type: 'BOTH', pool_code: 'EXAMPLE-OIL', status: 'ACTIVE',
+    id: 'example-oil', product_name: 'Refined Cooking Oil — Commercial 16L', variety: 'Refined Vegetable Cooking Oil',
+    category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Food-Service Grade',
+    pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'tin',
+    supplier_business_name: 'City Oils Wholesale',
+    buyer_min_qty: 1, estimated_unit_price: 7900,
+    target_quantity: 80, committed_quantity: 24, fill_percentage: 30,
+    image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82',
+    delivery_type: 'BOTH', pool_code: 'DEMO-OIL-01', status: 'ACTIVE',
   },
   {
-    id: 'example-daal', title: 'Daal Chana', variety: 'Chana Dal · Bold Grain',
-    category_name: 'Pulses & Lentils', quality_grade: 'Special Polish',
-    pack_size: '25kg Bag', pack_unit: 'kg', pool_unit: 'kg',
-    target_quantity: 250, image_url: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82',
-    delivery_type: 'BOTH', pool_code: 'EXAMPLE-DAAL', status: 'ACTIVE',
+    id: 'example-daal', product_name: 'Premium Daal Chana — Bold Grain', variety: 'Polished Chana Dal · Bold Grain',
+    category_name: 'Pulses & Lentils', quality_grade: 'Selected Commercial Quality',
+    pack_size: '25kg Bag', pack_unit: 'kg', pool_unit: 'bag',
+    supplier_business_name: 'Lahore Pulses Supply',
+    buyer_min_qty: 1, estimated_unit_price: 6100,
+    target_quantity: 150, committed_quantity: 45, fill_percentage: 30,
+    image_url: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82',
+    delivery_type: 'BOTH', pool_code: 'DEMO-DAAL-01', status: 'ACTIVE',
   },
 ];
 
@@ -346,8 +356,9 @@ export const LandingPage = () => {
                     ...item,
                     scheduled_close_at: exampleDeadline.toISOString(),
                     promised_delivery_at: new Date(exampleDeadline.getTime() + 3 * 86400000).toISOString(),
-                    fill_percentage: 0,
-                    committed_quantity: 0,
+                    // These figures are illustrative and do not reserve inventory.
+                    fill_percentage: item.fill_percentage,
+                    committed_quantity: item.committed_quantity,
                   }}
                 />
               </div>
