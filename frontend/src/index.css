@@ -1150,3 +1150,47 @@ h1, h2, h3, h4, h5, h6, .font-display {
   outline: 2px solid var(--pool-detail-accent);
   outline-offset: 3px;
 }
+
+/* MILJOR THEMED POOL CAROUSEL 2026-11-16 */
+:root {
+  --pool-rail-track: rgba(126, 95, 52, .10);
+  --pool-rail-thumb: #c4a265;
+  --pool-nav-bg: #f3e6d0;
+  --pool-nav-border: #c6ab77;
+  --pool-nav-ink: #72521d;
+  --pool-nav-hover: #e8d1a5;
+}
+.dark {
+  --pool-rail-track: rgba(219, 193, 135, .09);
+  --pool-rail-thumb: #c8b276;
+  --pool-nav-bg: #143c2f;
+  --pool-nav-border: rgba(210, 181, 119, .5);
+  --pool-nav-ink: #ecd5a4;
+  --pool-nav-hover: #24513e;
+}
+.miljor-public-landing .miljor-pool-rail {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pool-rail-thumb) var(--pool-rail-track);
+}
+.miljor-public-landing .miljor-pool-rail::-webkit-scrollbar { height: 8px; }
+.miljor-public-landing .miljor-pool-rail::-webkit-scrollbar-track {
+  background: var(--pool-rail-track);
+  border-radius: 999px;
+}
+.miljor-public-landing .miljor-pool-rail::-webkit-scrollbar-thumb {
+  background: var(--pool-rail-thumb);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.miljor-public-landing .miljor-pool-nav {
+  color: var(--pool-nav-ink) !important;
+  border-color: var(--pool-nav-border) !important;
+  background: var(--pool-nav-bg) !important;
+  box-shadow: 0 2px 8px rgba(30, 40, 32, .05);
+}
+.miljor-public-landing .miljor-pool-nav:hover,
+.miljor-public-landing .miljor-pool-nav:focus-visible {
+  background: var(--pool-nav-hover) !important;
+  color: var(--pool-nav-ink) !important;
+}
