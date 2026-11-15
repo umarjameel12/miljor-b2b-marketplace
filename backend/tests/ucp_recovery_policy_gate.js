@@ -6,8 +6,8 @@ process.env.NODE_ENV='test';
 const dbPath=require.resolve('../src/config/db');
 const database={};
 require.cache[dbPath]={id:dbPath,filename:dbPath,loaded:true,exports:database};
-const noticesPath=require.resolve('../src/services/ucpExpiryNotificationService');
-require.cache[noticesPath]={id:noticesPath,filename:noticesPath,loaded:true,exports:{recordFlashExpiryOnConnection:async()=>{}}};
+const noticesPath=require.resolve('../src/services/ucpTransactionalNotifications');
+require.cache[noticesPath]={id:noticesPath,filename:noticesPath,loaded:true,exports:{recordFlashOnConnection:async()=>{}}};
 const recovery=require('../src/services/ucpRecoveryService');
 test('unchanged low-ID offers cannot starve later recovery batches',async()=>{
   let cursor=0;
