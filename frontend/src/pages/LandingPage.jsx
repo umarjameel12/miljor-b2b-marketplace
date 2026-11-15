@@ -76,6 +76,7 @@ export const LandingPage = () => {
   const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
+  const [exampleDeadline] = useState(() => new Date(Date.now() + 15 * 24 * 60 * 60 * 1000));
 
   useEffect(() => {
     if (paused || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return undefined;
@@ -305,36 +306,44 @@ export const LandingPage = () => {
               </div>
             </div>
           )}
-          {/* Clearly labelled illustrative product pool cards, shown in every environment. */}
-          <>
-                  <div className="mt-10 mb-5 flex flex-wrap items-center justify-between gap-3">
+          {/* Product procurement examples are illustrative, not published or joinable supplier offers. */}
+          <div className="mt-8">
+            <h3 className="mb-4 text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Procurement</h3>
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {PREVIEW_POOLS.slice(0, 3).map((item) => (
+                <article key={item.title} className="flex flex-col overflow-hidden rounded-3xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                  <div className="relative h-28 sm:h-32 overflow-hidden" style={{ backgroundColor: 'var(--bg-subtle)' }}>
+                    <img src={item.image} alt={item.category} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                    <span className="absolute right-2.5 top-2.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)' }}>Example</span>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-3 p-4">
                     <div>
-                      <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.17em]">Explore the range</p>
-                      <h3 className="landing-section-title mt-2 text-lg font-semibold">Sample procurement cards</h3>
+                      <h4 className="text-sm font-bold sm:text-base" style={{ color: 'var(--text-primary)' }}>{item.title}</h4>
+                      <p className="mt-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>{item.category}</p>
+                      <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--text-secondary)' }}>{item.spec} · {item.pack}</p>
                     </div>
-                    <span className="rounded-full border px-3 py-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>Not live offers</span>
+                    <div className="mt-auto rounded-xl border p-3 text-[11px]" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span style={{ color: 'var(--text-secondary)' }}>Illustrative procurement window</span>
+                        <strong className="tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>15 days</strong>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span style={{ color: 'var(--text-secondary)' }}>Example closing (PKT)</span>
+                        <span className="text-right tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>
+                          {exampleDeadline.toLocaleString('en-PK', { timeZone: 'Asia/Karachi', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between border-t pt-2" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                        <span>Target quantity</span>
+                        <strong>{item.target}</strong>
+                      </div>
+                    </div>
+                    <Link to={isAuthenticated ? '/pools' : '/login'} state={isAuthenticated ? undefined : { from: { pathname: '/pools' } }} className="miljor-pool-join rounded-xl border px-3 py-2.5 text-center text-xs font-semibold">Explore Procurement</Link>
                   </div>
-                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                    {PREVIEW_POOLS.map((pool) => (
-                      <article key={pool.title} className="landing-demo-card flex flex-col overflow-hidden rounded-[1.5rem] border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
-                        <div className="relative h-44 overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
-                          <img src={pool.image} alt={pool.category + ' product reference'} loading="lazy" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-                          <span className="absolute right-3 top-3 rounded-full border px-3 py-1 text-[10px] font-bold shadow-sm" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}>PREVIEW</span>
-                        </div>
-                        <div className="flex flex-1 flex-col p-5 sm:p-6">
-                          <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.16em]">{pool.category}</p>
-                          <h4 className="landing-section-title mt-2 text-lg font-semibold">{pool.title}</h4>
-                          <p className="mt-2 rounded-lg px-3 py-2 text-xs leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Sample specification: </span>{pool.spec}</p>
-                          <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-                            <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Sample target</p><p className="mt-1 text-sm font-semibold">{pool.target}</p></div>
-                            <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Pack size</p><p className="mt-1 text-sm font-semibold">{pool.pack}</p></div>
-                          </div>
-                          <p className="mt-4 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>Visual example only · No live inventory or pricing</p>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-          </>
+                </article>
+              ))}
+            </div>
+          </div>
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
