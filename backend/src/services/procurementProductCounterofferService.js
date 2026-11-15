@@ -29,8 +29,10 @@ class ProcurementProductCounterofferService{
         "SELECT id,status,quote_deadline FROM procurement_requests WHERE id=? AND buyer_id=? FOR UPDATE",
         [request,buyer]);
       if(!owned.length)throw fail('REQUEST_NOT_FOUND','Request not found',404);
-      if(owned[0].status!=='OPEN'||new Date(owned[0].quote_deadline)<=new Date())
-        throw fail('REQUEST_CLOSED','Procurement request is closed or expired');
+      if(owned[0].status!=='OPEN')throw fail('REQUEST_CLOSED','Procurement request is closed');
+      const [[requestClock]]=await conn.query(
+        'SELECT quote_deadline>UTC_TIMESTAMP() AS valid FROM procurement_requests WHERE id=?',[request]);
+      if(Number(requestClock?.valid)!==1)throw fail('REQUEST_CLOSED','Procurement request has expired');
       const [quotes]=await conn.query(
         `SELECT q.id,q.supplier_id,q.current_version,q.status,v.valid_until
          FROM procurement_quotes q JOIN procurement_quote_versions v
@@ -40,7 +42,10 @@ class ProcurementProductCounterofferService{
       const current=quotes[0];
       if(current.status!=='ACTIVE'||Number(current.current_version)!==expected)
         throw fail('QUOTE_STALE','Refresh the current active quotation');
-      if(new Date(current.valid_until)<=new Date())throw fail('QUOTE_EXPIRED','Quotation expired');
+      const [[quoteClock]]=await conn.query(
+        'SELECT valid_until>UTC_TIMESTAMP() AS valid FROM procurement_quote_versions WHERE quote_id=? AND version_number=?',
+        [quote,expected]);
+      if(Number(quoteClock?.valid)!==1)throw fail('QUOTE_EXPIRED','Quotation expired');
       const [existing]=await conn.query(
         `SELECT * FROM procurement_product_counteroffers WHERE buyer_id=? AND idempotency_key=?
          ORDER BY request_item_id FOR UPDATE`,[buyer,idem]);
