@@ -1676,6 +1676,8 @@ This document tracks phase-by-phase execution, gates, and verification status fo
 
 # 2026-11-15 Smart Procurement Hub continuation
 
+R1 review follow-up: implementation e4d92bd, main reconciliation b6926a5 (main 9fb07cf). Three focused review findings corrected: reminder candidate eligibility before limit, lifecycle lock retained during reminder dispatch, saved delivery preference on preparation replay. Real isolated MySQL gate now 17/17 PASS; 96 contract/9 worker rerun PASS; post-merge build 2,233 modules PASS. Final CI/browser pending. Complete Hub still PARTIAL; no main merge.
+
 2026-11-16 remaining work authorized: plan extended with R1–R6 dependencies/files/acceptance. R1 implements per-cycle quantities/delivery preferences, scheduled-item snapshots, pause/resume version reconciliation, missed cutoff handling, skip UI, reminder/draft/missed outbox events and stale inbox/email suppression. Local 96/96 contracts, 9/9 worker, 15/15 owned MySQL and 12/12 canonical checks PASS; frontend build PASS. History 59/59; protected orders/payments 0/0; owned fixtures removed. Main/source reconciliation and browser CI pending. Evidence: SMART_HUB_RECURRING_CONTROLS_EXECUTION_2026_11_16.md. Full scope PARTIAL. CAN START NEXT PHASE: NO.
 
 Final supplier phase evidence: tested code `bac81ee20175d39ec9f0ad545c2dd6b5ea3317bc` has all 9 PR workflows SUCCESS, including canonical real Chromium/MySQL, P0 supplier overview and notification contracts. Chromium caught an incorrect frontend fulfillment mount; corrected with RED/GREEN URL/idempotency regression before final PASS. Supplier integration slice VERIFIED; full Hub scope remains PARTIAL/BLOCKED. No main merge. Final evidence in SMART_HUB_SUPPLIER_OPERATIONS_EXECUTION_2026_11_16.md. CAN START NEXT PHASE: NO.

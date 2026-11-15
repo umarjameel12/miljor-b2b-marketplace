@@ -52,3 +52,11 @@ Baseline approved feature HEAD 08a9d87809a1c3683074500d20f6a14fb5c41781 matched 
 Skills: using-superpowers, brainstorming (existing approved specification/reuse decisions), writing-plans (R1–R6 sequence), executing-plans (bounded inline implementation), using-git-worktrees (existing separate checkout retained), test-driven-development (pure input policy regression), systematic-debugging (actual concurrency/fixture errors), verification-before-completion (fresh evidence). Project data safety/consolidated test protocol took precedence over generic skill defaults. One read-only focused independent review requested while documentation/source reconciliation proceeds.
 
 RESULT: local R1 controls PASS within described evidence; real browser/exact-head CI pending. Complete Hub PARTIAL. No main merge. CAN START NEXT PHASE: NO.
+
+## Review and source reconciliation follow-up
+
+Implementation commit `e4d92bd` followed by clean merge `b6926a541e41fd32f609d9a349b6f65c427b070b` brings main `9fb07cf9274509c1686b68b5bf8bdd91bd26718f` into the approved feature branch without conflicts. Post-merge frontend build PASS, 2,233 modules. No original working-project files changed.
+
+Independent read-only review found three concrete issues, all corrected: eligibility now filters reminder candidates before LIMIT to prevent starvation; reminder email keeps shared lifecycle locks through dispatch recording so pause/skip commits first and suppresses, or waits for an already in-flight send; preparation replay reads its saved REQUEST_DRAFT_CREATED preference. No locks span ordinary non-reminder email delivery. Tradeoff: reminder pause/skip may wait for the existing bounded transport attempt; a provider-accepted message cannot be recalled.
+
+Targeted real-MySQL gate after these corrections: **17/17 PASS**, including ineligible candidate exclusion, actual InnoDB skip-vs-controlled-mock-dispatch serialization and identical preference on concurrent preparation replay. No real provider invoked. Final affected 96-contract and 9-worker rerun PASS. Existing 15-check result above is superseded by 17 checks, not added to it. Reviewer made no source or DB changes. Applied receiving-code-review to verify findings before correction. Exact corrected-code CI/browser result pending push.

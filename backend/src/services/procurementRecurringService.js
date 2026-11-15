@@ -313,9 +313,11 @@ class ProcurementRecurringService {
       const cycle=cycles[0];
       if(!cycle)throw fail('CYCLE_NOT_FOUND','Recurring cycle not found.',404);
       if(cycle.status==='AWAITING_BUYER_APPROVAL' && cycle.generated_request_id){
+        const [events]=await conn.query("SELECT event_snapshot FROM procurement_recurring_cycle_events WHERE cycle_id=? AND event_key='REQUEST_DRAFT_CREATED' FOR UPDATE",[cyid]);
+        const original=events.length?decode(events[0].event_snapshot):{};
         await conn.commit();
-        return {cycle_id:cyid,request_id:cycle.generated_request_id,
-          status:'AWAITING_BUYER_APPROVAL',is_replay:true,creates_order:false};
+        return {cycle_id:cyid,request_id:cycle.generated_request_id,delivery_preference:original.delivery_preference??null,
+          status:'AWAITING_BUYER_APPROVAL',is_replay:true,creates_order:false,creates_payment:false};
       }
       if(contract.status!=='ACTIVE'||cycle.status!=='SCHEDULED')
         throw fail('CYCLE_NOT_PREPARABLE','Paused, skipped, processed or cancelled cycle.',409);
@@ -495,6 +497,8 @@ class ProcurementRecurringService {
     if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw fail('INVALID_WORKER_LIMIT','Reminder batch size must be 1–100.');
     const [candidates]=await this.database.query(`SELECT cy.id,cy.contract_id,cy.buyer_id FROM procurement_recurring_cycles cy
       JOIN procurement_recurring_contracts c ON c.id=cy.contract_id
+      JOIN users u ON u.id=cy.buyer_id AND u.role='BUYER' AND u.is_verified=1
+        AND u.verification_status IN ('VERIFIED','EMAIL_VERIFIED') AND u.buyer_trust_status<>'SUSPENDED'
       WHERE cy.status='SCHEDULED' AND c.status='ACTIVE' AND cy.contract_version=c.version_number
       AND cy.due_at_utc>UTC_TIMESTAMP() AND cy.due_at_utc<=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 24 HOUR)
       AND NOT EXISTS (SELECT 1 FROM procurement_recurring_cycle_events e WHERE e.cycle_id=cy.id AND e.event_key='UPCOMING_24H')

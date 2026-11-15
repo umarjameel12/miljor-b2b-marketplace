@@ -940,10 +940,18 @@ class EmailService {
       processed++;
 
       let providerAccepted = false;
+      let reminderConnection = null;
       try {
         const payload = typeof msg.payload_json === 'string' ? JSON.parse(msg.payload_json) : (msg.payload_json || {});
-        if(msg.template_name==='platform_notification'&&payload.reminderContext&&
-           !await require('./recurringReminderPolicy').isCurrent(db,{buyerId:msg.recipient_user_id,...payload.reminderContext})){
+        let reminderCurrent=true;
+        if(msg.template_name==='platform_notification'&&payload.reminderContext){
+          // Keep shared lifecycle locks until dispatch is recorded. Pause/skip
+          // either commits first and suppresses, or waits for this in-flight send.
+          reminderConnection=await db.getConnection();
+          await reminderConnection.beginTransaction();
+          reminderCurrent=await require('./recurringReminderPolicy').isCurrent(reminderConnection,{buyerId:msg.recipient_user_id,...payload.reminderContext});
+        }
+        if(!reminderCurrent){
           const [suppressed]=await db.query("UPDATE transactional_email_outbox SET status='FAILED',attempt_count=3,last_error='STALE_REMINDER_SUPPRESSED',claim_token=NULL,claim_expires_at=NULL,next_attempt_at=NULL WHERE id=? AND status='SENDING' AND claim_token=?",[msg.id,token]);
           if(suppressed.affectedRows)failed++;else ambiguous++;
           continue;
@@ -988,6 +996,10 @@ class EmailService {
         );
         if (rejected.affectedRows) failed++;
         else ambiguous++;
+      } finally {
+        if(reminderConnection){
+          try{await reminderConnection.rollback();}finally{reminderConnection.release();}
+        }
       }
     }
 

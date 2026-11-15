@@ -102,6 +102,7 @@ const input = changes => ({ recipientEmail: 'buyer@example.test', recipientUserI
 test('queued reminder is revalidated before transport and terminally suppressed when stale',async()=>{
  const f=memory();let sends=0;
  const db={query:async(sql,args)=>sql.includes('SELECT cy.id FROM procurement_recurring_contracts')?[[]]:f.db.query(sql,args)};
+ db.getConnection=async()=>({query:db.query,beginTransaction:async()=>{},rollback:async()=>{},release(){}});
  const s=service(db,async()=>{sends++;return {messageId:'unexpected'};});
  await s.enqueueEmail(db,input({payload:{title:'Upcoming cutoff',message:'Review cycle',reminderContext:{contractId:12,cycleId:31}}}));
  const result=await s.processOutboxBatch();assert.equal(sends,0);assert.equal(result.failed,1);assert.equal(result.succeeded,0);

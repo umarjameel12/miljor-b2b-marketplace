@@ -42,7 +42,34 @@ async function main(){
  // Scope background candidate discovery to this test's own contract; actual SQL/locks/outbox remain real.
  const scoped={getConnection:()=>db.getConnection(),query:(sql,params)=>db.query(sql.replace("WHERE cy.status='SCHEDULED'","WHERE cy.contract_id="+Number(contractId)+" AND cy.status='SCHEDULED'"),params)};
  const worker=new ProcurementRecurringService(scoped);
+ await db.query('UPDATE users SET is_verified=0 WHERE id=?',[buyer]);
+ assert.equal((await worker.runReminderBatch({limit:1})).checked,0);
+ await db.query('UPDATE users SET is_verified=1 WHERE id=?',[buyer]);pass('Ineligible buyers excluded before bounded reminder selection');
  const reminders=await Promise.all([worker.runReminderBatch(),worker.runReminderBatch()]);assert.equal(reminders.reduce((n,r)=>n+r.enqueued,0),2);pass('Concurrent cutoff workers enqueue once per owned cycle');
+ // Real InnoDB lifecycle locks with an explicitly mocked transport. A pause or
+ // skip cannot finish and then be followed by dispatch from an earlier check.
+ const emailDb={getConnection:()=>db.getConnection(),query:(sql,args)=>db.query(/(?:FROM|UPDATE) transactional_email_outbox/.test(sql)?sql.replace(/\bWHERE\b/,'WHERE recipient_user_id='+Number(buyer)+' AND'):sql,args)};
+ const emailModule={exports:{}};
+ new Function('require','module','exports','process',require('node:fs').readFileSync(require('node:path').resolve(__dirname,'../src/services/emailService.js'),'utf8'))(name=>{
+  if(name==='../config/db')return emailDb;if(name==='crypto')return crypto;
+  if(name==='nodemailer')return {createTransport(){throw Error('Real transport forbidden');}};
+  if(name==='./recurringReminderPolicy')return require('../src/services/recurringReminderPolicy');
+  throw Error('Unexpected email dependency '+name);
+ },emailModule,emailModule.exports,{env:{NODE_ENV:'test',TRANSACTIONAL_EMAIL_MODE:'mock',APP_FRONTEND_URL:'https://app.miljor.test'}});
+ const email=emailModule.exports;let entered,releaseDispatch;
+ const started=new Promise(resolve=>{entered=resolve;}),released=new Promise(resolve=>{releaseDispatch=resolve;});
+ email.transporter={sendMail:async()=>{entered();await released;return {messageId:'fixture-only-no-provider'};}};
+ await email.enqueueEmail(emailDb,{recipientEmail:'recurring-'+tag+'@example.invalid',recipientUserId:buyer,templateName:'platform_notification',payload:{title:'Upcoming cutoff',message:'Review cycle',reminderContext:{contractId,cycleId:third}},idempotencyKey:'recurring-lock-'+tag});
+ const dispatch=email.processOutboxBatch();
+ let timer;
+ try{await Promise.race([started,dispatch.then(()=>{throw Error('Reminder dispatch did not reach controlled transport');}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Timed out waiting for controlled transport')),10000);})]);}
+ finally{clearTimeout(timer);}
+ let skipCompleted=false;
+ const skipping=recurring.skipCycle(buyer,contractId,third).then(result=>{skipCompleted=true;return result;});
+ let lockFailure;
+ try{await new Promise(resolve=>setTimeout(resolve,100));assert.equal(skipCompleted,false,'Skip must wait for existing in-flight reminder dispatch');}catch(error){lockFailure=error;}finally{releaseDispatch();}
+ const [dispatched]=await Promise.all([dispatch,skipping]);if(lockFailure)throw lockFailure;
+ assert.equal(dispatched.succeeded,1);pass('Skip completion serialized with already in-flight mocked email dispatch');
  const paused=await recurring.changeStatus(buyer,contractId,'PAUSE',2,false);assert.equal(paused.version_number,3);
  assert.equal((await worker.runReminderBatch()).enqueued,0);pass('Paused cycles emit no active reminders');
  await db.query('UPDATE procurement_recurring_cycles SET due_at_utc=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE) WHERE id=?',[second]);
@@ -53,6 +80,7 @@ async function main(){
  await db.query('UPDATE procurement_recurring_cycles SET due_at_utc=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE) WHERE id=?',[first]);
  await deny(()=>recurring.updateCycleInputs(buyer,contractId,first,{...payload,expected_revision:1},'rec-late-'+tag),'CYCLE_CUTOFF_PASSED');
  const prepared=await Promise.all([recurring.prepareDueCycle(buyer,contractId,first),recurring.prepareDueCycle(buyer,contractId,first)]);assert.equal(prepared.filter(p=>p.is_replay).length,1);requestIds.push(prepared[0].request_id);
+ assert.deepEqual(prepared[0].delivery_preference,prepared[1].delivery_preference);assert.equal(prepared[0].delivery_preference.mode,'PICKUP');
  const generated=await requests.getMine(buyer,prepared[0].request_id);assert.equal(generated.items[0].quantity,'3.0000');assert.equal(generated.status,'DRAFT');pass('Due preparation clones cycle revision once, not edited standing template');
  await deny(()=>recurring.skipCycle(buyer,contractId,first),'CYCLE_ALREADY_COMMITTED');
  await recurring.skipCycle(buyer,contractId,third);await recurring.skipCycle(buyer,contractId,third);
@@ -75,7 +103,7 @@ main().catch(error=>{console.error(error.code||'RECURRING_CONTROLS_FAILED',error
   assert.equal((await db.query('SELECT DATABASE() AS name'))[0][0].name,'miljor_test_db');
   if(contractId){await db.query('DELETE FROM procurement_recurring_cycle_events WHERE cycle_id IN (SELECT id FROM procurement_recurring_cycles WHERE contract_id=?)',[contractId]);await db.query('DELETE FROM procurement_recurring_cycles WHERE contract_id=?',[contractId]);await db.query('DELETE FROM procurement_recurring_contracts WHERE id=?',[contractId]);}
   for(const requestId of requestIds){await db.query('DELETE FROM procurement_request_mutations WHERE request_id=?',[requestId]);await db.query('DELETE FROM procurement_request_items WHERE request_id=?',[requestId]);await db.query('DELETE FROM procurement_requests WHERE id=?',[requestId]);}
-  for(const userId of users){await db.query('DELETE FROM platform_notifications WHERE user_id=?',[userId]);await db.query('DELETE FROM procurement_notifications WHERE recipient_id=?',[userId]);await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id=?',[userId]);await db.query('DELETE FROM users WHERE id=?',[userId]);}
+  for(const userId of users){await db.query('DELETE FROM transactional_email_outbox WHERE recipient_user_id=?',[userId]);await db.query('DELETE FROM platform_notifications WHERE user_id=?',[userId]);await db.query('DELETE FROM procurement_notifications WHERE recipient_id=?',[userId]);await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id=?',[userId]);await db.query('DELETE FROM users WHERE id=?',[userId]);}
  }catch(error){console.error('OWNED_FIXTURE_CLEANUP_FAILED',error.code||error.message);process.exitCode=1;}
  await db.end();
 });
