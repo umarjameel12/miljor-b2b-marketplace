@@ -23,7 +23,12 @@ function startScheduler() {
     console.log(`[Scheduler] Running pool expiry check at ${new Date().toISOString()}`);
     try {
       await poolClosureService.processExpiredPools();
-      await poolClosureService.processExpiredFlashPools();
+      if (process.env.UCP_FLASH_RECOVERY_ENABLED === 'true' &&
+          process.env.UCP_FLASH_RECOVERY_RUNTIME_APPROVED === 'true') {
+        await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
+      } else {
+        await poolClosureService.processExpiredFlashPools();
+      }
     } catch (err) {
       console.error('[Scheduler] Pool expiry job failed:', err.message);
     }
