@@ -126,7 +126,7 @@ export const SupplierDisputesPage = () => {
                 <AlertTriangle className="w-3.5 h-3.5" /> Discrepancy & Shortage Hub
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text-primary)]">
               Disputes & Discrepancies
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
