@@ -120,9 +120,9 @@ export const PoolCard = ({ pool, onSelect }) => {
         ) : (
           <div
             className="w-full h-full flex items-center justify-center"
-            style={{ backgroundColor: 'var(--brand-primary)' }}
+            style={{ backgroundColor: 'var(--bg-subtle)' }}
           >
-            <Package className="w-8 h-8 text-stone-300" />
+            <Package className="w-8 h-8" style={{ color: 'var(--landing-accent-text, var(--brand-accent))' }} />
           </div>
         )}
 
@@ -174,7 +174,7 @@ export const PoolCard = ({ pool, onSelect }) => {
         <div>
           {/* Product Title */}
           <h3
-            className="font-sans font-bold text-sm sm:text-base tracking-tight truncate"
+            className="font-sans font-bold text-sm sm:text-base tracking-tight leading-snug line-clamp-2"
             style={{ color: 'var(--text-primary)' }}
             title={pool.product_name || pool.title}
           >
@@ -182,7 +182,7 @@ export const PoolCard = ({ pool, onSelect }) => {
           </h3>
 
           {/* Supplier Info & Grade Line */}
-          <div className="flex items-center justify-between text-[11px] font-sans text-stone-500 dark:text-stone-400 mt-0.5">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-sans mt-1" style={{ color: 'var(--text-secondary)' }}>
             <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
               {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Supplier details available on request'}
             </span>
@@ -204,8 +204,9 @@ export const PoolCard = ({ pool, onSelect }) => {
           </div>
 
           {specification && (
-            <div className="mt-2 rounded-lg px-2.5 py-2 text-[11px] leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
-              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Specification: </span>{specification}
+            <div className="mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-5" style={{ backgroundColor: 'var(--bg-subtle)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--landing-accent-text, var(--text-primary))' }}>Product specifications</span>
+              <span className="mt-1 block break-words">{specification}</span>
             </div>
           )}
 
@@ -302,13 +303,13 @@ export const PoolCard = ({ pool, onSelect }) => {
               <span className="font-sans font-bold text-base sm:text-lg tabular-nums" style={{ color: 'var(--text-primary)' }}>
                 {estimatedPrice ? `Rs. ${Number(estimatedPrice).toLocaleString()}` : 'Price on Tier'}
               </span>
-              <span className="text-[11px] font-sans text-stone-500">
+              <span className="text-[11px] font-sans" style={{ color: 'var(--text-secondary)' }}>
                 / {unit}
               </span>
             </div>
 
             {/* Percentage pill on right side */}
-            <span className="text-xs font-sans font-semibold tabular-nums text-stone-600 dark:text-stone-300">
+            <span className="text-xs font-sans font-semibold tabular-nums" style={{ color: 'var(--text-secondary)' }}>
               {progressPercent}%
             </span>
           </div>
@@ -347,7 +348,7 @@ export const PoolCard = ({ pool, onSelect }) => {
             </div>
 
             {/* Current vs Target volume text */}
-            <div className="mt-1 flex items-center justify-between text-[10px] font-sans text-stone-500 dark:text-stone-400 tabular-nums">
+            <div className="mt-1 flex items-center justify-between text-[10px] font-sans tabular-nums" style={{ color: 'var(--text-secondary)' }}>
               <span>{committedQty.toLocaleString()} {unit} pledged</span>
               <span>Target: {targetQty.toLocaleString()} {unit}</span>
             </div>
