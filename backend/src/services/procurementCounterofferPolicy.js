@@ -47,6 +47,10 @@ function validateSupplierDecision(input,selectedLine){
   if(!selectedLine||!selectedLine.request_item_id)throw error('COUNTER_ITEM_NOT_FOUND','Selected negotiation product not found');
   if(input.decision==='COUNTER_AGAIN'){
     const amount=decimal(input.proposed_unit_price,'Supplier counter price');
+    const buyer=decimal(selectedLine.buyer_proposed_unit_price,'Buyer proposed price');
+    const quoted=decimal(selectedLine.quoted_unit_price,'Supplier quoted price');
+    if(amount.cents<buyer.cents||amount.cents>quoted.cents)
+      throw error('COUNTER_PRICE_OUT_OF_RANGE','Supplier counter price must be between buyer offer and original quoted price');
     return {decision:input.decision,request_item_id:positiveId(selectedLine.request_item_id),proposed_unit_price:amount.value};
   }
   if(input.proposed_unit_price!==undefined&&input.proposed_unit_price!==null)
