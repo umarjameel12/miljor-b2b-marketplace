@@ -507,6 +507,8 @@ class DisputeService {
         [actor.id, disputeId, JSON.stringify({ dispute_code: disputeCode, category, claimed_amount: calculatedClaimStr })]
       );
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:'DISPUTE.OPENED',transitionId:'dispute-'+disputeId});
       await connection.commit();
 
       return {
@@ -731,6 +733,8 @@ class DisputeService {
         ]
       );
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:'FULFILLMENT.SHORTAGE_RECORDED',transitionId:'dispute-'+disputeId});
       await connection.commit();
 
       return {
@@ -948,6 +952,8 @@ class DisputeService {
         ]
       );
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:dispute.order_id,type:'DISPUTE.RESPONSE_SUBMITTED',transitionId:trimmedKey});
       await connection.commit();
 
       return {
@@ -1533,6 +1539,8 @@ class DisputeService {
         }
       }
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:dispute.order_id,type:'DISPUTE.RESOLVED',transitionId:'closed-'+dispute.id});
       await connection.commit();
 
       return {
