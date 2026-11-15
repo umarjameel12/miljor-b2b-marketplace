@@ -215,6 +215,22 @@ async function runE3Gate() {
       pass('Notification preferences: persisted Urdu locale, buyer isolation and cross-user override denial');
     } catch(e) { fail('Notification preferences acceptance',e); }
 
+    // Supplier delivery read model must be tenant-isolated and DB-backed.
+    try {
+      const supplierResponse=await api('/api/v1/supplier/delivery-runs',{
+        headers:{Authorization:`Bearer ${supplierToken}`}
+      });
+      assert.strictEqual(supplierResponse.status,200);
+      assert.ok(Array.isArray(supplierResponse.body.data.runs));
+      assert.strictEqual(supplierResponse.body.data.runs.length,0,
+        'Freshly created supplier cannot see another supplier delivery');
+      const buyerResponse=await api('/api/v1/supplier/delivery-runs',{
+        headers:{Authorization:`Bearer ${generateToken(testBuyerId,'BUYER')}`}
+      });
+      assert.strictEqual(buyerResponse.status,403);
+      pass('Supplier delivery runs: real MySQL empty state and buyer role isolation');
+    } catch(e) { fail('Supplier delivery run isolation',e); }
+
     // Helper to create and publish a product and SKU in a family
     async function createAndPublishSkuInFamily(familyId, variety, packSize, packUnit, isUnbranded = false, brand = 'TestBrand') {
       const pRes = await api('/api/v1/catalog/supplier-products', {
