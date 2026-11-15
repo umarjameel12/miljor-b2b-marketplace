@@ -232,12 +232,12 @@ export const PoolCard = ({ pool, onSelect }) => {
                 </div>
               )}
               {promisedDeliveryFormatted && (
-                <div className="flex items-center justify-between" style={{ color: 'var(--text-secondary)' }}>
-                  <span className="inline-flex items-center gap-1 font-medium">
-                    <Truck className="w-3 h-3" />
+                <div className="flex items-center justify-between gap-3" style={{ color: 'var(--text-secondary)' }}>
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Truck className="w-3 h-3 shrink-0" style={{ color: 'var(--landing-accent-text, var(--brand-accent))' }} aria-hidden="true" />
                     <span>Promised Delivery:</span>
                   </span>
-                  <strong className="font-sans font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{promisedDeliveryFormatted}</strong>
+                  <strong className="font-sans font-semibold tabular-nums text-right" style={{ color: 'var(--text-primary)' }}>{promisedDeliveryFormatted}</strong>
                 </div>
               )}
               <div className="flex items-center justify-between text-[9px] text-stone-400 pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
