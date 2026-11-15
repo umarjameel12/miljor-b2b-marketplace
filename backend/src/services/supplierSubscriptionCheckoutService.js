@@ -33,7 +33,7 @@ function checkOwner(actor) {
 }
 function safeAttempt(row) {
   return { id: row.id, plan_code: row.plan_code, amount_pkr: row.amount_pkr,
-    currency: row.currency, status: row.status, checkout_url: row.checkout_url || null };
+    currency: row.currency, status: row.status, can_reconcile: Boolean(row.tracker_token && ['INITIATED','UNKNOWN'].includes(row.status)), checkout_url: row.checkout_url || null };
 }
 function baseUrl() {
   const url = process.env.APP_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
