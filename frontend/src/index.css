@@ -769,3 +769,33 @@ h1, h2, h3, h4, h5, h6, .font-display {
   background: linear-gradient(115deg,#ddc68f,#b89b5f) !important;
   color: #172c24 !important;
 }
+
+
+/* Landing corrections: preserve forest-green dark header, calm light ivory and uniform account hover. */
+:root {
+  --landing-header-bg: #eeeae2;
+  --landing-nav-ink: #343b35;
+  --landing-nav-hover: #86612e;
+  --landing-account-selected-bg: #e9d7b1;
+  --landing-account-selected-ink: #3c3020;
+}
+.dark {
+  --landing-header-bg: var(--bg-sidebar);
+  --landing-nav-ink: #f0e7d5;
+  --landing-nav-hover: #e8cf95;
+  --landing-account-selected-bg: #c8b276;
+  --landing-account-selected-ink: #182a22;
+}
+.miljor-public-landing .landing-account-option:is(:hover, :focus-visible, :active) {
+  background: var(--landing-account-selected-bg);
+  color: var(--landing-account-selected-ink);
+  font-weight: 600;
+}
+.miljor-public-landing .landing-account-option {
+  display: block;
+  width: 100%;
+  text-decoration: none;
+}
+.miljor-public-landing .landing-topbar {
+  border-color: var(--border-subtle);
+}
