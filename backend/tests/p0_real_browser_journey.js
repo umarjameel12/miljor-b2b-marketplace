@@ -51,6 +51,14 @@ async function main(){
       'Premium UI must not advertise the obsolete dead-end checkout');
     pass('Supplier subscription loads premium plan UI and authoritative active entitlement');
 
+    await s.page.goto(base+'/supplier/delivery',{waitUntil:'domcontentloaded'});
+    await s.page.getByRole('heading',{name:'Delivery & logistics'}).waitFor({timeout:15000});
+    await s.page.getByRole('heading',{name:'Delivery runs'}).waitFor({timeout:15000});
+    await s.page.getByText('No delivery runs yet').waitFor({timeout:15000});
+    assert.equal(await s.page.getByText('Unable to load delivery runs').count(),0,
+      'Supplier delivery UI must use real supplier-owned MySQL endpoint');
+    pass('Supplier delivery page renders real empty state and premium run controls');
+
     await s.page.goto(base+'/supplier/pools',{waitUntil:'domcontentloaded'});
     await s.page.getByRole('heading',{name:'Pool Management'}).waitFor({timeout:15000});
     await s.page.reload({waitUntil:'domcontentloaded'});
