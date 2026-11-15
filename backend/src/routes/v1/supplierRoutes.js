@@ -65,6 +65,7 @@ router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN')
 // ---------------------------------------------------------------------------
 router.get('/subscription', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.getMySubscription(req, res));
 router.post('/subscription/upgrade', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.changePlan(req, res));
+router.post('/subscription/cancel-renewal', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.cancelRenewal(req, res));
 router.get('/subscription/plans', (req, res) => subscriptionController.getPlans(req, res));
 
 // ---------------------------------------------------------------------------
