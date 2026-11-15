@@ -24,14 +24,14 @@ const COMMODITIES = [
   {
     title: 'Wheat & flour',
     subtitle: 'Everyday supplies for busy kitchens',
-    image: 'https://images.unsplash.com/photo-1624565019871-16a8d90ad749?auto=format&fit=crop&w=1200&q=82',
-    alt: 'Golden wheat in a field',
+    image: 'https://unsplash.com/photos/KMDGu1blGi8/download?force=true&w=1200',
+    alt: 'Golden wheat heads and grain texture',
   },
   {
     title: 'Cooking oil',
     subtitle: 'Everyday kitchen essentials',
-    image: 'https://images.unsplash.com/photo-1552592074-ea7a91b851b3?auto=format&fit=crop&w=1200&q=82',
-    alt: 'Cooking oil dispenser bottle',
+    image: 'https://unsplash.com/photos/iNSFdfuw__A/download?force=true&w=1200',
+    alt: 'Groundnut cooking oil bottles displayed together',
   },
 ];
 
