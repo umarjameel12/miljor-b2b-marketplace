@@ -223,7 +223,7 @@ export const AppShell = ({ children }) => {
         { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
         { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
         { label: 'Pool Management', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
-        { label: 'Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Smart Procurement Hub', path: '/procurement', icon: ClipboardList, active: is('/procurement') },
         { label: 'Subscription', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
         { label: 'Business Profile', path: '/supplier/profile', icon: User, active: is('/supplier/profile') || is('/supplier/onboarding') },
       ]
@@ -233,8 +233,7 @@ export const AppShell = ({ children }) => {
         ...(isAuthenticated
           ? [
               { label: 'Orders', path: '/orders', icon: ClipboardList, active: is('/orders') },
-              { label: 'Procurement', path: '/rfqs', icon: Tag, active: is('/rfqs') },
-              { label: 'Demand Requests', path: '/demand-requests', icon: Users, active: is('/demand-requests') },
+              { label: 'Smart Procurement Hub', path: '/procurement', icon: Tag, active: is('/procurement') },
             ]
           : []),
       ];
