@@ -148,7 +148,7 @@ export const LandingPage = () => {
                   className="landing-gradient-cta landing-account-trigger inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
                   style={{ borderColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
                 >
-                  <UserRound size={16} aria-hidden="true" />
+                  
                   Account
 
                 </button>
