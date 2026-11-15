@@ -42,6 +42,7 @@ function validateProductCounteroffers(input,quotedLines){
 }
 const SUPPLIER_DECISIONS=Object.freeze(['ACCEPT','REJECT','COUNTER_AGAIN']);
 function validateSupplierDecision(input,selectedLine){
+  if(input&&Object.keys(input).some(field=>!['decision','proposed_unit_price'].includes(field)))throw error('UNSUPPORTED_COUNTER_FIELD','Supplier decisions cannot contain chat messages');
   if(!input||!SUPPLIER_DECISIONS.includes(input.decision))throw error('INVALID_COUNTER_DECISION','Choose Accept, Reject or Counter Again');
   if(!selectedLine||!selectedLine.request_item_id)throw error('COUNTER_ITEM_NOT_FOUND','Selected negotiation product not found');
   if(input.decision==='COUNTER_AGAIN'){
