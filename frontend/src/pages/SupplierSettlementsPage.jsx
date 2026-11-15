@@ -104,7 +104,7 @@ export const SupplierSettlementsPage = () => {
                 <ShieldCheck className="w-3.5 h-3.5" /> Escrow Protected
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text-primary)]">
               Payments, Earnings & Settlements
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
@@ -138,7 +138,7 @@ export const SupplierSettlementsPage = () => {
               </div>
             </div>
             <div>
-              <span className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)] block">
+              <span className="text-2xl sm:text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                 {formatPKR(summary.held_in_escrow)}
               </span>
               <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
@@ -158,7 +158,7 @@ export const SupplierSettlementsPage = () => {
               </div>
             </div>
             <div>
-              <span className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)] block">
+              <span className="text-2xl sm:text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                 {formatPKR(summary.settlement_eligible)}
               </span>
               <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
@@ -178,7 +178,7 @@ export const SupplierSettlementsPage = () => {
               </div>
             </div>
             <div>
-              <span className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)] block">
+              <span className="text-2xl sm:text-3xl font-sans tabular-nums font-bold text-[var(--text-primary)] block">
                 {formatPKR(summary.completed_payouts)}
               </span>
               <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
