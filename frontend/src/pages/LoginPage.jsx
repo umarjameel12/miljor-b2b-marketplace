@@ -100,7 +100,7 @@ export const LoginPage = () => {
 
       {/* Segmented Quick-Switch Tabs [Sign In | Create Account] */}
       <div
-        className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+        className="auth-auth-tabs grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
         style={{
           backgroundColor: 'var(--bg-input)',
           borderColor: 'var(--border-subtle)',
