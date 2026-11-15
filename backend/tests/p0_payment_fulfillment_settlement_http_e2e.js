@@ -155,7 +155,7 @@ async function main(){
    console.log('PASS G9 real financial/fulfillment outbox recipients and no false settlement completion');
    console.log('PASS REAL HTTP+MYSQL E2E with synthetic signed Safepay event; real provider and bank settlement NOT VERIFIED');
  }finally{
-   await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=?",[String(orderId)]);
+   await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=? AND event_type IN ('PAYMENT_VERIFIED','DISPATCH_SCHEDULED','OUT_FOR_DELIVERY','DELIVERY_REPORTED','RECEIPT_CONFIRMED','SETTLEMENT_PENDING')",[String(orderId)]);
    await new Promise(resolve=>server.close(resolve));
  }
 }

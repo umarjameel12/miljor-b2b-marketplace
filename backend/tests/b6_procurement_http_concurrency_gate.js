@@ -399,7 +399,7 @@ async function main() {
   } finally {
     // Cleanup only this run's request IDs; queued events must never outlive fixtures.
     for (const rid of createdRequestIds) {
-      await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=?", [String(rid)]);
+      await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=? AND event_type IN ('REQUEST_CREATED','REQUEST_PUBLISHED','SUPPLIER_MATCHED','QUOTE_RECEIVED','QUOTE_REVISED','COUNTEROFFER_SUBMITTED','SUPPLIER_ACCEPT','SUPPLIER_REJECT','SUPPLIER_COUNTER_AGAIN')", [String(rid)]);
       await db.query('DELETE FROM procurement_product_counteroffers WHERE request_id=?', [rid]);
       await db.query('DELETE FROM procurement_quote_negotiations WHERE request_id=?', [rid]);
       const [quotes] = await db.query('SELECT id FROM procurement_quotes WHERE request_id=?', [rid]);
