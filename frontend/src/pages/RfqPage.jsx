@@ -708,10 +708,10 @@ export const RfqPage = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
             <span className="text-xs uppercase tracking-wider font-semibold text-[var(--brand-accent)] block mb-1">
-              Custom Procurement Desk
+              One Unified Procurement Experience
             </span>
             <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
-              Get Best Quotes
+              Smart Procurement Hub
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">
               One shopping list, flexible suppliers, clearer wholesale comparisons. Start by creating a multi-product request below.
@@ -722,10 +722,10 @@ export const RfqPage = () => {
         </div>
 
         {user?.role === 'BUYER' && (
-          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Get Best Quotes">
+          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Smart Procurement Hub">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent)]">Smart Procurement Hub</p>
-              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Get Best Quotes — Your Shopping List</h2>
+              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Your Procurement Shopping List</h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">Choose solo or group purchasing, one product or a complete shopping list, and one-time or recurring procurement. Payments require a later explicit buyer confirmation.</p>
             </div>
             {user?.role === 'BUYER' && (!user.is_verified || !['VERIFIED', 'EMAIL_VERIFIED'].includes(user.verification_status)) && (
