@@ -17,6 +17,18 @@ router.use(protect);
 // Master Supplier Operations Center — Live KPIs & Priority Action Center
 router.get('/dashboard-kpis', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => dashboardController.getDashboardKpis(req, res));
 
+// PR53 supplier operations: read-only, always scoped to the verified actor.
+router.get('/operations', authorizeStrict('SUPPLIER'), async(req,res)=>{
+  try {
+    return res.json({success:true,data:await require('../../services/supplierOperationsService').get(req.user)});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({success:false,error:{
+      code:error.statusCode?error.code:'SUPPLIER_OPERATIONS_UNAVAILABLE',
+      message:error.statusCode?error.message:'Unable to load supplier operations'
+    }});
+  }
+});
+
 // Unified supplier management READ MODEL only. Mutations stay on B4/B5 routes.
 router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{
   try {
