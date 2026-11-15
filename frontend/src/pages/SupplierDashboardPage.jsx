@@ -152,7 +152,7 @@ export const SupplierDashboardPage = () => {
               {profile?.business_name || user?.business_name || user?.full_name || 'Wholesale Supplier Operations'}
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
-              Live operational metrics, order fulfillment, delivery tracking, escrow settlement, and collective demand.
+              Orders, procurement, deliveries and earnings in one place.
             </p>
           </div>
 
@@ -489,7 +489,7 @@ export const SupplierDashboardPage = () => {
               </div>
             </div>
 
-            {/* Card 10: Completed Verified Payouts */}
+            {/* Card 10: Completed Recorded Payouts */}
             <div className="p-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-[var(--text-muted)]">Verified Payouts</span>
@@ -606,7 +606,7 @@ export const SupplierDashboardPage = () => {
                 </div>
               </div>
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                Bank IBAN encrypted with AES-256-GCM. Escrow payouts released automatically upon buyer delivery confirmation without premature drawdown.
+                Banking details are protected. Buyer confirmation alone does not prove a payout.
               </p>
             </div>
             <Link
