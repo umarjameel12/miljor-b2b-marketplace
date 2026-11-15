@@ -36,7 +36,7 @@ const DEFAULT_CARD_IMAGES = {
   sugar: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?auto=format&fit=crop&w=500&q=80',
 };
 
-export const PoolCard = ({ pool, onSelect }) => {
+export const PoolCard = ({ pool, onSelect, isExample = false }) => {
   const [imgError, setImgError] = useState(false);
   const [deadlineExpired, setDeadlineExpired] = useState(false);
   const [showProductDetails, setShowProductDetails] = useState(false);
@@ -48,18 +48,29 @@ export const PoolCard = ({ pool, onSelect }) => {
     Math.max(0, parseFloat(pool.fill_percentage || pool.progress_percentage || 0))
   );
 
-  const isClosed = pool.status === 'CLOSED' || deadlineExpired;
+  const isClosed = !isExample && (pool.status === 'CLOSED' || deadlineExpired);
   const estimatedPrice = pool.estimated_unit_price || pool.current_unit_price || pool.current_price_per_unit || pool.base_unit_price;
-  const unit = pool.pack_unit || pool.pool_unit || 'kg';
+  const unit = pool.pool_unit || pool.unit || pool.pack_unit || 'kg';
   const buyerMoq = pool.min_order_qty || pool.buyer_min_qty || pool.moq_buyer || 1;
   const grade = pool.quality_spec_grade || pool.quality_grade || pool.grade || null;
   const brandLabel = pool.brand ? pool.brand : (pool.is_unbranded ? 'Unbranded' : null);
-  const specification = [pool.variety, pool.quality_spec_grade || pool.quality_grade || pool.grade, pool.pack_size ? `${pool.pack_size} ${pool.pack_unit || unit}` : null].filter(Boolean).join(' · ');
+  const normalizedPack = pool.pack_size
+    ? String(pool.pack_size).trim() + (/\b(kg|g|l|litres?|bags?|tins?|cartons?)\b/i.test(String(pool.pack_size))
+      ? '' : ' ' + (pool.pack_unit || unit))
+    : null;
+  const specification = [pool.variety, pool.quality_spec_grade || pool.quality_grade || pool.grade, normalizedPack]
+    .filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ');
   const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : Math.round((progressPercent / 100) * (pool.target_quantity || pool.target_qty || 1000)));
   const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
   const promisedDeliveryFormatted = formatLahoreTimestamp(pool.promised_delivery_at);
-  const productName = pool.product_name || pool.title || 'Wholesale Commodity';
+  const rawName = pool.product_name || pool.title || '';
+  const varietyText = String(pool.variety || '').trim();
+  const productName = rawName && !/^(wholesale commodity|commodity|product)$/i.test(rawName.trim())
+    ? rawName
+    : /1121|basmati|rice|sella|kernel|grain/i.test(varietyText)
+      ? '1121 Basmati Rice'
+      : pool.category_name || pool.family_name || 'Wholesale Commodity';
   const productLower = productName.toLowerCase();
   const categoryLabel = /rice|basmati|kainat|sella|grain/.test(productLower) ? 'Rice & Grains'
     : /oil|ghee|olein/.test(productLower) ? 'Cooking Oil & Ghee'
@@ -113,7 +124,7 @@ export const PoolCard = ({ pool, onSelect }) => {
         borderColor: 'var(--border-subtle)',
         boxShadow: 'var(--shadow-card)',
       }}
-      className="rounded-3xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col overflow-hidden group select-none"
+      className="h-full min-w-0 rounded-3xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col overflow-hidden group"
     >
       {/* Top Banner Photo */}
       <div className="relative h-28 sm:h-32 w-full overflow-hidden bg-stone-200 dark:bg-stone-900">
@@ -139,7 +150,7 @@ export const PoolCard = ({ pool, onSelect }) => {
           <span
             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-md shadow-xs"
             style={{
-              backgroundColor: isClosed ? 'rgba(95, 72, 62, 0.94)' : 'rgba(49, 39, 24, 0.9)',
+              backgroundColor: isExample ? 'rgba(28, 56, 46, .94)' : isClosed ? 'rgba(95, 72, 62, 0.94)' : 'rgba(49, 39, 24, 0.9)',
               color: '#f7edd7',
               border: `1px solid ${
                 FLAGS.dynamicDemandBadges && progressPercent >= 75
@@ -160,6 +171,7 @@ export const PoolCard = ({ pool, onSelect }) => {
             <span>
               {isClosed
                 ? 'Concluded'
+                : isExample ? 'Example Pool'
                 : FLAGS.dynamicDemandBadges && progressPercent >= 75
                 ? 'Wholesale Tier 2'
                 : FLAGS.dynamicDemandBadges && progressPercent >= 50
@@ -172,7 +184,7 @@ export const PoolCard = ({ pool, onSelect }) => {
         {/* Spec Code / Pool Code pill */}
         <div className="absolute bottom-2 left-2.5">
           <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium backdrop-blur-md bg-black/60 text-stone-200 border border-white/10">
-            {pool.pool_code || (pool.spec_code ? `SPEC-${pool.spec_code}` : 'POOL')}
+            {isExample ? 'ILLUSTRATIVE' : pool.pool_code || (pool.spec_code ? `SPEC-${pool.spec_code}` : 'POOL')}
           </span>
         </div>
       </div>
@@ -190,16 +202,16 @@ export const PoolCard = ({ pool, onSelect }) => {
           </h3>
           <span className="mt-1.5 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--pool-detail-accent)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>{categoryLabel}</span>
 
-          {showProductDetails && (
+          {(isExample || showProductDetails) && (
             <> 
-              <button
+              {!isExample && <button
                 type="button"
                 onClick={() => setShowProductDetails(false)}
                 className="mt-2 text-[11px] font-semibold hover:opacity-80"
                 style={{ color: 'var(--pool-detail-accent)' }}
               >
                 Hide product details −
-              </button>
+              </button>}
             <div className="mt-1 rounded-xl border p-2.5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>
           {/* Supplier specifications are opt-in; never clutter the pool overview. */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-sans mt-1" style={{ color: 'var(--text-secondary)' }}>
@@ -234,7 +246,7 @@ export const PoolCard = ({ pool, onSelect }) => {
             </>
           )}
 
-          {/* Participation Cutoff & Promised 1-3 Day Delivery SLA */}
+          {/* Participation cutoff and delivery promise. Example data is illustrative only. */}
           {(cutoffFormatted || promisedDeliveryFormatted) && (
             <div className="mt-2 p-2 rounded-xl border text-[10px] space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
               {cutoffFormatted && (
@@ -271,7 +283,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                   <Lock className="w-2.5 h-2.5" style={{ color: 'var(--pool-detail-accent)' }} />
                   <span>Immutable Published Terms</span>
                 </span>
-                <span>1–3 Day SLA</span>
+                <span>{isExample ? 'Illustrative terms' : '1–3 Day SLA'}</span>
               </div>
             </div>
           )}
@@ -385,8 +397,8 @@ export const PoolCard = ({ pool, onSelect }) => {
         <div className="pt-2">
           <button
             type="button"
-            onClick={() => { if (onSelect) onSelect(pool); else setShowProductDetails(true); }}
-            disabled={isClosed}
+            onClick={() => { if (!isExample && onSelect) onSelect(pool); else if (!isExample) setShowProductDetails(true); }}
+            disabled={isClosed || isExample}
             className="miljor-pool-join w-full py-2.5 px-3 rounded-xl font-sans font-semibold text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs transition-all hover:brightness-105 hover:shadow-md"
             style={{
               background: 'var(--pool-join-gradient, linear-gradient(115deg, #e0cb94, #c8b276 55%, #b39357))',
@@ -394,7 +406,7 @@ export const PoolCard = ({ pool, onSelect }) => {
               border: '1px solid var(--pool-join-border, rgba(125, 93, 43, 0.28))',
             }}
           >
-            <span>{isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
+            <span>{isExample ? 'Example · Not Joinable' : isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
           </button>
         </div>
       </div>
