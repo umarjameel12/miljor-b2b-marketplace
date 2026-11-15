@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
 import { Logo } from '../components/ui/Logo';
@@ -142,38 +142,78 @@ export const LandingPage = () => {
                 <button
                   type="button"
                   onClick={() => setAccountMenuOpen((open) => !open)}
+                  aria-label="User Account Menu"
                   aria-haspopup="menu"
                   aria-expanded={accountMenuOpen}
                   aria-controls="landing-account-options"
-                  className="landing-gradient-cta landing-account-trigger inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
-                  style={{ borderColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
+                  title="Account Menu"
+                  className="flex items-center gap-2.5 h-9 px-3 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    borderColor: 'var(--border-default)',
+                    color: 'var(--text-primary)',
+                  }}
                 >
-                  Account
+                  <div className="w-6 h-6 rounded-full bg-[var(--brand-accent)] text-[#072a21] flex items-center justify-center font-bold text-xs shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-semibold max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>
+                    Account
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-stone-700 dark:text-stone-300 transition-transform duration-200 ${accountMenuOpen ? 'rotate-180' : ''}`}
+                  />
                 </button>
                 {accountMenuOpen && (
                   <div
                     id="landing-account-options"
                     role="menu"
                     aria-label="Account options"
-                    className="absolute right-0 top-full z-50 mt-2 w-44 rounded-xl border p-1.5 shadow-xl"
-                    style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                    className="absolute right-0 top-full mt-2 w-64 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                    style={{
+                      backgroundColor: 'var(--bg-surface)',
+                      borderColor: 'var(--border-default)',
+                      boxShadow: 'var(--shadow-elevated)',
+                    }}
                   >
-                    <Link
-                      role="menuitem"
-                      to="/login"
-                      onClick={() => setAccountMenuOpen(false)}
-                      className="landing-account-option block rounded-lg px-3 py-2.5 text-sm font-medium"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      role="menuitem"
-                      to="/register"
-                      onClick={() => setAccountMenuOpen(false)}
-                      className="landing-account-option block rounded-lg px-3 py-2.5 text-sm font-medium"
-                    >
-                      Register
-                    </Link>
+                    <div className="space-y-3">
+                      <div className="text-center pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          Welcome to MilJor
+                        </p>
+                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          Wholesale Collective Procurement
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Link
+                          role="menuitem"
+                          to="/login"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+                          style={{
+                            backgroundColor: 'var(--bg-card)',
+                            borderColor: 'var(--border-default)',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <User className="w-3.5 h-3.5 text-emerald-900 dark:text-champagne" />
+                          <span>Sign In</span>
+                        </Link>
+                        <Link
+                          role="menuitem"
+                          to="/register"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer hover:opacity-95"
+                          style={{
+                            backgroundColor: 'var(--brand-accent)',
+                            color: 'var(--text-on-champagne)',
+                          }}
+                        >
+                          <span>Register</span>
+                        </Link>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
