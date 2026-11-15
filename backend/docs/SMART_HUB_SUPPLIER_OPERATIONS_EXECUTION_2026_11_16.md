@@ -41,3 +41,25 @@ RESULT: PARTIAL overall. CAN START NEXT PHASE: NO.
 ## CI-driven correction
 
 At code `1aa7e18`, canonical source/build and real MySQL jobs passed, but Chromium found the new UI API used `/supplier/orders` instead of the existing mounted `/fulfillment/supplier/orders`. Dashboard real counters and numeric deep link had already passed before the empty paid queue timed out. Corrected all four frontend fulfillment URLs, retained existing backend routes/authorization and added adapter assertions for list/detail/transition/exception plus both idempotency headers. Regression reproduced RED, then frontend test files PASS after fix. This is an integration defect in this phase, not an upstream blocker; prior local helper assertions did not cover URL routing. Final Chromium result pending corrective push.
+
+## Final verified code and remote acceptance
+
+This section supersedes the pending-CI statements above. Tested code SHA: `bac81ee20175d39ec9f0ad545c2dd6b5ea3317bc`; preceding cancellation correction: `c0ce76a85e4555e209906c8e6d5a2347d411cd93`. All nine pull-request workflows at that exact code SHA completed SUCCESS:
+
+| Workflow | Result | Run |
+| --- | --- | --- |
+| UCP canonical (source/build, real MySQL, real Chromium) | PASS, all three jobs | [43751023376](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023376) |
+| P0 payment/fulfillment/settlement + new supplier MySQL gate | PASS | [43751023352](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023352) |
+| Notification contracts + new supplier/frontend tests/build | PASS | [43751023217](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023217) |
+| Isolated MySQL counteroffers | PASS | [43751023216](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023216) |
+| Counteroffer source | PASS | [43751023294](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023294) |
+| Delivery quantity safety | PASS | [43751023339](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023339) |
+| Admin supplier approval | PASS | [43751023412](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023412) |
+| Buyer B6/auth/frontend | PASS | [43751023350](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023350) |
+| OTP email quality | PASS | [43751023338](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43751023338) |
+
+Chromium job 132924767463 confirmed real supplier dashboard counts, numeric deep link and paid-only queue with no unpaid advancement. Real login, HttpOnly refresh/reload, buyer order rendering, independent sessions and supplier checkout denial also PASS. Known offline refresh-response loss still requires explicit secure re-login; this is reported by the existing journey and is not silent recovery. Browser did not exercise every paid supplier mutation or the full recurring/collective purchase lifecycle; those remain NOT_TESTED as complete browser journeys.
+
+P0 job 132924767398 log confirms the new real supplier MySQL test PASS, synthetic signed payment/refund replay/concurrency checks PASS and no pre-receipt payout preparation. Genuine external provider delivery/payment completion is still BLOCKED/unverified. Local post-URL-fix frontend test files and build rerun PASS (2,231 modules). No application changes after tested code SHA; final evidence-only commit records these observations and does not imply another runtime test execution.
+
+FINAL: supplier dashboard integration slice VERIFIED within the tests above; full mandatory Hub/notification/provider scope PARTIAL/BLOCKED. No merge to main. CAN START NEXT PHASE: NO.
