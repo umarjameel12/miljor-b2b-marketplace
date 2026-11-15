@@ -1,0 +1,34 @@
+name: Smart Procurement Hub Counteroffer Source Gate
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/pages/RfqPage.jsx'
+      - 'frontend/src/App.jsx'
+      - 'frontend/src/components/layout/AppShell.jsx'
+      - 'backend/src/services/procurementCounterofferPolicy.js'
+      - 'backend/src/services/procurementProductCounterofferService.js'
+      - 'backend/src/controllers/procurementController.js'
+      - 'backend/src/routes/v1/procurementRoutes.js'
+      - 'backend/database/migrations/090_smart_procurement_product_counteroffers.sql'
+      - 'backend/tests/smart_hub_counteroffer_policy_gate.js'
+      - '.github/workflows/smart-hub-counteroffers.yml'
+  push:
+    branches:
+      - 'feature/smart-procurement-hub-unified-entry'
+jobs:
+  source-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Product-wise numeric counteroffer policy tests
+        run: node backend/tests/smart_hub_counteroffer_policy_gate.js
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Frontend production build
+        run: npm run build --prefix frontend
