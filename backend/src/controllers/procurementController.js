@@ -9,6 +9,7 @@ const procurementMatchingService = require('../services/procurementMatchingServi
 const procurementQuoteService = require('../services/procurementQuoteService');
 const procurementQuoteComparisonService = require('../services/procurementQuoteComparisonService');
 const procurementNegotiationService = require('../services/procurementNegotiationService');
+const procurementProductCounterofferService = require('../services/procurementProductCounterofferService');
 const procurementAwardPolicy = require('../services/procurementAwardPolicy');
 const procurementCollectiveService = require('../services/procurementCollectiveService');
 const procurementRecurringService = require('../services/procurementRecurringService');
@@ -184,6 +185,34 @@ class ProcurementController {
     try{
       const negotiations=await procurementNegotiationService.forSupplier(req.user.id);
       res.json({success:true,data:{negotiations}});
+    }catch(err){this._smartError(res,err);}
+  }
+
+  // Product-wise numeric counteroffers: nonbinding, no chat, no checkout.
+  async submitProductCounteroffers(req,res){
+    try{
+      const result=await procurementProductCounterofferService.submit(
+        req.user.id,req.params.id,req.params.quoteId,req.body,req.headers['x-idempotency-key']);
+      res.status(result.is_replay?200:201).json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async respondProductCounteroffer(req,res){
+    try{
+      const result=await procurementProductCounterofferService.respond(
+        req.user.id,req.params.offerId,req.body);
+      res.json({success:true,data:result});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listBuyerProductCounteroffers(req,res){
+    try{
+      const counteroffers=await procurementProductCounterofferService.forBuyer(req.user.id,req.params.id);
+      res.json({success:true,data:{counteroffers}});
+    }catch(err){this._smartError(res,err);}
+  }
+  async listSupplierProductCounteroffers(req,res){
+    try{
+      const counteroffers=await procurementProductCounterofferService.forSupplier(req.user.id);
+      res.json({success:true,data:{counteroffers}});
     }catch(err){this._smartError(res,err);}
   }
 
