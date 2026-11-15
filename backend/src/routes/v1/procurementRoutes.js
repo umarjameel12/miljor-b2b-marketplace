@@ -50,6 +50,12 @@ router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authoriz
 router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
 router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
 
+// Smart Hub product-wise numeric counteroffers (no free-text or chat).
+router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitProductCounteroffers(req,res));
+router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerProductCounteroffers(req,res));
+router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierProductCounteroffers(req,res));
+router.post('/procurement/supplier/counteroffers/:offerId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondProductCounteroffer(req,res));
+
 // B6-G/H award preview: buyer explicitly selects quote version and physical SKU.
 // No order, hold, ledger or checkout route is exposed before inventory/Safepay gate.
 router.post('/procurement/requests/:id/award-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartAward(req,res));
