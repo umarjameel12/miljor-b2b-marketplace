@@ -55,10 +55,11 @@ async function main() {
   const db={query,getConnection:async()=>connection};
   let providerAmount='3500.00';
   let providerState='TRACKER_ENDED';
+  let transactionStatus='SUCCESS';
   const adapter={
     createTracker:async input=>{calls++;assert.equal(input.amount,3500);return {trackerToken:'track_mock_01'};},
     constructCheckoutUrl:()=> 'https://sandbox.api.getsafepay.com/checkout/pay?beacon=track_mock_01',
-    fetchTracker:async token=>({data:{token,state:providerState,currency:'PKR',amount:providerAmount,transaction:{id:'tx_mock'}}})
+    fetchTracker:async token=>({data:{token,state:providerState,currency:'PKR',amount:providerAmount,transaction:{id:'tx_mock',status:transactionStatus}}})
   };
   const source=fs.readFileSync(path.join(__dirname,'../src/services/supplierSubscriptionCheckoutService.js'),'utf8');
   const moduleStub={exports:{}};
@@ -91,6 +92,11 @@ async function main() {
     assert.equal(pending.reconciled,false);
     assert.equal(profile.subscription_plan,'STARTER');
     providerState='TRACKER_ENDED';
+    transactionStatus='FAILED';
+    const declined=await svc.reconcile({actor,attemptId:1});
+    assert.equal(declined.reconciled,false);
+    assert.equal(profile.subscription_plan,'STARTER');
+    transactionStatus='SUCCESS';
     await assert.rejects(()=>svc.reconcile({actor:{id:8,role:'SUPPLIER'},attemptId:1}),e=>e.code==='ATTEMPT_NOT_FOUND');
     const paid=await svc.reconcile({actor,attemptId:1});
     assert.equal(paid.reconciled,true);
