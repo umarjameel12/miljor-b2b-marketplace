@@ -59,6 +59,27 @@ async function main(){
     await s.page.getByText('No paid orders in this queue.',{exact:true}).waitFor({timeout:15000});
     assert.equal(await s.page.getByRole('button',{name:/Start preparation|Record dispatch/}).count(),0,'Unpaid browser fixture must not allow fulfillment');
     pass('Supplier dashboard real counters, numeric deep link and paid-only queue with no unpaid advancement');
+    await b.page.goto(base+'/procurement',{waitUntil:'domcontentloaded'});
+    await b.page.getByRole('button',{name:'View Actual Cycles',exact:true}).click();
+    let cycleControl=b.page.getByRole('group',{name:/^Cycle .* controls$/}).first();
+    await cycleControl.getByRole('button',{name:'Review cycle quantities and delivery',exact:true}).click();
+    await cycleControl.getByRole('spinbutton',{name:/Cycle quantity for item/}).fill('3');
+    await cycleControl.getByRole('combobox',{name:'Cycle delivery preference',exact:true}).selectOption('PICKUP');
+    const revisionPromise=b.page.waitForResponse(response=>response.request().method()==='PUT'&&/\/cycles\/\d+\/inputs$/.test(new URL(response.url()).pathname));
+    await cycleControl.getByRole('button',{name:'Save this cycle revision',exact:true}).click();
+    const revisionResponse=await revisionPromise;assert.equal(revisionResponse.status(),200);
+    const revision=(await revisionResponse.json()).data;assert.equal(revision.revision,1);assert.equal(revision.items[0].quantity,'3.0000');assert.equal(revision.delivery_preference.mode,'PICKUP');assert.equal(revision.creates_payment,false);
+    await cycleControl.getByText('Saved revision 1.',{exact:false}).waitFor({timeout:15000});
+    await b.page.reload({waitUntil:'domcontentloaded'});
+    await b.page.getByRole('button',{name:'View Actual Cycles',exact:true}).click();
+    cycleControl=b.page.getByRole('group',{name:/^Cycle .* controls$/}).first();
+    await cycleControl.getByRole('button',{name:'Review cycle quantities and delivery',exact:true}).click();
+    assert.equal(await cycleControl.getByRole('spinbutton',{name:/Cycle quantity for item/}).inputValue(),'3.0000');
+    const skipPromise=b.page.waitForResponse(response=>response.request().method()==='POST'&&/\/cycles\/\d+\/skip$/.test(new URL(response.url()).pathname));
+    await cycleControl.getByRole('button',{name:'Skip this cycle',exact:true}).click();
+    assert.equal((await skipPromise).status(),200);
+    await cycleControl.getByRole('status').filter({hasText:'Cycle skip confirmed.'}).waitFor({timeout:15000});
+    pass('Buyer changes one cycle quantity/pickup preference, persists after reload and skips through real backend');
     await b.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
     await b.page.getByRole('heading',{name:'Procurement Orders & Reservations'}).waitFor({timeout:15000});
     // Real order row from isolated MySQL, rendered through actual backend GET /orders.

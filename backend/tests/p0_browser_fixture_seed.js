@@ -49,6 +49,15 @@ async function run(){
     [orderCode,buyerRows[0].id,supplierRows[0].id,10,100,1000,120,25,1145,2.50,
      'Disposable Gulberg Lahore buyer address']);
   console.log('PASS P0 browser poolless order seeded UNPAID with exact PKR 1145.00');
+  const [families]=await db.query("SELECT f.id FROM catalog_product_families f JOIN catalog_categories c ON c.id=f.category_id AND c.is_active=1 AND c.approval_status='APPROVED' WHERE f.is_active=1 AND f.approval_status='APPROVED' AND JSON_CONTAINS(f.allowed_purchasing_units,JSON_QUOTE('bag')) ORDER BY f.id LIMIT 1");
+  assert.ok(families.length,'Recurring browser fixture requires approved bag family');
+  const template=await require('../src/services/procurementRequestService').createDraft(buyerRows[0].id,{frequency:'BIWEEKLY',delivery_area:'Lahore',items:[{family_id:families[0].id,quantity:'2',unit:'bag'}]},'browser-recurring-template-20261116');
+  const tomorrow=new Date(Date.now()+86400000);
+  const recurring=require('../src/services/procurementRecurringService');
+  const contract=await recurring.createDraft(buyerRows[0].id,template.request.id,{cadence:'BIWEEKLY',weekday_number:tomorrow.getUTCDay(),local_run_time:'23:59',starts_on:tomorrow.toISOString().slice(0,10)},'browser-recurring-contract-20261116');
+  await recurring.changeStatus(buyerRows[0].id,contract.contract.id,'ACTIVATE',1,true);
+  await recurring.scheduleUpcomingForBuyer(buyerRows[0].id,contract.contract.id,{limit:2});
+  console.log('PASS P0 recurring browser cycles seeded without orders or payments');
   console.log('PASS P0 browser fixtures seeded in disposable database; secrets not printed');
 }
 run().then(()=>process.exit(0)).catch(e=>{console.error('FAIL P0 browser fixture',e.message);process.exit(1)});

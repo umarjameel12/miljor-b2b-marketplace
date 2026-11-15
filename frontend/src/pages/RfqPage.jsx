@@ -18,6 +18,7 @@ import {
 import { toast } from 'react-toastify';
 import { geoApi } from '../api/geo';
 import { deliveryApi } from '../api/delivery';
+import { RecurringCycleControls } from '../components/procurement/RecurringCycleControls';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
@@ -619,6 +620,7 @@ export const RfqPage = () => {
       });
       await refreshProcurementModes();
       toast.success('Recurring schedule updated without an automatic payment.');
+      if(recurringCyclesContract===contract.id)await loadActualRecurringCycles(contract.id);
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
@@ -1186,6 +1188,7 @@ export const RfqPage = () => {
                           <button type="button" disabled={shoppingBusy}
                             onClick={()=>prepareRecurringDraft(recurringCyclesContract,cycle.id)}
                             className="text-xs underline">Prepare Due Shopping Draft</button>}
+                        <RecurringCycleControls key={`${user.id}:${cycle.id}`} contractId={recurringCyclesContract} cycle={cycle} onChanged={()=>loadActualRecurringCycles(recurringCyclesContract)} />
                       </div>
                     ))}
                     <p className="text-xs text-amber-700">

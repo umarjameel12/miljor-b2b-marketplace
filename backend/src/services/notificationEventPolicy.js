@@ -22,6 +22,8 @@ const definitions={
   CYCLE_GENERATED:['Recurring cycle generated','اگلا دور بن گیا','recurring',false],
   CYCLE_CUTOFF_UPCOMING:['Recurring cutoff approaching','اگلے دور کی آخری مہلت قریب ہے','recurring'],
   CYCLE_QUANTITY_MODIFIED:['Cycle quantity updated','دور کی مقدار تبدیل ہو گئی','recurring'],
+  CYCLE_DELIVERY_PREFERENCE_UPDATED:['Cycle delivery preference updated','دور کی ترسیل کی ترجیح تبدیل ہو گئی','recurring'],
+  CYCLE_DRAFT_READY:['Cycle draft ready for review','دور کی درخواست جائزے کے لیے تیار ہے','recurring'],
   CYCLE_SKIPPED:['Cycle skipped','یہ دور چھوڑ دیا گیا','recurring'],
   RECURRING_PAUSED:['Recurring schedule paused','مسلسل خریداری روک دی گئی','recurring'],
   RECURRING_RESUMED:['Recurring schedule resumed','مسلسل خریداری بحال ہو گئی','recurring'],

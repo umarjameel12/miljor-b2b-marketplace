@@ -46,6 +46,8 @@ jobs:
           node tests/canonical_migration_manifest_gate.js
           node tests/procurement_delivery_binding_policy_gate.js
           node --test tests/supplier_operations_overview_gate.js
+          node --test tests/recurring_cycle_inputs_policy_gate.js
+          node tests/b6_recurring_worker_gate.js
       - name: Install frontend
         run: npm ci --prefix ../frontend
       - name: Polling, account isolation and durable read tests

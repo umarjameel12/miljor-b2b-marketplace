@@ -52,6 +52,7 @@ function startScheduler() {
       if (recurringRunning) return;
       recurringRunning = true;
       try {
+        await require('./procurementRecurringService').runReminderBatch({limit:20});
         const result = await require('./procurementRecurringService')
           .runDueBatch({limit:20});
         if (result.checked || result.failed) {

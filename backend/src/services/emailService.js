@@ -942,6 +942,12 @@ class EmailService {
       let providerAccepted = false;
       try {
         const payload = typeof msg.payload_json === 'string' ? JSON.parse(msg.payload_json) : (msg.payload_json || {});
+        if(msg.template_name==='platform_notification'&&payload.reminderContext&&
+           !await require('./recurringReminderPolicy').isCurrent(db,{buyerId:msg.recipient_user_id,...payload.reminderContext})){
+          const [suppressed]=await db.query("UPDATE transactional_email_outbox SET status='FAILED',attempt_count=3,last_error='STALE_REMINDER_SUPPRESSED',claim_token=NULL,claim_expires_at=NULL,next_attempt_at=NULL WHERE id=? AND status='SENDING' AND claim_token=?",[msg.id,token]);
+          if(suppressed.affectedRows)failed++;else ambiguous++;
+          continue;
+        }
         const { text, html } = this._renderTemplate(msg.template_name, payload);
         const sendResult = await this.transporter.sendMail({
           from: this.emailFrom,

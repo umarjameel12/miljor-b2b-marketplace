@@ -96,6 +96,8 @@ router.post('/procurement/recurring/:contractId/cycles/:cycleId/skip',protect,au
 router.post('/procurement/recurring/:contractId/cycles/schedule',protect,authorizeStrict('BUYER'),(req,res)=>controller.scheduleRecurringCycles(req,res));
 router.get('/procurement/recurring/:contractId/cycles',protect,authorizeStrict('BUYER'),(req,res)=>controller.listRecurringCycles(req,res));
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/prepare',protect,authorizeStrict('BUYER'),(req,res)=>controller.prepareRecurringCycle(req,res));
+router.get('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.getRecurringCycleInputs(req,res));
+router.put('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.updateRecurringCycleInputs(req,res));
 
 // B6-G/H — Fee-inclusive preview and server-gated real order acceptance.
 router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartPayable(req,res));

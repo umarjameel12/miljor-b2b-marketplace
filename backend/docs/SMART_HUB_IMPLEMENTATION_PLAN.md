@@ -4,6 +4,66 @@ Baseline: PR #53, f8a82037a83e6f8ccb59e8bb1ffd2c79354b634f. Scope recovered from
 
 **Mandatory cross-phase requirement:** Event-driven notifications are core business scope in every phase, not an optional follow-up. Implement the event/recipient/channel matrix and acceptance contract in [SMART_HUB_NOTIFICATION_ACCEPTANCE.md](SMART_HUB_NOTIFICATION_ACCEPTANCE.md). No phase passes until its business action and notification gates pass independently. Extend existing notification/outbox infrastructure; preserve UCP, protected databases, B6 checkout gates and Safepay sandbox restrictions.
 
+## Remaining-work execution sequence — authorized 2026-11-16
+
+Goal: complete the remaining scope as independently verified vertical slices on PR #53. Architecture: extend the existing procurement, delivery, fulfillment, finance and outbox services; each recurring occurrence and each group buyer retain independent commercial consent. Express/MySQL/React remain the stack. No alternative parallel engine, automatic debit or B6 gate bypass. Original protected checkout/configuration stays read-only. The present clean approved feature checkout is already separate from the original working project.
+
+### R1 — Recurring controls and notification lifecycle (STARTED)
+
+Files: procurementRecurringService.js; focused procurementRecurringCyclePolicy.js if pure normalization warrants it; procurementController.js/procurementRoutes.js; RfqPage.jsx and a focused cycle-control component; recurring contract/MySQL/notification tests and existing CI. Use existing recurring cycle_events for append-only quantity/delivery-preference revisions and stable mutation keys; no second schedule database.
+
+- [ ] Pin regression for pause/resume version drift, post-cutoff edits, cross-buyer mutation, fractional packaging, concurrent revisions/retries and notification rollback.
+- [ ] Reconcile only uncommitted scheduled cycles on pause/resume/cancel. Missed paused cutoffs remain skipped/missed, never silently prepared; generated/paid/history untouched. Preserve original biweekly anchor.
+- [ ] Snapshot requested items when scheduling. Allow owner to change only that future cycle's quantities and nonbinding owned delivery preference under contract-first/cycle-second locks and expected revision. Generated draft copies this revision; supplier eligibility, stock, exact new delivery pricing and buyer payment require fresh approval via existing services.
+- [ ] Expose cycle input/skip controls and backend-confirmed success in existing hub. Show delivery preference as requested, never as an approved fee.
+- [ ] Add bounded idempotent upcoming-cutoff producer and verified draft-ready/missed notifications using existing outbox; paused/skipped cycles cannot emit new active reminders.
+- [ ] Consolidated isolated MySQL/API/rollback/concurrency gate; relevant existing recurring/notification contracts; build and actual CI/browser controls. Record PASS/FAIL/BLOCKED by business event/channel. Commit verified phase and stop per project protocol.
+
+### R2 — Individual collective commitment and capacity
+
+Files: procurementCollectiveApprovalService.js, procurementCollectiveBidService.js, procurementAwardService.js and existing shared inventory/reservation services; collective routes/controller/UI; forward schema only if existing approval/order link is insufficient.
+
+- [ ] Reconcile overlapping PR #28/#29 actual finance/fulfillment diffs before porting any source; retain accepted code and original migration checksums.
+- [ ] Transform each buyer's separately approved current bid/spec/fee snapshot into only their own gated payable suborder, using shared stock locking/allocation. Organizer cannot consent/pay for peers.
+- [ ] Preserve paid peers when unpaid/withdrawn quantity changes; any changed tier/fee requires fresh consent. No automatic repricing of locked orders. Stock reservation has durable expiry/release and no double allocation against Regular/Flash.
+- [ ] Invitation/join/leave/minimum/cutoff/tier/consent/payment notifications use authorized recipients and immutable event identity.
+- [ ] Test partial membership/payment, decline, stale bid, lost intent response, shared SKU races and exact per-buyer invoice/escrow on miljor_test_db, then real buyer/supplier browser journey.
+
+### R3 — Recurring/group delivery coordination and pricing
+
+Files: deliveryEligibilityService.js, procurementDeliveryBindingService.js/policy, existing supplier delivery configuration/rates, order delivery snapshots, delivery routes/UI. A forward route/stop migration may be needed; inspect existing logistics tables before defining it.
+
+- [ ] Independent clustered/individual/pickup/express choices with exact fees; reuse authoritative eligibility. Carry R1 preferences but revalidate each cycle/address/version/window.
+- [ ] Route compatibility checks same supplier dispatch, verified stops, overlapping window, product handling and vehicle weight/volume; reserve capacity transactionally. Allocate exact charges with deterministic residual rounding.
+- [ ] Lock supplier-confirmed route/mode/cost into buyer consent and order/invoice; changed grouping cannot change a locked price. Buyer sees only own stop.
+- [ ] Cluster/route/dispatch/ETA/delay/reminder events; test incompatible route, oversubscription, fee sum, private addresses and changed destination with MySQL/concurrency/browser evidence.
+
+### R4 — Per-line POD, disputes and failed-delivery reattempt
+
+Files: fulfillmentService.js, deliveryQuantityPolicy.js, existing dispute/refund/financial settlement services, invoiceService.js, fulfillment routes and buyer/supplier controls. Inspect merged 100/80/20 work first; never clone it.
+
+- [ ] Record ordered/delivered/accepted/disputed quantities per award line, unit-correct bounded quantities and authorized evidence; preserve append-only attempt history.
+- [ ] Allocate accepted/disputed value exactly; held amounts cannot settle/refund twice and unrelated buyers continue.
+- [ ] Supplier reports failed attempt with responsibility; buyer approves proposed new slot and explicit extra fee before a reattempt. No new debit or fake delivered state.
+- [ ] Proof/partial/dispute/failed/rescheduled notifications and ownership, concurrency, duplicate POD, 100/80/20 per-line ledger/refund identity tests plus browser evidence.
+
+### R5 — Financial/provider acceptance, remaining notifications and reporting
+
+Files: existing Safepay checkout/payment/refund/settlement, invoice services, email outbox workers and configured SMS adapter, notification producers/policy, existing analytics read models/UI; new report policy only when needed for defensible comparable baselines.
+
+- [ ] Display all merchandise/delivery/processing/tax basis/rate/amount/currency before consent and reproduce invoice totals exactly.
+- [ ] Genuine Safepay sandbox buyer consent/payment/fulfillment/receipt and provider refund/settlement evidence. Keep external bank execution disabled; missing credentials/provider capability is BLOCKED, not synthetic PASS.
+- [ ] Complete reminder/admin/security event matrix, EN/Urdu, mandatory financial/security alerts, scoped deep links, durable retries/failed delivery and configured urgent SMS/email. Reuse inbox/outbox; real delivery channels distinct from mock/acceptance.
+- [ ] Savings require a recorded matching spec/quantity/time/cost baseline; otherwise unavailable. Reliability defines on-time denominator and failed/partial/missed/cancelled handling. Test factual source rows and boundaries.
+
+### R6 — Release reconciliation
+
+- [ ] Canonical test-only backup/migrations/history; B6/UCP/security/financial/concurrency and buyer/supplier browser journeys for one-time, collective, recurring, partial/dispute and failed attempts.
+- [ ] Complete required event/channel matrix and overlapping PR source reconciliation; record exact tested SHA and all blockers in existing reports/phase log.
+- [ ] Merge only if every required critical business/provider gate is PASS on proposed code and authorization remains valid; otherwise keep PR #53 draft. Existing nine green CI workflows certify only the scope they actually exercise.
+
+Review focus across phases: pause straddles cutoff; configuration/address changes after consent; unpaid peer exits before dispatch; concurrent stock/receipt/refund retries; missing or delayed provider events. Each belongs to its owning phase's negative/concurrency gate. Approval to start this sequence is already explicit; no repeated design permission is required. Local phase completion does not authorize silently starting another phase under the project strict stop rule.
+
 ## Impact map
 
 | Component | Current evidence | Required change | Risk |

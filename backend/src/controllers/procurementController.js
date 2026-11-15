@@ -425,6 +425,14 @@ class ProcurementController {
       res.json({success:true,data:{cycles}});
     }catch(e){this._smartError(res,e);}
   }
+  async getRecurringCycleInputs(req,res){
+    try{res.json({success:true,data:await procurementRecurringService.cycleInputs(req.user.id,req.params.contractId,req.params.cycleId)});}
+    catch(error){this._smartError(res,error);}
+  }
+  async updateRecurringCycleInputs(req,res){
+    try{res.json({success:true,data:await procurementRecurringService.updateCycleInputs(req.user.id,req.params.contractId,req.params.cycleId,req.body,req.headers['x-idempotency-key'])});}
+    catch(error){this._smartError(res,error);}
+  }
 
   // B5: Dedicated Flash Pool lifecycle. Fail closed on unsafe direct ACTIVE creation.
   async createFlashPool(req,res) {
