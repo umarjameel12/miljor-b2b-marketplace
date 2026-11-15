@@ -202,13 +202,8 @@ export const LandingPage = () => {
               Wholesale procurement, made easier for growing food businesses.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link to="/pools" className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Explore Pools <ArrowUpRight size={16} /></Link>
-              <Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition-colors hover:opacity-75" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>Request a Quote <ArrowRight size={16} /></Link>
-            </div>
-            <div className="mt-10 flex flex-wrap items-center gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
-              <span className="flex items-center gap-2"><Layers size={15} style={{ color: 'var(--brand-accent)' }} /> Pooled buying</span>
-              <span className="flex items-center gap-2"><ShoppingBag size={15} style={{ color: 'var(--brand-accent)' }} /> Supplier offers</span>
-              <span className="flex items-center gap-2"><Truck size={15} style={{ color: 'var(--brand-accent)' }} /> Order tracking</span>
+              <Link to="/pools" className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Explore Pools</Link>
+              <Link to={requestQuoteDestination} state={quoteState} className="inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Request a Quote</Link>
             </div>
           </div>
 
