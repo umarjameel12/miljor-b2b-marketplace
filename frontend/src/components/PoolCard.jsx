@@ -55,11 +55,14 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
   const grade = pool.quality_spec_grade || pool.quality_grade || pool.grade || null;
   const brandLabel = pool.brand ? pool.brand : (pool.is_unbranded ? 'Unbranded' : null);
   const normalizedPack = pool.pack_size
-    ? String(pool.pack_size).trim() + (/\b(kg|g|l|litres?|bags?|tins?|cartons?)\b/i.test(String(pool.pack_size))
+    ? String(pool.pack_size).trim() + (/(kg|g|litres?|bags?|tins?|cartons?|\d\s*l)\b/i.test(String(pool.pack_size))
       ? '' : ' ' + (pool.pack_unit || unit))
     : null;
-  const specification = [pool.variety, pool.quality_spec_grade || pool.quality_grade || pool.grade, normalizedPack]
-    .filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ');
+  const specification = [
+    pool.variety || (isExample ? pool.category_name : null),
+    pool.quality_spec_grade || pool.quality_grade || pool.grade,
+    normalizedPack,
+  ].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ');
   const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : Math.round((progressPercent / 100) * (pool.target_quantity || pool.target_qty || 1000)));
   const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
@@ -76,6 +79,8 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
       ? '1121 Basmati Rice'
       : pool.category_name || pool.family_name || 'Wholesale Commodity';
   const productLower = productName.toLowerCase();
+  const sellerName = pool.supplier_business_name || pool.supplier_name;
+  const sellerDisplay = sellerName ? (isExample ? `${sellerName} · Demo` : sellerName) : (isExample ? 'Demo supplier' : null);
   const categoryLabel = /rice|basmati|kainat|sella|grain/.test(productLower) ? 'Rice & Grains'
     : /oil|ghee|olein/.test(productLower) ? 'Cooking Oil & Ghee'
     : /flour|atta|maida|chakki|wheat/.test(productLower) ? 'Flour & Bakery'
@@ -194,60 +199,33 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
       </div>
 
       {/* Card Content Body */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-        <div>
+      <div className="p-4 flex-1 flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {/* Product Title */}
           <h3
             className="font-sans font-bold text-sm sm:text-base tracking-tight leading-snug line-clamp-2"
             style={{ color: 'var(--text-primary)' }}
-            title={pool.product_name || pool.title}
+            title={productName}
           >
             {productName}
           </h3>
-          <span className="mt-1.5 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--pool-detail-accent)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>{categoryLabel}</span>
-
-          {(isExample || showProductDetails) && (
-            <> 
-              {!isExample && <button
-                type="button"
-                onClick={() => setShowProductDetails(false)}
-                className="mt-2 text-[11px] font-semibold hover:opacity-80"
-                style={{ color: 'var(--pool-detail-accent)' }}
-              >
-                Hide product details −
-              </button>}
-            <div className="mt-1 rounded-xl border p-2.5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>
-          {/* Supplier specifications are opt-in; never clutter the pool overview. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-sans mt-1" style={{ color: 'var(--text-secondary)' }}>
-            <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
-              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : isExample ? 'Illustrative supplier listing' : 'Supplier details available on request'}
-            </span>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {brandLabel && (
-                <>
-                  <span>{brandLabel}</span>
-                  <span>•</span>
-                </>
-              )}
-              {grade && (
-                <>
-                  <span>{grade}</span>
-                  <span>•</span>
-                </>
-              )}
-              {!isExample && <span>Min {buyerMoq} {unit}</span>}
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <span className="inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--pool-detail-accent)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>{categoryLabel}</span>
+            {sellerDisplay && <span className="text-[10px] font-medium truncate max-w-full" style={{ color: 'var(--text-secondary)' }} title={sellerDisplay}>By {sellerDisplay}</span>}
           </div>
 
+          {/* Short, visible product specification for both real and demo offers. */}
           {specification && (
-            <div className="mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-5" style={{ backgroundColor: 'var(--bg-subtle)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-              <span className="block text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--landing-accent-text, var(--text-primary))' }}>Product specifications</span>
-              <span className="mt-1 block break-words">{specification}</span>
+            <div className="rounded-xl border px-3 py-2.5 text-[11px] leading-[1.4rem]"
+              style={{ backgroundColor: 'var(--bg-subtle)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--text-primary)' }}>Product Specifications</span>
+              <p className="mt-0.5 break-words">{specification}</p>
             </div>
           )}
-
+          {!isExample && !specification && (
+            <div className="rounded-xl border px-3 py-2 text-[11px]" style={{ backgroundColor: 'var(--bg-subtle)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              Product grade and packaging details available in the published listing
             </div>
-            </>
           )}
 
           {/* Participation cutoff and delivery promise. Example data is illustrative only. */}
@@ -274,7 +252,10 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
                 </div>
               )}
               {deliveryDateConflict && !isExample && (
-                <p className="text-[10px]" style={{ color: 'var(--status-warning, var(--pool-detail-accent))' }}>Delivery date pending supplier correction</p>
+                <div className="flex items-center justify-between gap-2 text-[10px]" style={{ color: 'var(--pool-detail-accent)' }}>
+                  <span className="inline-flex items-center gap-1"><Truck className="w-3 h-3" />Promised Delivery:</span>
+                  <span className="font-medium text-right">Pending supplier confirmation</span>
+                </div>
               )}
               {promisedDeliveryFormatted && (
                 <div className="flex items-center justify-between gap-3" style={{ color: 'var(--pool-detail-accent)' }}>
@@ -288,7 +269,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
               <div className="flex items-center justify-between text-[9px] pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
                 <span className="inline-flex items-center gap-1">
                   <Lock className="w-2.5 h-2.5" style={{ color: 'var(--pool-detail-accent)' }} />
-                  <span>Immutable Published Terms</span>
+                  <span>{isExample ? 'Demo Procurement Terms' : 'Immutable Published Terms'}</span>
                 </span>
                 <span>{isExample ? 'Illustrative terms' : '1–3 Day SLA'}</span>
               </div>
@@ -401,7 +382,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
         </div>
 
         {/* Action Button: Reserve Quantity */}
-        <div className="pt-2">
+        <div className="mt-auto pt-2">
           <button
             type="button"
             onClick={() => { if (!isExample && onSelect) onSelect(pool); else if (!isExample) setShowProductDetails(true); }}
@@ -413,7 +394,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
               border: '1px solid var(--pool-join-border, rgba(125, 93, 43, 0.28))',
             }}
           >
-            <span>{isExample ? 'Example · Not Joinable' : isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
+            <span>{isExample ? 'Demo Pool · Preview Only' : isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
           </button>
         </div>
       </div>
