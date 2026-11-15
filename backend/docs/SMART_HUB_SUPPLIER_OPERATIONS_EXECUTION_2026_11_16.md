@@ -37,3 +37,7 @@ Implementation commit `1aa7e18e57f1789d3f53bc06fb7b22700fd606c0` pushed to appro
 Skills applied: executing-plans (bounded inline phase), test-driven-development (new contract regressions), systematic-debugging (actual build/test failure root causes), verification-before-completion (fresh evidence); using-superpowers consulted. Project consolidated gate and data-safety policy took precedence over generic workflows.
 
 RESULT: PARTIAL overall. CAN START NEXT PHASE: NO.
+
+## CI-driven correction
+
+At code `1aa7e18`, canonical source/build and real MySQL jobs passed, but Chromium found the new UI API used `/supplier/orders` instead of the existing mounted `/fulfillment/supplier/orders`. Dashboard real counters and numeric deep link had already passed before the empty paid queue timed out. Corrected all four frontend fulfillment URLs, retained existing backend routes/authorization and added adapter assertions for list/detail/transition/exception plus both idempotency headers. Regression reproduced RED, then frontend test files PASS after fix. This is an integration defect in this phase, not an upstream blocker; prior local helper assertions did not cover URL routing. Final Chromium result pending corrective push.

@@ -5,10 +5,10 @@ const dataOf=response=>{
 };
 export const supplierFulfillmentApi={
   overview:async({signal}={})=>dataOf(await apiClient.get('/supplier/operations/overview',{signal})),
-  list:async({page=1,status,signal}={})=>dataOf(await apiClient.get('/supplier/orders',{params:{page,limit:20,...(status?{status}:{})},signal})),
-  detail:async(id,{signal}={})=>dataOf(await apiClient.get(`/supplier/orders/${encodeURIComponent(id)}`,{signal})),
-  transition:async(id,body,key,{signal}={})=>dataOf(await apiClient.post(`/supplier/orders/${encodeURIComponent(id)}/transition`,body,{headers:{'X-Idempotency-Key':key},signal})),
-  exception:async(id,body,key,{signal}={})=>dataOf(await apiClient.post(`/supplier/orders/${encodeURIComponent(id)}/exception`,body,{headers:{'X-Idempotency-Key':key},signal})),
+  list:async({page=1,status,signal}={})=>dataOf(await apiClient.get('/fulfillment/supplier/orders',{params:{page,limit:20,...(status?{status}:{})},signal})),
+  detail:async(id,{signal}={})=>dataOf(await apiClient.get(`/fulfillment/supplier/orders/${encodeURIComponent(id)}`,{signal})),
+  transition:async(id,body,key,{signal}={})=>dataOf(await apiClient.post(`/fulfillment/supplier/orders/${encodeURIComponent(id)}/transition`,body,{headers:{'X-Idempotency-Key':key},signal})),
+  exception:async(id,body,key,{signal}={})=>dataOf(await apiClient.post(`/fulfillment/supplier/orders/${encodeURIComponent(id)}/exception`,body,{headers:{'X-Idempotency-Key':key},signal})),
   invoice:async(id,{signal}={})=>dataOf(await apiClient.get(`/invoices/${encodeURIComponent(id)}`,{signal})),
 };
 export function nextSupplierMilestone(order){

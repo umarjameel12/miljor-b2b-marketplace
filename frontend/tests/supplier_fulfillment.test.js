@@ -1,5 +1,15 @@
 import assert from 'node:assert/strict';
-import { nextSupplierMilestone, supplierDeliveryMethods, createSupplierIntentStore } from '../src/api/supplierFulfillment.js';
+import { supplierFulfillmentApi, nextSupplierMilestone, supplierDeliveryMethods, createSupplierIntentStore } from '../src/api/supplierFulfillment.js';
+import apiClient from '../src/api/client.js';
+const requests=[];
+apiClient.defaults.adapter=async config=>{requests.push(config);return {data:{success:true,data:{orders:[]}},status:200,statusText:'OK',headers:{},config};};
+await supplierFulfillmentApi.list();
+await supplierFulfillmentApi.detail(21);
+await supplierFulfillmentApi.transition(21,{to_status:'PREPARING'},'retry-key');
+await supplierFulfillmentApi.exception(21,{reason:'SUPPLIER_DELIVERY_DELAYED',description:'Actual delay'},'issue-key');
+assert.deepEqual(requests.map(request=>request.url),['/fulfillment/supplier/orders','/fulfillment/supplier/orders/21','/fulfillment/supplier/orders/21/transition','/fulfillment/supplier/orders/21/exception']);
+assert.equal(requests[2].headers.get('X-Idempotency-Key'),'retry-key');
+assert.equal(requests[3].headers.get('X-Idempotency-Key'),'issue-key');
 assert.equal(nextSupplierMilestone({payment_status:'PAID',fulfillment_status:'PREPARING'}),'READY_FOR_DISPATCH');
 assert.equal(nextSupplierMilestone({payment_status:'AWAITING_PAYMENT',fulfillment_status:'PREPARING'}),null);
 assert.equal(nextSupplierMilestone({payment_status:'PAID',fulfillment_status:'EXCEPTION'}),null);
