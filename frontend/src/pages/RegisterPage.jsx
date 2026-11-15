@@ -248,7 +248,7 @@ export const RegisterPage = () => {
             border: '1px solid var(--border-default)',
           }}
         >
-          Create Account
+          Register
         </span>
       </div>
 
@@ -502,7 +502,7 @@ export const RegisterPage = () => {
             color: 'var(--text-on-champagne)',
           }}
         >
-          Create Account
+          Get Started
         </Button>
 
         <p className="text-[11px] text-center text-stone-500">
