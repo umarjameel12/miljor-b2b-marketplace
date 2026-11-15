@@ -11,7 +11,8 @@ assert.deepEqual(valid,[
   {request_item_id:13,quoted_unit_price:'510.00',proposed_unit_price:'490.00'}
 ]);
 const bad=(fn,code)=>assert.throws(fn,e=>e.code===code,code);
-bad(()=>validateProductCounteroffers({message:'hello',lines:[]},quoted),'INVALID_COUNTEROFFER');
+bad(()=>validateProductCounteroffers({message:'hello',lines:[{request_item_id:12,proposed_unit_price:'270'}]},quoted),'UNSUPPORTED_COUNTER_FIELD');
+bad(()=>validateProductCounteroffers({lines:[]},quoted),'INVALID_COUNTEROFFER');
 bad(()=>validateProductCounteroffers({lines:[{request_item_id:99,proposed_unit_price:'1'}]},quoted),'UNQUOTED_COUNTER_ITEM');
 bad(()=>validateProductCounteroffers({lines:[{request_item_id:12,proposed_unit_price:'270'},{request_item_id:12,proposed_unit_price:'280'}]},quoted),'DUPLICATE_COUNTER_ITEM');
 bad(()=>validateProductCounteroffers({lines:[{request_item_id:12,proposed_unit_price:'290'}]},quoted),'UNCHANGED_COUNTER_PRICE');
