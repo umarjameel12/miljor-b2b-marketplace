@@ -220,6 +220,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                     <span>Closes (PKT):</span>
                   </span>
                   <div className="flex flex-col items-end gap-0.5">
+                    <span style={{ color: 'var(--pool-detail-accent)' }}>
                     <CountdownTimer
                       deadline={pool.scheduled_close_at || pool.expires_at}
                       serverTime={pool.server_time || null}
@@ -227,17 +228,18 @@ export const PoolCard = ({ pool, onSelect }) => {
                       label="Closes in"
                       onExpire={() => setDeadlineExpired(true)}
                     />
+                  </span>
                     <strong className="font-mono text-[10px]" style={{ color: 'var(--text-primary)' }}>{cutoffFormatted}</strong>
                   </div>
                 </div>
               )}
               {promisedDeliveryFormatted && (
-                <div className="flex items-center justify-between gap-3" style={{ color: 'var(--text-secondary)' }}>
+                <div className="flex items-center justify-between gap-3" style={{ color: 'var(--pool-detail-accent)' }}>
                   <span className="inline-flex items-center gap-1.5 font-medium">
                     <Truck className="w-3 h-3 shrink-0" style={{ color: 'var(--pool-detail-accent)' }} aria-hidden="true" />
                     <span>Promised Delivery:</span>
                   </span>
-                  <strong className="font-sans font-semibold tabular-nums text-right" style={{ color: 'var(--text-primary)' }}>{promisedDeliveryFormatted}</strong>
+                  <strong className="font-sans font-semibold tabular-nums text-right" style={{ color: 'var(--pool-detail-accent)' }}>{promisedDeliveryFormatted}</strong>
                 </div>
               )}
               <div className="flex items-center justify-between text-[9px] pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
