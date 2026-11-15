@@ -1,0 +1,35 @@
+name: MilJor UCP Recovery Reconciliation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/services/flashPoolService.js'
+      - 'backend/src/services/ucpRecoveryService.js'
+      - 'backend/src/services/ucpExpiryNotificationService.js'
+      - 'backend/src/services/schedulerService.js'
+      - 'backend/database/migrations/095_ucp_recovery_cursor.sql'
+      - 'backend/tests/ucp_flash_recovery_gate.js'
+      - 'backend/tests/ucp_recovery_policy_gate.js'
+      - '.github/workflows/ucp-flash-recovery-reconciliation.yml'
+  push:
+    branches: ['feature/miljor-release-reconciliation']
+jobs:
+  recovery-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate canonical migration and recovery source
+        run: |
+          node backend/database/migrationManifest.js
+          node --check backend/src/services/flashPoolService.js
+          node --check backend/src/services/ucpRecoveryService.js
+          node --check backend/src/services/ucpExpiryNotificationService.js
+          node --check backend/src/services/schedulerService.js
+      - name: Recovery lease and suspended supplier safety
+        run: |
+          node backend/tests/ucp_flash_recovery_gate.js
+          node backend/tests/ucp_recovery_policy_gate.js
