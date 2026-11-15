@@ -63,7 +63,11 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
   const committedQty = pool.committed_quantity !== undefined ? pool.committed_quantity : (pool.current_qty !== undefined ? Number(pool.current_qty) : Math.round((progressPercent / 100) * (pool.target_quantity || pool.target_qty || 1000)));
   const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
-  const promisedDeliveryFormatted = formatLahoreTimestamp(pool.promised_delivery_at);
+  const deliveryTimestampMs = pool.promised_delivery_at ? new Date(pool.promised_delivery_at).getTime() : NaN;
+  const closeTimestampMs = pool.scheduled_close_at || pool.expires_at ? new Date(pool.scheduled_close_at || pool.expires_at).getTime() : NaN;
+  const deliveryDateConflict = Number.isFinite(deliveryTimestampMs) &&
+    Number.isFinite(closeTimestampMs) && deliveryTimestampMs < closeTimestampMs;
+  const promisedDeliveryFormatted = !deliveryDateConflict ? formatLahoreTimestamp(pool.promised_delivery_at) : null;
   const rawName = pool.product_name || pool.title || '';
   const varietyText = String(pool.variety || '').trim();
   const productName = rawName && !/^(wholesale commodity|commodity|product)$/i.test(rawName.trim())
@@ -216,7 +220,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
           {/* Supplier specifications are opt-in; never clutter the pool overview. */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-sans mt-1" style={{ color: 'var(--text-secondary)' }}>
             <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
-              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : 'Supplier details available on request'}
+              {pool.supplier_name || pool.supplier_business_name ? `By ${pool.supplier_name || pool.supplier_business_name}` : isExample ? 'Illustrative supplier listing' : 'Supplier details available on request'}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
               {brandLabel && (
@@ -231,7 +235,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
                   <span>•</span>
                 </>
               )}
-              <span>Min {buyerMoq} {unit}</span>
+              {!isExample && <span>Min {buyerMoq} {unit}</span>}
             </div>
           </div>
 
@@ -247,7 +251,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
           )}
 
           {/* Participation cutoff and delivery promise. Example data is illustrative only. */}
-          {(cutoffFormatted || promisedDeliveryFormatted) && (
+          {(cutoffFormatted || promisedDeliveryFormatted || deliveryDateConflict) && (
             <div className="mt-2 p-2 rounded-xl border text-[10px] space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
               {cutoffFormatted && (
                 <div className="space-y-1">
@@ -268,6 +272,9 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
                     <strong className="text-right font-sans font-semibold tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>{cutoffFormatted}</strong>
                   </div>
                 </div>
+              )}
+              {deliveryDateConflict && !isExample && (
+                <p className="text-[10px]" style={{ color: 'var(--status-warning, var(--pool-detail-accent))' }}>Delivery date pending supplier correction</p>
               )}
               {promisedDeliveryFormatted && (
                 <div className="flex items-center justify-between gap-3" style={{ color: 'var(--pool-detail-accent)' }}>
