@@ -42,6 +42,22 @@ function startScheduler() {
   });
   activeTasks.push(cleanupTask);
 
+  // Paid subscriptions explicitly cancelled by suppliers return to STARTER at
+  // the end of the verified paid period. No automatic charge or renewal occurs.
+  let subscriptionTickRunning = false;
+  const subscriptionTask = cron.schedule('*/5 * * * *', async () => {
+    if (subscriptionTickRunning) return;
+    subscriptionTickRunning = true;
+    try {
+      await require('./subscriptionEntitlementService').processScheduledStarterChanges(50);
+    } catch (error) {
+      console.error('[Scheduler] Subscription period-end transition failed:', error.code || error.message);
+    } finally {
+      subscriptionTickRunning = false;
+    }
+  });
+  activeTasks.push(subscriptionTask);
+
   // B6-M recurring procurement draft worker, opt-in only.
   // Does NOT create orders, trigger Safepay or authorize standing charges.
   // Locking and retry backoff are maintained in procurementRecurringService.
