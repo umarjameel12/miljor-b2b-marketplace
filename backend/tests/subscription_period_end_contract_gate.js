@@ -18,7 +18,7 @@ async function main() {
       return [[{ ...period }]];
     if (sql.includes('SELECT id, plan_code, current_period_end, pending_plan_code, status'))
       return [[{ ...period }]];
-    if (sql.includes('SELECT supplier_id FROM supplier_subscriptions WHERE pending_plan_code'))
+    if (sql.includes('SELECT supplier_id FROM supplier_subscriptions WHERE plan_code IN'))
       return [[{ supplier_id: 7 }]];
     if (sql.includes('UPDATE supplier_subscriptions SET pending_plan_code = \'STARTER\'')) {
       period.pending_plan_code = 'STARTER'; return [{}];
