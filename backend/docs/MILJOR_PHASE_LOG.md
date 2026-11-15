@@ -1,5 +1,17 @@
 # MilJor — Phase Execution Log
 
+## Supplier Subscription Sandbox Checkout and Release Hardening — 2026-11-16
+
+- Branch: `feature/supplier-provider-billing-hardening`; PR #58 (draft).
+- Qualified code/test SHA: `a15dc187921f7f8325d91e1a7d639274f504b585`.
+- Implemented: separate Safepay subscription attempt journal 062; supplier-only DB-priced checkout and provider readback; exactly-once paid activation; period-end downgrade without automatic billing; premium supplier subscription UI; notification read ownership fix.
+- Evidence: `backend/docs/MILJOR_SUPPLIER_CHECKOUT_RELEASE_HARDENING_2026_11_16.md`.
+- Tests: focused subscription contract, real disposable MySQL E3/billing, UCP canonical+Chromium, P0 finance, demo quantity and admin/frontend build — **six exact-head CI SUCCESS**.
+- Protected DB: not mutated in this session; no live money movement.
+- Remaining: real Safepay subscription provider acceptance, paid-to-paid billing policy, PR #53/#54 migrations/notifications, full clustered delivery browser E2E, historical credential rotation.
+- RESULT: **PARTIAL / RELEASE BLOCKED**. CAN START NEXT PHASE: NO
+
+
 ## Supplier Dashboard Master Implementation & Operations Center Integration — 2026-11-15
 
 - **Active Branch:** `feature/supplier-dashboard-master-integration`
