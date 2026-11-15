@@ -36,6 +36,15 @@ const COMMODITIES = [
 ];
 
 
+const PREVIEW_POOLS = [
+  { title: 'Super Kernel Basmati Rice', category: 'Rice & grains', target: '300 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=960&q=82', icon: Layers },
+  { title: 'Fine Wheat Flour', category: 'Flour & bakery', target: '500 kg', pack: '20 kg bags', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag },
+  { title: 'Refined Cooking Oil', category: 'Commercial essentials', target: '160 L', pack: '16 L tins', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82', icon: Store },
+  { title: 'Daal Chana', category: 'Pulses', target: '250 kg', pack: '25 kg bags', image: 'https://images.unsplash.com/photo-1585994192701-f1a505c817ea?auto=format&fit=crop&w=960&q=82', icon: Layers },
+  { title: 'Refined White Sugar', category: 'Sweeteners', target: '500 kg', pack: '50 kg bags', image: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?auto=format&fit=crop&w=960&q=82', icon: ShoppingBag },
+  { title: 'Super White Maida', category: 'Bakery staples', target: '840 kg', pack: '84 kg bags', image: 'https://images.unsplash.com/photo-1601593768795-9ac27c0c9d71?auto=format&fit=crop&w=960&q=82', icon: Store },
+];
+
 function CommoditySlide({ item, active }) {
   return (
     <div
@@ -248,39 +257,43 @@ export const LandingPage = () => {
               {featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}
             </div>
           ) : (
-            <div className="grid gap-5 lg:grid-cols-[1fr_0.95fr]">
+            <div className="space-y-6">
               {import.meta.env.DEV && (
-                <article className="landing-demo-card flex flex-col rounded-[1.5rem] border p-6 sm:p-7" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.17em]">Pool design preview</span>
-                    <span className="rounded-full border px-3 py-1 text-[10px] font-semibold" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>Preview only</span>
-                  </div>
-                  <div className="mt-6 flex items-start gap-4">
-                    <span className="landing-demo-illustration grid h-16 w-16 shrink-0 place-items-center rounded-2xl"><Layers size={28} strokeWidth={1.5} /></span>
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Rice & grains</p>
-                      <h3 className="landing-section-title mt-1 text-xl font-bold">Super Kernel Basmati Rice</h3>
-                      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>Illustrative supplier pool card with a clean, compact procurement layout.</p>
+                      <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.17em]">Design preview · Development only</p>
+                      <h3 className="landing-section-title mt-2 text-lg font-semibold">Sample procurement cards</h3>
                     </div>
+                    <span className="rounded-full border px-3 py-1.5 text-[11px] font-medium" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}>Not live offers</span>
                   </div>
-                  <div className="mt-6 grid grid-cols-2 gap-4 border-t pt-5" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <div><p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sample target</p><p className="mt-1 font-semibold">300 kg</p></div>
-                    <div><p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sample packing</p><p className="mt-1 font-semibold">25 kg bags</p></div>
+                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    {PREVIEW_POOLS.map((pool) => (
+                      <article key={pool.title} className="landing-demo-card flex flex-col overflow-hidden rounded-[1.5rem] border" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
+                        <div className="relative h-44 overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
+                          <img src={pool.image} alt={pool.category + ' product reference'} loading="lazy" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+                          <span className="absolute right-3 top-3 rounded-full border px-3 py-1 text-[10px] font-bold shadow-sm" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}>PREVIEW</span>
+                        </div>
+                        <div className="flex flex-1 flex-col p-5 sm:p-6">
+                          <p className="landing-eyebrow text-[10px] font-semibold uppercase tracking-[0.16em]">{pool.category}</p>
+                          <h4 className="landing-section-title mt-2 text-lg font-semibold">{pool.title}</h4>
+                          <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                            <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Sample target</p><p className="mt-1 text-sm font-semibold">{pool.target}</p></div>
+                            <div><p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Pack size</p><p className="mt-1 text-sm font-semibold">{pool.pack}</p></div>
+                          </div>
+                          <p className="mt-4 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>Visual example only · No live inventory or pricing</p>
+                        </div>
+                      </article>
+                    ))}
                   </div>
-                  <p className="mt-5 rounded-xl p-3 text-xs leading-5" style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
-                    Visual preview in development only. Not published, purchasable, or connected to supplier inventory.
-                  </p>
-                </article>
+                </>
               )}
-              <div className="flex flex-col justify-center gap-4 rounded-[1.5rem] border p-7 sm:p-9" style={panel}>
-                <h3 className="landing-section-title text-lg font-semibold">No published pools available yet</h3>
-                <p className="max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
-                  As soon as an approved supplier publishes a live pool, its actual stock, pricing and progress will appear here automatically.
-                </p>
-                <Link
-                  to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'}
-                  className="landing-gradient-cta inline-flex w-fit items-center justify-center rounded-full px-5 py-3 text-sm font-semibold"
-                >
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] border p-6 sm:p-8" style={panel}>
+                <div>
+                  <h3 className="landing-section-title text-base font-semibold">No published pools available yet</h3>
+                  <p className="mt-2 max-w-lg text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>Actual supplier offers will appear here automatically after publication.</p>
+                </div>
+                <Link to={isAuthenticated && user?.role === 'SUPPLIER' ? '/supplier/pools' : isAuthenticated ? '/pools' : '/login'} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold">
                   {isAuthenticated && user?.role === 'SUPPLIER' ? 'Create a Pool' : isAuthenticated ? 'Browse Marketplace' : 'Sign In'}
                 </Link>
               </div>
