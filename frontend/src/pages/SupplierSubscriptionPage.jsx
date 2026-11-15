@@ -13,6 +13,7 @@ export const SupplierSubscriptionPage = () => {
   const { token } = useAuth();
   const [data, setData] = useState(null);
   const [plans, setPlans] = useState([]);
+  const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -25,16 +26,19 @@ export const SupplierSubscriptionPage = () => {
     setError('');
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [current, available] = await Promise.all([
+      const [current, available, checkoutHistory] = await Promise.all([
         fetch('/api/v1/supplier/subscription', { headers }),
-        fetch('/api/v1/supplier/subscription/plans', { headers })
+        fetch('/api/v1/supplier/subscription/plans', { headers }),
+        fetch('/api/v1/supplier/subscription/checkout-attempts', { headers })
       ]);
-      if (!current.ok || !available.ok) throw new Error('Unable to load subscription details.');
+      if (!current.ok || !available.ok || !checkoutHistory.ok) throw new Error('Unable to load subscription details.');
       const a = await current.json();
       const b = await available.json();
-      if (!a.success || !b.success) throw new Error('Unable to load subscription details.');
+      const c = await checkoutHistory.json();
+      if (!a.success || !b.success || !c.success) throw new Error('Unable to load subscription details.');
       setData(a.data);
       setPlans(b.data.plans || []);
+      setAttempts(c.data.attempts || []);
     } catch (err) {
       setError(err.message || 'Unable to load subscription details.');
     } finally {
@@ -55,7 +59,7 @@ export const SupplierSubscriptionPage = () => {
       });
       const body = await response.json();
       if (!response.ok || !body.success) throw new Error(body.error?.message || 'Unable to cancel renewal.');
-      setNotice('Renewal cancelled. Your current plan remains active until its period ends.');
+      setNotice('Plan end scheduled. Your current benefits remain until the period ends.');
       setConfirmCancel(false);
       await refresh();
     } catch (err) {
@@ -63,6 +67,52 @@ export const SupplierSubscriptionPage = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const startCheckout = async (planCode) => {
+    if (submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const key = `supplier-sub-${crypto.randomUUID()}`;
+      const response = await fetch('/api/v1/supplier/subscription/checkout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json',
+          'X-Idempotency-Key': key },
+        body: JSON.stringify({plan_code:planCode})
+      });
+      const body = await response.json();
+      if (!response.ok || !body.success) throw new Error(body.error?.message || 'Checkout unavailable.');
+      if (!body.data.attempt?.checkout_url) throw new Error('Payment session is being prepared. Refresh to continue.');
+      // Only a server-returned Safepay Sandbox checkout URL is eligible.
+      const link = new URL(body.data.attempt.checkout_url);
+      if (link.protocol !== 'https:' || link.hostname !== 'sandbox.api.getsafepay.com') {
+        throw new Error('Unexpected checkout destination blocked.');
+      }
+      window.location.assign(link.href);
+    } catch(e) {
+      setError(e.message || 'Subscription checkout unavailable.');
+      setSubmitting(false);
+      await refresh();
+    }
+  };
+
+  const verifyPayment = async (attemptId) => {
+    setSubmitting(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch(`/api/v1/supplier/subscription/checkout/${attemptId}/reconcile`, {
+        method:'POST', headers:{Authorization:`Bearer ${token}`}
+      });
+      const body = await response.json();
+      if (!response.ok || !body.success) throw new Error(body.error?.message || 'Verification unavailable.');
+      setNotice(body.data.reconciled ? 'Safepay payment verified. Your plan is active.' :
+        'Payment not yet confirmed by Safepay. You can verify again after checkout.');
+      await refresh();
+    } catch(e) {
+      setError(e.message || 'Unable to verify payment.');
+    } finally { setSubmitting(false); }
   };
 
   const entitlement = data?.entitlements;
@@ -74,6 +124,7 @@ export const SupplierSubscriptionPage = () => {
   const alreadyScheduled = latest?.pending_plan_code === 'STARTER';
   const usage = entitlement?.active_families_count ?? 0;
   const quota = entitlement?.max_allowed_families ?? FAMILY_CAPS[currentPlan];
+  const checkoutAttempt = attempts.find(a => ['INITIATED','UNKNOWN','INITIATING'].includes(a.status));
   const eligibleToCancel = paid && latest?.status === 'ACTIVE' && periodEnd && new Date(periodEnd).getTime() > Date.now() && !alreadyScheduled;
 
   return (
@@ -102,16 +153,17 @@ export const SupplierSubscriptionPage = () => {
               <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
                 <div><p className="text-[var(--text-muted)] text-xs">Product families</p><p className="font-semibold mt-1">{usage} / {quota}</p></div>
                 {periodEnd && <div><p className="text-[var(--text-muted)] text-xs">Current period ends</p><p className="font-semibold mt-1">{formatDate(periodEnd)}</p></div>}
-                <div><p className="text-[var(--text-muted)] text-xs">Renewal</p><p className="font-semibold mt-1">{alreadyScheduled ? 'Cancelled' : paid ? 'Not configured' : 'Free plan'}</p></div>
+                <div><p className="text-[var(--text-muted)] text-xs">Billing</p><p className="font-semibold mt-1">{alreadyScheduled ? 'Ending at period end' : paid ? 'No automatic charges' : 'Free plan'}</p></div>
               </div>
               <div className="h-1.5 rounded-full bg-[var(--bg-card)] overflow-hidden" aria-label="Product-family quota usage">
                 <div className="h-full rounded-full bg-[var(--brand-accent)]" style={{width: `${quota ? Math.min(100, 100 * usage / quota) : 0}%`}}/>
               </div>
+              {checkoutAttempt && <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 flex flex-wrap items-center gap-3 justify-between text-sm"><span>{checkoutAttempt.status === 'INITIATED' ? 'Safepay checkout ready' : 'Checkout needs review'}</span><div className="flex gap-3">{checkoutAttempt.status === 'INITIATED' && checkoutAttempt.checkout_url && <a className="underline underline-offset-4" href={checkoutAttempt.checkout_url}>Continue checkout</a>}{checkoutAttempt.status === 'INITIATED' && <button type="button" disabled={submitting} className="font-medium text-[var(--brand-accent)]" onClick={()=>verifyPayment(checkoutAttempt.id)}>Verify payment</button>}</div></div>}
               {alreadyScheduled && <p className="flex gap-2 items-start text-sm text-[var(--text-secondary)]"><Clock3 size={16} className="shrink-0 mt-0.5"/>Your plan changes to Starter after {formatDate(periodEnd)}. Existing orders and historical records remain intact.</p>}
               {entitlement.is_over_limit && <p className="text-sm text-[var(--text-secondary)]">You're above your plan's family allowance. Existing commitments remain; new families cannot be published until usage is within the limit.</p>}
               {eligibleToCancel && (
                 <button type="button" onClick={() => setConfirmCancel(true)} className="text-sm font-medium underline underline-offset-4 hover:text-[var(--brand-accent)]">
-                  Cancel renewal
+                  End paid plan
                 </button>
               )}
             </section>
@@ -135,15 +187,20 @@ export const SupplierSubscriptionPage = () => {
                     <p className="flex gap-2 text-sm items-center"><Check size={17} className="text-[var(--brand-accent)]"/>{plan?.max_active_families ?? FAMILY_CAPS[code]} product families</p>
                     <div className="mt-auto pt-2">
                       {isCurrent ? <span className="block rounded-xl bg-[var(--bg-card)] p-3 text-center text-sm text-[var(--text-muted)]">Your active plan</span> :
+                        code !== 'STARTER' && !paid && !checkoutAttempt && fee != null && Number(fee) > 0 ?
+                        <button type="button" onClick={()=>startCheckout(code)} disabled={submitting}
+                          className="w-full rounded-xl bg-[var(--brand-accent)] p-3 text-sm font-semibold text-stone-900 disabled:opacity-50">
+                          {submitting ? 'Preparing checkout…' : 'Pay with Safepay Sandbox'}
+                        </button> :
                         <span className="block rounded-xl border border-[var(--border-subtle)] p-3 text-center text-sm text-[var(--text-muted)]">
-                          {code === 'STARTER' && paid ? alreadyScheduled ? 'Scheduled for period end' : 'Use Cancel renewal above' :
-                            'Checkout not available yet'}
+                          {code === 'STARTER' && paid ? alreadyScheduled ? 'Scheduled for period end' : 'Use End paid plan above' :
+                            paid ? 'Paid plan changes unavailable' : checkoutAttempt ? 'Finish existing checkout' : 'Not available'}
                         </span>}
                     </div>
                   </article>;
                 })}
               </div>
-              <p className="text-xs text-[var(--text-muted)]">Paid plan changes require verified Safepay subscription checkout. Until it is available, paid upgrades and paid-to-paid downgrades cannot be activated.</p>
+              <p className="text-xs text-[var(--text-muted)]">Safepay Sandbox only. Paid plans activate after server-side payment verification; no automatic renewal. Changes between paid plans are not yet supported.</p>
             </section>
 
             {history.length > 0 && <section className="space-y-3" aria-label="Subscription history">
@@ -162,7 +219,7 @@ export const SupplierSubscriptionPage = () => {
           <div role="dialog" aria-modal="true" aria-labelledby="cancel-renewal-title" className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-xl space-y-4">
             <ShieldCheck size={24} className="text-[var(--brand-accent)]"/>
             <h2 id="cancel-renewal-title" className="font-display text-2xl font-semibold">Cancel renewal?</h2>
-            <p className="text-sm text-[var(--text-secondary)]">Your paid plan stays active until {formatDate(periodEnd)}. Then it becomes Starter. Existing orders, pools and records stay intact; new family publication follows Starter limits.</p>
+            <p className="text-sm text-[var(--text-secondary)]">Your paid plan remains active until {formatDate(periodEnd)}. Then it becomes Starter. Existing orders, pools and records stay intact; new family publication follows Starter limits.</p>
             <div className="flex flex-wrap gap-3 justify-end">
               <button type="button" onClick={() => setConfirmCancel(false)} disabled={submitting} className="rounded-xl border border-[var(--border-subtle)] px-4 py-2.5 text-sm font-medium">Keep plan</button>
               <button type="button" onClick={cancelRenewal} disabled={submitting} className="rounded-xl bg-[var(--brand-accent)] text-stone-900 px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{submitting ? 'Processing…' : 'Confirm cancellation'}</button>
