@@ -72,6 +72,7 @@ export const LandingPage = () => {
   const { isDark } = useTheme();
   const { isAuthenticated, user } = useAuth();
   const [slide, setSlide] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [featuredPools, setFeaturedPools] = useState([]);
@@ -82,6 +83,12 @@ export const LandingPage = () => {
     const timer = setInterval(() => setSlide((index) => (index + 1) % COMMODITIES.length), 5000);
     return () => clearInterval(timer);
   }, [paused]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const timer = setInterval(() => setStepIndex((index) => (index + 1) % STEPS.length), 5500);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -183,12 +190,21 @@ export const LandingPage = () => {
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.19em]" style={{ color: 'var(--brand-accent)' }}>Simple by design</p><h2 className="mt-2 font-sans text-2xl font-semibold tracking-tight sm:text-3xl">One place to procure.</h2></div>
               <Link to="/register" className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-70">Get Started <ArrowRight size={15} /></Link>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {STEPS.map((item) => <div key={item.number} className="rounded-2xl border p-6" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-page)' }}>
-                <span className="text-xs font-semibold tracking-widest" style={{ color: 'var(--brand-accent)' }}>{item.number}</span>
-                <h3 className="mt-6 font-sans text-lg font-semibold tracking-tight">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>{item.text}</p>
-              </div>)}
+            <div className="relative overflow-hidden rounded-[1.6rem] border p-7 sm:p-11" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-page)' }}>
+              <div className="flex flex-wrap items-center justify-between gap-5">
+                <div className="max-w-2xl" aria-live="off">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--brand-accent)' }}>Step {STEPS[stepIndex].number} / 03</span>
+                  <h3 className="mt-5 font-sans text-2xl font-semibold tracking-tight sm:text-3xl">{STEPS[stepIndex].title}</h3>
+                  <p className="mt-3 max-w-xl text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>{STEPS[stepIndex].text}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => setStepIndex((stepIndex + STEPS.length - 1) % STEPS.length)} aria-label="Previous procurement step" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: 'var(--border-default)' }}><ChevronLeft size={17} /></button>
+                  <button type="button" onClick={() => setStepIndex((stepIndex + 1) % STEPS.length)} aria-label="Next procurement step" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: 'var(--border-default)' }}><ChevronRight size={17} /></button>
+                </div>
+              </div>
+              <div className="mt-10 flex gap-2" role="group" aria-label="Procurement steps">
+                {STEPS.map((item, index) => <button type="button" key={item.number} onClick={() => setStepIndex(index)} aria-label={'Show step ' + item.number} aria-current={stepIndex === index ? 'step' : undefined} className="h-1.5 flex-1 rounded-full transition-colors" style={{ backgroundColor: stepIndex === index ? 'var(--brand-accent)' : 'var(--border-default)' }} />)}
+              </div>
             </div>
           </div>
         </section>
