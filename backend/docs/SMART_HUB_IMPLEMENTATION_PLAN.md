@@ -12,12 +12,12 @@ Goal: complete the remaining scope as independently verified vertical slices on 
 
 Files: procurementRecurringService.js; focused procurementRecurringCyclePolicy.js if pure normalization warrants it; procurementController.js/procurementRoutes.js; RfqPage.jsx and a focused cycle-control component; recurring contract/MySQL/notification tests and existing CI. Use existing recurring cycle_events for append-only quantity/delivery-preference revisions and stable mutation keys; no second schedule database.
 
-- [ ] Pin regression for pause/resume version drift, post-cutoff edits, cross-buyer mutation, fractional packaging, concurrent revisions/retries and notification rollback.
-- [ ] Reconcile only uncommitted scheduled cycles on pause/resume/cancel. Missed paused cutoffs remain skipped/missed, never silently prepared; generated/paid/history untouched. Preserve original biweekly anchor.
-- [ ] Snapshot requested items when scheduling. Allow owner to change only that future cycle's quantities and nonbinding owned delivery preference under contract-first/cycle-second locks and expected revision. Generated draft copies this revision; supplier eligibility, stock, exact new delivery pricing and buyer payment require fresh approval via existing services.
-- [ ] Expose cycle input/skip controls and backend-confirmed success in existing hub. Show delivery preference as requested, never as an approved fee.
-- [ ] Add bounded idempotent upcoming-cutoff producer and verified draft-ready/missed notifications using existing outbox; paused/skipped cycles cannot emit new active reminders.
-- [ ] Consolidated isolated MySQL/API/rollback/concurrency gate; relevant existing recurring/notification contracts; build and actual CI/browser controls. Record PASS/FAIL/BLOCKED by business event/channel. Commit verified phase and stop per project protocol.
+- [x] Pin regression for pause/resume version drift, post-cutoff edits, cross-buyer mutation, fractional packaging, concurrent revisions/retries and notification rollback.
+- [x] Reconcile only uncommitted scheduled cycles on pause/resume/cancel. Missed paused cutoffs remain skipped/missed, never silently prepared; generated/paid/history untouched. Preserve original biweekly anchor.
+- [x] Snapshot requested items when scheduling. Allow owner to change only that future cycle's quantities and nonbinding owned delivery preference under contract-first/cycle-second locks and expected revision. Generated draft copies this revision; supplier eligibility, stock, exact new delivery pricing and buyer payment require fresh approval via existing services.
+- [x] Expose cycle input/skip controls and backend-confirmed success in existing hub. Show delivery preference as requested, never as an approved fee.
+- [x] Add bounded idempotent upcoming-cutoff producer and verified draft-ready/missed notifications using existing outbox; paused/skipped cycles cannot emit new active reminders.
+- [x] Consolidated isolated MySQL/API/rollback/concurrency gate; relevant existing recurring/notification contracts; build and actual CI/browser controls. Record PASS/FAIL/BLOCKED by business event/channel. Commit verified phase and stop per project protocol. Software controls verified at 340cafdd848f8eb1e8d7234e3a3c1f4c62d86754 (20 MySQL, 96 contracts, 9 worker checks and all 9 CI workflows PASS); real provider delivery remains BLOCKED under R5, not implied PASS. Evidence: SMART_HUB_RECURRING_CONTROLS_EXECUTION_2026_11_16.md.
 
 ### R2 — Individual collective commitment and capacity
 

@@ -64,3 +64,25 @@ Targeted real-MySQL gate after these corrections: **17/17 PASS**, including inel
 Acceptance completion: added positive own-verified-address preference event (server address revision, fresh-quote flag) and reminder enqueue-failure rollback/retry identity checks. Final local real MySQL gate **19/19 PASS**; this supersedes 17/17. CYCLE_DELIVERY_PREFERENCE_UPDATED now has actual action/outbox evidence, not only a template. Runtime correction SHA `cecae6b7c70fbad7a28f4f25a53efc35bee4f261`. Implementation at prior merge head b6926a5 had all nine CI workflows PASS including real Chromium; final corrected head still requires its own CI evidence.
 
 Final no-op acceptance: saving already-current quantities/preference records a replayable INPUTS_CONFIRMED intent without incrementing the input revision or fabricating a changed notification. UI reports already-current state. Real MySQL gate now **20/20 PASS**, superseding the earlier count. No other business phase started.
+
+## Final exact-code CI evidence
+
+Tested code SHA **340cafdd848f8eb1e8d7234e3a3c1f4c62d86754**. All nine PR workflows completed SUCCESS at this exact code SHA; this supersedes all pending-CI statements above.
+
+| Workflow | Result | Run |
+| --- | --- | --- |
+| Canonical UCP / source+build / actual MySQL / Chromium | PASS all 3 jobs | [43753836182](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753836182) |
+| P0 payment/fulfillment/settlement + recurring controls | PASS, real recurring gate 20/20 | [43753835997](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753835997) |
+| Notification/email contracts + recurring policy/worker/build | PASS | [43753836039](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753836039) |
+| Isolated MySQL numeric counteroffers | PASS | [43753836027](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753836027) |
+| Buyer B6/auth/frontend | PASS | [43753835955](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753835955) |
+| Delivery quantity safety | PASS | [43753836014](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753836014) |
+| Admin supplier verification | PASS | [43753835943](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753835943) |
+| Counteroffer source | PASS | [43753835994](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753835994) |
+| Branded OTP quality | PASS | [43753835985](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43753835985) |
+
+Chromium job 132933476199 confirms actual buyer edit of one cycle quantity/pickup preference, persistence after reload and skip via real backend. Supplier counters/deep link/paid-only queue, HttpOnly auth/session isolation, buyer unpaid order display and supplier checkout denial also PASS. Existing offline refresh-response-loss limitation still requires explicit secure re-login; the test reports this rather than claiming silent recovery.
+
+P0 job 132933475723 confirms the 20-check real recurring gate and existing payment/fulfillment/settlement tests PASS on disposable MySQL. Email race used controlled mock transport only; real email/SMS/Safepay provider completion remains BLOCKED/NOT_TESTED. Final local read-only protected counts remain orders=0/payments=0 in both protected databases; remaining owned fixture users=0. Original migration SQL unchanged, VERIFIED_HISTORY 59/59. No app/runtime change follows this tested code SHA; final evidence-only commit records observations without implying another runtime execution.
+
+Final statuses: R1 cycle controls IMPLEMENTED/TESTED/VERIFIED within the stated scope; notification action/outbox/inbox/mock-channel and suppression checks PASS; genuine provider channels BLOCKED. Remaining R2–R6 business requirements remain open. Overall Hub result PARTIAL. PR #53 remains draft; no main merge, no live money movement. CAN START NEXT PHASE: NO.
