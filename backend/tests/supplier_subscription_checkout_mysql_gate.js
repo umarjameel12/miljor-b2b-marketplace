@@ -17,10 +17,11 @@ async function main() {
   const token='track_subscription_ci_'+now;
   let amount='3500.00';
   let state='TRACKER_ENDED';
+  let transactionStatus='SUCCESS';
   const fakeProvider={
     createTracker: async ({amount:a,currency})=>{assert.equal(a,3500);assert.equal(currency,'PKR');return {trackerToken:token};},
     constructCheckoutUrl:()=> 'https://sandbox.api.getsafepay.com/checkout/pay?beacon='+token,
-    fetchTracker:async key=>({data:{token:key,state,currency:'PKR',amount,transaction:{id:'synthetic_ci'}}})
+    fetchTracker:async key=>({data:{token:key,state,currency:'PKR',amount,transaction:{id:'synthetic_ci',status:transactionStatus}}})
   };
   const svc=new SupplierSubscriptionCheckoutService(db,fakeProvider);
   const email=`supplier_checkout_${now}@miljor.test`;
@@ -44,6 +45,9 @@ async function main() {
     amount='3500.00';state='TRACKER_PENDING';
     assert.equal((await svc.reconcile({actor,attemptId:started.attempt.id})).reconciled,false);
     state='TRACKER_ENDED';
+    transactionStatus='FAILED';
+    assert.equal((await svc.reconcile({actor,attemptId:started.attempt.id})).reconciled,false);
+    transactionStatus='SUCCESS';
     const paid=await svc.reconcile({actor,attemptId:started.attempt.id});
     assert.equal(paid.reconciled,true);
     const [after]=await db.query('SELECT subscription_plan,subscription_status,max_active_listings FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
