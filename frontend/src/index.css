@@ -22,7 +22,7 @@
   --color-ink: #121417;
   --color-ink-muted: #536057;
 
-  --font-display: 'Playfair Display', Georgia, serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -499,4 +499,34 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .miljor-public-landing a:focus-visible {
   outline: 2px solid var(--brand-accent);
   outline-offset: 3px;
+}
+
+/* Contextual, legible premium typography and contrast for MilJor public/auth. */
+:root {
+  --auth-heading-color: #273d35;
+  --landing-header-bg: #d9cbb6;
+  --landing-accent-text: #76531e;
+}
+.dark {
+  --auth-heading-color: #f0dfbd;
+  --landing-header-bg: var(--bg-sidebar);
+  --landing-accent-text: #dfbf85;
+}
+.miljor-public-landing .landing-top-link {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+.miljor-public-landing .landing-top-link:hover {
+  color: var(--landing-accent-text);
+}
+.miljor-public-landing .landing-eyebrow {
+  color: var(--landing-accent-text);
+}
+.miljor-public-landing h1,
+.miljor-public-landing h2,
+.miljor-public-landing h3 {
+  font-family: var(--font-sans);
+}
+.auth-heading {
+  color: var(--auth-heading-color);
 }
