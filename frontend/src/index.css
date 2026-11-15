@@ -613,3 +613,67 @@ h1, h2, h3, h4, h5, h6, .font-display {
     transform: none !important;
   }
 }
+
+/* Landing / account polish: theme legibility and understated champagne accents. */
+.miljor-public-landing .landing-display-gradient {
+  background: linear-gradient(108deg, #73501e 0%, #ae8541 42%, #67481d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.dark .miljor-public-landing .landing-display-gradient {
+  background: linear-gradient(110deg, #f0dcae 0%, #c8b276 45%, #e4c98b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.miljor-public-landing .landing-top-link,
+.miljor-public-landing .landing-top-link .landing-nav-icon {
+  color: #2c4038;
+}
+.miljor-public-landing .landing-top-link:hover,
+.miljor-public-landing .landing-top-link:hover .landing-nav-icon {
+  color: #79551c;
+}
+.dark .miljor-public-landing .landing-top-link,
+.dark .miljor-public-landing .landing-top-link .landing-nav-icon {
+  color: #ecdfc9;
+}
+.dark .miljor-public-landing .landing-top-link:hover,
+.dark .miljor-public-landing .landing-top-link:hover .landing-nav-icon {
+  color: #e4c98b;
+}
+.miljor-public-landing .landing-account-option {
+  color: var(--text-primary);
+}
+.miljor-public-landing .landing-account-option:hover,
+.miljor-public-landing .landing-account-option:focus-visible {
+  background-color: rgba(184, 145, 75, 0.19);
+  color: #604414;
+}
+.dark .miljor-public-landing .landing-account-option:hover,
+.dark .miljor-public-landing .landing-account-option:focus-visible {
+  background-color: rgba(200, 178, 118, 0.19);
+  color: #f4dfb6;
+}
+.auth-tabs-premium .auth-segment-active {
+  background: linear-gradient(115deg, #e5d2a2 0%, #c8b276 100%) !important;
+  border-color: rgba(130, 96, 42, 0.38) !important;
+  color: #28362f !important;
+  box-shadow: 0 3px 9px rgba(95, 67, 22, 0.13);
+}
+.dark .auth-tabs-premium .auth-segment-active {
+  background: linear-gradient(115deg, #ddc68f 0%, #b89b5f 100%) !important;
+  color: #172c24 !important;
+}
+.auth-tabs-premium .auth-tab-inactive {
+  color: var(--text-secondary) !important;
+  font-weight: 600;
+}
+.auth-tabs-premium .auth-tab-inactive:hover,
+.auth-tabs-premium .auth-tab-inactive:focus-visible {
+  color: var(--text-primary) !important;
+  background: var(--bg-sidebar-active);
+}
