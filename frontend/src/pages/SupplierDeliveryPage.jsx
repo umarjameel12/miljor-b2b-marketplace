@@ -50,7 +50,7 @@ export const SupplierDeliveryPage = () => {
                 <MapPin className="w-3.5 h-3.5" /> Lahore Metropolitan Clusters
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text-primary)]">
               Delivery Modes & Cluster Pricing
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
