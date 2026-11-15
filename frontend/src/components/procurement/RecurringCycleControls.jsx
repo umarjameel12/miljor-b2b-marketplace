@@ -35,7 +35,7 @@ export function RecurringCycleControls({contractId,cycle,onChanged}){
    if(!response.data?.success)throw Error('Cycle operation was not confirmed');
    if(alive.current){
     if(action!=='skip')setRecord(response.data.data);
-    setMessage(action==='skip'?'Cycle skip confirmed.':'Cycle revision saved. Delivery still needs a fresh supplier quote and your approval.');
+    setMessage(action==='skip'?'Cycle skip confirmed.':response.data.data.unchanged?'Cycle inputs are already current.':'Cycle revision saved. Delivery still needs a fresh supplier quote and your approval.');
     await onChanged();
    }
   }catch(error){if(alive.current)setError(error.response?.data?.error?.message||'Action could not be confirmed. Refresh before retrying.');}

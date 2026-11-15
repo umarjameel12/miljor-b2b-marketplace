@@ -31,6 +31,7 @@ async function main(){
  assert.equal(edits.filter(result=>result.is_replay).length,1);assert.equal(edits[0].revision,1);pass('Concurrent same intent applies one immutable cycle revision');
  await deny(()=>recurring.updateCycleInputs(buyer,contractId,first,{...payload,items:[{...payload.items[0],quantity:'4'}]},'rec-edit-'+tag),'IDEMPOTENCY_CONFLICT');
  await deny(()=>recurring.updateCycleInputs(buyer,contractId,first,payload,'rec-stale-'+tag),'CYCLE_REVISION_CONFLICT');pass('Changed intent and stale revisions denied');
+ const unchanged=await recurring.updateCycleInputs(buyer,contractId,first,{...payload,expected_revision:1},'rec-nochange-'+tag);assert.equal(unchanged.revision,1);assert.equal(unchanged.unchanged,true);pass('Unchanged save records intent without a fabricated change notification');
  const failing=new ProcurementRecurringService(db,{enqueueEvent:async()=>{throw Error('outbox unavailable');}});
  await assert.rejects(()=>failing.updateCycleInputs(buyer,contractId,first,{...payload,expected_revision:1,items:[{...payload.items[0],quantity:'4'}]},'rec-rollback-'+tag),/outbox unavailable/);
  assert.equal((await recurring.cycleInputs(buyer,contractId,first)).revision,1);pass('Notification enqueue failure rolls back input revision');

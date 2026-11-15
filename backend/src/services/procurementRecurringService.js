@@ -85,12 +85,13 @@ class ProcurementRecurringService {
         if(!addresses.length)throw fail('CYCLE_ADDRESS_UNAVAILABLE','Choose your own verified delivery address.',409);
         Object.assign(preference,{address_revision:Number(addresses[0].revision),cluster_id:Number(addresses[0].cluster_id)});
       }
-      const result={revision:Number(current.revision)+1,items:normalized.items,delivery_preference:preference,request_hash:hash,cycle_id:cyid,creates_order:false,creates_payment:false,delivery_requires_fresh_quote:true};
+      const quantitiesChanged=JSON.stringify(current.items.map(item=>String(item.quantity)))!==JSON.stringify(normalized.items.map(item=>item.quantity));
+      const changed=quantitiesChanged||JSON.stringify(current.delivery_preference)!==JSON.stringify(preference);
+      const result={revision:Number(current.revision)+(changed?1:0),items:normalized.items,delivery_preference:preference,request_hash:hash,cycle_id:cyid,creates_order:false,creates_payment:false,delivery_requires_fresh_quote:true,unchanged:!changed};
       const [[finalClock]]=await conn.query('SELECT (? > UTC_TIMESTAMP()) AS before_cutoff',[cycle.due_at_utc]);
       if(Number(finalClock.before_cutoff)!==1)throw fail('CYCLE_CUTOFF_PASSED','Cycle cutoff passed while validating inputs.',409);
-      await conn.query("INSERT INTO procurement_recurring_cycle_events(cycle_id,event_key,event_type,event_snapshot) VALUES (?,?,'CYCLE_INPUTS_UPDATED',?)",[cyid,eventKey,JSON.stringify(result)]);
-      const quantitiesChanged=JSON.stringify(current.items.map(item=>String(item.quantity)))!==JSON.stringify(result.items.map(item=>item.quantity));
-      await this.notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:quantitiesChanged?'CYCLE_QUANTITY_MODIFIED':'CYCLE_DELIVERY_PREFERENCE_UPDATED',eventKey:'cycle:'+cyid+':inputs:'+result.revision,entityId:cid});
+      await conn.query('INSERT INTO procurement_recurring_cycle_events(cycle_id,event_key,event_type,event_snapshot) VALUES (?,?,?,?)',[cyid,eventKey,changed?'CYCLE_INPUTS_UPDATED':'CYCLE_INPUTS_CONFIRMED',JSON.stringify(result)]);
+      if(changed)await this.notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:quantitiesChanged?'CYCLE_QUANTITY_MODIFIED':'CYCLE_DELIVERY_PREFERENCE_UPDATED',eventKey:'cycle:'+cyid+':inputs:'+result.revision,entityId:cid});
       await conn.commit();return {...result,is_replay:false};
     }catch(error){await conn.rollback();throw error;}finally{conn.release();}
   }
