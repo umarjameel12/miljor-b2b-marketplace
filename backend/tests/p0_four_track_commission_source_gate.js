@@ -23,7 +23,14 @@ assert.match(flash,/supplier_commission_percent,currency/);
 assert.match(flash,/commissionSnapshot,deliveryTerms\.delivery_type,address/);
 assert.match(flash,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
 assert.match(procurement,/supplier_commission_percent,currency,delivery_type/);
-assert.match(procurement,/group\.supplier_commission_percent,address/);
+assert.match(procurement,/group\\.supplier_commission_percent,deliveryType,boundAddress/,
+  'Award must preserve exact supplier commission when delivery terms are bound');
+assert.match(procurement,/binding\\.validate\\(conn/,
+  'Supplier delivery must be revalidated on the same SQL transaction');
+assert.match(procurement,/assertDeliveryConsent\\(currentTerms,group\\.delivery_terms\\.hash\\)/,
+  'Award must require explicit buyer consent to immutable delivery terms');
+assert.match(procurement,/acceptedDelivery\\.full_address/,
+  'Delivered address must match verified buyer-approved destination');
 assert.match(fee,/SUPPLIER_COMMISSION_NOT_CONFIGURED/);
 assert.doesNotMatch(fee,/transaction_fee_percent\?\?'2\.50'/);
 assert.match(settlement,/order\.supplier_commission_percent/);
