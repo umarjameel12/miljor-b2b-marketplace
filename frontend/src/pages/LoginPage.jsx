@@ -90,7 +90,7 @@ export const LoginPage = () => {
         {preferences.showBrandHeading && (
           <h1
             className="auth-heading text-2xl sm:text-[29px] leading-tight"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--auth-heading-color)' }}
           >
             Sign In to MilJor
           </h1>
