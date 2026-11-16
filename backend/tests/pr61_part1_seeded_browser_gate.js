@@ -264,6 +264,24 @@ async function verify(browser,fixture){
    },tag+'-route'),e=>e.code==='GROUP_PAYMENTS_INCOMPLETE');
    await db.query(`UPDATE orders SET payment_status='PAID',order_status='PAID',
       fulfillment_status='AWAITING_SUPPLIER_ACKNOWLEDGEMENT' WHERE id=?`,[created.groupOrders[1]]);
+   // Exercise the same stock finalizer called from trusted Safepay transaction
+   // without inventing a provider-origin signature in this isolated fixture.
+   for(const oid of created.groupOrders){
+     const connection=await db.getConnection();
+     try{
+       await connection.beginTransaction();
+       const result=await groupOrders.reconcilePaidOrder(connection,oid);
+       assert.equal(result.handled,true);
+       assert.equal(result.supplier_settlement_not_authorized,true);
+       await connection.commit();
+     }catch(error){await connection.rollback();throw error;}
+     finally{connection.release();}
+   }
+   const [finalAllocations]=await db.query(`SELECT COUNT(*) AS count
+     FROM supplier_inventory_allocations WHERE allocation_type='ORDER_DIRECT'
+       AND reference_id IN (?,?) AND status='COMMITTED'`,created.groupOrders);
+   assert.equal(Number(finalAllocations[0].count),2);
+   console.log('PASS SYNTHETIC-PAYMENT STOCK FINALIZATION: both buyer allocations committed; no supplier settlement authorization');
    const route=await groupDelivery.propose(fixture.supplier.supplier_id,fixture.groupId,{
       delivery_day:new Date(Date.now()+3*86400000).toISOString().slice(0,10),
       delivery_window:'09:00-12:00'
