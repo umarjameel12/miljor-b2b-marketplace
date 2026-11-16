@@ -12,6 +12,7 @@ import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import { SupplierVerificationBadge } from '../components/supplier/SupplierVerificationBadge';
 import { SupplierOnboardingWizard } from '../components/supplier/SupplierOnboardingWizard';
+import { SupplierVerificationCorrections } from '../components/supplier/SupplierVerificationCorrections';
 import SupplierDeliverySettingsForm from '../components/delivery/SupplierDeliverySettingsForm';
 import supplierApi from '../api/supplier';
 import {
@@ -193,10 +194,24 @@ export const SupplierProfilePage = () => {
         {/* TAB 1: BUSINESS PROFILE & ONBOARDING */}
         {activeTab === 'onboarding' && (
           <div className="space-y-6">
-            <SupplierOnboardingWizard
-              initialProfile={profile}
-              onProfileUpdated={(updated) => setProfile(updated)}
-            />
+            {profile?.verification_status === 'MORE_INFORMATION_REQUIRED' ? (
+              <SupplierVerificationCorrections profile={profile} onSubmitted={fetchProfile} />
+            ) : isPending ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 space-y-2 text-sm">
+                <h2 className="font-semibold">Submitted application receipt</h2>
+                <p>Revision {profile?.submitted_revision || 'legacy'} · Submitted {profile?.submitted_at ? new Date(profile.submitted_at).toLocaleString() : 'previously'}</p>
+                <p className="text-[var(--text-muted)]">Your business details are locked during review. You do not need to submit them again.</p>
+              </div>
+            ) : isRejected ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 text-sm">
+                The application is rejected. A new review is available only if an authorized administrator opens an appeal. Your existing documents are retained.
+              </div>
+            ) : (
+              <SupplierOnboardingWizard
+                initialProfile={profile}
+                onProfileUpdated={(updated) => setProfile(updated)}
+              />
+            )}
           </div>
         )}
 
