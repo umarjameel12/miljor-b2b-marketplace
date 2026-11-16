@@ -40,7 +40,9 @@ Shell environment syntax above is illustrative; local Windows execution supplied
 
 **Email transport PASS:** configured SMTP authentication/TLS verification succeeded. Existing transactional email service submitted a bilingual test notification to the configured own test/sender address; outbox record **25** was provider-accepted with a message ID. **Inbox delivery NOT VERIFIED**. No address, password or provider token is published.
 
-**Safepay authentication/initialization PASS:** real configured sandbox passport authentication and canonical tracker creation succeeded without a mock adapter. **Genuine payment completion, authenticated public webhook receipt and fulfillment-to-provider settlement remain NOT VERIFIED**. The configured webhook signing secret is not evidence of a publicly reachable webhook URL. Initial read-only checkout inspection was restricted by blocked bootstrap/static requests; that browser limitation does not establish a provider outage.
+**Safepay authentication/initialization/form bootstrap PASS:** real configured sandbox passport authentication and canonical tracker creation succeeded without a mock adapter. A subsequent read-only continuation reused the genuine tracker, authenticated its current state, received HTTP 200 and loaded the hosted Cybersource card form. The exact documented capture-context bootstrap and required static resources were permitted; no card/contact submission occurred and the original order remains unpaid. Initial blocked-bootstrap inspection is superseded by this successful stage-one result, not a provider outage. **Genuine payment completion, authenticated public webhook receipt and fulfillment-to-provider settlement remain NOT VERIFIED**. The configured webhook signing secret is not evidence of a publicly reachable webhook URL. Presence-only environment inspection found no controlled test phone or public webhook URL; no mailbox/IMAP verification configuration. Hosted phone-field requiredness was not established, so it is not claimed as a proven provider rejection.
+
+Official provider references: [API sandbox/testing and capture context](https://apidocs.getsafepay.com/), [sandbox card/contact testing](https://safepay.helpscoutdocs.com/article/41-dummy-card-information). These describe provider behavior, not evidence that this application completed a genuine payment.
 
 **SMS EXCLUDED:** user explicitly stated no SMS provider is in use and requested no SMS work. This is not reported as a delivered/tested channel.
 
@@ -52,11 +54,16 @@ using-superpowers, executing-plans, brainstorming, writing-plans, test-driven-de
 
 Final local browser gate **PASS**, exit 0: full order 211 / route 11; partial order 212 / route 12 / review 8 / disbursement 10 (supplier 15615.00 + platform 475.00 + refunds 4085.00); paid reattempt order 213 / contract 7 / second route 14 / disbursement 11. Reattempt finished BUYER_CONFIRMED, route DELIVERED, fee REVIEWED, payout PREPARED with external execution DISABLED. Three scenarios, sixteen labelled checkpoints. Artifacts are ignored locally under `backend/artifacts/smart-hub-paid-browser`; CI publishes explicitly labelled synthetic evidence. Earlier browser failures exposed accessible-field names and harness refresh/HTTP-replay assumptions; these were repaired without bypassing application guards. A vehicle-save timeout did not reproduce in the final complete run.
 
-Final frontend build **PASS**, 2237 modules, exit 0. `npm run test:canonical:preflight` **PASS**, including 12 canonical migration assertions and existing UCP source safety gates; these source checks are not claimed as UCP browser E2E. `git diff --check` PASS. Exact-head remote CI remains pending commit/push.
+Final frontend build **PASS**, 2237 modules, exit 0. `npm run test:canonical:preflight` **PASS**, including 12 canonical migration assertions and existing UCP source safety gates; these source checks are not claimed as UCP browser E2E. `git diff --check` PASS.
+
+Implementation commit: `6af9b21131ab83868754c0f41b14eedfbe46af3c`. CI-only fixes: `1e7ed7bd0d744f5a33afa5329288bd863bc7271d` pins Ubuntu 24.04 after Playwright 1.56.1 rejected the updated ubuntu-latest; `70c22861cbd7d6e8cfc4b1162445f604d5a610ca` makes loopback addressing explicit and exposes startup diagnostics; `0cdf6465ab10aad8a4bc3874c56868bd8aeed7d3` repairs the observed readiness-marker root cause (ANSI formatting split `Local:`). At 70c2286 the ten non-paid-browser workflows passed, including P0 actual MySQL/HTTP/concurrency and UCP acceptance. The paid-browser job installed successfully and audited 65/65 migrations but failed before login on the ANSI marker; it was not reported as PASS. Corrected exact-head CI results are recorded below after execution. No local application suite was repeated for CI-only runner changes.
 
 Whole-release status remains **PARTIAL/BLOCKED**, because genuine provider completion and required production tax approval are not established. B6 stays gated; PR remains draft. No external money movement or main merge.
 
 CAN START NEXT PHASE: NO
+
+## Changed files
+
 - `.github/workflows/p0-payment-fulfillment-settlement-e2e.yml`
 - `.github/workflows/smart-hub-notifications.yml`
 - `.gitignore`
@@ -110,3 +117,12 @@ CAN START NEXT PHASE: NO
 - `backend/tests/smart_hub_paid_browser_provider_readiness.test.js`
 - `backend/tests/smart_hub_paid_browser_safety.test.js`
 - `frontend/src/components/procurement/AdminProcurementSettlementReview.jsx`
+- `backend/tests/smart_hub_genuine_safepay_probe.js`
+
+## Verified remote application head
+
+Exact application/test-runner head **0cdf6465ab10aad8a4bc3874c56868bd8aeed7d3: 11/11 workflows SUCCESS**. Actual paid-browser job 133639481566 completed all steps, including Chromium and artifact upload, successfully. [Paid browser run](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43964281806), [P0 MySQL/HTTP/financial/concurrency run](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43964281701), [UCP acceptance run](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43964281747), [notification contracts](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43964281678). The remaining successful workflows cover buyer OTP, buyer B6/auth/frontend, admin/supplier approval, isolated counteroffers, source counteroffers, branded email and demo quantity safety.
+
+This evidence commit also stores the opt-in genuine provider probe (syntax checked and actually executed with real read-only provider lookup/form bootstrap). It requires isolated test identity, sandbox credentials, explicit opt-in, and owns its local listener. It does not submit card/contact data, invent callbacks, use SMS or claim genuine capture. Its artifact confirms HTTP 200, capture-context bootstrap success, hosted card controls, no visible network error, unpaid order and no capture. Phone requiredness remains unknown. It is excluded from ordinary CI because CI has only synthetic provider credentials.
+
+**Closing implementation/local and remote automated gates: PASS. Whole-release certification: BLOCKED/PARTIAL.** Missing genuine payment/webhook completion, inbox receipt and production tax approval are not converted to success by the eleven green workflows. SMS is EXCLUDED, not failed. Protected databases, UCP and B6 remain preserved. PR #53 remains draft; main is unchanged.
