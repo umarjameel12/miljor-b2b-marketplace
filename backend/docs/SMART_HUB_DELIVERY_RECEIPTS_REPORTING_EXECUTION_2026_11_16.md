@@ -44,7 +44,7 @@ Canonical runner applied only 096 and 097 to `miljor_test_db`. Read-only audit a
 | Savings percentage | BLOCKED | Comparable baseline absent; truthful unavailable result implemented |
 | In-app event targeting/duplicate/rollback and EN/Urdu projections | PASS | Focused tests and actual SQL events; not every event/channel matrix is complete |
 | Genuine configured email/SMS delivery, Safepay-origin payment/refund/settlement | BLOCKED | No genuine provider evidence on this pass. Queuing/synthetic callbacks are not delivery/completion proof |
-| Exact-head CI / actual Chromium | PENDING | Wired focused tests and combined SQL extension into existing workflows; evidence updated after push |
+| Implementation-head CI / actual Chromium | PASS | All 10 PR workflows SUCCESS at 9602bd1bb5773920abfb39a6a438ad8d1753445c; genuine paid provider browser journey still untested |
 | Main merge | BLOCKED | PR #53 remains draft until all required critical business/provider/browser gates pass |
 
 ## Changed paths
@@ -57,4 +57,12 @@ Tests: procurement_delivery_run_policy_gate, procurement_delivery_evidence, proc
 
 Skills applied: executing-plans (continued authorized phases), test-driven-development (relevant policy/transaction checks with consolidated project gates), systematic-debugging (actual SQL/collation/reporting failures), verification-before-completion (fresh evidence), requesting-code-review (bounded source review), dispatching-parallel-agents/subagent-driven-development (independent receipt/reporting/proof scopes from earlier session; no shared finance edits while workers owned them). Worker mocks are not mislabelled MySQL or provider verification.
 
-RESULT: **PARTIAL**. Implementation is committed only to the approved feature branch after the local gates; complete Hub release is not certified. No main merge, protected-database mutation or external money movement. CAN START NEXT PHASE: NO.
+## Remote verification at implementation commit
+
+Commit **9602bd1bb5773920abfb39a6a438ad8d1753445c**, 40 changed project files, pushed to the approved feature branch. All **10/10 PR workflows SUCCESS**, including the newly surfaced Buyer OTP MySQL workflow. [Canonical installation/build/Chromium run](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43899921535), [P0 combined MySQL/payment handler run](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43899921392), [Notification and new contracts/build](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43899921070).
+
+Inspected P0 job133413431228 logs: combined extension **17/17 PASS**, including actual SQL private proof/outbox rollback, consented zero-fee recovery, additional-fee block, linked receipt money and independent-session lock exclusion. Inspected actual Chromium job133413432014 logs: supplier delivery workspace and scoped report read actual backend state with unavailable savings; supplier counters/deep link/paid-only queue; buyer cycle change/reload/skip; group capacity/private terms with default B6 denial; unpaid poolless order/reload; interrupted request/offline reauthentication and role/session isolation all PASS. This browser fixture deliberately contains no fake paid provider order, so complete paid route/POD/reattempt UI acceptance is still NOT_TESTED.
+
+PR #53 metadata updated to current delivered scope and explicit remaining blockers; confirmed OPEN/DRAFT and merged=false. Evidence-only follow-up does not change runtime code. No global clean-lint claim, genuine provider delivery claim or full-Hub completion claim is made.
+
+RESULT: **PARTIAL**. Complete Hub release is not certified. No main merge, protected-database mutation or external money movement. CAN START NEXT PHASE: NO.
