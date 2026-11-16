@@ -1510,3 +1510,30 @@ html.dark #top header.landing-topbar button[aria-label^="Theme setting:"] svg {
 html.dark #top header.landing-topbar button[aria-label^="Theme setting:"] > svg {
   color: #e4c78c !important;
 }
+
+/* MILJOR DARK AUTH THEME DROPDOWN PARITY WITH LANDING */
+/* Dark auth routes only. Match landing theme menu, including older local ThemeSelector versions. */
+html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] {
+  background: var(--theme-menu-bg, #072a21) !important;
+  border-color: var(--theme-menu-border, rgba(200,178,118,.35)) !important;
+  color: var(--theme-menu-ink, #f0e7d5) !important;
+  box-shadow: 0 12px 30px -4px rgba(0,0,0,.7) !important;
+}
+html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [role="menuitemradio"] {
+  background: transparent !important;
+  color: var(--theme-menu-ink, #f0e7d5) !important;
+  border-color: transparent !important;
+}
+html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [role="menuitemradio"]:is(:hover,:focus-visible) {
+  background: var(--theme-menu-hover, #314e40) !important;
+  color: var(--theme-menu-ink, #f0e7d5) !important;
+}
+html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [role="menuitemradio"][aria-checked="true"],
+html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [role="menuitemradio"][aria-checked="true"]:is(:hover,:focus-visible) {
+  background: var(--theme-menu-selected, #c8b276) !important;
+  color: var(--theme-menu-selected-ink, #182a22) !important;
+  border-color: var(--theme-menu-border, rgba(200,178,118,.35)) !important;
+}
+html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [role="menuitemradio"] svg {
+  color: inherit !important;
+}
