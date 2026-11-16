@@ -22,7 +22,7 @@ async function main(){
       method:'POST',signal:AbortSignal.timeout(12000),
       headers:{'Content-Type':'application/json','X-SFPY-SIGNATURE':options.signature||hmac(bytes),
         'X-SFPY-EVENT-ID':options.eventId||'evt_p0_'+id(),
-        'X-SFPY-EVENT-TYPE':'payment.succeeded','X-SFPY-TIMESTAMP':new Date().toISOString()},
+        'X-SFPY-EVENT-TYPE':options.eventType||'payment.succeeded','X-SFPY-TIMESTAMP':new Date().toISOString()},
       body:options.tamper?Buffer.concat([bytes,Buffer.from(' ')]):bytes
     });
     return {status:res.status,data:await res.json()};
@@ -46,6 +46,13 @@ async function main(){
     assert.equal(r.status,401,'Invalid signature must be rejected');
     r=await post(payload(tracker),{tamper:true});
     assert.equal(r.status,401,'Tampered raw bytes must be rejected');
+    r=await post({type:'payment.failed',token:'evt_'+id(),
+      data:{tracker:{token:tracker,amount:1145,currency:'PKR'}}});
+    assert.equal(r.status,422,'Unsigned header cannot convert signed failed event to success');
+    r=await post({type:'payment.failed',token:'evt_'+id(),
+      data:{tracker:{token:tracker,amount:1145,currency:'PKR'}}},
+      {eventType:'payment.failed'});
+    assert.equal(r.status,200,'Signed failed event is recorded without payment transition');
     let [[state]]=await db.query('SELECT order_status FROM orders WHERE id=?',[order]);
     assert.equal(state.order_status,'AWAITING_PAYMENT');
     console.log('PASS signed HTTP invalid/tampered HMAC cannot pay an order');
