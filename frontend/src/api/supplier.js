@@ -30,6 +30,14 @@ export const supplierApi = {
     return res.data;
   },
 
+  // Field-scoped correction submission; unaffected business information stays intact.
+  submitCorrections: async (expectedRevision, changes, idempotencyKey) => {
+    const res = await apiClient.post('/supplier/verification/corrections',
+      { expected_revision: expectedRevision, changes },
+      { headers: { 'X-Idempotency-Key': idempotencyKey } });
+    return res.data;
+  },
+
   // 4. Get Lightweight Verification Status
   getVerificationStatus: async () => {
     const res = await apiClient.get('/supplier/verification/status');
