@@ -40,7 +40,7 @@ const COMMODITIES = [
 // Showcase data: these are fictional examples, NOT published supplier offers.
 const PREVIEW_POOLS = [
   {
-    id: 'example-flour', product_name: 'Premium Fine Wheat Flour', variety: 'Fine Wheat Flour · Bakery & Restaurant Use',
+    id: 'example-flour', product_name: 'Sunridge Super Fine Atta', variety: 'Super Fine Wheat Atta · Restaurant Use',
     category_name: 'Flour & Bakery', quality_grade: 'Commercial Fine-Milled',
     pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'bag',
     supplier_business_name: 'Punjab Flour Traders',
@@ -50,7 +50,7 @@ const PREVIEW_POOLS = [
     delivery_type: 'BOTH', pool_code: 'DEMO-FLOUR-01', status: 'ACTIVE',
   },
   {
-    id: 'example-oil', product_name: 'Refined Cooking Oil — Commercial 16L', variety: 'Refined Vegetable Cooking Oil',
+    id: 'example-oil', product_name: 'Sufi Cooking Oil — 16L Tin', variety: 'Refined Cooking Oil · Food-Service Use',
     category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Food-Service Grade',
     pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'tin',
     supplier_business_name: 'City Oils Wholesale',
@@ -66,7 +66,7 @@ const PREVIEW_POOLS = [
     supplier_business_name: 'Lahore Pulses Supply',
     buyer_min_qty: 1, estimated_unit_price: 6100,
     target_quantity: 150, committed_quantity: 45, fill_percentage: 30,
-    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Split_Chickpeas.jpg?width=960',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Channa_dall.JPG?width=960',
     delivery_type: 'BOTH', pool_code: 'DEMO-DAAL-01', status: 'ACTIVE',
   },
 ];
@@ -150,7 +150,7 @@ export const LandingPage = () => {
   const requestQuoteDestination = isAuthenticated ? '/rfqs' : '/login';
   const quoteState = isAuthenticated ? undefined : { from: { pathname: '/rfqs' } };
   const buttonGold = { color: 'var(--text-on-champagne)' };
-  const exploreDestination = '#live-pools';
+  const scrollToPools = () => document.getElementById('live-pools')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
 
   return (
@@ -278,7 +278,7 @@ export const LandingPage = () => {
               Wholesale procurement, made easier for growing food businesses.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link to={exploreDestination} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Explore Pools</Link>
+              <button type="button" onClick={scrollToPools} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Explore Pools</button>
               <Link to={requestQuoteDestination} state={quoteState} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Request a Quote</Link>
             </div>
           </div>
@@ -305,14 +305,14 @@ export const LandingPage = () => {
             <div>
               <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Supplier-led procurement</p>
               <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
-              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers and clearly marked category examples.</p>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers and showcase listings. Availability is confirmed after sign-in.</p>
             </div>
             {isAuthenticated ? (
               <Link to={user?.role === 'SUPPLIER' ? '/supplier/pools' : '/pools'} className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">
                 {user?.role === 'SUPPLIER' ? 'Manage your pools' : 'View All Pools'} <ArrowRight size={16} />
               </Link>
             ) : (
-              <Link to="/login" state={{ from: { pathname: '/pools' } }} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers</Link>
+              <button type="button" onClick={scrollToPools} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers</button>
             )}
           </div>
           <div className="mb-3 flex items-center justify-end gap-2">
@@ -338,7 +338,7 @@ export const LandingPage = () => {
           <div
             ref={poolCarouselRef}
             role="region"
-            aria-label="Buying pools and procurement examples"
+            aria-label="Buying pools and showcase listings"
             tabIndex={0}
             className="miljor-pool-rail flex items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth snap-x snap-mandatory pb-4"
           >
@@ -368,7 +368,7 @@ export const LandingPage = () => {
           </div>
           {loadingPools && <p role="status" className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>Checking published pools…</p>}
           {!loadingPools && featuredPools.length === 0 && (
-            <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>No published supplier offers currently. The cards above are examples.</p>
+            <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>No published supplier offers currently. Showcase listings are not yet available for purchase.</p>
           )}
         </section>
 
