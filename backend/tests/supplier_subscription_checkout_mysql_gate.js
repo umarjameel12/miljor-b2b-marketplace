@@ -7,6 +7,12 @@ const db=require('../src/config/db');
 const {SupplierSubscriptionCheckoutService}=require('../src/services/supplierSubscriptionCheckoutService');
 
 async function main() {
+  const watchdog=setTimeout(()=>{
+    console.error('SUBSCRIPTION_MYSQL_TIMEOUT: previous progress marker identifies blocked stage');
+    process.exit(2);
+  },90000);
+  watchdog.unref();
+  const marker=label=>console.log('SUBSCRIPTION_MYSQL_STAGE: '+label);
   if (process.env.DB_NAME!=='miljor_test_db' || process.env.TEST_DB_NAME!=='miljor_test_db' ||
       process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT!=='false' || process.env.SAFEPAY_ENV!=='sandbox') {
     throw new Error('TEST_DB_AND_SANDBOX_GUARD_REQUIRED');
@@ -34,6 +40,7 @@ async function main() {
       "INSERT INTO supplier_profiles (supplier_id,business_type,verification_status,subscription_plan,subscription_status,max_active_listings) VALUES (?,'WHOLESALER','VERIFIED','STARTER','STARTER_ACTIVE',4)",
       [supplierId]);
     const actor={id:supplierId,role:'SUPPLIER'};
+    marker('START_PROVIDER_SESSION');
     const started=await svc.start({actor,planCode:'GROWTH',idempotencyKey:'subscription-ci-123456789'});
     assert.equal(started.attempt.status,'INITIATED');
     const replay=await svc.start({actor,planCode:'GROWTH',idempotencyKey:'subscription-ci-123456789'});
@@ -55,6 +62,7 @@ async function main() {
       'SELECT subscription_plan FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
     assert.equal(stillStarter[0].subscription_plan,'STARTER');
     transactionStatus='SUCCESS';
+    marker('VERIFY_POSITIVE_PROVIDER_TRANSACTION');
     const paid=await svc.reconcile({actor,attemptId:started.attempt.id});
     assert.equal(paid.reconciled,true);
     const [after]=await db.query('SELECT subscription_plan,subscription_status,max_active_listings FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
@@ -81,13 +89,16 @@ async function main() {
     assert.equal(count[0].n,1,'reconciliation must be exactly once');
     // Non-renewing paid periods must revert to STARTER at expiry with no charge.
     await db.query("UPDATE supplier_subscriptions SET current_period_end=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE id=?",[paidId]);
+    marker('PROCESS_PERIOD_END');
     const expiry=require('../src/services/subscriptionEntitlementService');
     assert.equal((await expiry.processScheduledStarterChanges(20)).processed,1);
     assert.equal((await expiry.processScheduledStarterChanges(20)).processed,0);
     const [final]=await db.query('SELECT subscription_plan FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
     assert.equal(final[0].subscription_plan,'STARTER');
+    marker('PASS_ALL_ASSERTIONS');
     console.log('SUPPLIER_SUBSCRIPTION_MYSQL_PASS: real transactions, price proof, exactly-once activation and period expiry');
   } finally {
+    marker('CLEANUP_DISPOSABLE_FIXTURE');
     if(supplierId){
       await db.query('DELETE FROM procurement_notifications WHERE recipient_id=?',[supplierId]);
       await db.query('DELETE FROM platform_notifications WHERE user_id=?',[supplierId]);
