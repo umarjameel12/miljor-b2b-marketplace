@@ -213,6 +213,31 @@ class ProcurementCollectiveOrderService {
    throw error;
   }finally{conn.release();}
  }
+ // Runs only inside the trusted provider-signed or provider-reconciled payment
+ // transaction. Never accepts a caller-supplied PAID claim.
+ async reconcilePaidOrder(conn,orderId){
+  const oid=id(orderId);
+  const [records]=await conn.query('SELECT group_id FROM procurement_collective_buyer_orders WHERE order_id=?',[oid]);
+  if(!records.length)return {handled:false};
+  const gid=Number(records[0].group_id);
+  const [groups]=await conn.query('SELECT id,status FROM procurement_collective_groups WHERE id=? FOR UPDATE',[gid]);
+  if(!groups.length||groups[0].status!=='QUALIFIED')
+    throw fail('GROUP_NOT_QUALIFIED','Paid order belongs to an invalid qualified group');
+  const [orders]=await conn.query(`SELECT co.order_id,o.payment_status
+    FROM procurement_collective_buyer_orders co JOIN orders o ON o.id=co.order_id
+    WHERE co.group_id=? ORDER BY co.order_id`,[gid]);
+  if(!orders.some(o=>Number(o.order_id)===oid&&o.payment_status==='PAID'))
+    throw fail('PROVIDER_PAYMENT_REQUIRED','Only verified paid orders can commit group stock');
+  const [allocations]=await conn.query(`SELECT id,status FROM supplier_inventory_allocations
+    WHERE allocation_type='ORDER_DIRECT' AND reference_id=? FOR UPDATE`,[oid]);
+  if(!allocations.length)throw fail('COLLECTIVE_STOCK_LEDGER_MISSING','Stock allocation missing for paid group order',500);
+  await conn.query(`UPDATE supplier_inventory_allocations SET status='COMMITTED'
+    WHERE allocation_type='ORDER_DIRECT' AND reference_id=? AND status='PENDING'`,[oid]);
+  const paid=orders.filter(o=>o.payment_status==='PAID').length;
+  return {handled:true,group_id:gid,paid_orders:paid,total_orders:orders.length,
+    group_payment_status:paid===orders.length?'ALL_ORDERS_PAID':'PARTIALLY_PAID',
+    supplier_settlement_not_authorized:true};
+ }
  async getMine(buyerId,groupId){
   const buyer=id(buyerId),gid=id(groupId);
   const [members]=await this.database.query('SELECT id FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?',[gid,buyer]);
