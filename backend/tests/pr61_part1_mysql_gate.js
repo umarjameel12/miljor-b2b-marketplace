@@ -6,6 +6,8 @@ const assert=require('node:assert/strict');
 const db=require('../src/config/db');
 const profileService=require('../src/services/supplierProfileService');
 const admin=require('../src/controllers/adminController');
+const jwt=require('jsonwebtoken');
+const http=require('node:http');
 
 const random=String(Date.now())+String(Math.floor(Math.random()*100000));
 const resp=()=>({statusCode:200,status(v){this.statusCode=v;return this;},json(value){this.body=value;return this;}});
@@ -49,6 +51,38 @@ async function main(){
    assert.equal(Object.hasOwn(snapshot,'bank_iban_masked'),true);
    await assert.rejects(profileService.updateProfile(sid,{warehouse_address:'Unreviewed warehouse'}),e=>e.code==='VERIFICATION_PROFILE_LOCKED');
    console.log('PASS: first submission, exact revision, replay, masked immutable snapshot, locked pending edit');
+   // Genuine Express authorization and owner-scoped API over this disposable database.
+   const app=require('../server');
+   const server=http.createServer(app);
+   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+   try{
+     const base='http://127.0.0.1:'+server.address().port;
+     const issue=(id,email,role)=>jwt.sign({id,email,role,token_version:1},
+       process.env.JWT_SECRET,{issuer:'miljor-api',audience:'miljor-app',expiresIn:'15m'});
+     const supplierToken=issue(sid,email,'SUPPLIER'), adminToken=issue(aid,adminEmail,'SUPER_ADMIN');
+     const call=async(path,token,opts={})=>{
+       const response=await fetch(base+path,{method:opts.method||'GET',
+         headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',
+           ...(opts.headers||{})},body:opts.body?JSON.stringify(opts.body):undefined});
+       return {status:response.status,body:await response.json()};
+     };
+     const own=await call('/api/v1/procurement/supplier/opportunities?type=all',supplierToken);
+     assert.equal(own.status,200,JSON.stringify(own.body));
+     assert.equal(own.body.data.items.length,0);
+     const denied=await call('/api/v1/procurement/supplier/opportunities?type=all',adminToken);
+     assert.equal(denied.status,403);
+     const invalid=await call('/api/v1/procurement/supplier/opportunities?type=other',supplierToken);
+     assert.equal(invalid.status,400);
+     const correctionForbidden=await call('/api/v1/supplier/verification/corrections',adminToken,{
+       method:'POST',headers:{'X-Idempotency-Key':'pr61_role_denied_12345'},
+       body:{expected_revision:1,changes:{warehouse_address:'Unauthorized attempt'}}
+     });
+     assert.equal(correctionForbidden.status,403);
+     console.log('PASS: genuine HTTP supplier opportunities, invalid filter and role-scoped correction denial');
+   }finally{
+     await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
+   }
+
 
    const review=resp();
    await admin.verifySupplier(adminReq('MORE_INFORMATION_REQUIRED',{
