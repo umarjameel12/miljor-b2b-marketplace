@@ -1491,3 +1491,17 @@ html.dark #top #landing-account-options {
 @media (prefers-reduced-motion: reduce) {
   #top #landing-account-options [role="menuitem"] { transition: none; transform: none !important; }
 }
+
+/* MILJOR AUTH/LANDING THEME TOGGLE PARITY 2026-11-16 */
+/* Auth (Sign In/Register) LIGHT toggle uses the landing toggle's cream surface and soft border.
+   Target aria-label too: older local ThemeSelector builds do not carry miljor-theme-trigger. */
+html:not(.dark) header.miljor-auth-navbar button[aria-label^="Theme setting:"] {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-default) !important;
+}
+/* Landing DARK toggle icon matches the auth-header icon's effective theme text color.
+   Keep button background, borders and dropdown mechanics unchanged. */
+html.dark #top header.landing-topbar button[aria-label^="Theme setting:"] svg {
+  color: var(--text-primary) !important;
+}
