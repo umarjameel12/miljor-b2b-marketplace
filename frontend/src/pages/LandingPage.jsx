@@ -36,41 +36,6 @@ const COMMODITIES = [
 ];
 
 
-// Visual examples only; never treated as published supplier listings or orders.
-// Showcase data: these are fictional examples, NOT published supplier offers.
-const PREVIEW_POOLS = [
-  {
-    id: 'example-flour', product_name: 'Sunridge Super Fine Atta', variety: 'Super Fine Wheat Atta · Restaurant Use',
-    category_name: 'Flour & Bakery', quality_grade: 'Commercial Fine-Milled',
-    pack_size: '20kg Bag', pack_unit: 'kg', pool_unit: 'bag',
-    supplier_business_name: 'Punjab Flour Traders',
-    buyer_min_qty: 2, estimated_unit_price: 2650,
-    target_quantity: 120, committed_quantity: 36, fill_percentage: 30,
-    image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82',
-    delivery_type: 'BOTH', pool_code: 'DEMO-FLOUR-01', status: 'ACTIVE',
-  },
-  {
-    id: 'example-oil', product_name: 'Sufi Cooking Oil — 16L Tin', variety: 'Refined Cooking Oil · Food-Service Use',
-    category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Food-Service Grade',
-    pack_size: '16L Tin', pack_unit: 'L', pool_unit: 'tin',
-    supplier_business_name: 'City Oils Wholesale',
-    buyer_min_qty: 1, estimated_unit_price: 7900,
-    target_quantity: 80, committed_quantity: 24, fill_percentage: 30,
-    image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82',
-    delivery_type: 'BOTH', pool_code: 'DEMO-OIL-01', status: 'ACTIVE',
-  },
-  {
-    id: 'example-daal', product_name: 'Premium Daal Chana — Bold Grain', variety: 'Polished Chana Dal · Bold Grain',
-    category_name: 'Pulses & Lentils', quality_grade: 'Selected Commercial Quality',
-    pack_size: '25kg Bag', pack_unit: 'kg', pool_unit: 'bag',
-    supplier_business_name: 'Lahore Pulses Supply',
-    buyer_min_qty: 1, estimated_unit_price: 6100,
-    target_quantity: 150, committed_quantity: 45, fill_percentage: 30,
-    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Channa_dall.JPG?width=960',
-    delivery_type: 'BOTH', pool_code: 'DEMO-DAAL-01', status: 'ACTIVE',
-  },
-];
-
 function CommoditySlide({ item, active }) {
   return (
     <div
@@ -104,7 +69,6 @@ export const LandingPage = () => {
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
   const poolCarouselRef = useRef(null);
-  const [exampleDeadline] = useState(() => new Date(Date.now() + 15 * 24 * 60 * 60 * 1000));
 
   useEffect(() => {
     if (paused || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return undefined;
@@ -130,9 +94,9 @@ export const LandingPage = () => {
 
   useEffect(() => {
     let mounted = true;
-    poolsApi.getActivePools({ limit: 6 })
+    poolsApi.getActivePools({ limit: 12 })
       .then((response) => {
-        if (mounted) setFeaturedPools(Array.isArray(response?.data?.pools) ? response.data.pools.slice(0, 6) : []);
+        if (mounted) setFeaturedPools(Array.isArray(response?.data?.pools) ? response.data.pools.filter((pool) => pool?.id && ['ACTIVE', 'OPEN', 'PUBLISHED'].includes(String(pool.status || 'ACTIVE').toUpperCase())).slice(0, 12) : []);
       })
       .catch(() => { if (mounted) setFeaturedPools([]); })
       .finally(() => { if (mounted) setLoadingPools(false); });
@@ -149,8 +113,8 @@ export const LandingPage = () => {
   const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
 
   return (
-    <div id="top" className="miljor-public-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
-      <header className="landing-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-sidebar)', color: 'var(--text-primary)' }}>
+    <div id="top" className="miljor-public-landing miljor-premium-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
+      <header className="landing-topbar landing-premium-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-sidebar)', color: 'var(--text-primary)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8 lg:px-10">
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
           <div className="hidden sm:flex items-center gap-3">
@@ -254,7 +218,7 @@ export const LandingPage = () => {
       </header>
 
       <main>
-        <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-10 sm:px-8 md:pt-14 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-12">
+        <section className="landing-premium-hero mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-10 sm:px-8 md:pt-14 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-12">
           <div className="max-w-xl">
             <span className="landing-tagline inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)' }}>Mil Kar Khareedo, Behtar Pao</span>
             <h1 className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
@@ -270,7 +234,7 @@ export const LandingPage = () => {
           </div>
 
           <div className="relative">
-            <div className="miljor-commodity-frame relative aspect-[5/4] overflow-hidden rounded-[1.75rem] border shadow-2xl sm:aspect-[6/5]" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+            <div className="miljor-commodity-frame landing-premium-image relative aspect-[5/4] overflow-hidden rounded-[1.75rem] border shadow-2xl sm:aspect-[6/5]" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
               onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
               onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
               {COMMODITIES.map((item, index) => <CommoditySlide key={item.title} item={item} active={index === slide} />)}
@@ -286,12 +250,12 @@ export const LandingPage = () => {
           </div>
         </section>
 
-        <section id="live-pools" className="mx-auto max-w-7xl scroll-mt-24 px-5 pt-8 pb-12 sm:px-8 sm:pt-10 sm:pb-14 lg:px-10">
+        <section id="live-pools" className="landing-premium-pools mx-auto max-w-7xl scroll-mt-24 px-5 pt-8 pb-12 sm:px-8 sm:pt-10 sm:pb-14 lg:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Supplier-led procurement</p>
               <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
-              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers and showcase listings. Availability is confirmed after sign-in.</p>
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier pools, with live quantities and commercial terms. Sign in to participate.</p>
             </div>
             {isAuthenticated && (
               <Link to={user?.role === 'SUPPLIER' ? '/supplier/pools' : '/pools'} className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">
@@ -322,43 +286,36 @@ export const LandingPage = () => {
           <div
             ref={poolCarouselRef}
             role="region"
-            aria-label="Buying pools and showcase listings"
+            aria-label="Published active buying pools"
             tabIndex={0}
             className="miljor-pool-rail flex items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth snap-x snap-mandatory pb-4"
           >
             {!loadingPools && featuredPools.map((pool) => (
-              <div key={pool.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
-                <PoolCard pool={pool} onSelect={() => navigate('/login', { state: { from: { pathname: '/pools' } } })} />
-              </div>
-            ))}
-            {/* Same card component and 15-day countdown for category examples.
-                Nothing here changes the backend deadlines of real published pools. */}
-            {PREVIEW_POOLS.map((item) => (
-              <div key={item.id} className="flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
+              <div key={pool.id} className="landing-pool-shell flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
                 <PoolCard
-                  isExample
-                  onSelect={() => navigate('/login', { state: { from: { pathname: '/pools' } } })}
-                  pool={{
-                    ...item,
-                    scheduled_close_at: exampleDeadline.toISOString(),
-                    promised_delivery_at: new Date(exampleDeadline.getTime() + 3 * 86400000).toISOString(),
-                    // These figures are illustrative and do not reserve inventory.
-                    fill_percentage: item.fill_percentage,
-                    committed_quantity: item.committed_quantity,
-                  }}
+                  pool={pool}
+                  onSelect={() => navigate(isAuthenticated ? `/pools/${pool.id}` : '/login', isAuthenticated ? undefined : { state: { from: { pathname: `/pools/${pool.id}` } } })}
                 />
               </div>
             ))}
           </div>
-          {loadingPools && <p role="status" className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>Checking published pools…</p>}
+          {loadingPools && (
+            <div role="status" className="landing-pool-loading mt-4 rounded-2xl border px-6 py-8 text-sm" style={{ borderColor: 'var(--border-subtle)' }}>
+              Checking published supplier pools…
+            </div>
+          )}
           {!loadingPools && featuredPools.length === 0 && (
-            <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>No published supplier offers currently. Showcase listings are not yet available for purchase.</p>
+            <div className="landing-pool-empty mt-4 rounded-3xl border px-7 py-9 sm:px-10" role="status">
+              <h3 className="text-lg font-semibold">New wholesale pools are on the way</h3>
+              <p className="mt-2 text-sm">There are no published active supplier pools right now. Check back for verified offers—nothing here is simulated inventory.</p>
+              <Link to="/register" className="landing-gradient-cta mt-5 inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Join MilJor <ArrowRight className="ml-2" size={16}/></Link>
+            </div>
           )}
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-            <div className="rounded-[1.75rem] border p-7 sm:p-10 lg:p-12" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--card-glass)', boxShadow: 'var(--shadow-card)' }}>
+            <div className="landing-premium-benefits rounded-[1.75rem] border p-7 sm:p-10 lg:p-12" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--card-glass)', boxShadow: 'var(--shadow-card)' }}>
               <div className="grid items-center gap-10 lg:grid-cols-[1fr_0.85fr] lg:gap-16">
                 <div>
                   <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">For buyers and suppliers</p>
