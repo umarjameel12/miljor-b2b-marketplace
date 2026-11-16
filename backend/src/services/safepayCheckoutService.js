@@ -22,6 +22,7 @@ const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
 const procurementCollectiveOrderService = require('./procurementCollectiveOrderService');
+const notificationService = require('./notificationService');
 
 class SafepayCheckoutService {
 
@@ -556,6 +557,17 @@ class SafepayCheckoutService {
       // listing allocations COMMITTED only after verified provider payment.
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
           await procurementCollectiveOrderService.reconcilePaidOrder(connection,order.id);
+      // Transactional, per-recipient receipt. A supplier notification never
+      // exposes buyers' contact details or a group's other buyers' orders.
+      if(order.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',order.buyer_id],['SUPPLIER',order.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'PAYMENT_VERIFIED',
+            eventKey:'collective:order:'+order.id+':provider-paid:'+role,
+            entityId:order.id
+          });
+        }
+      }
       await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // 8. Record Webhook Event as PROCESSED
@@ -1003,6 +1015,17 @@ class SafepayCheckoutService {
 
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
           await procurementCollectiveOrderService.reconcilePaidOrder(connection,order.id);
+      // Transactional, per-recipient receipt. A supplier notification never
+      // exposes buyers' contact details or a group's other buyers' orders.
+      if(order.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',order.buyer_id],['SUPPLIER',order.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'PAYMENT_VERIFIED',
+            eventKey:'collective:order:'+order.id+':provider-paid:'+role,
+            entityId:order.id
+          });
+        }
+      }
 
       // B4 pool outbox: only valid for actual pool-backed orders.
       // B5/B6 poolless orders use verified payment rows and their own lifecycle events.
