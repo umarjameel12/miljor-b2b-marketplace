@@ -23,8 +23,8 @@ class SupplierProcurementOpportunitiesService {
     }
     // All reads must be owner-scoped in their authoritative services.
     const [singles, groups] = await Promise.all([
-      type === 'grouped' ? Promise.resolve([]) : this.singleService.inbox(id),
-      type === 'single' ? Promise.resolve([]) : this.groupedService.supplierInbox(id)
+      this.singleService.inbox(id),
+      this.groupedService.supplierInbox(id)
     ]);
     const singleRows = singles.map(i => ({
       type: 'single', key: 'single:' + i.invitation_id, invitation_id: i.invitation_id,
@@ -36,9 +36,10 @@ class SupplierProcurementOpportunitiesService {
       type: 'grouped', key: 'grouped:' + i.invitation_id, invitation_id: i.invitation_id,
       group_id: i.group_id, status: i.status, join_deadline: i.join_deadline,
       quote_deadline: i.quote_deadline, minimum_buyers: i.minimum_buyers,
-      delivery_area: i.delivery_area, items: i.items || [], action: 'BID'
+      delivery_area: i.delivery_area, participant_count: i.participant_count,
+      items: i.items || [], action: 'BID'
     }));
-    const items = [...singleRows, ...groupRows].sort((a,b) =>
+    const items = [...singleRows, ...groupRows].filter(row=>type==='all'||row.type===type).sort((a,b) =>
       new Date(a.quote_deadline).getTime() - new Date(b.quote_deadline).getTime());
     return {
       items,
