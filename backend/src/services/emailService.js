@@ -296,13 +296,18 @@ class EmailService {
     const escapedName = this._escapeHtml(name || 'there');
     const escapedOtp = this._escapeHtml(otp);
     const reset = purpose === 'PASSWORD_RESET';
-    const title = reset ? 'Your reset code' : 'Your verification code';
+    const emailVerification = purpose === 'EMAIL_VERIFICATION';
+    const title = reset ? 'Your reset code' : (emailVerification ? 'Verify your email address' : 'Your verification code');
     const instruction = reset
       ? 'Use this one-time code to reset your MilJor password.'
-      : 'Use this one-time code to verify your MilJor email address.';
+      : (emailVerification
+        ? 'Enter this one-time code to confirm your MilJor email address.'
+        : 'Use this one-time code to verify your MilJor email address.');
     const note = reset
       ? 'Not your request? You can ignore this email.'
-      : 'Did not sign up? You can ignore this email.';
+      : (emailVerification
+        ? "Didn't request email verification? You can safely ignore this email."
+        : 'Did not sign up? You can ignore this email.');
 
     return `
 <!doctype html>
@@ -391,6 +396,13 @@ class EmailService {
           subject: 'MilJor | Verify your email',
           text: `Hi ${payload.name || 'there'},\n\nYour MilJor email verification code is: ${payload.otp}\n\nThis code expires in 10 minutes. Do not share it.\n\nIf you did not create an account, ignore this email.\n\nMilJor — Secure business procurement`,
           html: this._renderOtpEmail({ name: payload.name, otp: payload.otp, purpose: 'REGISTRATION_OTP' })
+        };
+
+      case 'EMAIL_VERIFICATION_OTP':
+        return {
+          subject: 'MilJor | Email verification code',
+          text: `Hi ${payload.name || 'there'},\n\nEnter this one-time code to confirm your MilJor email address: ${payload.otp}\n\nThis code expires in 10 minutes. Do not share it.\n\nDidn't request email verification? You can safely ignore this email.\n\nMilJor — Secure business procurement`,
+          html: this._renderOtpEmail({ name: payload.name, otp: payload.otp, purpose: 'EMAIL_VERIFICATION' })
         };
 
       case 'PASSWORD_RESET_OTP':
@@ -516,7 +528,7 @@ class EmailService {
    * @param {string} [params.purpose='REGISTRATION_VERIFY']
    * @returns {Promise<Object>} { sent: boolean, expires_at: Date }
    */
-  async createAndSendOtp({ userId, email, userName = 'User', purpose = 'REGISTRATION_VERIFY' }) {
+  async createAndSendOtp({ userId, email, userName = 'User', purpose = 'REGISTRATION_VERIFY', emailContext = 'registration' }) {
     // 1. Rate Limiting Check: Prevent spamming OTP resend (< 60s cooldown)
     const [recent] = await db.query(
       `SELECT created_at FROM email_verifications 
@@ -542,12 +554,14 @@ class EmailService {
     );
 
     // Cancel any stale queued outbox notifications for this user and template
-    const templateName = purpose === 'PASSWORD_RESET' ? 'PASSWORD_RESET_OTP' : 'REGISTRATION_OTP';
+    const templateName = purpose === 'PASSWORD_RESET'
+      ? 'PASSWORD_RESET_OTP'
+      : (emailContext === 'verification' ? 'EMAIL_VERIFICATION_OTP' : 'REGISTRATION_OTP');
     await db.query(
       `UPDATE transactional_email_outbox 
        SET status = 'FAILED', last_error = 'SUPERSEDED_BY_NEWER_REQUEST' 
-       WHERE recipient_user_id = ? AND template_name = ? AND status = 'QUEUED'`,
-      [userId, templateName]
+       WHERE recipient_user_id = ? AND template_name IN ('REGISTRATION_OTP', 'EMAIL_VERIFICATION_OTP', 'PASSWORD_RESET_OTP') AND status = 'QUEUED'`,
+      [userId]
     );
 
     // 3. Generate secure OTP and server-secret HMAC-SHA-256 hash (v2)
