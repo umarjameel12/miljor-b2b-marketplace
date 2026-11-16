@@ -308,6 +308,11 @@ async function verify(browser,fixture){
    }
    const [finalStops]=await db.query('SELECT status FROM procurement_delivery_stops WHERE run_id=? ORDER BY order_id',[route.run_id]);
    assert.equal(finalStops.length,2);
+   const [shortageDisputes]=await db.query(`SELECT id,claimed_amount,disputed_quantity
+     FROM order_disputes WHERE order_id=? AND dispute_category='SHORT_QUANTITY'`,[created.groupOrders[0]]);
+   assert.equal(shortageDisputes.length,1);
+   assert.equal(String(shortageDisputes[0].disputed_quantity),'1.00');
+   assert.equal(String(shortageDisputes[0].claimed_amount),'250.00');
    assert.equal(finalStops.filter(x=>x.status==='EXCEPTION').length,1);
    assert.equal(finalStops.filter(x=>x.status==='BUYER_CONFIRMED').length,1);
    const [refunds]=await db.query('SELECT COUNT(*) AS count FROM refund_obligations WHERE order_id IN (?,?)',created.groupOrders);
@@ -342,6 +347,8 @@ async function cleanup(){
          ['collective:receipt:%']);
        await db.query(`DELETE FROM procurement_collective_receipt_lines WHERE receipt_id IN
          (SELECT id FROM procurement_collective_receipt_submissions WHERE order_id=?)`,[oid]);
+       await db.query('DELETE FROM order_disputes WHERE order_id=? AND dispute_code LIKE ?',
+         [oid,'DSP-P1-'+oid+'-%']);
        await db.query('DELETE FROM procurement_collective_receipt_submissions WHERE order_id=?',[oid]);
        await db.query('DELETE FROM invoices WHERE order_id=?',[oid]);
        await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (SELECT buyer_id FROM orders WHERE id=?) AND event_key LIKE ?',[oid,'collective:%']);
