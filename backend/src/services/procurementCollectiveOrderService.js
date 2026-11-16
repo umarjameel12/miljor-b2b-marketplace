@@ -242,10 +242,27 @@ class ProcurementCollectiveOrderService {
   const buyer=id(buyerId),gid=id(groupId);
   const [members]=await this.database.query('SELECT id FROM procurement_collective_participants WHERE group_id=? AND buyer_id=?',[gid,buyer]);
   if(!members.length)throw fail('GROUP_NOT_FOUND','No buyer participation found',404);
+  const [groups]=await this.database.query(
+    'SELECT status,qualification_snapshot FROM procurement_collective_groups WHERE id=?',[gid]);
+  const group=groups[0],qualification=unpack(group?.qualification_snapshot);
+  const version=Number(qualification?.bid_version_id);
+  const [approvals]=group?.status==='QUALIFIED'&&Number.isSafeInteger(version)?
+    await this.database.query(`SELECT bid_version_id,total_preview,item_subtotal,
+      delivery_fee,buyer_fee_preview FROM procurement_collective_buyer_approvals
+      WHERE group_id=? AND buyer_id=? AND bid_version_id=?
+        AND status='CONSENTED_NOT_PAYABLE'`,[gid,buyer,version]):[[]];
   const [orders]=await this.database.query(`SELECT co.*,o.payment_status,o.order_status,
     o.fulfillment_status FROM procurement_collective_buyer_orders co
     JOIN orders o ON o.id=co.order_id WHERE co.group_id=? AND co.buyer_id=?`,[gid,buyer]);
-  return {group_id:gid,has_order:orders.length>0,order:orders[0]?orderView(orders[0]):null,
+  return {group_id:gid,group_status:group?.status,has_order:orders.length>0,
+    payment_ready:group?.status==='QUALIFIED'&&approvals.length===1&&!orders.length,
+    approved_terms:approvals.length?{
+      bid_version_id:version,total_amount:money(approvals[0].total_preview),
+      item_subtotal:money(approvals[0].item_subtotal),
+      delivery_fee:money(approvals[0].delivery_fee),
+      buyer_platform_fee:money(approvals[0].buyer_fee_preview)
+    }:null,
+    order:orders[0]?orderView(orders[0]):null,
     payment_requires_authoritative_safepay:true,group_payment_not_auto_authorized:true};
  }
  async supplierGroup(supplierId,groupId){
