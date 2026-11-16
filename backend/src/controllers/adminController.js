@@ -388,8 +388,11 @@ class AdminController {
       }
 
     } catch (error) {
+      if(error.statusCode && error.statusCode < 500) {
+        return res.status(error.statusCode).json({success:false,error:{code:error.code,message:error.message}});
+      }
       console.error('Verify Supplier Error:', error);
-      return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+      return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Supplier review could not be processed' } });
     }
   }
 
