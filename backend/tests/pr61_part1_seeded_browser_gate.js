@@ -9,11 +9,14 @@ const requests=require('../src/services/procurementRequestService');
 const matching=require('../src/services/procurementMatchingService');
 const collectives=require('../src/services/procurementCollectiveService');
 const bids=require('../src/services/procurementCollectiveBidService');
+const approvals=require('../src/services/procurementCollectiveApprovalService');
+const groupOrders=require('../src/services/procurementCollectiveOrderService');
+const invoiceService=require('../src/services/invoiceService');
 const {chromium}=require('playwright');
 const base=process.env.P0_BROWSER_BASE_URL||'http://127.0.0.1:3000';
 const password=process.env.P0_BROWSER_TEST_PASSWORD;
 const tag='pr61-'+crypto.randomUUID();
-const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{}};
+const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{},groupOrders:[],addresses:[]};
 function assertEnvironment(){
  for(const [k,v] of Object.entries({NODE_ENV:'test',DB_NAME:'miljor_test_db',MILJOR_TEST_ONLY_MIGRATIONS:'1'}))
   assert.equal(process.env[k],v,'PROTECTED_DB_ABORT '+k);
@@ -168,6 +171,83 @@ async function verify(browser,fixture){
    await supplier.page.getByRole('link',{name:'Open group and bid'}).first().click();
    await supplier.page.waitForURL(/\/rfqs#supplier-collective/,{timeout:15000});
    console.log('PASS CHROMIUM: actual Single/Grouped cards, filters, quantity and canonical group-bidding navigation');
+   // Actual qualified collective E2E: immutable bid, independent exact consents,
+   // owner-scoped delivery address, per-buyer unpaid orders and real invoice lines.
+   const quote=await bids.submitBid(fixture.supplier.supplier_id,fixture.groupId,{
+     valid_until:new Date(Date.now()+24*3600000).toISOString(),
+     delivery_fee_per_buyer:'125.00',
+     lines:[{request_item_id:(await db.query('SELECT id FROM procurement_request_items WHERE request_id=?',[created.requestIds[1]]))[0][0].id,
+       supplier_listing_id:fixture.supplier.listing_id,unit_price:'250.00',
+       min_aggregate_quantity:'5'}]
+   },tag+'-supplier-bid');
+   for(const b of [fixture.firstBuyer,created.secondBuyer]){
+     const preview=await approvals.preview(b.id,fixture.groupId,quote.bid.bid_id);
+     const result=await approvals.consent(b.id,fixture.groupId,quote.bid.bid_id,{
+       bid_version_id:preview.bid_version_id,total_preview:preview.total_preview,
+       physical_specifications_accepted:true,buyer_total_confirmed:true
+     },tag+'-approve-'+b.id);
+     assert.equal(result.approval.status,'CONSENTED_NOT_PAYABLE');
+   }
+   const [[version]]=await db.query(`SELECT v.id FROM procurement_collective_bid_versions v
+      JOIN procurement_collective_bids b ON b.id=v.bid_id
+      WHERE b.group_id=? AND b.supplier_id=?`,[fixture.groupId,fixture.supplier.supplier_id]);
+   const qualified=await approvals.qualifyGroup(fixture.firstBuyer.id,fixture.groupId,version.id);
+   assert.equal(qualified.qualification.stock_reserved,false);
+   const [clusters]=await db.query('SELECT id FROM geographic_clusters WHERE is_active=1 ORDER BY id LIMIT 1');
+   assert.ok(clusters.length,'Active delivery cluster required');
+   for(const b of [fixture.firstBuyer,created.secondBuyer]){
+     const [added]=await db.query(`INSERT INTO buyer_delivery_addresses
+       (user_id,city,cluster_id,society_area,full_address,
+        geographic_match_status,user_confirmation_status,
+        business_verification_status,manual_review_required,revision)
+       VALUES (?,'Lahore',?,'Johar Town','PR61 Test Shop, Street 12, Johar Town Lahore',
+         'MATCHED','CONFIRMED','VERIFIED',0,1)`,[b.id,clusters[0].id]);
+     created.addresses.push(added.insertId);
+     const state=await groupOrders.getMine(b.id,fixture.groupId);
+     assert.equal(state.payment_ready,true);
+     const order=await groupOrders.prepare(b.id,fixture.groupId,{
+       bid_version_id:state.approved_terms.bid_version_id,
+       delivery_address_id:added.insertId,total_amount:state.approved_terms.total_amount,
+       confirm_payment_terms:true,confirm_physical_specifications:true
+     },tag+'-payable-'+b.id);
+     assert.equal(order.order.payment_status,'AWAITING_PAYMENT');
+     created.groupOrders.push(order.order.order_id);
+     const replay=await groupOrders.prepare(b.id,fixture.groupId,{
+       bid_version_id:state.approved_terms.bid_version_id,
+       delivery_address_id:added.insertId,total_amount:state.approved_terms.total_amount,
+       confirm_payment_terms:true,confirm_physical_specifications:true
+     },tag+'-payable-'+b.id);
+     assert.equal(replay.is_replay,true);
+     const generated=await invoiceService.generateInvoiceForOrder(order.order.order_id,{id:b.id,role:'BUYER'});
+     assert.ok(generated.invoice_snapshot_json,'Itemized group invoice required');
+   }
+   assert.equal(created.groupOrders.length,2);
+   const [allocated]=await db.query(`SELECT SUM(allocated_qty) AS qty FROM supplier_inventory_allocations
+     WHERE allocation_type='ORDER_DIRECT' AND reference_id IN (?,?) AND status='PENDING'`,
+     created.groupOrders);
+   assert.equal(String(allocated[0].qty),'5.0000');
+   const detail=await groupOrders.supplierGroup(fixture.supplier.supplier_id,fixture.groupId);
+   assert.equal(detail.all_paid,false);
+   assert.equal(detail.unpaid_orders,2);
+   await assert.rejects(async()=>{
+      const connection=await db.getConnection();
+      try{return await groupOrders.reconcilePaidOrder(connection,created.groupOrders[0]);}
+      finally{connection.release();}
+   },e=>e.code==='PROVIDER_PAYMENT_REQUIRED');
+   const groupBuyerView=await buyer1.page.request.get(
+     base+'/api/v1/procurement/collectives/'+fixture.groupId+'/order',
+     {headers:{Authorization:'Bearer '+buyer1.token}});
+   assert.equal(groupBuyerView.status(),200);
+   const otherBuyerOrder=created.groupOrders[1];
+   const forbidden=await buyer1.page.request.post(base+'/api/v1/orders/'+otherBuyerOrder+'/checkout',{
+     headers:{Authorization:'Bearer '+buyer1.token,'X-Idempotency-Key':tag+'-other-checkout'},
+     data:{}});
+   assert.equal(forbidden.status(),403,'Other buyer cannot initiate Safepay checkout');
+   await buyer2.page.reload({waitUntil:'domcontentloaded'});
+   await buyer2.page.getByText('Your own group payment',{exact:true}).waitFor({timeout:18000});
+   assert.equal(await buyer2.page.getByText('Order #'+created.groupOrders[1],{exact:false}).count(),1);
+   console.log('PASS PR61 PART2: two independent approved buyer orders, exact stock and invoices; no payment spoofing or cross-buyer checkout');
+
    // Buyer sessions cannot act on supplier RFQ routes, and invite is always owned.
    const buyerForbidden=await buyer2.page.request.get(base+'/api/v1/procurement/supplier/collectives/invitations',{
      headers:{Authorization:'Bearer '+buyer2.token}});
@@ -181,8 +261,26 @@ async function cleanup(){
  try{
    const [[identity]]=await db.query('SELECT DATABASE() AS name');
    assert.equal(identity.name,'miljor_test_db','Unsafe cleanup target');
+   if(created.groupOrders.length){
+     for(const oid of created.groupOrders){
+       await db.query('DELETE FROM invoices WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (SELECT buyer_id FROM orders WHERE id=?) AND event_key LIKE ?',[oid,'collective:%']);
+       await db.query('DELETE FROM supplier_inventory_allocations WHERE allocation_type=? AND reference_id=?',['ORDER_DIRECT',oid]);
+       await db.query('DELETE FROM procurement_collective_order_lines WHERE collective_order_id IN (SELECT id FROM procurement_collective_buyer_orders WHERE order_id=?)',[oid]);
+       await db.query('DELETE FROM procurement_collective_buyer_orders WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM orders WHERE id=?',[oid]);
+     }
+   }
+   for(const aid of created.addresses)await db.query('DELETE FROM buyer_delivery_addresses WHERE id=?',[aid]);
    if(created.groupId){
      const gid=created.groupId;
+     await db.query('DELETE FROM procurement_collective_buyer_approvals WHERE group_id=?',[gid]);
+     await db.query(`DELETE FROM procurement_collective_bid_lines WHERE bid_version_id IN
+       (SELECT v.id FROM procurement_collective_bid_versions v
+        JOIN procurement_collective_bids b ON b.id=v.bid_id WHERE b.group_id=?)`,[gid]);
+     await db.query(`DELETE FROM procurement_collective_bid_versions WHERE bid_id IN
+       (SELECT id FROM procurement_collective_bids WHERE group_id=?)`,[gid]);
+     await db.query('DELETE FROM procurement_collective_bids WHERE group_id=?',[gid]);
      await db.query('DELETE FROM procurement_collective_supplier_invitations WHERE group_id=?',[gid]);
      await db.query('DELETE FROM procurement_collective_participant_lines WHERE participant_id IN (SELECT id FROM procurement_collective_participants WHERE group_id=?)',[gid]);
      await db.query('DELETE FROM procurement_collective_participants WHERE group_id=?',[gid]);
