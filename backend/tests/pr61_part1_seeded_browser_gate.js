@@ -13,7 +13,7 @@ const {chromium}=require('playwright');
 const base=process.env.P0_BROWSER_BASE_URL||'http://127.0.0.1:3000';
 const password=process.env.P0_BROWSER_TEST_PASSWORD;
 const tag='pr61-'+crypto.randomUUID();
-const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,oldPassword:null};
+const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{}};
 function assertEnvironment(){
  for(const [k,v] of Object.entries({NODE_ENV:'test',DB_NAME:'miljor_test_db',MILJOR_TEST_ONLY_MIGRATIONS:'1'}))
   assert.equal(process.env[k],v,'PROTECTED_DB_ABORT '+k);
@@ -31,32 +31,45 @@ async function seed(){
   VALUES (?,?,?,?,?,'BUYER','VERIFIED',1,'CONTACT_VERIFIED','Lahore','Johar Town')`,
   ['PR61 Buyer Two','PR61 Buyer Two Business',tag+'@miljor.test','+923190000019',hash]);
  created.secondBuyer={id:createdBuyer.insertId,email:tag+'@miljor.test'};
- const [listings]=await db.query(`SELECT sl.id AS listing_id, sl.supplier_id, sl.delivery_zones,
-   sk.family_id, sk.purchasing_unit,sl.available_stock,sl.buyer_min_qty,u.email
-   FROM supplier_listings sl
-   JOIN supplier_skus sk ON sk.id=sl.supplier_sku_id AND sk.status='PUBLISHED'
-   JOIN supplier_products sp ON sp.id=sk.supplier_product_id AND sp.status='PUBLISHED'
-   JOIN product_specifications ps ON ps.id=sl.product_spec_id AND ps.is_active=1
-     AND ps.approval_status='APPROVED' AND ps.lifecycle_status='PUBLISHED'
-   JOIN users u ON u.id=sl.supplier_id AND u.role='SUPPLIER' AND u.is_verified=1
-     AND u.verification_status='VERIFIED'
-   JOIN supplier_profiles p ON p.supplier_id=u.id AND p.verification_status='VERIFIED'
-   WHERE sl.status='ACTIVE' AND sl.currency='PKR' AND sl.available_stock>=5
-     AND sl.buyer_min_qty<=5 AND sk.purchasing_unit='bag'
-   ORDER BY sl.id LIMIT 40`);
- const options=listings.map(row=>{
-   let zones;try{zones=typeof row.delivery_zones==='string'?JSON.parse(row.delivery_zones):row.delivery_zones;}catch{return null;}
-   const z=zones?.find(v=>typeof v==='string'&&v.trim());
-   if(!z)return null;
-   const area=/^(all lahore|lahore wide)$/i.test(z)?'Johar Town, Lahore':z;
-   return {...row,area};
- }).filter(Boolean);
- assert.ok(options.length,'Eligible supplier fixture missing; do not fabricate SKU');
- const supplier=options[0];
+ // A browser-only test DB has no eligible published SKU by default.
+ // Construct one fully relational canonical supplier-owned SKU exclusively in this
+ // disposable MySQL instance; real matching SQL still validates every relationship.
+ const [[supplierUser]]=await db.query(
+   "SELECT id,email FROM users WHERE email='p0_supplier@miljor.test' AND role='SUPPLIER' AND is_verified=1 AND verification_status='VERIFIED'");
+ assert.ok(supplierUser,'Canonical disposable supplier account not found');
+ const productHash=crypto.createHash('sha256').update(tag+'-product').digest('hex');
+ const skuHash=crypto.createHash('sha256').update(tag+'-sku').digest('hex');
+ const specHash=crypto.createHash('sha256').update(tag+'-spec').digest('hex');
+ const code=tag.replace(/[^a-zA-Z0-9]/g,'').slice(0,24);
+ const [newProduct]=await db.query(`INSERT INTO supplier_products
+   (product_code,supplier_id,category_id,family_id,title,brand,variety,quality_grade,product_identity_hash,status,published_at)
+   VALUES (?,?,1,1,'PR61 Test Rice','PR61 Test','Basmati','Grade A',?,'PUBLISHED',UTC_TIMESTAMP())`,
+   ['P1PROD'+code,supplierUser.id,productHash]);
+ created.catalog.productId=newProduct.insertId;
+ const [newSku]=await db.query(`INSERT INTO supplier_skus
+   (sku_code,supplier_id,supplier_product_id,category_id,family_id,packaging_type,pack_size,pack_unit,
+    purchasing_unit,sku_hash,status,published_at)
+    VALUES (?,?,?,1,1,'PP Bag',25,'kg','bag',?,'PUBLISHED',UTC_TIMESTAMP())`,
+   ['P1SKU'+code,supplierUser.id,newProduct.insertId,skuHash]);
+ created.catalog.skuId=newSku.insertId;
+ const [newSpec]=await db.query(`INSERT INTO product_specifications
+   (product_id,spec_code,title,brand,variety,processing_method,quality_grade,packaging_type,
+    pack_size,pack_unit,purchasing_unit,spec_hash,category_id,family_id,supplier_id,
+    supplier_product_id,supplier_sku_id,is_active,approval_status,lifecycle_status)
+    VALUES (1,?,'PR61 Verified Rice 25kg','PR61 Test','Basmati','Sella','Grade A',
+      'PP Bag',25,'kg','bag',?,1,1,?,?,?,1,'APPROVED','PUBLISHED')`,
+   ['P1SPEC'+code,specHash,supplierUser.id,newProduct.insertId,newSku.insertId]);
+ created.catalog.specId=newSpec.insertId;
+ const [newListing]=await db.query(`INSERT INTO supplier_listings
+   (listing_code,supplier_id,product_spec_id,supplier_product_id,supplier_sku_id,
+    available_stock,base_unit_price,currency,supplier_min_qty,buyer_min_qty,
+    delivery_zones,delivery_fee_policy,fulfilment_lead_time_days,status)
+    VALUES (?,?,?,?,?,50,2500,'PKR',1,1,JSON_ARRAY('All Lahore'),'INCLUDED_IN_PRICE',2,'ACTIVE')`,
+   ['P1LIST'+code,supplierUser.id,newSpec.insertId,newProduct.insertId,newSku.insertId]);
+ created.catalog.listingId=newListing.insertId;
+ const supplier={supplier_id:supplierUser.id,email:supplierUser.email,
+   listing_id:newListing.insertId,family_id:1,purchasing_unit:'bag',area:'Johar Town, Lahore'};
  created.supplier=supplier;
- const [[existing]]=await db.query('SELECT password_hash FROM users WHERE id=?',[supplier.supplier_id]);
- created.oldPassword=existing.password_hash;
- await db.query('UPDATE users SET password_hash=? WHERE id=?',[hash,supplier.supplier_id]);
  const date=new Date(Date.now()+48*3600000).toISOString();
  const single=await requests.createDraft(firstBuyer.id,{
    delivery_area:supplier.area,quote_deadline:date,
@@ -169,8 +182,14 @@ async function cleanup(){
      await db.query('DELETE FROM procurement_request_items WHERE request_id=?',[rid]);
      await db.query('DELETE FROM procurement_requests WHERE id=?',[rid]);
    }
-   if(created.supplier&&created.oldPassword)
-     await db.query('UPDATE users SET password_hash=? WHERE id=?',[created.oldPassword,created.supplier.supplier_id]);
+   if(created.catalog.listingId)
+     await db.query('DELETE FROM supplier_listings WHERE id=?',[created.catalog.listingId]);
+   if(created.catalog.specId)
+     await db.query('DELETE FROM product_specifications WHERE id=?',[created.catalog.specId]);
+   if(created.catalog.skuId)
+     await db.query('DELETE FROM supplier_skus WHERE id=?',[created.catalog.skuId]);
+   if(created.catalog.productId)
+     await db.query('DELETE FROM supplier_products WHERE id=?',[created.catalog.productId]);
    if(created.secondBuyer)await db.query('DELETE FROM users WHERE id=?',[created.secondBuyer.id]);
  }finally{await db.end();}
 }
