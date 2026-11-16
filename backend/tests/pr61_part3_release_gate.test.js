@@ -24,7 +24,8 @@ test('unsigned webhook event-type header cannot elevate failed signed payload',(
 });
 test('both buyer and subscription reconciliation require positive nested capture',()=>{
   for(const s of [checkout,subscription]){
-    assert.match(s,/transaction\.status\|\|transaction\.state/);
+    assert.ok(/transaction\.status\|\|transaction\.state/.test(s)||
+      /tracker\.transaction\.status\s*\|\|\s*tracker\.transaction\.state/.test(s));
     assert.match(s,/\['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'\]/);
   }
   assert.match(subscription,/PROVIDER_TRANSACTION_ID_MISSING/);
