@@ -48,6 +48,7 @@ class SupplierProfileRepository {
         sp.correction_requested_revision,
         sp.correction_requested_at,
         sp.last_correction_key,
+        sp.last_correction_hash,
         sp.last_correction_revision,
         sp.submitted_at,
         sp.verified_at,
