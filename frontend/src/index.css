@@ -1349,3 +1349,28 @@ h1, h2, h3, h4, h5, h6, .font-display {
   outline-offset: 2px;
   box-shadow: none !important;
 }
+
+/* MILJOR FINAL DARK LANDING NAV: HIGH SPECIFICITY CONTROL MATCH */
+/* Scoped to public landing only; beats legacy gold border, ring, and inline styles. */
+html.dark #top header.landing-topbar button.landing-account-trigger,
+html.dark #top header.landing-topbar button.miljor-theme-trigger {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  border: 1px solid rgba(169, 186, 175, .23) !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+html.dark #top header.landing-topbar button.landing-account-trigger:hover,
+html.dark #top header.landing-topbar button.miljor-theme-trigger:hover {
+  background: var(--bg-card) !important;
+  border-color: rgba(169, 186, 175, .30) !important;
+  box-shadow: none !important;
+}
+html.dark #top header.landing-topbar button.landing-account-trigger:focus-visible,
+html.dark #top header.landing-topbar button.miljor-theme-trigger:focus-visible {
+  border-color: rgba(169, 186, 175, .30) !important;
+  outline: 2px solid rgba(169, 186, 175, .42) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
