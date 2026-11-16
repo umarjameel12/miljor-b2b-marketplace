@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('../../controllers/procurementController');
+const supplierOpportunities = require('../../services/supplierProcurementOpportunitiesService');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
 
 // Flash Pools
@@ -28,6 +29,19 @@ router.get('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)
 router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.getSmartRequest(req,res));
 router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
 router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));
+
+// One supplier-owned opportunities read endpoint; writes remain in canonical quote/group services.
+router.get('/procurement/supplier/opportunities',protect,authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try {
+    const data = await supplierOpportunities.list(req.user, { type:req.query.type });
+    return res.json({success:true,data});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({
+      success:false,error:{code:error.statusCode?error.code:'OPPORTUNITIES_UNAVAILABLE',
+        message:error.statusCode?error.message:'Could not load procurement opportunities'}
+    });
+  }
+});
 
 // B6-D supplier matching; buyer-only discovery and invitations.
 // Never expose procurement request addresses or identities to suppliers.
