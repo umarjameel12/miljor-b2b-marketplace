@@ -69,6 +69,11 @@ async function main() {
     assert.equal(subs[0].auto_renew,0);
     assert.equal(subs[0].billing_cycle,'MONTHLY');
     assert.equal(subs[0].status,'ACTIVE');
+    const [activatedNotices]=await db.query(
+      "SELECT id,recipient_id,recipient_role,event_type FROM procurement_notifications WHERE recipient_id=? AND event_type='SUBSCRIPTION_ACTIVATED'",
+      [supplierId]);
+    assert.equal(activatedNotices.length,1,'Activation requires exactly one supplier-owned notification');
+    assert.equal(activatedNotices[0].recipient_role,'SUPPLIER');
     assert.ok(subs[0].current_period_end);
     assert.equal((await svc.reconcile({actor,attemptId:started.attempt.id})).replay,true);
     const [count]=await db.query(
@@ -84,6 +89,8 @@ async function main() {
     console.log('SUPPLIER_SUBSCRIPTION_MYSQL_PASS: real transactions, price proof, exactly-once activation and period expiry');
   } finally {
     if(supplierId){
+      await db.query('DELETE FROM procurement_notifications WHERE recipient_id=?',[supplierId]);
+      await db.query('DELETE FROM platform_notifications WHERE user_id=?',[supplierId]);
       await db.query('DELETE FROM supplier_subscription_checkout_attempts WHERE supplier_id=?',[supplierId]);
       await db.query('DELETE FROM supplier_subscriptions WHERE supplier_id=?',[supplierId]);
       await db.query('DELETE FROM system_audit_logs WHERE actor_id=? AND entity_name IN (?,?)',
