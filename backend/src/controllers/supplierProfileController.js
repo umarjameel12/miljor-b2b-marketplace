@@ -123,6 +123,18 @@ class SupplierProfileController {
     }
   }
 
+  async getVerificationHistory(req,res) {
+    try{
+      const history=await profileService.getVerificationHistory(req.user.id);
+      return res.json({success:true,data:{history}});
+    }catch(error){
+      return res.status(error.statusCode||500).json({success:false,error:{
+        code:error.statusCode?error.code:'VERIFICATION_HISTORY_UNAVAILABLE',
+        message:error.statusCode?error.message:'Unable to load verification history'
+      }});
+    }
+  }
+
   /**
    * POST /api/v1/supplier/verification/corrections
    * Corrections are review-specific; this route never starts a new application.
