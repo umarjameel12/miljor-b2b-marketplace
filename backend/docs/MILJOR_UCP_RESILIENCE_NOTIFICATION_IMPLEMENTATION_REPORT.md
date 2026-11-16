@@ -142,3 +142,11 @@ Skills applied: using-superpowers, executing-plans, using-git-worktrees, dispatc
 RESULT: **IMPLEMENTED increment tested locally; overall PARTIAL / RELEASE BLOCKED.** This is not an all-master-plan-complete or production-ready report. PR remains draft; no blind merge/deployment. Rollback means disable new workers/revert application changes while preserving domain, inbox, outbox, audit and migration evidence; never narrow event columns or rewrite journals.
 
 CAN START NEXT PHASE: NO
+
+### First remote CI and targeted correction
+
+Qualified implementation commit00987fc79a1bae8e0f6f1af7a0ae42c704fef3dd was pushed. PR54 is draft and now conflicts with newer main; no main merge was attempted. Workflow-only commitf0bb9a3545d1200ee6d217692e5f7600b1113b90 enables the existing canonical acceptance workflow directly on this approved branch because conflicted pull requests do not produce usable PR-triggered verification. Run43788333296: source/production build PASS; real Chromium buyer/supplier auth/retry/offline PASS; disposable-MySQL job FAIL. This failed run remains recorded in evidence/ucp-ci-initial-2026-11-16.json.
+
+Actual CI root causes were repaired: E2/E3 legacy fixture teardown omitted transactional notification dependents; a strict test-only owned-user cleanup helper now checks database/port identity and removes dependent fixture rows before users, without FK disabling or global deletion. E2 now reports cleanup errors as test failures. Checkout now validates persisted ownership before provider configuration, retaining configuration checks before any inventory claim or provider call.
+
+Targeted observed verification on isolated33321: E2 product ownership/immutable pools33/33 PASS; E3 entitlements18/18 PASS; checkout safety33/33 PASS; actual Express order-ownership gate PASS including foreign-buyer denial without provider credentials and zero payment mutations. These are corrections to the failed CI cases, not a retrospective PASS for the failed run. New remote CI must still be observed; protected-data attribution and the full-release blockers above remain unresolved.

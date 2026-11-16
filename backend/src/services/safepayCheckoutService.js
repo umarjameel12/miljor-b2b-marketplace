@@ -87,12 +87,12 @@ class SafepayCheckoutService {
 
     // Fail known local configuration errors before any inventory claim or
     // durable reservation. A failure after reservation is an unknown outcome.
-    safepayAdapter.validateConfig();
     const [initialOrders] = await db.query(
       `SELECT o.*, u.role AS buyer_role, u.buyer_trust_status
        FROM orders o JOIN users u ON o.buyer_id = u.id WHERE o.id = ?`, [orderId]
     );
     this._validateCheckoutOrder(initialOrders[0], actor);
+    safepayAdapter.validateConfig();
 
     // Existing hold engines acquire their parent locks first. Never call them
     // while holding the order lock (their transactions use other connections).

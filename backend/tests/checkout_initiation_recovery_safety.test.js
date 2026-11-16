@@ -193,6 +193,12 @@ test('owner, database role, suspension and payment state are revalidated after c
   }
 });
 
+test('foreign buyer receives ownership denial even when provider configuration is missing',async()=>{
+  const f=fixture({configError:true});
+  await assert.rejects(f.start('foreign-without-provider-config',{id:8,role:'BUYER'}),error=>error.code==='FORBIDDEN'&&error.statusCode===403);
+  assert.equal(f.calls,0);assert.equal(f.attempts.length,0);
+});
+
 test('reservation persistence or fresh-hold denial prevents all provider calls', async () => {
   for (const option of ['failReservation', 'holdExpired']) {
     const f = fixture({ [option]: true });

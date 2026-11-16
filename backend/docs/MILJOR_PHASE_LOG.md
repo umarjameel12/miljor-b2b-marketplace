@@ -1712,3 +1712,7 @@ PARTIAL: biweekly schedule/request/UI and forward migration 091 implemented; cal
 - Applied skills and actual command/results/file inventory recorded in that report and evidence JSON. Code SHA is recorded in the final commit/CI addendum after source commit creation.
 
 CAN START NEXT PHASE: NO
+
+### PR54 CI correction — 2026-11-16
+
+Source commit00987fc pushed; direct branch-CI triggerf0bb9a3 preserves main merge boundaries. Initial remote run43788333296 passed source/build and Chromium but failed MySQL due to missing notification fixture teardown and ownership/configuration error ordering. Narrow fixes verified on isolated33321: E2 33/33, E3 18/18, checkout33/33, real Express tenant/financial-negative gate PASS. Failed CI evidence retained; corrected remote CI pending. Overall PARTIAL / RELEASE BLOCKED remains.
