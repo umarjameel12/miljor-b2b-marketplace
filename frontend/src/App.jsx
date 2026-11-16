@@ -25,6 +25,7 @@ const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage')
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
 const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then((m) => ({ default: m.AdminCatalogPage })));
 const SupplierDashboardPage = lazy(() => import('./pages/SupplierDashboardPage').then((m) => ({ default: m.SupplierDashboardPage })));
+const SupplierOpportunitiesPage = lazy(() => import('./pages/SupplierOpportunitiesPage').then((m) => ({ default: m.SupplierOpportunitiesPage })));
 const SupplierPoolsPage = lazy(() => import('./pages/SupplierPoolsPage').then((m) => ({ default: m.SupplierPoolsPage })));
 const SupplierSubscriptionPage = lazy(() => import('./pages/SupplierSubscriptionPage').then((m) => ({ default: m.SupplierSubscriptionPage })));
 const DemandRequestsPage = lazy(() => import('./pages/DemandRequestsPage').then((m) => ({ default: m.DemandRequestsPage })));
@@ -95,7 +96,7 @@ function AppContent() {
           <Route path="/supplier/settlements" element={<SupplierSettlementsPage />} />
           <Route path="/supplier/disputes" element={<SupplierDisputesPage />} />
           <Route path="/supplier/analytics" element={<SupplierAnalyticsPage />} />
-          <Route path="/supplier/procurement" element={<Navigate to="/rfqs" replace />} />
+          <Route path="/supplier/procurement" element={<SupplierOpportunitiesPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/verifications" element={<AdminVerificationPage />} />
