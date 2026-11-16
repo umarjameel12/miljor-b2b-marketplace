@@ -63,7 +63,7 @@ async function main() {
   const adapter={
     createTracker:async input=>{calls++;assert.equal(input.amount,3500);return {trackerToken:'track_mock_01'};},
     constructCheckoutUrl:()=> 'https://sandbox.api.getsafepay.com/checkout/pay?beacon=track_mock_01',
-    fetchTracker:async token=>({data:{token,state:providerState,currency:'PKR',amount:providerAmount,transaction:{id:'tx_mock',status:transactionStatus}}})
+    fetchTracker:async token=>({data:{token,state:providerState,currency:'PKR',amount:providerAmount,transaction:{token:'trans_subscription_contract',status:transactionStatus}}})
   };
   const source=fs.readFileSync(path.join(__dirname,'../src/services/supplierSubscriptionCheckoutService.js'),'utf8');
   const moduleStub={exports:{}};
