@@ -98,6 +98,11 @@ router.get('/procurement/collectives/:groupId/order',protect,authorizeStrict('BU
   try{return res.json({success:true,data:await collectiveOrders.getMine(req.user.id,req.params.groupId)});}
   catch(error){return collectiveRouteError(res,error);}
 });
+router.get('/procurement/supplier/collectives/orders',protect,
+  authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try{return res.json({success:true,data:{groups:await collectiveOrders.listSupplierGroups(req.user.id)}});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
 router.get('/procurement/supplier/collectives/:groupId/orders',protect,
   authorizeStrict('SUPPLIER'),async(req,res)=>{
     try{return res.json({success:true,data:await collectiveOrders.supplierGroup(req.user.id,req.params.groupId)});}
