@@ -1180,7 +1180,8 @@ class AuthController {
         userId: user.id,
         email: user.email,
         userName: user.full_name,
-        purpose: 'REGISTRATION_VERIFY'
+        purpose: 'REGISTRATION_VERIFY',
+        emailContext: 'verification'
       });
 
       return res.status(200).json({
