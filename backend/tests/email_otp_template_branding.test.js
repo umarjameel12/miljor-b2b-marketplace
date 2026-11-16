@@ -5,7 +5,12 @@ process.env.NODE_ENV = 'test';
 process.env.TRANSACTIONAL_EMAIL_MODE = 'mock';
 const email = require('../src/services/emailService');
 const db = require('../src/config/db');
-after(async () => { await db.end(); });
+// Only close the pool when this test runs inside the disposable MySQL acceptance
+// environment. Standalone branding CI has no MySQL server: its initial connection
+// attempt may still be resolving and closing the pool there causes a hook failure.
+if (process.env.TEST_DB_NAME === 'miljor_otp_acceptance_test') {
+  after(async () => { await db.end(); });
+}
 
 for (const [type,heading] of [
   ['REGISTRATION_OTP','Your verification code'],
