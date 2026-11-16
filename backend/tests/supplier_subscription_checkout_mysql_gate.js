@@ -27,7 +27,7 @@ async function main() {
   const fakeProvider={
     createTracker: async ({amount:a,currency})=>{assert.equal(a,3500);assert.equal(currency,'PKR');return {trackerToken:token};},
     constructCheckoutUrl:()=> 'https://sandbox.api.getsafepay.com/checkout/pay?beacon='+token,
-    fetchTracker:async key=>({data:{token:key,state,currency:'PKR',amount,transaction:{id:'synthetic_ci',status:transactionStatus}}})
+    fetchTracker:async key=>({data:{token:key,state,currency:'PKR',amount,transaction:{token:'trans_subscription_ci',status:transactionStatus}}})
   };
   const svc=new SupplierSubscriptionCheckoutService(db,fakeProvider);
   const email=`supplier_checkout_${now}@miljor.test`;
