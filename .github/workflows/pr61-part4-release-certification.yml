@@ -1,0 +1,95 @@
+name: PR61 Part 4 Security and Sandbox Release Readiness
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/services/safepayAdapter.js'
+      - 'backend/src/services/supplierVerificationDocumentService.js'
+      - 'backend/tests/pr61_part1_document_mysql_gate.js'
+      - 'backend/tests/pr61_part4_release_gate.test.js'
+      - 'backend/docs/PR61_PART4_RELEASE_DECISION.md'
+      - '.github/workflows/pr61-part4-release-certification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security-and-provider-boundaries:
+    name: Phase 4 no-provider-traffic negative security and release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      NODE_ENV: test
+      SAFEPAY_ENV: sandbox
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      DB_NAME: miljor_test_db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks for changed security services
+        run: |
+          node --check backend/src/services/safepayAdapter.js
+          node --check backend/src/services/supplierVerificationDocumentService.js
+          node --check backend/tests/pr61_part4_release_gate.test.js
+          node --check backend/tests/pr61_part1_document_mysql_gate.js
+      - name: Phase 4 negative security, file upload and Safepay tracker controls
+        run: node --test backend/tests/pr61_part4_release_gate.test.js
+      - name: Read-only Safepay Sandbox readiness - not provider certification
+        run: node backend/scripts/safepaySandboxPreflight.js
+
+  isolated-mysql-evidence-and-finance:
+    name: Real disposable MySQL 8 document-security and payment safety regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      SAFEPAY_ENV: sandbox
+      SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install reproducible backend
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Bootstrap and migrate disposable MySQL ONLY
+        run: |
+          cd backend
+          node database/financeCompatibilityGate.js
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node database/migrationManifest.js
+      - name: MySQL verification evidence RBAC, append-only versions and malicious file rejections
+        run: cd backend && node tests/pr61_part1_document_mysql_gate.js
+      - name: Signed HTTP negative payment and exactly-once escrow checks - synthetic, not provider origin
+        run: cd backend && node tests/p0_safepay_signed_http_acceptance.js
+      - name: Read-only finance conservation gate
+        run: cd backend && node tests/p0_finance_readonly_integrity_gate.js
+      - name: Confirm canonical journal and isolation
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
