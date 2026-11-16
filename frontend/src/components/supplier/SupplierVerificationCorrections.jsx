@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import supplierApi from '../../api/supplier';
+import { SupplierVerificationDocuments } from './SupplierVerificationDocuments';
 import { toast } from 'react-toastify';
 
 // Only server-selected fields can appear here. This component cannot edit other
@@ -15,6 +16,7 @@ const labels = {
 export function SupplierVerificationCorrections({profile,onSubmitted}) {
   const fields = Array.isArray(profile?.correction_fields) ?
     profile.correction_fields.filter(field=>Object.prototype.hasOwnProperty.call(labels,field)) : [];
+  const documents=Array.isArray(profile?.correction_fields)?profile.correction_fields.filter(f=>f.startsWith('document:')).map(f=>f.slice(9)):[];
   const notes=profile?.correction_notes || {};
   const [values,setValues] = useState({});
   const [busy,setBusy] = useState(false);
@@ -26,7 +28,7 @@ export function SupplierVerificationCorrections({profile,onSubmitted}) {
   },[profile?.submitted_revision,profile?.correction_fields?.join(',')]);
   async function submit(e){
     e.preventDefault();
-    if(!fields.length || busy)return;
+    if((!fields.length&&!documents.length) || busy)return;
     setBusy(true);setError('');
     try{
       const changes=Object.fromEntries(fields.map(field=>[field,values[field]??'']));
@@ -42,8 +44,10 @@ export function SupplierVerificationCorrections({profile,onSubmitted}) {
       <h2 className="font-semibold text-lg text-[var(--text-primary)]">Requested verification corrections</h2>
       <p className="text-sm text-[var(--text-muted)]">Original submission revision {profile.submitted_revision} remains on record. Only the fields listed below need updating; all other details and documents remain saved.</p>
     </div>
-    {!fields.length?<p role="alert" className="text-sm">No field-specific correction request is available. Contact MilJor support instead of re-submitting your full application.</p>:
+    {!fields.length&&!documents.length?<p role="alert" className="text-sm">No field-specific correction request is available. Contact MilJor support instead of re-submitting your full application.</p>:
     <form onSubmit={submit} className="space-y-4">
+      {documents.length>0&&<SupplierVerificationDocuments profile={profile} requestedKinds={documents}/>}
+
       {fields.map(field=><div key={field} className="space-y-1">
         <label htmlFor={'correction-'+field} className="text-sm font-semibold">{labels[field]}</label>
         <p className="text-xs text-[var(--text-muted)]">{notes[field]||'Update this requested field'}</p>
