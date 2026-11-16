@@ -728,7 +728,12 @@ class FinancialSettlementService {
            WHERE ao.order_id=?`,
           [orderId]
         );
-        if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
+        const [groupLineCounts]=await connection.query(
+          `SELECT COUNT(*) AS line_count FROM procurement_collective_order_lines gl
+           JOIN procurement_collective_buyer_orders co ON co.id=gl.collective_order_id
+           WHERE co.order_id=?`,[orderId]);
+        if (Number(awardLineCounts[0]?.line_count || 0) > 0 ||
+            Number(groupLineCounts[0]?.line_count || 0) > 0) {
           const err = new Error('Partial refunds for awarded procurement orders require line-item quantities, verified receipts and itemized contractual prices');
           err.code = 'LINE_ITEM_REFUND_ALLOCATION_REQUIRED';
           err.statusCode = 409;
