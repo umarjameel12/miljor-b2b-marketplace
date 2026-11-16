@@ -11,6 +11,7 @@ async function main(){
   const password=process.env.P0_BROWSER_TEST_PASSWORD;
   assert.ok(password&&password.length>=16,'Test fixture password missing');
   const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  let db;
   try{
     const ctx=await browser.newContext({baseURL:base});
     const page=await ctx.newPage();
@@ -47,7 +48,7 @@ async function main(){
     console.log('PASS CHROMIUM: authenticated supplier, unified inbox, All/Single/Grouped, empty/error safety and HttpOnly session');
     // Exercise actual correction-only React view on a disposable supplier fixture,
     // without creating any payments or editing a protected database.
-    const db=require('../src/config/db');
+    db=require('../src/config/db');
     const [[fixture]]=await db.query("SELECT id FROM users WHERE email='p0_supplier@miljor.test'");
     assert.ok(fixture?.id,'Disposable supplier fixture missing');
     const [[previous]]=await db.query(
@@ -73,6 +74,9 @@ async function main(){
           previous.correction_notes,previous.correction_requested_revision,fixture.id]);
     }
     await ctx.close();
-  }finally{await browser.close();}
+  }finally{
+    await browser.close();
+    if(db && typeof db.end==='function')await db.end();
+  }
 }
 main().catch(e=>{console.error('FAIL CHROMIUM PR61 PART1',e);process.exitCode=1;});
