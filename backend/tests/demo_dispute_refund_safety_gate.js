@@ -48,7 +48,10 @@ function fixture(cfg={}) {
       if(query.includes('FROM refund_obligations')&&query.includes("status IN ('REQUESTED'"))
         return [cfg.duplicate?[{id:81}]:[]];
       if(query.includes('SELECT SUM(total_refund_amount)'))return [[{total_refunded:'0.00'}]];
-      if(query.includes('COUNT(*) AS line_count'))return [[{line_count:cfg.multiLine?2:0}]];
+      if(query.includes('COUNT(*) AS line_count') && query.includes('procurement_collective_order_lines'))
+        return [[{line_count:cfg.groupLines?2:0}]];
+      if(query.includes('COUNT(*) AS line_count'))
+        return [[{line_count:cfg.multiLine?2:0}]];
       if(query.includes('FROM order_disputes WHERE order_id = ? AND idempotency_key'))return [[]];
       if(query.includes('SELECT id, dispute_code, disputed_quantity'))return [[]];
       if(query.includes('FROM supplier_payables'))return [[]];
