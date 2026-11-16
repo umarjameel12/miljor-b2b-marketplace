@@ -1173,7 +1173,12 @@ class FulfillmentService {
            WHERE ao.order_id = ?`,
           [orderId]
         );
-        if (Number(awardItems[0]?.line_count || 0) > 0) {
+        const [groupItems]=await connection.query(
+          `SELECT COUNT(*) AS line_count FROM procurement_collective_order_lines gl
+           JOIN procurement_collective_buyer_orders co ON co.id=gl.collective_order_id
+           WHERE co.order_id=?`,[orderId]);
+        if (Number(awardItems[0]?.line_count || 0) > 0 ||
+            Number(groupItems[0]?.line_count || 0) > 0) {
           const err = new Error('Procurement award deliveries require line-specific discrepancy evidence; aggregate shortage cannot be calculated safely');
           err.code = 'LINE_ITEM_RECEIPT_REQUIRED';
           err.statusCode = 409;
