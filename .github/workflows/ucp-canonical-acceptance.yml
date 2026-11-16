@@ -270,3 +270,6 @@ jobs:
       - name: Real Chromium separate buyer/supplier acceptance
         timeout-minutes: 10
         run: cd backend && node tests/p0_real_browser_journey.js
+      - name: PR61 supplier unified opportunities Chromium tabs and API acceptance
+        timeout-minutes: 5
+        run: cd backend && node tests/pr61_part1_chromium_gate.js
