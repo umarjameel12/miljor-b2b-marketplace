@@ -1325,3 +1325,27 @@ h1, h2, h3, h4, h5, h6, .font-display {
   outline-offset: 2px;
   box-shadow: none !important;
 }
+
+/* MILJOR DARK NAVBAR FINAL: EXACT MATCHED CONTROLS */
+/* Dark landing only. Fixed-width neutral border, no golden rings or focused glow. */
+.dark .miljor-public-landing .landing-topbar button.landing-account-trigger,
+.dark .miljor-public-landing .landing-topbar button.miljor-theme-trigger {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  border: 1px solid rgba(181, 199, 190, .22) !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+.dark .miljor-public-landing .landing-topbar button.landing-account-trigger:hover,
+.dark .miljor-public-landing .landing-topbar button.miljor-theme-trigger:hover {
+  border-color: rgba(181, 199, 190, .29) !important;
+  box-shadow: none !important;
+}
+.dark .miljor-public-landing .landing-topbar button.landing-account-trigger:focus-visible,
+.dark .miljor-public-landing .landing-topbar button.miljor-theme-trigger:focus-visible {
+  border-color: rgba(181, 199, 190, .3) !important;
+  outline: 2px solid rgba(181, 199, 190, .45) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
