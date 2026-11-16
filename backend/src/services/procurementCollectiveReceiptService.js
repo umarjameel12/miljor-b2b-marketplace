@@ -173,7 +173,19 @@ class ProcurementCollectiveReceiptService{
   const [lines]=await this.database.query(`SELECT collective_order_line_id,ordered_quantity,
     received_quantity,shortage_quantity,unit,locked_unit_price,shortage_value
     FROM procurement_collective_receipt_lines WHERE receipt_id=? ORDER BY id`,[rows[0].id]);
-  return {...rows[0],lines,refund_executed:false};
+  const [disputes]=await this.database.query(
+    `SELECT d.id,d.disputed_quantity,d.claimed_amount,
+       CAST(JSON_UNQUOTE(JSON_EXTRACT(d.evidence_metadata,'$.line_id')) AS UNSIGNED) AS contract_line_id
+     FROM order_disputes d WHERE d.order_id=? AND d.buyer_id=?
+       AND d.dispute_category='SHORT_QUANTITY'
+       AND JSON_UNQUOTE(JSON_EXTRACT(d.evidence_metadata,'$.source'))='PR61_COLLECTIVE_RECEIPT'`,
+    [order,buyer]);
+  const disputeByLine=new Map(disputes.map(d=>[Number(d.contract_line_id),{
+    dispute_id:Number(d.id),claimed_amount:money(d.claimed_amount),
+    disputed_quantity:qty(d.disputed_quantity)}]));
+  const exposed=lines.map(l=>({...l,
+    dispute:disputeByLine.get(Number(l.collective_order_line_id))||null}));
+  return {...rows[0],lines:exposed,refund_executed:false};
  }
 }
 module.exports=new ProcurementCollectiveReceiptService();
