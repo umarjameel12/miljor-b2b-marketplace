@@ -95,6 +95,11 @@ async function main() {
     assert.equal((await expiry.processScheduledStarterChanges(20)).processed,0);
     const [final]=await db.query('SELECT subscription_plan FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
     assert.equal(final[0].subscription_plan,'STARTER');
+    const [periodNotices]=await db.query(
+      "SELECT id FROM procurement_notifications WHERE recipient_id=? AND event_type='SUBSCRIPTION_DOWNGRADED'",
+      [supplierId]);
+    assert.equal(periodNotices.length,1,
+      'Exactly one supplier-only notification must record effective paid-period expiry');
     marker('PASS_ALL_ASSERTIONS');
     console.log('SUPPLIER_SUBSCRIPTION_MYSQL_PASS: real transactions, price proof, exactly-once activation and period expiry');
   } finally {
