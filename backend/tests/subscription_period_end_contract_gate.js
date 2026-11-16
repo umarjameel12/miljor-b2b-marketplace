@@ -43,7 +43,17 @@ async function main() {
   const db = {query, getConnection: async()=>connection};
   const moduleStub = { exports: {} };
   new Function('require', 'module', 'exports', source)(
-    (name)=>{ if(name==='../config/db') return db; throw new Error('Unexpected dependency'); },
+    (name)=>{
+      if(name==='../config/db')return db;
+      if(name==='./notificationService')return {enqueueEvent:async(conn,event)=>{
+        assert.equal(event.role,'SUPPLIER');
+        assert.equal(event.userId,7);
+        assert.ok(['SUBSCRIPTION_DOWNGRADE_SCHEDULED','SUBSCRIPTION_DOWNGRADED'].includes(event.eventType));
+        assert.ok(event.entityId>0);
+        return {};
+      }};
+      throw new Error('Unexpected dependency');
+    },
     moduleStub, moduleStub.exports
   );
   const service = moduleStub.exports;
