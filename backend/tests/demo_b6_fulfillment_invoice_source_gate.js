@@ -40,7 +40,8 @@ gate('invoice uses immutable per-line B6 snapshots',()=>{
 });
 gate('invoice rejects line subtotal mismatch',()=>{
   assert.match(invoice,/INVOICE_AMOUNT_MISMATCH/);
-  assert.match(invoice,/exactDecimal\.exactDecimalSum\(awardLines\.map/);
+  assert.match(invoice,/exactDecimal\.exactDecimalSum\(acceptedLines\.map/);
+  assert.match(invoice,/procurement_collective_order_lines/);
 });
 gate('B6 aggregate receipt and partial refund are fail-closed',()=>{
   assert.match(fulfillment,/LINE_ITEM_RECEIPT_REQUIRED/);
