@@ -197,7 +197,7 @@ export const LandingPage = () => {
                     }}
                   >
                     <div className="space-y-3">
-                      <div className="text-center pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-center pb-2.5">
                         <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
                           Welcome to MilJor
                         </p>
