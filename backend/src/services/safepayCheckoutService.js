@@ -302,8 +302,17 @@ class SafepayCheckoutService {
       throw err;
     }
 
+    // The event type driving a financial mutation MUST originate in the signed
+    // raw JSON, not in an unsigned HTTP header. A header/payload mismatch
+    // indicates spoofing or a broken provider integration and fails closed.
+    const signedEventType=parsedPayload.type||parsedPayload.event||parsedPayload.webhook_event_type;
+    if(typeof signedEventType!=='string'||!signedEventType.trim()||
+       (eventType && eventType!==signedEventType)){
+      const err=new Error('Webhook event type does not match signed payload');
+      err.code='WEBHOOK_EVENT_TYPE_MISMATCH';err.statusCode=422;throw err;
+    }
     const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
-    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.event || parsedPayload.webhook_event_type || 'unknown';
+    const effectiveEventType = signedEventType;
 
     // 2. Check for duplicate webhook receipt (Idempotency)
     const [existingEvent] = await db.query(
@@ -854,6 +863,16 @@ class SafepayCheckoutService {
     }
 
     const transaction = trackerData.transaction;
+    // The tracker may have ENDED due to failure, reversal or cancellation.
+    // A nested transaction object is not by itself proof of captured funds.
+    const transactionState=String(transaction.status||transaction.state||'').toUpperCase();
+    if(!['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'].includes(transactionState)){
+      return {success:true,reconciled:false,
+        order_status:order.order_status,payment_status:order.payment_status,
+        provider_state:trackerData.state,
+        transaction_state:transactionState||'UNVERIFIED_TRANSACTION',
+        message:'Provider has not positively verified a captured payment'};
+    }
 
     // Verify currency
     const providerCurrency = trackerData.currency || transaction.currency || 'PKR';
