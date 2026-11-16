@@ -1226,3 +1226,18 @@ h1, h2, h3, h4, h5, h6, .font-display {
   box-shadow: none;
   cursor: not-allowed;
 }
+
+/* LANDING MINIMAL NAVBAR: MATCH ACCOUNT AND THEME CONTROL */
+.miljor-public-landing .landing-topbar .landing-account-trigger {
+  background-color: var(--miljor-theme-trigger-bg) !important;
+  border-color: var(--theme-menu-border, var(--border-default)) !important;
+  color: var(--miljor-theme-trigger-ink) !important;
+  box-shadow: none;
+}
+.miljor-public-landing .landing-topbar .landing-account-trigger > span {
+  color: var(--miljor-theme-trigger-ink) !important;
+}
+.miljor-public-landing .landing-topbar .landing-account-trigger:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 3px;
+}
