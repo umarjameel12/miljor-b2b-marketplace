@@ -1297,11 +1297,12 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 
 /* MILJOR DARK-ONLY NAVBAR CONTROL MATCH 2026-11-16 */
+/* Keep original border width for stable dimensions, but remove both gold outlines. */
 .dark .miljor-public-landing .landing-topbar .landing-account-trigger {
-  border-color: var(--brand-accent) !important;
+  border-color: transparent !important;
 }
 .dark .miljor-public-landing .landing-topbar .miljor-theme-trigger {
   background: var(--bg-card) !important;
   background-color: var(--bg-card) !important;
-  border-color: var(--brand-accent) !important;
+  border-color: transparent !important;
 }
