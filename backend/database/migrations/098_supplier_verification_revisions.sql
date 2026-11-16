@@ -5,7 +5,9 @@ ALTER TABLE supplier_profiles
   ADD COLUMN correction_fields JSON NULL,
   ADD COLUMN correction_notes JSON NULL,
   ADD COLUMN correction_requested_revision INT UNSIGNED NULL,
-  ADD COLUMN correction_requested_at DATETIME NULL;
+  ADD COLUMN correction_requested_at DATETIME NULL,
+  ADD COLUMN last_correction_key VARCHAR(120) NULL,
+  ADD COLUMN last_correction_revision INT UNSIGNED NULL;
 
 CREATE TABLE IF NOT EXISTS supplier_verification_revisions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -17,7 +19,9 @@ CREATE TABLE IF NOT EXISTS supplier_verification_revisions (
   reviewed_by INT NULL,
   reviewed_at DATETIME NULL,
   review_reason TEXT NULL,
+  submission_key VARCHAR(120) NULL,
   UNIQUE KEY uq_supplier_review_revision (supplier_id, revision),
+  UNIQUE KEY uq_supplier_review_idempotency (supplier_id, submission_key),
   KEY idx_supplier_review_latest (supplier_id,submitted_at),
   CONSTRAINT fk_supplier_review_supplier FOREIGN KEY (supplier_id) REFERENCES users(id),
   CONSTRAINT fk_supplier_review_admin FOREIGN KEY (reviewed_by) REFERENCES users(id)
