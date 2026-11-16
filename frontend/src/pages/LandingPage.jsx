@@ -294,7 +294,7 @@ export const LandingPage = () => {
               <div key={pool.id} className="landing-pool-shell flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
                 <PoolCard
                   pool={pool}
-                  onSelect={() => navigate(isAuthenticated ? `/pools/${pool.id}` : '/login', isAuthenticated ? undefined : { state: { from: { pathname: `/pools/${pool.id}` } } })}
+                  onSelect={() => navigate(isAuthenticated ? '/pools' : '/login', isAuthenticated ? undefined : { state: { from: { pathname: '/pools' } } })}
                 />
               </div>
             ))}
