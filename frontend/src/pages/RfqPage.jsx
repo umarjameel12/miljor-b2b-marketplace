@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -22,6 +22,9 @@ import { RecurringCycleControls } from '../components/procurement/RecurringCycle
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
+  const navigate=useNavigate();
+  const [awardAddress,setAwardAddress]=useState(''),[awardConsent,setAwardConsent]=useState(false);
+  const awardIntents=useRef(new Map());
   const [activeTab, setActiveTab] = useState(user?.role === 'SUPPLIER' ? 'supplier' : 'buyer');
   const location = useLocation();
   useEffect(() => {
@@ -371,7 +374,7 @@ export const RfqPage = () => {
       const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/checkout-preview`,{
         method:'POST',body:JSON.stringify({selections})
       });
-      setAwardPreview(data.preview);
+      setAwardPreview({...data.preview,confirmed_selections:selections,request_id:compareRequestId});setAwardConsent(false);
       toast.success('Fee-inclusive nonbinding preview created. Real checkout remains gated.');
     }catch(e){setShoppingError(e.message);}
     finally{setQuoteBusy(false);}
@@ -635,6 +638,34 @@ export const RfqPage = () => {
   };
 
   // B6-J/K: private supplier bids and independent buyer consent.
+  const prepareCollectiveCommitment=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    const signature=`group:${user.id}:${groupId}:prepare`;
+    if(!awardIntents.current.has(signature))awardIntents.current.set(signature,'group-'+crypto.randomUUID());
+    try{
+      const result=await procurementApi(`/api/v1/procurement/collectives/${groupId}/commitment`,{method:'POST',headers:{'X-Idempotency-Key':awardIntents.current.get(signature)},body:'{}'});
+      await refreshRequests();await viewSmartComparison(result.request_id);
+      toast.success('Group stock held. Review your own physical terms and final amount; payment has not started.');
+    }catch(error){setShoppingError(error.message);}finally{setShoppingBusy(false);}
+  };
+  const confirmReviewedAward=async()=>{
+    if(!awardConsent||!awardPreview||awardAddress.trim().length<8)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const recoveredResponse=await fetch(`/api/v1/procurement/requests/${compareRequestId}/award`,{headers:{Authorization:`Bearer ${token}`}});
+      if(recoveredResponse.ok){const recovered=await recoveredResponse.json();if(recovered.data?.award?.orders?.length){navigate('/orders');return;}}
+      else if(recoveredResponse.status!==404)throw Error('Unable to confirm whether an award already exists. Refresh before submitting.');
+      if(Number(awardPreview.request_id)!==Number(compareRequestId)||!awardPreview.confirmed_selections?.every(line=>reviewedAwardLines[`${line.quote_id}:${line.request_item_id}:${line.version_number}`]))throw Error('Refresh and review every selected physical specification before confirming.');
+      const payload={selections:awardPreview.confirmed_selections,accepted_total_payable:awardPreview.total_payable,buyer_total_confirmed:true,delivery_address:awardAddress.trim()};
+      const signature=JSON.stringify([user.id,compareRequestId,payload]);
+      if(!awardIntents.current.has(signature))awardIntents.current.set(signature,'award-'+crypto.randomUUID());
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award`,{method:'POST',headers:{'X-Idempotency-Key':awardIntents.current.get(signature)},body:JSON.stringify(payload)});
+      navigate('/orders');
+    }catch(error){
+      try{const recovered=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award`);if(recovered.award?.orders?.length){navigate('/orders');return;}}catch{/* Keep original error; no unconfirmed success. */}
+      setShoppingError(error.message);
+    }finally{setShoppingBusy(false);}
+  };
   const openGroupBidding=async groupId=>{
     setShoppingBusy(true);setShoppingError('');
     try{
@@ -1038,6 +1069,10 @@ export const RfqPage = () => {
                       <button type="button" disabled={shoppingBusy}
                         onClick={()=>showCollectiveBids(invite.group_id)}
                         className="text-xs underline">View private bids</button>}
+                    {invite.status==='LOCKED'&&invite.group_status==='QUALIFIED'&&<div className="text-xs space-y-2">
+                      <p>Every buyer creates and pays only their own order. Supplier preparation waits for the entire approved group to be funded. Unfunded group failures require explicit resolution; paid peers are never automatically repriced or refunded.</p>
+                      <button type="button" disabled={shoppingBusy} onClick={()=>prepareCollectiveCommitment(invite.group_id)} className="underline">Prepare my individual group order</button>
+                    </div>}
                     {invite.status==='INVITED'&&invite.group_status==='FORMING' && <>
                       {(invite.items||[]).map(item=>(
                         <label key={item.id} className="block text-xs">
@@ -1304,8 +1339,11 @@ export const RfqPage = () => {
                     <p className="text-base font-semibold">Calculated basket payable: Rs. {awardPreview.total_payable}</p>
                     <p className="text-xs text-amber-700">
                       Nonbinding preflight only. Tax policy and authoritative inventory checkout gate are not yet approved.
-                      No stock is reserved, order created or payment requested.
+                      This preview creates no order or payment. Existing group capacity holds follow their own expiry.
                     </p>
+                    <label className="block text-xs">Your delivery address or agreed pickup destination<input aria-label="Final award delivery address" value={awardAddress} onChange={event=>{setAwardAddress(event.target.value);setAwardConsent(false);}} className="block w-full p-2 rounded-lg border bg-[var(--bg-surface)]"/></label>
+                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={awardConsent} onChange={event=>setAwardConsent(event.target.checked)}/>I approve these selected physical specifications and the displayed final amount. Order creation remains subject to server financial gates; payment is a separate action.</label>
+                    <button type="button" disabled={shoppingBusy||!awardConsent||awardAddress.trim().length<8} onClick={confirmReviewedAward} className="text-xs underline">Confirm reviewed terms through gated checkout</button>
                   </section>
                 )}
                 <div className="space-y-3" aria-label="Product-wise numeric counteroffers">

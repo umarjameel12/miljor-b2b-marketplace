@@ -13,6 +13,8 @@ const definitions={
   QUOTE_EXPIRED:['Quote expired','قیمت کی پیشکش کی مدت ختم ہو گئی','request'],
   TERMS_LOCKED:['Price and specifications locked','قیمت اور تفصیلات محفوظ ہو گئیں','request'],
   GROUP_INVITED:['Group invitation','گروپ میں شمولیت کی دعوت','group'],
+  GROUP_CAPACITY_RESERVED:['Group capacity reserved for individual approval','انفرادی منظوری کے لیے گروپ کی گنجائش محفوظ ہے','group'],
+  GROUP_CAPACITY_RELEASED:['Your group capacity released','گروپ میں آپ کی محفوظ گنجائش ختم ہو گئی','group'],
   GROUP_JOINED:['Buyer joined group','خریدار گروپ میں شامل ہو گیا','group',false],
   GROUP_LEFT:['Buyer left group','خریدار گروپ سے نکل گیا','group',false],
   GROUP_MINIMUM_REACHED:['Group minimum reached','گروپ کی کم از کم مقدار پوری ہو گئی','group'],

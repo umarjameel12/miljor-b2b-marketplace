@@ -80,6 +80,16 @@ async function main(){
     assert.equal((await skipPromise).status(),200);
     await cycleControl.getByRole('status').filter({hasText:'Cycle skip confirmed.'}).waitFor({timeout:15000});
     pass('Buyer changes one cycle quantity/pickup preference, persists after reload and skips through real backend');
+    await b.page.goto(base+'/procurement',{waitUntil:'domcontentloaded'});
+    await b.page.getByRole('button',{name:'Prepare my individual group order',exact:true}).click();
+    await b.page.getByRole('checkbox',{name:'I reviewed this physical SKU, grade and pack for my order preview',exact:true}).check();
+    await b.page.getByRole('button',{name:'Review Seller-Specific Order Breakdown',exact:true}).click();
+    await b.page.getByRole('textbox',{name:'Final award delivery address',exact:true}).fill('P0 owned group destination, Lahore');
+    await b.page.getByRole('checkbox',{name:/I approve these selected physical specifications/}).check();
+    const gatedAwardPromise=b.page.waitForResponse(response=>response.request().method()==='POST'&&/\/procurement\/requests\/\d+\/award$/.test(new URL(response.url()).pathname));
+    await b.page.getByRole('button',{name:'Confirm reviewed terms through gated checkout',exact:true}).click();
+    const gatedAward=await gatedAwardPromise;assert.equal(gatedAward.status(),503);assert.equal((await gatedAward.json()).error.code,'B6_FINANCIAL_GATE_BLOCKED');
+    pass('Buyer reserves group capacity and reviews private physical/fee terms; default B6 financial gate still rejects order creation');
     await b.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
     await b.page.getByRole('heading',{name:'Procurement Orders & Reservations'}).waitFor({timeout:15000});
     // Real order row from isolated MySQL, rendered through actual backend GET /orders.

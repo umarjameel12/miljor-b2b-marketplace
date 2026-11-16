@@ -47,6 +47,7 @@ jobs:
           node tests/procurement_delivery_binding_policy_gate.js
           node --test tests/supplier_operations_overview_gate.js
           node --test tests/recurring_cycle_inputs_policy_gate.js
+          node --test tests/collective_commitment_policy_gate.js
           node tests/b6_recurring_worker_gate.js
       - name: Install frontend
         run: npm ci --prefix ../frontend

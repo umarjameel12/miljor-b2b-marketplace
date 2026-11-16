@@ -21,6 +21,8 @@ Files: procurementRecurringService.js; focused procurementRecurringCyclePolicy.j
 
 ### R2 — Individual collective commitment and capacity
 
+Execution 2026-11-16: software capacity and individual canonical award bridge implemented. Migration095 uses existing MANUAL_HOLD/ORDER_DIRECT ledger. All-member MOQ preflight, frozen derived quote provenance, exact stock transfer, group-funding guard, expiry and buyer-owned lost-response recovery verified in 12 real MySQL acceptance groups; 76 contracts/build/UCP source PASS. Provider-origin multi-buyer payment, failed/unpaid-group financial resolution and complete group delivery remain unverified. See SMART_HUB_COLLECTIVE_COMMITMENTS_EXECUTION_2026_11_16.md. This does not mark all of R2 or full Hub complete.
+
 Files: procurementCollectiveApprovalService.js, procurementCollectiveBidService.js, procurementAwardService.js and existing shared inventory/reservation services; collective routes/controller/UI; forward schema only if existing approval/order link is insufficient.
 
 - [ ] Reconcile overlapping PR #28/#29 actual finance/fulfillment diffs before porting any source; retain accepted code and original migration checksums.

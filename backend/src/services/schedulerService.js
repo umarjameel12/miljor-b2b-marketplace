@@ -24,6 +24,7 @@ function startScheduler() {
     try {
       await poolClosureService.processExpiredPools();
       await poolClosureService.processExpiredFlashPools();
+      await require('./procurementCollectiveCommitmentService').releaseExpiredBatch({limit:20});
     } catch (err) {
       console.error('[Scheduler] Pool expiry job failed:', err.message);
     }

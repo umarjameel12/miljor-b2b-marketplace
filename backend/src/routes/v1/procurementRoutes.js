@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../../controllers/procurementController');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
+const idempotencyGuard = require('../../middlewares/idempotencyGuard');
 
 // Flash Pools
 router.get('/flash-pools', (req, res) => controller.getFlashPools(req, res));
@@ -82,6 +83,14 @@ router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',prot
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
 
 // B6-L/M — buyer-owned recurring template and cycle controls.
+router.post('/procurement/collectives/:groupId/commitment',protect,authorizeStrict('BUYER'),idempotencyGuard.required,async(req,res)=>{
+  try{res.json({success:true,data:await require('../../services/procurementCollectiveCommitmentService').prepareMine(req.user.id,req.params.groupId)});}
+  catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.code||'GROUP_COMMITMENT_FAILED',message:error.statusCode?error.message:'Unable to prepare group commitment'}});}
+});
+router.post('/procurement/collectives/:groupId/commitment/release',protect,authorizeStrict('BUYER'),idempotencyGuard.required,async(req,res)=>{
+  try{res.json({success:true,data:await require('../../services/procurementCollectiveCommitmentService').releaseMine(req.user.id,req.params.groupId)});}
+  catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.code||'GROUP_COMMITMENT_FAILED',message:error.statusCode?error.message:'Unable to release group commitment'}});}
+});
 // No automatic checkout/payment or buyer impersonation.
 router.post('/procurement/requests/:id/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.createSmartRecurring(req,res));
 router.get('/procurement/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartRecurring(req,res));
@@ -102,6 +111,10 @@ router.put('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,a
 // B6-G/H — Fee-inclusive preview and server-gated real order acceptance.
 router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartPayable(req,res));
 router.post('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptSmartAward(req,res));
+router.get('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),async(req,res)=>{
+ try{res.json({success:true,data:{award:await require('../../services/procurementAwardService').findMineByRequest(req.user.id,req.params.id)}});}
+ catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.code||'AWARD_RECOVERY_FAILED',message:error.statusCode?error.message:'Unable to recover award'}});}
+});
 router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartAward(req,res));
 
 // Demand Pool Requests ("Request a Pool")

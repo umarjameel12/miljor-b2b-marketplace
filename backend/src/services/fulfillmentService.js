@@ -329,6 +329,7 @@ class FulfillmentService {
       }
 
       const currentStatus = order.fulfillment_status || 'AWAITING_SUPPLIER_ACKNOWLEDGEMENT';
+      if(order.notes==='SMART_PROCUREMENT_BASKET')await require('./procurementCollectiveCommitmentService').assertFunded(connection,order.id);
 
       // Idempotency replay check: If identical target status was recorded with the same key
       if (currentStatus === toStatus) {

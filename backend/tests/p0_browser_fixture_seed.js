@@ -58,6 +58,26 @@ async function run(){
   await recurring.changeStatus(buyerRows[0].id,contract.contract.id,'ACTIVATE',1,true);
   await recurring.scheduleUpcomingForBuyer(buyerRows[0].id,contract.contract.id,{limit:2});
   console.log('PASS P0 recurring browser cycles seeded without orders or payments');
+  const supplier=supplierRows[0].id,buyer=buyerRows[0].id,catalog=require('../src/services/catalogService');
+  const product=await catalog.createSupplierProduct(supplier,{family_id:1,is_unbranded:false,brand:'P0 GROUP',variety:'Browser collective'});
+  const sku=await catalog.createSupplierSku(supplier,{supplier_product_id:product.id,packaging_type:'PP Woven Bag',pack_size:25,pack_unit:'kg',purchasing_unit:'bag'});
+  await catalog.publishSupplierSku(supplier,sku.id);
+  let listingResponse,listingStatus;
+  await require('../src/controllers/supplierListingController').createListing({user:{id:supplier,role:'SUPPLIER'},body:{supplier_sku_id:sku.id,available_stock:5,base_unit_price:100,supplier_min_qty:1,buyer_min_qty:1,delivery_zones:['all lahore']}},{status(code){listingStatus=code;return this;},json(body){listingResponse=body;return this;}});
+  assert.equal(listingStatus,201,JSON.stringify(listingResponse));const listing=listingResponse.data.listing;
+  const [peer]=await db.query("INSERT INTO users(full_name,email,password_hash,role,is_verified,verification_status,buyer_trust_status) VALUES ('P0 group peer','p0_group_peer@miljor.test',?,'BUYER',1,'VERIFIED','CONTACT_VERIFIED')",[hash]);
+  const requestService=require('../src/services/procurementRequestService'),collectives=require('../src/services/procurementCollectiveService'),bids=require('../src/services/procurementCollectiveBidService'),approvals=require('../src/services/procurementCollectiveApprovalService');
+  const groupDraft=await requestService.createDraft(buyer,{ownership:'COLLECTIVE',delivery_area:'Lahore',join_deadline:new Date(Date.now()+3600000).toISOString(),quote_deadline:new Date(Date.now()+86400000).toISOString(),items:[{family_id:1,unit:'bag',quantity:'2'}]},'browser-group-template-20261116');
+  const group=(await collectives.createGroup(buyer,groupDraft.request.id,{minimum_buyers:2})).group;
+  await collectives.invite(buyer,group.id,peer.insertId);
+  for(const [member,quantity] of [[buyer,'2'],[peer.insertId,'3']])await collectives.join(member,group.id,[{request_item_id:groupDraft.request.items[0].id,quantity}],'browser-group-join-'+member);
+  await db.query('UPDATE procurement_collective_groups SET join_deadline=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE) WHERE id=?',[group.id]);
+  await bids.openBidding(buyer,group.id);await bids.inviteSupplier(buyer,group.id,supplier);
+  const bid=(await bids.submitBid(supplier,group.id,{valid_until:new Date(Date.now()+3600000).toISOString(),delivery_fee_per_buyer:'25',lines:[{request_item_id:groupDraft.request.items[0].id,supplier_listing_id:listing.id,unit_price:'100',min_aggregate_quantity:'5'}]},'browser-group-bid-20261116')).bid;
+  let bidVersion;
+  for(const member of [buyer,peer.insertId]){const preview=await approvals.preview(member,group.id,bid.bid_id);bidVersion=preview.bid_version_id;await approvals.consent(member,group.id,bid.bid_id,{bid_version_id:bidVersion,total_preview:preview.total_preview,physical_specifications_accepted:true,buyer_total_confirmed:true},'browser-group-consent-'+member);}
+  await approvals.qualifyGroup(buyer,group.id,bidVersion);
+  console.log('PASS P0 qualified collective browser fixture; no orders or payments created');
   console.log('PASS P0 browser fixtures seeded in disposable database; secrets not printed');
 }
 run().then(()=>process.exit(0)).catch(e=>{console.error('FAIL P0 browser fixture',e.message);process.exit(1)});
