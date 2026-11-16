@@ -210,7 +210,7 @@ export const LandingPage = () => {
                           role="menuitem"
                           to="/login"
                           onClick={() => setAccountMenuOpen(false)}
-                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+                          className="landing-signin-option w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]"
                           style={{
                             backgroundColor: 'var(--bg-card)',
                             borderColor: 'var(--border-default)',
