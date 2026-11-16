@@ -201,7 +201,7 @@ async function verify(browser,fixture){
         geographic_match_status,user_confirmation_status,
         business_verification_status,manual_review_required,revision)
        VALUES (?,'Lahore',?,'Johar Town','PR61 Test Shop, Street 12, Johar Town Lahore',
-         'MATCHED','CONFIRMED','VERIFIED',0,1)`,[b.id,clusters[0].id]);
+         'VERIFIED','CONFIRMED','VERIFIED',0,1)`,[b.id,clusters[0].id]);
      created.addresses.push(added.insertId);
      const state=await groupOrders.getMine(b.id,fixture.groupId);
      assert.equal(state.payment_ready,true);
