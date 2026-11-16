@@ -1374,3 +1374,25 @@ html.dark #top header.landing-topbar button.miljor-theme-trigger:focus-visible {
   outline-offset: 2px;
   box-shadow: none !important;
 }
+
+/* MILJOR DARK NAV REAL-BROWSER THEME LABEL SELECTOR */
+/* Also works for older local ThemeSelector variants without .miljor-theme-trigger. */
+html.dark #top header.landing-topbar button.landing-account-trigger,
+html.dark #top header.landing-topbar button[aria-label^="Theme setting:"] {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  border: 1px solid rgba(169, 186, 175, .23) !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+html.dark #top header.landing-topbar button.landing-account-trigger:hover,
+html.dark #top header.landing-topbar button[aria-label^="Theme setting:"]:hover {
+  border-color: rgba(169, 186, 175, .3) !important;
+  box-shadow: none !important;
+}
+html.dark #top header.landing-topbar button.landing-account-trigger:focus-visible,
+html.dark #top header.landing-topbar button[aria-label^="Theme setting:"]:focus-visible {
+  outline: 2px solid rgba(169, 186, 175, .42) !important;
+  outline-offset: 2px;
+}
