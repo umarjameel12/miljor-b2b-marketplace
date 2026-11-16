@@ -7,6 +7,7 @@ const defaultDb = require('../config/db');
 const crypto = require('node:crypto');
 const supplierProfileRepo = require('../repositories/supplierProfileRepository');
 const validationService = require('./supplierValidationService');
+const supplierEvidence = require('./supplierVerificationDocumentService');
 
 class SupplierProfileService {
   _asJson(value, fallback) {
@@ -254,10 +255,12 @@ class SupplierProfileService {
       await connection.query(
         "UPDATE users SET verification_status='PENDING_SUPPLIER_VERIFICATION' WHERE id=?",
         [supplierId]);
+      const firstSnapshot=this._reviewSnapshot(profile);
+      firstSnapshot.documents=await supplierEvidence.latest(supplierId,connection);
       await connection.query(
         `INSERT INTO supplier_verification_revisions
            (supplier_id,revision,submitted_snapshot) VALUES (?,?,?)`,
-        [supplierId,revision,JSON.stringify(this._reviewSnapshot(profile))]);
+        [supplierId,revision,JSON.stringify(firstSnapshot)]);
       await connection.query(
         `INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,new_value)
          VALUES (?,'SUPPLIER','SUPPLIER_VERIFICATION_SUBMITTED','supplier_profiles',?,?)`,
@@ -319,16 +322,26 @@ class SupplierProfileService {
         throw Object.assign(new Error('Correction request is stale. Refresh the application.'),{code:'STALE_CORRECTION',statusCode:409});
       }
       const fields=this._asJson(profile.correction_fields,[]);
+      const textFields=fields.filter(x=>typeof x==='string'&&!x.startsWith('document:'));
+      const documentFields=fields.filter(x=>typeof x==='string'&&x.startsWith('document:'));
       const changed=Object.keys(payload.changes);
-      if(!Array.isArray(fields)||!fields.length||!changed.length ||
-         changed.some(k=>!fields.includes(k)) ||
-         fields.some(k=>!Object.prototype.hasOwnProperty.call(payload.changes,k))) {
+      if(!Array.isArray(fields)||!fields.length||changed.length!==textFields.length ||
+        changed.some(k=>!textFields.includes(k)) ||
+        textFields.some(k=>!Object.prototype.hasOwnProperty.call(payload.changes,k))) {
         throw Object.assign(new Error('Submit only the exact fields requested by the administrator.'),
           {code:'CORRECTION_FIELDS_MISMATCH',statusCode:400});
       }
       if(changed.some(field=>typeof payload.changes[field]!=='string')) {
         throw Object.assign(new Error('Correction values must be strings'),
           {code:'INVALID_CORRECTION_VALUES',statusCode:400});
+      }
+      const docVersions=await supplierEvidence.latest(supplierId,connection);
+      for(const token of documentFields){
+        const kind=token.slice('document:'.length);
+        const doc=docVersions.find(d=>d.kind===kind);
+        if(!doc || doc.review_revision!==Number(profile.submitted_revision))
+          throw Object.assign(new Error('Upload a fresh replacement for each requested document'),
+            {code:'DOCUMENT_CORRECTION_REQUIRED',statusCode:409});
       }
       const validation=validationService.validateProfileData(payload.changes,false);
       if(!validation.valid || changed.some(k=>!Object.prototype.hasOwnProperty.call(validation.sanitized,k))) {
@@ -344,10 +357,12 @@ class SupplierProfileService {
             correction_requested_revision=NULL,correction_requested_at=NULL,rejection_reason=NULL,
             last_correction_key=?,last_correction_hash=?,last_correction_revision=?
            WHERE supplier_id=?`,[revision,rawKey,replayHash,revision,supplierId]);
+      const correctedSnapshot=this._reviewSnapshot(updated);
+      correctedSnapshot.documents=docVersions;
       await connection.query(
         `INSERT INTO supplier_verification_revisions
            (supplier_id,revision,submitted_snapshot,submission_key) VALUES (?,?,?,?)`,
-        [supplierId,revision,JSON.stringify(this._reviewSnapshot(updated)),rawKey]);
+        [supplierId,revision,JSON.stringify(correctedSnapshot),rawKey]);
       await connection.query(
         `INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,new_value)
          VALUES (?,'SUPPLIER','SUPPLIER_VERIFICATION_CORRECTED','supplier_profiles',?,?)`,
