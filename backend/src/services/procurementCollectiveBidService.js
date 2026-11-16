@@ -4,6 +4,7 @@
 const crypto=require('node:crypto');
 const db=require('../config/db');
 const exact=require('./exactDecimal');
+const procurementMatchingService=require('./procurementMatchingService');
 const {buildCollectiveBidPreview}=require('./procurementCollectiveBidPolicy');
 const err=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=v=>{if(v==null||typeof v==='boolean'||!/^[1-9]\d*$/.test(String(v))||
@@ -74,6 +75,31 @@ class ProcurementCollectiveBidService {
     throw err('GROUP_NOT_QUOTING','Supplier invitation requires qualified collective bidding.',409);
    const [verified]=await conn.query("SELECT u.id FROM users u JOIN supplier_profiles p ON p.supplier_id=u.id WHERE u.id=? AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED' AND p.verification_status='VERIFIED'",[supplier]);
    if(!verified.length)throw err('SUPPLIER_NOT_VERIFIED','Verified supplier required.',403);
+   // Pre-invitation eligibility uses the canonical SKU, published spec, inventory
+   // and delivery-zone matcher. Aggregate JOINED/consented buyer demand first.
+   const demand=await this.demand(conn,group);
+   const joined=demand.participants.filter(p=>p.status==='JOINED'&&p.consent_confirmed);
+   if(joined.length<Number(group.minimum_buyers))
+     throw err('GROUP_NOT_QUALIFIED','Not enough consenting buyers.',409);
+   const aggregate=new Map(demand.items.map(item=>[Number(item.id),'0.0000']));
+   for(const participant of joined) {
+     for(const line of participant.lines) {
+       const requestItem=demand.items.find(item=>Number(item.id)===Number(line.request_item_id));
+       if(!requestItem || String(line.unit).toLowerCase()!==String(requestItem.unit).toLowerCase())
+         throw err('MIXED_GROUP_UNITS','Participant item units do not match the published request.',409);
+       aggregate.set(Number(line.request_item_id),exact.exactDecimalSum([
+         aggregate.get(Number(line.request_item_id))||'0.0000',String(line.quantity)
+       ],4));
+     }
+   }
+   const aggregatedItems=demand.items.map(item=>({...item,quantity:aggregate.get(Number(item.id))||'0.0000'}));
+   const eligible=await procurementMatchingService._candidates(conn,{
+     delivery_area:group.delivery_area,items:aggregatedItems
+   });
+   if(!eligible.some(candidate=>Number(candidate.supplier_id)===supplier &&
+     Number(candidate.covered_item_count)===aggregatedItems.length))
+     throw err('COLLECTIVE_SUPPLIER_NOT_ELIGIBLE',
+       'Supplier must have eligible live stock, SKU/spec and delivery coverage for every grouped item.',409);
    await conn.query("INSERT INTO procurement_collective_supplier_invitations (group_id,supplier_id,status) VALUES (?,?,'INVITED') ON DUPLICATE KEY UPDATE id=id",[gid,supplier]);
    const [rows]=await conn.query('SELECT id,group_id,supplier_id,status FROM procurement_collective_supplier_invitations WHERE group_id=? AND supplier_id=?',[gid,supplier]);
    if(rows[0].status!=='INVITED')throw err('INVITATION_REVOKED','Supplier invitation is not active.',409);
