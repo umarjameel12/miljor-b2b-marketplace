@@ -1,0 +1,39 @@
+name: PR61 Part 1 Supplier Verification and Unified Opportunities
+on:
+  pull_request:
+    paths:
+      - 'backend/src/controllers/adminController.js'
+      - 'backend/src/controllers/supplierProfileController.js'
+      - 'backend/src/services/supplierProfileService.js'
+      - 'backend/src/services/supplierProcurementOpportunitiesService.js'
+      - 'backend/src/routes/v1/procurementRoutes.js'
+      - 'frontend/src/pages/SupplierOpportunitiesPage.jsx'
+      - 'frontend/src/pages/AdminVerificationPage.jsx'
+      - 'frontend/src/App.jsx'
+      - 'backend/tests/pr61_part1_regression_gate.js'
+      - '.github/workflows/pr61-part1-regression.yml'
+  workflow_dispatch:
+jobs:
+  supplier-part1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Server syntax checks
+        run: |
+          node --check backend/src/controllers/adminController.js
+          node --check backend/src/controllers/supplierProfileController.js
+          node --check backend/src/services/supplierProfileService.js
+          node --check backend/src/services/supplierProcurementOpportunitiesService.js
+          node --check backend/src/routes/v1/procurementRoutes.js
+          node --check backend/tests/pr61_part1_regression_gate.js
+      - name: Supplier verification and opportunities regression
+        run: node backend/tests/pr61_part1_regression_gate.js
+      - name: Production frontend compile
+        run: |
+          cd frontend
+          npm ci
+          npm run build
