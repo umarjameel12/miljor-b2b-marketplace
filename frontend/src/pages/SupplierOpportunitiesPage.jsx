@@ -61,11 +61,11 @@ export const SupplierOpportunitiesPage = () => {
                   {row.type==='single'?('Request '+(row.request_code||row.request_id)):('Group #'+row.group_id)}
                 </h2>
                 <p className="mt-2 text-xs text-[var(--text-muted)]">Quote deadline: {row.quote_deadline?new Date(row.quote_deadline).toLocaleString():'Not specified'}</p>
-                {row.type==='grouped' && <p className="mt-2 text-xs text-[var(--text-muted)]">Minimum buyers: {row.minimum_buyers} · Area: {row.delivery_area||'Not specified'}</p>}
+                {row.type==='grouped' && <p className="mt-2 text-xs text-[var(--text-muted)]">Participating buyers: {row.participant_count ?? 'Unknown'} · Minimum required: {row.minimum_buyers} · Area: {row.delivery_area||'Not specified'}</p>}
                 <ul className="mt-3 space-y-2">
                   {(row.items||[]).map((item,index)=>(
                     <li key={item.request_item_id||item.id||index} className="border-t border-[var(--border-subtle)] pt-2 text-xs text-[var(--text-secondary)]">
-                      Item {index+1}: Family {item.family_id} {item.quantity?(' · '+item.quantity+' '+(item.unit||'')):(item.unit?' · '+item.unit:'')}
+                      Item {index+1}: Family {item.family_id} {(row.type==='grouped' && item.aggregate_quantity)?(' · '+item.aggregate_quantity+' '+(item.unit||'')):(item.quantity?(' · '+item.quantity+' '+(item.unit||'')):(item.unit?' · '+item.unit:''))}
                     </li>
                   ))}
                 </ul>
