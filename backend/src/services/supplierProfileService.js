@@ -315,6 +315,10 @@ class SupplierProfileService {
         throw Object.assign(new Error('Submit only the exact fields requested by the administrator.'),
           {code:'CORRECTION_FIELDS_MISMATCH',statusCode:400});
       }
+      if(changed.some(field=>typeof payload.changes[field]!=='string')) {
+        throw Object.assign(new Error('Correction values must be strings'),
+          {code:'INVALID_CORRECTION_VALUES',statusCode:400});
+      }
       const validation=validationService.validateProfileData(payload.changes,false);
       if(!validation.valid || changed.some(k=>!Object.prototype.hasOwnProperty.call(validation.sanitized,k))) {
         throw Object.assign(new Error((validation.errors||[]).join('; ')||'Invalid correction fields'),
