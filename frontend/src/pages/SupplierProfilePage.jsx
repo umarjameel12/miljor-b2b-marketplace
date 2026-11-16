@@ -13,6 +13,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { SupplierVerificationBadge } from '../components/supplier/SupplierVerificationBadge';
 import { SupplierOnboardingWizard } from '../components/supplier/SupplierOnboardingWizard';
 import { SupplierVerificationCorrections } from '../components/supplier/SupplierVerificationCorrections';
+import { SupplierVerificationDocuments } from '../components/supplier/SupplierVerificationDocuments';
 import SupplierDeliverySettingsForm from '../components/delivery/SupplierDeliverySettingsForm';
 import supplierApi from '../api/supplier';
 import {
@@ -226,10 +227,14 @@ export const SupplierProfilePage = () => {
                 The application is rejected. A new review is available only if an authorized administrator opens an appeal. Your existing documents are retained.
               </div>
             ) : (
-              <SupplierOnboardingWizard
-                initialProfile={profile}
-                onProfileUpdated={(updated) => setProfile(updated)}
-              />
+              <>
+                {profile?.verification_status==='NOT_SUBMITTED'&&
+                  <SupplierVerificationDocuments profile={profile}/>}
+                <SupplierOnboardingWizard
+                  initialProfile={profile}
+                  onProfileUpdated={(updated) => setProfile(updated)}
+                />
+              </>
             )}
           </div>
         )}
