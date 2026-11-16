@@ -69,6 +69,7 @@ for (const [route,action] of [
 // ---------------------------------------------------------------------------
 router.get('/profile', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => profileController.getProfile(req, res));
 router.put('/profile', authorizeStrict('SUPPLIER'), (req, res) => profileController.updateProfile(req, res));
+router.get('/verification/history', authorizeStrict('SUPPLIER'), (req,res)=>profileController.getVerificationHistory(req,res));
 router.post('/verification/corrections', authorizeStrict('SUPPLIER'), (req,res)=>profileController.submitCorrections(req,res));
 router.post('/verification/submit', authorizeStrict('SUPPLIER'), (req, res) => profileController.submitVerification(req, res));
 router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => profileController.getVerificationStatus(req, res));
