@@ -19,6 +19,9 @@ export default function SupplierDeliverySettingsForm({ onSaved }) {
   const [standardEnabled, setStandardEnabled] = useState(true);
   const [pickupEnabled, setPickupEnabled] = useState(false);
   const [expressEnabled, setExpressEnabled] = useState(false);
+  const [individualEnabled, setIndividualEnabled] = useState(false);
+  const [individualRates, setIndividualRates] = useState({});
+  const [individualEligible, setIndividualEligible] = useState({});
   const [clusterRates, setClusterRates] = useState({});
   const [expressRates, setExpressRates] = useState({});
 
@@ -48,19 +51,27 @@ export default function SupplierDeliverySettingsForm({ onSaved }) {
           setStandardEnabled(cfg.standard_delivery_enabled !== false);
           setPickupEnabled(Boolean(cfg.pickup_enabled));
           setExpressEnabled(Boolean(cfg.express_enabled));
+          setIndividualEnabled(Number(cfg.individual_delivery_enabled) === 1);
 
           // Map cluster rates
           const stdMap = {};
           const expMap = {};
+          const indMap = {};
+          const indEligible = {};
           (settingsRes.data.cluster_rates || []).forEach((r) => {
             if (r.mode === 'STANDARD_CLUSTERED') {
               stdMap[r.cluster_id] = r.fee_pkr;
+            } else if (r.mode === 'INDIVIDUAL') {
+              indMap[r.cluster_id] = r.fee_pkr;
+              indEligible[r.cluster_id] = Number(r.is_eligible) === 1;
             } else if (r.mode === 'EXPRESS') {
               expMap[r.cluster_id] = r.fee_pkr;
             }
           });
           setClusterRates(stdMap);
           setExpressRates(expMap);
+          setIndividualRates(indMap);
+          setIndividualEligible(indEligible);
         }
       } catch (err) {
         console.error('[SupplierDeliverySettingsForm] Load error:', err);
@@ -76,14 +87,19 @@ export default function SupplierDeliverySettingsForm({ onSaved }) {
     setStatusMessage(null);
 
     // Invariant: At least one mode must be enabled
-    if (!standardEnabled && !pickupEnabled && !expressEnabled) {
+    if (!standardEnabled && !pickupEnabled && !expressEnabled && !individualEnabled) {
       setStatusMessage({
         type: 'error',
-        text: 'You must offer at least one fulfillment mode (Standard, Pickup, or Express).',
+        text: 'You must offer at least one fulfillment mode (Standard, Pickup, Express, or Individual procurement).',
       });
       return;
     }
 
+    if (individualEnabled && clusters.some(c => individualEligible[c.id] &&
+      !/^\d{1,8}(\.\d{1,2})?$/.test(String(individualRates[c.id] ?? '')))) {
+      setStatusMessage({type:'error',text:'Enter an explicit individual fee, up to two decimal places, for every covered cluster.'});
+      return;
+    }
     setIsSaving(true);
     try {
       const formattedRates = [];
@@ -108,10 +124,22 @@ export default function SupplierDeliverySettingsForm({ onSaved }) {
         }
       });
 
+      // Explicit zero is valid; blank never becomes a free delivery rate.
+      clusters.forEach(c => {
+        const fee = String(individualRates[c.id] ?? '');
+        if (/^\d{1,8}(\.\d{1,2})?$/.test(fee)) {
+          formattedRates.push({cluster_id:c.id,mode:'INDIVIDUAL',fee_pkr:fee,is_eligible:Boolean(individualEligible[c.id])});
+        } else if (settings?.cluster_rates?.some(r => r.mode === 'INDIVIDUAL' && Number(r.cluster_id) === Number(c.id))) {
+          // Preserve the configured fee when turning coverage off.
+          const saved = settings.cluster_rates.find(r => r.mode === 'INDIVIDUAL' && Number(r.cluster_id) === Number(c.id));
+          formattedRates.push({cluster_id:c.id,mode:'INDIVIDUAL',fee_pkr:String(saved.fee_pkr),is_eligible:false});
+        }
+      });
       const payload = {
         standard_delivery_enabled: standardEnabled,
         pickup_enabled: pickupEnabled,
         express_enabled: expressEnabled,
+        individual_delivery_enabled: individualEnabled,
         cluster_rates: formattedRates,
       };
 
@@ -434,6 +462,18 @@ export default function SupplierDeliverySettingsForm({ onSaved }) {
             </div>
           </div>
         )}
+
+        <fieldset className="pt-4 border-t space-y-3" disabled={isSaving}>
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" checked={individualEnabled} onChange={event=>setIndividualEnabled(event.target.checked)} />
+            Offer individual doorstep delivery for procurement
+          </label>
+          <p className="text-xs">Disabled until you opt in. Set a separate fee for each covered cluster. Buyers must approve a fresh quotation; regular pools and collective qualification are unchanged.</p>
+          {individualEnabled && clusters.map(cluster=><div key={cluster.id} className="flex flex-wrap items-center gap-3 text-xs">
+            <label><input type="checkbox" checked={Boolean(individualEligible[cluster.id])} onChange={event=>setIndividualEligible(values=>({...values,[cluster.id]:event.target.checked}))} /> {cluster.name}</label>
+            <label>Individual fee (PKR) <input aria-label={`Individual delivery fee for ${cluster.name}`} type="number" min="0" max="99999999.99" step="0.01" placeholder="Enter fee" disabled={!individualEligible[cluster.id]} required={Boolean(individualEligible[cluster.id])} value={individualRates[cluster.id] ?? ''} onChange={event=>setIndividualRates(values=>({...values,[cluster.id]:event.target.value}))} className="p-2 rounded border bg-[var(--bg-input)]" /></label>
+          </div>)}
+        </fieldset>
 
         {/* 3. Pickup Points Management (when Pickup enabled) */}
         {pickupEnabled && (

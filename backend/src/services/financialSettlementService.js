@@ -39,7 +39,7 @@ function isFinancialAdminRole(role) {
 class FinancialSettlementService {
 
   _assertLegacyAllocationMutationAllowed(row) {
-    if (row.receipt_policy_version || row.procurement_line_receipt_id) {
+    if (row.receipt_policy_version || row.procurement_line_receipt_id || row.procurement_settlement_review_id || row.procurement_delivery_contract_id) {
       throw Object.assign(new Error('Receipt-linked funds require line-aware financial review; legacy aggregate mutation is blocked.'),
         {code:'LINE_FINANCIAL_ADMIN_REVIEW_REQUIRED',statusCode:409});
     }
@@ -150,10 +150,12 @@ class FinancialSettlementService {
         canonical_settlement_required:true,refund_obligation_created:false,hold_applied:false,
         settlement_authorized:false};
     }
-    const [captures] = await connection.query("SELECT id FROM payments WHERE order_id=? AND status IN ('PAID','PARTIALLY_REFUNDED','REFUNDED') FOR UPDATE",[oid]);
+    const [captures] = await connection.query("SELECT id FROM payments WHERE order_id=? AND status IN ('PAID','PARTIALLY_REFUNDED','REFUNDED') AND procurement_delivery_contract_id IS NULL FOR UPDATE",[oid]);
     const [payables] = await connection.query('SELECT * FROM supplier_payables WHERE order_id=? FOR UPDATE',[oid]);
-    const [holds] = await connection.query('SELECT id FROM financial_holds WHERE order_id=? FOR UPDATE',[oid]);
-    const [refunds] = await connection.query('SELECT id FROM refund_obligations WHERE order_id=? FOR UPDATE',[oid]);
+    const [allHolds] = await connection.query('SELECT * FROM financial_holds WHERE order_id=? FOR UPDATE',[oid]);
+    const supplements=allHolds.some(row=>row.receipt_policy_version==='R6_DELIVERY_FEE_V1')?(await connection.query('SELECT financial_hold_id,amount FROM procurement_delivery_payment_contracts WHERE order_id=? AND payment_id IS NOT NULL FOR UPDATE',[oid]))[0]:[];
+    const holds=allHolds.filter(row=>!(row.receipt_policy_version==='R6_DELIVERY_FEE_V1'&&supplements.some(contract=>Number(contract.financial_hold_id)===Number(row.id)&&exactDecimal.exactDecimalEquals(contract.amount,row.hold_amount,2))));
+    const [refunds] = await connection.query('SELECT id FROM refund_obligations WHERE order_id=? AND payment_id=? FOR UPDATE',[oid,payment.id]);
     const [payouts] = await connection.query('SELECT id FROM supplier_disbursement_instructions WHERE order_id=? FOR UPDATE',[oid]);
     if (captures.length!==1 || String(captures[0].id)!==String(payment.id) || payables.length>1 || holds.length || refunds.length || payouts.length)
       return blocked('EXISTING_LEDGER_RECONCILIATION_REQUIRED');
@@ -280,7 +282,7 @@ class FinancialSettlementService {
 
       // Check payment record
       const [payments] = await connection.query(
-        `SELECT * FROM payments WHERE order_id = ? AND status = 'PAID' ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+        `SELECT * FROM payments WHERE order_id = ? AND status = 'PAID' AND procurement_delivery_contract_id IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE`,
         [orderId]
       );
 
@@ -708,7 +710,7 @@ class FinancialSettlementService {
         `SELECT o.*, p.id AS payment_row_id, p.amount AS captured_amount, p.status AS payment_row_status
          FROM orders o
          JOIN payments p ON p.order_id = o.id
-         WHERE o.id = ? AND p.status = 'PAID'
+         WHERE o.id = ? AND p.status = 'PAID' AND p.procurement_delivery_contract_id IS NULL
          ORDER BY p.id DESC LIMIT 1 FOR UPDATE`,
         [orderId]
       );
@@ -1220,6 +1222,8 @@ class FinancialSettlementService {
       // 1. Lock and fetch supplier payable with order & supplier profile
       const [payables] = await connection.query(
         `SELECT sp.*, o.order_code, o.fulfillment_status, o.order_status,
+                EXISTS(SELECT 1 FROM procurement_delivery_payment_contracts dc WHERE dc.order_id=o.id AND dc.status<>'REVIEWED') AS supplemental_review_pending,
+                u.role AS supplier_role,u.verification_status AS supplier_user_status,
                 u.is_verified AS supplier_user_verified,
                 prof.verification_status AS supplier_profile_status
          FROM supplier_payables sp
@@ -1239,12 +1243,19 @@ class FinancialSettlementService {
 
       const payable = payables[0];
 
-      if (payable.receipt_policy_version) {
+      if(Number(payable.supplemental_review_pending)===1)throw Object.assign(new Error('Separate reattempt payments require final fee review before supplier release.'),{code:'SUPPLEMENTAL_REVIEW_REQUIRED',statusCode:409});
+
+      let reviewedRelease=null;
+      if (payable.receipt_policy_version && !payable.procurement_settlement_review_id) {
         throw Object.assign(new Error('Line-aware partial-release validation and fee/dispute review are required before preparing any payout.'),
           {code:'LINE_PARTIAL_RELEASE_VALIDATOR_REQUIRED',statusCode:409});
       }
+      if(payable.receipt_policy_version){
+        reviewedRelease=await require('./procurementSettlementReviewService').validateForDisbursement(connection,payable,{actor,idempotencyKey,beneficiaryTitle,beneficiaryIban:cleanIban,beneficiaryBankCode});
+        if(reviewedRelease.replay){await connection.commit();return {success:true,is_replay:true,data:{disbursement:reviewedRelease.replay}};}
+      }
       // Supplier Affirmative Verification Invariant
-      if (!payable.supplier_user_verified || payable.supplier_profile_status !== 'VERIFIED') {
+      if (!payable.supplier_user_verified || payable.supplier_profile_status !== 'VERIFIED' || (payable.supplier_role && payable.supplier_role!=='SUPPLIER') || (payable.supplier_user_status&&!['VERIFIED','EMAIL_VERIFIED'].includes(payable.supplier_user_status))) {
         const err = new Error('Supplier must be affirmatively verified before preparing disbursement');
         err.code = 'SUPPLIER_NOT_VERIFIED';
         err.statusCode = 403;
@@ -1252,7 +1263,7 @@ class FinancialSettlementService {
       }
 
       // Fulfillment must be BUYER_CONFIRMED or COMPLETED
-      if (!['BUYER_CONFIRMED', 'COMPLETED'].includes(payable.fulfillment_status)) {
+      if (!reviewedRelease && !['BUYER_CONFIRMED', 'COMPLETED'].includes(payable.fulfillment_status)) {
         const err = new Error(`Order fulfillment is '${payable.fulfillment_status}'. Disbursement requires BUYER_CONFIRMED or COMPLETED.`);
         err.code = 'ORDER_NOT_BUYER_CONFIRMED';
         err.statusCode = 422;
@@ -1277,12 +1288,19 @@ class FinancialSettlementService {
       }
 
       // Check idempotency if key provided
+      const [reservedInstructions]=await connection.query('SELECT * FROM supplier_disbursement_instructions WHERE supplier_payable_id=? FOR UPDATE',[payable.id]);
+      if(reservedInstructions.length){
+        const prior=reservedInstructions[0];
+        if(reservedInstructions.length!==1||!idempotencyKey||prior.idempotency_key!==idempotencyKey||prior.beneficiary_title!==beneficiaryTitle.trim()||prior.beneficiary_iban!==cleanIban||prior.beneficiary_bank_code!==(beneficiaryBankCode||null)||!exactDecimal.exactDecimalEquals(prior.amount,availableAmount,2)||prior.external_execution_status!=='DISABLED')throw Object.assign(new Error('This entitlement already has a different disbursement reservation.'),{code:'DISBURSEMENT_ALREADY_RESERVED',statusCode:409});
+        await connection.commit();return {success:true,is_replay:true,data:{disbursement:prior}};
+      }
       if (idempotencyKey) {
         const [existingIdem] = await connection.query(
           `SELECT * FROM supplier_disbursement_instructions WHERE idempotency_key = ?`,
           [idempotencyKey]
         );
         if (existingIdem.length > 0) {
+          if(Number(existingIdem[0].supplier_payable_id)!==Number(payable.id))throw Object.assign(new Error('Intent key belongs to a different payable.'),{code:'IDEMPOTENCY_CONFLICT',statusCode:409});
           await connection.commit();
           return {
             success: true,
@@ -1316,6 +1334,7 @@ class FinancialSettlementService {
       );
 
       const disbId = disbInsert.insertId;
+      if(reviewedRelease)await connection.query('UPDATE supplier_disbursement_instructions SET procurement_settlement_review_id=? WHERE id=?',[reviewedRelease.review_id,disbId]);
 
       // Update payable status to DISBURSEMENT_PREPARED
       await connection.query(
@@ -1399,7 +1418,12 @@ class FinancialSettlementService {
       }
 
       const disb = disbursements[0];
-      this._assertLegacyAllocationMutationAllowed(disb);
+      if(disb.receipt_policy_version && disb.procurement_settlement_review_id){
+        await require('./procurementSettlementReviewService').validateForDisbursement(connection,{id:disb.supplier_payable_id,order_id:disb.order_id,procurement_settlement_review_id:disb.procurement_settlement_review_id},{actor,instructionId:disb.id});
+      }else this._assertLegacyAllocationMutationAllowed(disb);
+      const [siblings]=await connection.query('SELECT id FROM supplier_disbursement_instructions WHERE supplier_payable_id=? FOR UPDATE',[disb.supplier_payable_id]);
+      if(siblings.length!==1||Number(siblings[0].id)!==Number(disb.id))throw Object.assign(new Error('Conflicting disbursement reservations require reconciliation.'),{code:'DISBURSEMENT_RESERVATION_CONFLICT',statusCode:409});
+      if(disb.procurement_settlement_review_id&&disb.status==='APPROVED'){await connection.commit();return {success:true,is_replay:true,data:{disbursement:disb}};}
 
       if (disb.status !== 'PREPARED') {
         const err = new Error(`Cannot approve disbursement in status '${disb.status}'. Expected PREPARED.`);

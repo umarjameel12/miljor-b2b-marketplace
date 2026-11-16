@@ -17,7 +17,7 @@ function normalizeCycleInputs(baseline,input){
  let preference=null;
  if(input.delivery_preference!=null){
   const value=input.delivery_preference;
-  if(Array.isArray(value)||Object.keys(value).some(key=>!['mode','address_id'].includes(key))||!['STANDARD_CLUSTERED','EXPRESS','PICKUP'].includes(value.mode))throw fail();
+  if(Array.isArray(value)||Object.keys(value).some(key=>!['mode','address_id'].includes(key))||!['STANDARD_CLUSTERED','EXPRESS','PICKUP','INDIVIDUAL'].includes(value.mode))throw fail();
   if(value.mode==='PICKUP'){
    if(value.address_id!=null)throw fail();
    preference={mode:'PICKUP',address_id:null};

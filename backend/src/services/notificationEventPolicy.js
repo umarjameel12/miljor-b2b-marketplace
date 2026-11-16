@@ -1,5 +1,6 @@
 'use strict';
 const definitions={
+  REFUND_APPROVED_PENDING:['Refund approved; external execution pending','رقم کی واپسی منظور؛ بیرونی ادائیگی باقی ہے','order'],
   DELIVERY_WINDOW_REQUESTED:['Delivery window requested; supplier confirmation pending','ترسیل کا وقت درخواست کیا گیا؛ سپلائر کی تصدیق باقی ہے','order'],
   DELIVERY_REATTEMPT_PROPOSED:['Review proposed delivery reattempt and fee','ترسیل کی نئی کوشش کے وقت اور فیس کا جائزہ لیں','order'],
   DELIVERY_ROUTE_CANCELLED:['Predispatch route cancelled; delivery requires reassignment','روانگی سے پہلے راستہ منسوخ؛ ترسیل دوبارہ مقرر کرنا ضروری ہے','order'],

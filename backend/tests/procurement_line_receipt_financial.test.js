@@ -38,7 +38,7 @@ function fixture(){
    if(sql.startsWith('SELECT fee_policy_version'))return [state.consents];
    if(sql.startsWith('SELECT id FROM payments'))return [state.captures];
    if(sql.startsWith('SELECT * FROM supplier_payables WHERE order_id'))return [state.payables];
-   if(sql.startsWith('SELECT id FROM financial_holds'))return [state.holds];
+   if(sql.startsWith('SELECT id FROM financial_holds')||sql.startsWith('SELECT * FROM financial_holds WHERE order_id'))return [state.holds];
    if(sql.startsWith('SELECT id FROM refund_obligations'))return [state.refunds];
    if(sql.startsWith('SELECT id FROM supplier_disbursement_instructions'))return [state.payouts];
    if(sql.startsWith('SELECT id FROM order_disputes'))return [state.disputes.filter(row=>row.receiptId===args[0])];

@@ -41,22 +41,26 @@ class FinancialConservationService {
       if(orders.length!==1)
         throw error('ORDER_NOT_FOUND','Financial audit order not found',404);
       const order=orders[0];
-      const [payments]=await conn.query(
-        `SELECT id,amount,status,transaction_ref
+      const [allPayments]=await conn.query(
+        `SELECT id,amount,status,transaction_ref,procurement_delivery_contract_id
          FROM payments WHERE order_id=? ORDER BY id`,[n]);
+      const payments=allPayments.filter(row=>!row.procurement_delivery_contract_id);
+      const supplementalPayments=allPayments.filter(row=>row.procurement_delivery_contract_id);
       const [payables]=await conn.query(
         `SELECT id,order_id,payment_id,gross_amount,delivery_fee_amount,
                 commission_rate_percent,commission_amount,net_payable_amount,
                 refund_deduction_amount,held_amount,available_amount,
-                disbursed_amount,status
+                disbursed_amount,status,receipt_policy_version,procurement_settlement_review_id
          FROM supplier_payables WHERE order_id=? ORDER BY id`,[n]);
       const [holds]=await conn.query(
         `SELECT id,supplier_payable_id,hold_amount,status
          FROM financial_holds WHERE order_id=? ORDER BY id`,[n]);
-      const [refunds]=await conn.query(
+      const [allRefunds]=await conn.query(
         `SELECT id,payment_id,total_refund_amount,assessed_refund_amount,
                 fee_refund_amount,status,currency
          FROM refund_obligations WHERE order_id=? ORDER BY id`,[n]);
+      const refunds=allRefunds.filter(row=>!supplementalPayments.some(payment=>Number(payment.id)===Number(row.payment_id)));
+      const supplementalContracts=supplementalPayments.length?(await conn.query('SELECT id,payment_id,amount,status,financial_hold_id,review_snapshot FROM procurement_delivery_payment_contracts WHERE order_id=?',[n]))[0]:[];
       const [instructions]=await conn.query(
         `SELECT id,supplier_payable_id,amount,status,external_execution_status
          FROM supplier_disbursement_instructions WHERE order_id=? ORDER BY id`,[n]);
@@ -126,7 +130,7 @@ class FinancialConservationService {
           flag('ACTIVE_HOLD_COVERAGE',
             exact.exactDecimalEquals(activeHold,p.held_amount,2),
             money(p.held_amount),activeHold);
-          const approvedDeductions=add(...refunds.filter(r=>
+          const approvedDeductions=p.receipt_policy_version?'0.00':add(...refunds.filter(r=>
             ['APPROVED','CONFIRMED','AWAITING_EXTERNAL_EXECUTION','EXTERNAL_PROCESSING'].includes(r.status))
             .map(r=>r.assessed_refund_amount));
           flag('REFUND_SUPPLIER_DEDUCTIONS',
@@ -149,6 +153,15 @@ class FinancialConservationService {
             add(refund.assessed_refund_amount,refund.fee_refund_amount),
             money(refund.total_refund_amount));
         }
+        for(const supplemental of supplementalPayments){
+          const contract=supplementalContracts.find(row=>Number(row.id)===Number(supplemental.procurement_delivery_contract_id));
+          flag('SUPPLEMENTAL_'+supplemental.id+'_CAPTURE',!!contract&&Number(contract.payment_id)===Number(supplemental.id)&&money(contract.amount)===money(supplemental.amount),'one exact contract-linked capture',contract?'contract '+contract.id:'missing contract');
+          const related=allRefunds.filter(row=>Number(row.payment_id)===Number(supplemental.id));
+          flag('SUPPLEMENTAL_'+supplemental.id+'_REFUND_BOUND',exact.exactDecimalGte(supplemental.amount,add(...related.filter(row=>relevantRefundStatuses.has(row.status)).map(row=>row.total_refund_amount)),2),'refund reservations <= separate capture',add(...related.map(row=>row.total_refund_amount)));
+          if(contract?.status==='REVIEWED'){const reviewed=typeof contract.review_snapshot==='string'?JSON.parse(contract.review_snapshot):contract.review_snapshot;
+            flag('SUPPLEMENTAL_'+supplemental.id+'_ALLOCATION',!!reviewed&&money(add(reviewed.supplier_amount,reviewed.refund_amount))===money(contract.amount)&&money(add(...related.filter(row=>relevantRefundStatuses.has(row.status)).map(row=>row.total_refund_amount)))===money(reviewed.refund_amount),'supplier plus reserved refund = capture',reviewed?add(reviewed.supplier_amount,reviewed.refund_amount):'missing allocation');
+          }else{const held=holds.find(row=>Number(row.id)===Number(contract?.financial_hold_id));flag('SUPPLEMENTAL_'+supplemental.id+'_HELD',!!held&&held.status==='ACTIVE'&&money(held.hold_amount)===money(supplemental.amount),'exact active supplemental fee hold',held?money(held.hold_amount):'missing hold');}
+        }
       }catch(e){
         checks.push({name:'AUDIT_CALCULATION_FAILED',passed:false,
           expected:'valid exact decimal financial inputs',actual:e.code||e.message});
@@ -156,7 +169,7 @@ class FinancialConservationService {
       return {
         order_id:n,order_code:order.order_code,
         status:checks.every(c=>c.passed)?'PASS':'RECONCILIATION_REQUIRED',
-        checks,counts:{payments:payments.length,payables:payables.length,
+        checks,counts:{payments:payments.length,supplemental_payments:supplementalPayments.length,payables:payables.length,
           financial_holds:holds.length,refunds:refunds.length,
           payout_instructions:instructions.length},
         limitations:'Internal ledger snapshot only; no provider custody, bank statement, or actual Safepay payout proof'

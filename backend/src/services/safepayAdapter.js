@@ -116,6 +116,7 @@ class SafepayAdapter {
         res.on('end', () => {
           if (res.statusCode < 200 || res.statusCode >= 300) {
             const err = new Error(`Safepay tracker initialization failed with status ${res.statusCode}`);
+            err.providerStatusCode = res.statusCode;
             err.code = 'SAFEPAY_API_ERROR';
             err.statusCode = 502;
             try {

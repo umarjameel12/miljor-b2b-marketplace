@@ -69,17 +69,18 @@ class ProcurementDeliveryAttemptService{
   if(actor?.role!=='SUPPLIER')throw fail('DELIVERY_FORBIDDEN','Assigned supplier required',403);
   return this._transaction(async conn=>{
    await this.delivery._supplier(conn,actor);const order=await this.delivery._order(conn,actor,oid),attempt=await this._attempt(conn,oid,aid),replay=await this._replay(conn,aid,intent,digest);if(replay)return replay;
-   if(attempt.status==='APPROVED_PAYMENT_REQUIRED')throw fail('SUPPLEMENTAL_PAYMENT_CONTRACT_REQUIRED','Extra-fee reattempt remains blocked until a separately approved verified payment contract is available');
-   if(attempt.status!=='APPROVED'||!exact.exactDecimalEquals(attempt.extra_fee,'0',2)||!attempt.buyer_consent_snapshot||order.fulfillment_status!=='EXCEPTION'||order.exception_reason!=='SUPPLIER_LOGISTICS_FAILURE')throw fail('REATTEMPT_NOT_APPROVED','Exact buyer-approved free reattempt required');
+   let supplemental=null;
+   if(attempt.status==='APPROVED_PAYMENT_REQUIRED')supplemental=await require('./procurementDeliveryPaymentService').verifiedForResume(conn,oid,attempt);
+   if((supplemental?attempt.status!=='APPROVED_PAYMENT_REQUIRED':attempt.status!=='APPROVED'||!exact.exactDecimalEquals(attempt.extra_fee,'0',2))||!attempt.buyer_consent_snapshot||order.fulfillment_status!=='EXCEPTION'||order.exception_reason!=='SUPPLIER_LOGISTICS_FAILURE')throw fail('REATTEMPT_NOT_APPROVED','Exact buyer-approved reattempt with any extra fee verified separately is required');
    const [[clock]]=await conn.query('SELECT ?>UTC_TIMESTAMP() live',[attempt.proposed_start_utc]);if(Number(clock.live)!==1)throw fail('REATTEMPT_WINDOW_EXPIRED','Approved slot has expired');
    const [[disputes]]=await conn.query("SELECT COUNT(*) total FROM order_disputes WHERE order_id=? AND status NOT IN ('CLOSED','RESOLVED_REJECTED','SUPPLIER_REMEDIATION_COMPLETED')",[oid]);
-   const [[holds]]=await conn.query("SELECT COUNT(*) total FROM financial_holds WHERE order_id=? AND status='ACTIVE'",[oid]);
+   const [[holds]]=await conn.query("SELECT COUNT(*) total FROM financial_holds WHERE order_id=? AND status='ACTIVE' AND id<>?",[oid,supplemental?.financial_hold_id||0]);
    const [[receipts]]=await conn.query('SELECT COUNT(*) total FROM procurement_line_receipts WHERE order_id=?',[oid]);
    if(Number(disputes.total)||Number(holds.total)||Number(receipts.total))throw fail('REATTEMPT_FINANCIAL_REVIEW_REQUIRED','Existing dispute, hold or receipt must be resolved through its own workflow');
    const [stops]=await conn.query("SELECT r.status FROM procurement_delivery_stops s JOIN procurement_delivery_runs r ON r.id=s.run_id WHERE s.order_id=? AND s.is_current=1 FOR UPDATE",[oid]);if(stops.some(row=>!['EXCEPTION','CANCELLED'].includes(row.status)))throw fail('PREVIOUS_ROUTE_ACTIVE','Close the failed route with exception evidence before assigning a reattempt');
    await require('./procurementCollectiveCommitmentService').assertFunded(conn,oid);
    await conn.query("UPDATE orders SET fulfillment_status='READY_FOR_DISPATCH',exception_reason=NULL,exception_details=NULL,exception_recorded_at=NULL WHERE id=?",[oid]);
-   await conn.query("INSERT INTO order_fulfillment_events(order_id,event_code,from_status,to_status,action,actor_id,actor_role,notes,metadata,idempotency_key) VALUES (?,?,'EXCEPTION','READY_FOR_DISPATCH','APPROVE_DELIVERY_REATTEMPT',?,'SUPPLIER','Buyer approved free reattempt',?,?)",[oid,'DR-'+crypto.randomUUID(),actor.id,JSON.stringify({attempt_id:aid,proposal:parse(attempt.proposal_snapshot)}),'reattempt:'+hash(intent)]);
+   await conn.query("INSERT INTO order_fulfillment_events(order_id,event_code,from_status,to_status,action,actor_id,actor_role,notes,metadata,idempotency_key) VALUES (?,?,'EXCEPTION','READY_FOR_DISPATCH','APPROVE_DELIVERY_REATTEMPT',?,'SUPPLIER','Buyer approved delivery reattempt',?,?)",[oid,'DR-'+crypto.randomUUID(),actor.id,JSON.stringify({attempt_id:aid,proposal:parse(attempt.proposal_snapshot),supplemental_contract_id:supplemental?.id||null}),'reattempt:'+hash(intent)]);
    await conn.query('UPDATE procurement_delivery_stops SET is_current=0 WHERE order_id=? AND is_current=1',[oid]);
    // A fresh destination/window choice is mandatory; historical choice events remain.
    await conn.query('UPDATE procurement_order_delivery_choices SET terms_snapshot=NULL WHERE order_id=?',[oid]);

@@ -21,6 +21,7 @@ module.exports=async({conn,db,orderIds,buyers,supplier,outsider,pass})=>{
  const [[clock]]=await conn.query("SELECT DATE_FORMAT(DATE_ADD(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+05:00'),INTERVAL 2 DAY),'%Y-%m-%d') day");
  const addresses=[];
  for(const buyer of buyers){const [address]=await conn.query("INSERT INTO buyer_delivery_addresses(user_id,cluster_id,society_area,full_address,geographic_match_status) VALUES (?,?,'Test area','Owned buyer destination, Lahore','VERIFIED')",[buyer,cluster.id]);addresses.push(address.insertId);}
+ if(process.env.SMART_HUB_CLOSING_GATE==='1')await require('./procurement_closing_mysql_extension').individualPricing({conn,oid:orderIds[0],buyerId:buyers[0],supplierId:supplier,addressId:addresses[0],clusterId:cluster.id,pass});
  await conn.query("UPDATE orders SET fulfillment_status='READY_FOR_DISPATCH' WHERE id IN (?,?)",orderIds);
  const vehicle=await delivery.saveVehicle(supplierActor,{vehicle_reference:'Owned test vehicle '+intent(),max_weight_kg:'150',max_volume_l:'0',handling_class:'AMBIENT'});
  for(let i=0;i<orderIds.length;i++){
@@ -63,7 +64,7 @@ module.exports=async({conn,db,orderIds,buyers,supplier,outsider,pass})=>{
  await attempts.propose(supplierActor,orderIds[0],failed.attempt_id,slot,intent());
  await denied(()=>attempts.approve(buyerActors[1],orderIds[0],failed.attempt_id,{proposal_version:1,accepted_extra_fee:'10',explicit_consent:true},intent()),'ORDER_NOT_FOUND');
  await attempts.approve(buyerActors[0],orderIds[0],failed.attempt_id,{proposal_version:1,accepted_extra_fee:'10',explicit_consent:true},intent());
- await denied(()=>attempts.resume(supplierActor,orderIds[0],failed.attempt_id,intent()),'SUPPLEMENTAL_PAYMENT_CONTRACT_REQUIRED');
+ await denied(()=>attempts.resume(supplierActor,orderIds[0],failed.attempt_id,intent()),'SUPPLEMENTAL_PAYMENT_REQUIRED');
  pass('R3 real SQL: failed attempt preserves canonical event, exact buyer proposal consent, extra fee dispatch stays blocked');
  // Different attempt scenario uses a savepoint so no paid provider records or
  // failure-policy changes escape this parent transaction.
@@ -85,6 +86,7 @@ module.exports=async({conn,db,orderIds,buyers,supplier,outsider,pass})=>{
   await conn.query("INSERT INTO payments(payment_code,order_id,buyer_id,amount,status,transaction_ref) VALUES (?,?,?,?,'PAID',?)",['TEST-'+intent().slice(0,20),order.id,order.buyer_id,order.total_amount,token]);
   await conn.query("INSERT INTO payment_webhook_events(event_id,event_type,order_id,attempt_id,provider_tracker_token,signature,timestamp_header,raw_payload,processed_status) VALUES (?,'payment.completed',?,?,?,?,?,'{}','PROCESSED')",['rollback-'+intent(),order.id,attempt.insertId,token,'SYNTHETIC_NOT_PROVIDER','rollback']);
  }
+ if(process.env.SMART_HUB_CLOSING_GATE==='1')await require('./procurement_closing_mysql_extension').supplemental({conn,db,adapter,oid:orderIds[0],attemptId:failed.attempt_id,buyer:buyerActors[0],supplier:supplierActor,receipts,attempts,pass});
  const orderBefore=(await conn.query('SELECT subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent FROM orders WHERE id=?',[orderIds[0]]))[0][0];
  const brokenReceipt=new ProcurementLineReceiptService(adapter,{notifications:{enqueueEvent:async()=>{throw Error('receipt outbox rollback');}}});
  await assert.rejects(()=>brokenReceipt.recordBuyerReceipt({...receiptInput,idempotencyKey:intent()}),/receipt outbox rollback/);
@@ -102,4 +104,5 @@ module.exports=async({conn,db,orderIds,buyers,supplier,outsider,pass})=>{
  const report=await reporting.getReport(buyerActors[0]);assert.equal(report.reliability.total_orders,1);assert.equal(report.reliability.partial,1);assert.equal(report.savings.status,'UNAVAILABLE');
  const contender=await db.getConnection();try{await contender.beginTransaction();await assert.rejects(()=>contender.query('SELECT id FROM orders WHERE id=? FOR UPDATE NOWAIT',[orderIds[0]]),error=>error.errno===3572);}finally{await contender.rollback();contender.release();}
  pass('R4/R5 real SQL: per-line receipt/commission, linked refund/fee holds, full acceptance path, own reporting and independent-session lock exclusion; synthetic payment evidence rolls back');
+ if(process.env.SMART_HUB_CLOSING_GATE==='1')await require('./procurement_closing_mysql_extension').partialReview({conn,db,adapter,oid:orderIds[0],buyer:buyerActors[0],pass});
 };

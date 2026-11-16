@@ -1,0 +1,89 @@
+name: Smart Hub real Chromium with synthetic signed sandbox payment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/smart-hub-paid-browser.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  paid-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: isolated_smart_browser_only
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pisolated_smart_browser_only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: isolated_smart_browser_only
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      SAFEPAY_ENV: sandbox
+      SAFEPAY_PUBLIC_KEY: synthetic-browser-public
+      SAFEPAY_SECRET_KEY: synthetic-browser-secret
+      SAFEPAY_WEBHOOK_SECRET: synthetic-smart-hub-browser-hmac-only
+      JWT_SECRET: isolated_smart_browser_jwt_secret_at_least_32_characters
+      OTP_HMAC_SECRET: isolated_smart_browser_otp_secret_at_least_32_characters
+      TRANSACTIONAL_EMAIL_MODE: mock
+      B6_FINANCIAL_GATE_ENABLED: 'false'
+      B6_B5_INVENTORY_RECONCILED: 'false'
+      B6_TAX_POLICY_APPROVED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install application and pinned browser dependencies
+        run: |
+          npm --prefix backend ci --no-audit --no-fund
+          npm --prefix frontend ci --no-audit --no-fund
+          npm --prefix backend install --no-save --package-lock=false playwright@1.56.1 --no-audit --no-fund
+          cd backend
+          npx --no-install playwright install --with-deps chromium
+      - name: Check readiness audit redaction and canonical migrations
+        working-directory: backend
+        run: |
+          node --test tests/smart_hub_paid_browser_provider_readiness.test.js tests/smart_hub_paid_browser_safety.test.js
+          npm run migration:preflight
+          node database/financeCompatibilityGate.js
+      - name: Bootstrap and migrate disposable test database only
+        working-directory: backend
+        run: |
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node database/readOnlyMigrationAudit.js --test-only
+      - name: Chromium full and partial receipts, admin races and complete synthetic paid reattempt
+        working-directory: backend
+        timeout-minutes: 10
+        run: node tests/smart_hub_paid_browser_journey.js
+      - name: Upload screenshots and explicit synthetic evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-hub-paid-browser-SYNTHETIC-provider-evidence
+          path: backend/artifacts/smart-hub-paid-browser/
+          if-no-files-found: warn
+          retention-days: 7

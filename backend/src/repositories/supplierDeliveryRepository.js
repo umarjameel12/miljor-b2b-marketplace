@@ -8,7 +8,7 @@ class SupplierDeliveryRepository {
   /**
    * Fetch supplier's delivery mode configuration
    */
-  async getSupplierConfiguration(supplierId, connection) {
+  async getSupplierConfiguration(supplierId, connection, lockPricing = false) {
     const db = connection || defaultDb;
     const [rows] = await db.query(
       `SELECT 
@@ -17,13 +17,14 @@ class SupplierDeliveryRepository {
         standard_delivery_enabled,
         pickup_enabled,
         express_enabled,
+        individual_delivery_enabled,
         express_cutoff_time,
         express_fulfillment_hours,
         version,
         created_at,
         updated_at
        FROM supplier_delivery_configurations
-       WHERE supplier_id = ?`,
+       WHERE supplier_id = ?${lockPricing ? ' FOR UPDATE' : ''}`,
       [supplierId]
     );
     return rows.length > 0 ? rows[0] : null;
@@ -38,19 +39,21 @@ class SupplierDeliveryRepository {
       standard_delivery_enabled = true,
       pickup_enabled = false,
       express_enabled = false,
+      individual_delivery_enabled = false,
       express_cutoff_time = '14:00:00',
       express_fulfillment_hours = 4
     } = config;
 
     await db.query(
       `INSERT INTO supplier_delivery_configurations (
-        supplier_id, standard_delivery_enabled, pickup_enabled, express_enabled,
+        supplier_id, standard_delivery_enabled, pickup_enabled, express_enabled, individual_delivery_enabled,
         express_cutoff_time, express_fulfillment_hours, version, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
       ON DUPLICATE KEY UPDATE
         standard_delivery_enabled = VALUES(standard_delivery_enabled),
         pickup_enabled = VALUES(pickup_enabled),
         express_enabled = VALUES(express_enabled),
+        individual_delivery_enabled = VALUES(individual_delivery_enabled),
         express_cutoff_time = VALUES(express_cutoff_time),
         express_fulfillment_hours = VALUES(express_fulfillment_hours),
         version = version + 1,
@@ -60,6 +63,7 @@ class SupplierDeliveryRepository {
         standard_delivery_enabled,
         pickup_enabled,
         express_enabled,
+        individual_delivery_enabled,
         express_cutoff_time,
         express_fulfillment_hours
       ]
@@ -71,7 +75,7 @@ class SupplierDeliveryRepository {
   /**
    * Fetch all cluster rates configured by a supplier
    */
-  async getSupplierClusterRates(supplierId, connection) {
+  async getSupplierClusterRates(supplierId, connection, lockPricing = false) {
     const db = connection || defaultDb;
     const [rows] = await db.query(
       `SELECT 
@@ -80,6 +84,7 @@ class SupplierDeliveryRepository {
         r.cluster_id,
         r.mode,
         r.is_eligible,
+        r.fee_pkr AS exact_fee_pkr,
         CAST(r.fee_pkr AS DOUBLE) AS fee_pkr,
         r.version,
         c.cluster_code,
@@ -88,10 +93,10 @@ class SupplierDeliveryRepository {
        FROM supplier_delivery_cluster_rates r
        JOIN geographic_clusters c ON r.cluster_id = c.id
        WHERE r.supplier_id = ?
-       ORDER BY r.cluster_id ASC, r.mode ASC`,
+       ORDER BY r.cluster_id ASC, r.mode ASC${lockPricing ? ' FOR UPDATE' : ''}`,
       [supplierId]
     );
-    return rows;
+    return rows.map(({exact_fee_pkr, ...row}) => ({...row,fee_pkr:row.mode === 'INDIVIDUAL' ? exact_fee_pkr : row.fee_pkr}));
   }
 
   /**
@@ -232,15 +237,16 @@ class SupplierDeliveryRepository {
       quoted_delivery_fee_pkr,
       pickup_point_id = null,
       supplier_config_version = 1,
-      expires_at
+      expires_at,
+      supplier_rate_version = null
     } = quoteData;
 
     await db.query(
       `INSERT INTO delivery_quotes (
         quote_code, buyer_id, supplier_id, pool_id, cluster_id, address_id,
         destination_address_snapshot, destination_fingerprint, mode, quoted_delivery_fee_pkr, pickup_point_id, supplier_config_version,
-        status, expires_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, NOW())`,
+        supplier_rate_version, status, expires_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, NOW())`,
       [
         quote_code,
         buyer_id,
@@ -254,6 +260,7 @@ class SupplierDeliveryRepository {
         quoted_delivery_fee_pkr,
         pickup_point_id,
         supplier_config_version,
+        supplier_rate_version,
         expires_at
       ]
     );

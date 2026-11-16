@@ -48,6 +48,7 @@ jobs:
           node --test tests/supplier_operations_overview_gate.js
           node --test tests/recurring_cycle_inputs_policy_gate.js
           node --test tests/collective_commitment_policy_gate.js
+          node --test tests/individual_delivery_pricing.test.js tests/procurement_settlement_review_policy.test.js tests/delivery_payment_recovery_policy.test.js tests/smart_hub_paid_browser_provider_readiness.test.js
           node --test tests/procurement_delivery_run_policy_gate.js tests/procurement_delivery_evidence.test.js tests/procurement_line_receipt_policy.test.js tests/procurement_line_receipt_transactions.test.js tests/procurement_line_receipt_api.test.js tests/procurement_line_receipt_financial.test.js tests/procurement_reporting_service_gate.js tests/procurement_reporting_routes_gate.js
           node tests/b6_recurring_worker_gate.js
       - name: Install frontend

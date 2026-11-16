@@ -79,7 +79,7 @@ jobs:
           node tests/procurement_delivery_binding_mysql_gate.js
           node tests/supplier_operations_mysql_gate.js
           node tests/recurring_cycle_controls_mysql_gate.js
-          SMART_HUB_OPERATIONS_GATE=1 node tests/collective_commitment_mysql_gate.js
+          SMART_HUB_OPERATIONS_GATE=1 SMART_HUB_CLOSING_GATE=1 node tests/collective_commitment_mysql_gate.js
       - name: Safepay synthetic payment, refund and 80 concurrent callback/retry stress checks
         timeout-minutes: 9
         env:

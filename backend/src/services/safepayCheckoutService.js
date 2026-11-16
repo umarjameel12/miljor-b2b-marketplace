@@ -139,7 +139,7 @@ class SafepayCheckoutService {
     // Check for existing active attempt with same idempotency key (idempotent replay)
     const [existingAttempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND idempotency_key = ?
+       WHERE order_id = ? AND idempotency_key = ? AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId, trimmedKey]
     );
@@ -155,7 +155,7 @@ class SafepayCheckoutService {
     // Check for currently active attempt to prevent duplicate concurrent sessions
     const [activeAttempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND status = 'INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+       WHERE order_id = ? AND status = 'INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );
@@ -342,7 +342,7 @@ class SafepayCheckoutService {
     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
       || data.currency
       || parsedPayload.currency
-      || 'PKR';
+      || null;
 
     // Support both official Safepay event 'payment.succeeded' and backwards-compatible 'payment.completed' / variants
     const isSuccessEvent = [
@@ -421,6 +421,7 @@ class SafepayCheckoutService {
 
       const attempt = attempts[0];
 
+
       // The initial event lookup is deliberately fast but NOT sufficient under
       // concurrent provider retries. Acquiring the payment attempt's FOR UPDATE
       // lock serializes callbacks for the same tracker; recheck event identity
@@ -435,6 +436,10 @@ class SafepayCheckoutService {
           message:'Duplicate authenticated webhook acknowledged after serialized tracker lock'};
       }
 
+      if(attempt.procurement_delivery_contract_id){
+        const result=await require('./procurementDeliveryPaymentService').captureWithinTransaction(connection,{attempt,providerAmount,providerCurrency,eventId:effectiveEventId,eventType:effectiveEventType,signature,timestamp,rawPayload:parsedPayload});
+        await connection.commit();return result;
+      }
       // Lock parent order row FOR UPDATE
       const [orders] = await connection.query(
         `SELECT * FROM orders WHERE id = ? FOR UPDATE`,
@@ -691,7 +696,7 @@ class SafepayCheckoutService {
     // Fetch latest payment attempt
     const [attempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? 
+       WHERE order_id = ? AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );
@@ -787,7 +792,7 @@ class SafepayCheckoutService {
     // If order is already PAID, return idempotent confirmation
     if (order.order_status === 'PAID') {
       const [existingPayments] = await db.query(
-        `SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1`,
+        `SELECT * FROM payments WHERE order_id = ? AND procurement_delivery_contract_id IS NULL ORDER BY id DESC LIMIT 1`,
         [orderId]
       );
       return {
@@ -812,7 +817,7 @@ class SafepayCheckoutService {
     // Find latest payment attempt
     const [attempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND status = 'INITIATED'
+       WHERE order_id = ? AND status = 'INITIATED' AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );

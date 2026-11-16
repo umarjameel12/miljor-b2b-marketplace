@@ -1,0 +1,157 @@
+'use strict';
+// Test-process adapter injection only. No runtime HTTP backdoor or provider I/O.
+const assert=require('node:assert/strict'),crypto=require('node:crypto');
+const {identity,key}=require('./smart_hub_paid_browser_fixture');
+module.exports=async function extraFee({api,db,fixture,buyer,supplier,fulfillment,routes,runPath,action,buyerPanel,artifactDir,signin}){
+  await identity(db);
+  const oid=fixture.order.id,base=`/procurement/orders/${oid}`;
+  const immutable=async()=>({order:(await db.query('SELECT total_qty,unit_price,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,procurement_delivery_snapshot FROM orders WHERE id=?',[oid]))[0][0],inventory:(await db.query("SELECT id,supplier_listing_id,allocated_qty,unit,status FROM supplier_inventory_allocations WHERE allocation_type='ORDER_DIRECT' AND reference_id=? ORDER BY id",[oid]))[0],invoice:(await api(fixture.buyer,'GET',`/invoices/${oid}`)).invoice});
+  const original=await immutable();assert.equal(Number(original.invoice.tax_amount),0,'Current isolated test tax contract');assert.equal(original.inventory.length,2);assert.ok(original.inventory.every(row=>row.status==='COMMITTED'));
+  await fulfillment.getByText('Delivery, proof and line receipts',{exact:true}).click();
+  await fulfillment.getByLabel('Failure evidence',{exact:true}).fill('Synthetic dispatched delivery attempt failed: test vehicle could not reach the agreed destination.');
+  const failed=await action(supplier,fulfillment.getByRole('button',{name:'Record failed attempt',exact:true}),base+'/delivery-attempts');
+  assert.equal(failed.data.status,'FAILED');const aid=failed.data.attempt_id,attemptBase=base+'/delivery-attempts/'+aid;
+  await action(supplier,routes.getByRole('button',{name:'Close route with recorded exceptions',exact:true}),runPath);
+  const date=new Date(Date.now()+2*86400000).toISOString().slice(0,10);
+  await fulfillment.getByLabel('New slot starts',{exact:true}).fill(date+'T09:00');await fulfillment.getByLabel('New slot ends',{exact:true}).fill(date+'T12:00');
+  await fulfillment.getByLabel('Extra fee (PKR)',{exact:true}).fill('42.00');
+  const proposed=await action(supplier,fulfillment.getByRole('button',{name:'Propose reattempt slot',exact:true}),attemptBase+'/proposal');assert.equal(proposed.data.proposal_version,1);
+  let panel=await buyerPanel();
+  const approved=await action(buyer,panel.getByRole('button',{name:'Approve displayed slot and extra fee',exact:true}),attemptBase+'/approval');assert.equal(approved.data.status,'APPROVED_PAYMENT_REQUIRED');
+  await fulfillment.getByRole('button',{name:'Refresh delivery records',exact:true}).click();
+  await api(fixture.supplier,'POST',attemptBase+'/resume',{},409,'SUPPLEMENTAL_PAYMENT_REQUIRED');
+  const input={proposal_version:1,accepted_extra_fee:'42.00',explicit_payment_consent:true},paymentPath=attemptBase+'/payment';
+  await api(fixture.buyer,'POST',paymentPath,input,503,'B6_FINANCIAL_GATE_BLOCKED');
+  const adapter=require('../src/services/safepayAdapter');
+  const saved={createTracker:adapter.createTracker,fetchTracker:adapter.fetchTracker,createPassportToken:adapter.createPassportToken};
+  const flagNames=['B6_FINANCIAL_GATE_ENABLED','B6_B5_INVENTORY_RECONCILED','B6_TAX_POLICY_APPROVED'],savedFlags=Object.fromEntries(flagNames.map(name=>[name,process.env[name]]));
+  const restore=()=>{Object.assign(adapter,saved);for(const name of flagNames){if(savedFlags[name]===undefined)delete process.env[name];else process.env[name]=savedFlags[name];}};
+  const tracker='synthetic_extra_'+fixture.tag;let created=0,fetched=0,blocked=0;
+  let navigationResolve;const blockedNavigation=new Promise(resolve=>navigationResolve=resolve);
+  const intercept=async route=>{blocked++;await route.abort('blockedbyclient');navigationResolve();};
+  const providerPattern='https://sandbox.api.getsafepay.com/**';
+  await buyer.context().route(providerPattern,intercept);
+  try{
+    await identity(db);
+    // Prior canonical award/stock gates and the immutable zero-tax invoice are
+    // checked above before enabling these flags for this isolated request only.
+    for(const name of flagNames)process.env[name]='true';
+    adapter.createTracker=async params=>{created++;assert.equal(params.amount,42);assert.equal(params.currency,'PKR');assert.match(params.orderCode,/^DELIVERY-\d+$/);return {trackerToken:tracker,rawResponse:{synthetic:true}};};
+    adapter.fetchTracker=async token=>{fetched++;assert.equal(token,tracker);return {data:{token:tracker,state:'TRACKER_PENDING',amount:42,currency:'PKR'}};};
+    adapter.createPassportToken=async()=>{throw Error('Unexpected passport request: genuine provider I/O is forbidden in browser fixtures');};
+    await api(fixture.supplier,'POST',paymentPath,input,403);await api(fixture.foreignBuyer,'POST',paymentPath,input,404,'ORDER_NOT_FOUND');
+    await api(fixture.buyer,'POST',paymentPath,{...input,accepted_extra_fee:'43.00'},409,'SUPPLEMENTAL_CONSENT_STALE');
+    const initiated=await action(buyer,panel.getByRole('button',{name:'Pay approved extra delivery fee of PKR 42.00',exact:true}),paymentPath);
+    assert.equal(initiated.data.status,'PAYMENT_PENDING');assert.equal(initiated.data.original_order_changed,false);
+    assert.equal(new URL(initiated.data.checkout_url).hostname,'sandbox.api.getsafepay.com');
+    // This waits for the intercepted navigation, never a fabricated provider page.
+    let timeout;
+    try{await Promise.race([blockedNavigation,new Promise((resolve,reject)=>{timeout=setTimeout(()=>reject(Error('Expected sandbox checkout navigation was not intercepted')),15000);})]);}finally{clearTimeout(timeout);}
+    const cid=initiated.data.contract_id;
+    const contract=await api(fixture.buyer,'GET',paymentPath);assert.equal(contract.id,cid);assert.equal(contract.amount,'42.00');assert.equal(contract.status,'PAYMENT_PENDING');
+    assert.equal(await api(fixture.foreignBuyer,'GET',paymentPath),null);await api(fixture.supplier,'GET',paymentPath,null,403);
+    const paymentIntent={'X-Idempotency-Key':initiated.request.headers()['x-idempotency-key']};
+    const replay=await api(fixture.buyer,'POST',paymentPath,input,200,null,paymentIntent);assert.deepEqual(replay,initiated.data);assert.equal(created,1);
+    const pending=await api(fixture.buyer,'POST',paymentPath+'/reconcile',{});assert.equal(pending.status,'PAYMENT_PENDING');assert.equal(fetched,1);
+    const callback=async(label,amount=42,currency='PKR',bad=false)=>{
+      const payload={token:'evt_extra_'+fixture.tag+'_'+label,type:'payment.completed',data:{tracker:{token:tracker,amount,currency}}};
+      const headers={'X-SFPY-SIGNATURE':bad?'invalid':crypto.createHmac('sha512',process.env.SAFEPAY_WEBHOOK_SECRET).update(JSON.stringify(payload)).digest('hex'),'X-SFPY-EVENT-ID':payload.token,'X-SFPY-EVENT-TYPE':payload.type,'X-SFPY-TIMESTAMP':new Date().toISOString()};
+      return api(null,'POST','/webhooks/safepay',payload,bad?401:amount!==42||currency!=='PKR'?422:200,null,headers);
+    };
+    await callback('bad-signature',42,'PKR',true);await callback('wrong-amount',41);await callback('wrong-currency',42,'USD');
+    assert.equal((await api(fixture.buyer,'GET',paymentPath)).status,'PAYMENT_PENDING');
+    const captured=await callback('success');assert.equal(captured.delivery_contract_id,cid);assert.equal(captured.status,'PAID');assert.equal(captured.original_order_changed,false);
+    const callbacks=await Promise.all([callback('success'),callback('success')]);assert.ok(callbacks.every(result=>result.is_duplicate===true));
+    const reconciled=await api(fixture.buyer,'POST',paymentPath+'/reconcile',{});assert.equal(reconciled.status,'PAID');assert.equal(fetched,1,'Already paid reconciliation must not fetch provider again');
+    const [payments]=await db.query('SELECT amount,status,procurement_delivery_contract_id FROM payments WHERE order_id=? ORDER BY id',[oid]);assert.equal(payments.length,2);assert.equal(payments[0].amount,fixture.order.total_amount);assert.equal(payments[0].procurement_delivery_contract_id,null);assert.equal(payments[1].amount,'42.00');assert.equal(Number(payments[1].procurement_delivery_contract_id),Number(cid));
+    const [[hold]]=await db.query('SELECT h.hold_amount,h.status FROM procurement_delivery_payment_contracts c JOIN financial_holds h ON h.id=c.financial_hold_id WHERE c.id=?',[cid]);assert.deepEqual(hold,{hold_amount:'42.00',status:'ACTIVE'});
+    assert.deepEqual(await immutable(),original,'Separate fee must not change original order money, invoice or committed stock');
+    panel=await buyerPanel();await panel.getByText('Separate delivery payment: PKR 42.00 · PAID. The original invoice remains unchanged.',{exact:true}).waitFor();
+    await buyer.screenshot({path:require('node:path').join(artifactDir,'extra-fee-01-synthetic-paid-contract.png'),fullPage:true});
+    await fulfillment.getByRole('button',{name:'Refresh delivery records',exact:true}).click();
+    const resumed=await action(supplier,fulfillment.getByRole('button',{name:'Resume approved reattempt',exact:true}),attemptBase+'/resume');assert.equal(resumed.data.status,'RESUMED');assert.equal(resumed.data.new_delivery_choice_required,true);
+    panel=await buyerPanel();await panel.getByLabel('Verified address',{exact:true}).selectOption(String(fixture.addressId));await panel.getByLabel('Pakistan delivery date',{exact:true}).fill(date);
+    await panel.getByLabel('I approve this destination, window and handling.',{exact:true}).check();
+    const chosen=await action(buyer,panel.getByRole('button',{name:'Request delivery window',exact:true}),base+'/delivery');assert.equal(chosen.data.locked_delivery_fee,'25.00');
+    const [[state]]=await db.query('SELECT fulfillment_status,payment_status,total_amount FROM orders WHERE id=?',[oid]);assert.equal(state.fulfillment_status,'READY_FOR_DISPATCH');assert.equal(state.payment_status,'PAID');assert.equal(state.total_amount,fixture.order.total_amount);
+    const [[payout]]=await db.query('SELECT COUNT(*) n FROM supplier_disbursement_instructions WHERE order_id=?',[oid]);assert.equal(Number(payout.n),0);
+    await buyer.screenshot({path:require('node:path').join(artifactDir,'extra-fee-02-synthetic-resumed-new-window.png'),fullPage:true});
+    assert.ok(blocked>=1);
+    // End the injected provider session before the physical reattempt. Everything
+    // below uses real UI/API state, with financial feature flags restored.
+    restore();
+    assert.equal(adapter.createTracker,saved.createTracker);assert.equal(adapter.fetchTracker,saved.fetchTracker);
+    const firstRunId=Number(/^\/procurement\/delivery\/runs\/(\d+)\/actions$/.exec(runPath)[1]);
+    const [[firstRun]]=await db.query('SELECT vehicle_id,status FROM procurement_delivery_runs WHERE id=?',[firstRunId]);assert.equal(firstRun.status,'EXCEPTION');
+    await routes.getByRole('button',{name:'Open or refresh delivery workspace',exact:true}).click();
+    await routes.getByLabel('Vehicle',{exact:true}).selectOption(String(firstRun.vehicle_id));
+    await routes.getByLabel(new RegExp(fixture.order.order_code)).check();
+    // A distinct supplier-declared cost gives this new route its own UI intent;
+    // the original failed run and its original intent remain immutable.
+    await routes.getByLabel('Total planned route cost (PKR)',{exact:true}).fill('19.00');
+    await routes.getByLabel('I confirm handling compatibility and declared route cost.',{exact:true}).check();
+    const nextRun=await action(supplier,routes.getByRole('button',{name:'Create proposed route',exact:true}),'/procurement/delivery/runs');
+    const newRunId=nextRun.data.run_id,newRunPath=`/procurement/delivery/runs/${newRunId}/actions`;
+    assert.notEqual(Number(newRunId),firstRunId);assert.equal(nextRun.data.status,'PROPOSED');
+    assert.equal(Number(nextRun.data.vehicle.id),Number(firstRun.vehicle_id));assert.equal(nextRun.data.delivery_day,date);
+    await action(supplier,routes.getByRole('button',{name:'Confirm route',exact:true}),newRunPath);
+    await supplier.getByRole('region',{name:'Paid supplier fulfillment',exact:true}).getByRole('button',{name:'Refresh queue',exact:true}).click();
+    await supplier.getByRole('button',{name:'Manage '+fixture.order.order_code,exact:true}).click();
+    await fulfillment.getByText('Confirmed state: READY_FOR_DISPATCH',{exact:true}).waitFor();
+    await fulfillment.getByLabel('Dispatch / pickup reference',{exact:true}).fill('SYNTHETIC-REATTEMPT-'+fixture.tag);
+    const transition=`/fulfillment/supplier/orders/${oid}/transition`;
+    await action(supplier,fulfillment.getByRole('button',{name:'Record dispatch / pickup handoff',exact:true}),transition);
+    await action(supplier,routes.getByRole('button',{name:'Confirm route dispatched',exact:true}),newRunPath);
+    await fulfillment.getByText('Delivery, proof and line receipts',{exact:true}).click();
+    const proofBytes=await supplier.screenshot();
+    await fulfillment.getByLabel('PNG, JPEG or PDF, at most 1 MB',{exact:true}).setInputFiles({name:'synthetic-reattempt-proof.png',mimeType:'image/png',buffer:proofBytes});
+    await action(supplier,fulfillment.getByRole('button',{name:'Upload proof',exact:true}),base+'/evidence',201);
+    await fulfillment.getByLabel('Delivery evidence / operational notes',{exact:true}).fill('Synthetic second delivery completed; private proof recorded for the buyer-approved paid reattempt.');
+    await action(supplier,fulfillment.getByRole('button',{name:'Report delivered / collected',exact:true}),transition);
+    await action(supplier,routes.getByRole('button',{name:'Close delivered route',exact:true}),newRunPath);
+    await supplier.screenshot({path:require('node:path').join(artifactDir,'extra-fee-03-synthetic-second-delivery.png'),fullPage:true});
+    panel=await buyerPanel();
+    await panel.getByRole('button',{name:'Review ordered products',exact:true}).click();
+    await panel.getByLabel('received',{exact:true}).first().waitFor();assert.equal(await panel.getByLabel('received',{exact:true}).count(),2);
+    await panel.getByLabel('I accept commission on accepted products and disputed delivery/processing fees held for admin review. Historical invoice terms remain recorded.',{exact:true}).check();
+    const finalLines=await action(buyer,panel.getByRole('button',{name:'Submit final product receipts',exact:true}),base+'/line-receipts');
+    assert.equal(finalLines.data.receipt.lines.length,2);assert.equal(finalLines.data.receipt.dispute_recorded,false);
+    for(const line of finalLines.data.receipt.lines){assert.equal(line.received_quantity,line.ordered_quantity);assert.equal(line.accepted_quantity,line.ordered_quantity);assert.equal(line.disputed_quantity,'0.0000');assert.equal(line.refund_assessment_amount,'0.00');}
+    const confirmPath=`/fulfillment/buyer/orders/${oid}/confirm-receipt`;
+    await api(fixture.supplier,'POST',confirmPath,{},403);
+    const confirmed=await action(buyer,panel.getByRole('button',{name:'Confirm complete order receipt',exact:true}),confirmPath);
+    assert.equal(confirmed.data.fulfillment_status,'BUYER_CONFIRMED');
+    const confirmReplay=await api(fixture.buyer,'POST',confirmPath,confirmed.request.postDataJSON(),200,null,{'X-Idempotency-Key':confirmed.request.headers()['x-idempotency-key']});assert.equal(confirmReplay.fulfillment_status,'BUYER_CONFIRMED');
+    await signin(fixture.admin,false,fixture.password);
+    const reviewPath=`/procurement/admin/delivery-payment-reviews/${cid}`;
+    await api(fixture.buyer,'GET',reviewPath,null,403);await api(fixture.supplier,'GET',reviewPath,null,403);
+    const feePreview=await api(fixture.admin,'GET',reviewPath);assert.equal(feePreview.status,'PAID');assert.equal(feePreview.amount,'42.00');
+    const feeInput={contract_hash:feePreview.contract_hash,refund_amount:'0.00',notes:'Synthetic complete second delivery and canonical buyer receipt verified; retain the separately captured delivery fee; no external payout execution.'};
+    const feeIntent={'X-Idempotency-Key':key('complete-extra-review-'+oid)};
+    const feeReview=await api(fixture.admin,'POST',reviewPath,feeInput,200,null,feeIntent);
+    assert.equal(feeReview.supplier_amount,'42.00');assert.equal(feeReview.refund_amount,'0.00');assert.equal(feeReview.refund_obligation_id,null);assert.equal(feeReview.external_execution_status,'DISABLED');
+    const feeReplay=await api(fixture.admin,'POST',reviewPath,feeInput,200,null,feeIntent);assert.deepEqual(feeReplay,feeReview);
+    await api(fixture.admin,'POST',reviewPath,{...feeInput,refund_amount:'1.00'},409,'IDEMPOTENCY_PAYLOAD_CONFLICT',feeIntent);
+    const [[payable]]=await db.query('SELECT id,delivery_fee_amount,net_payable_amount,available_amount,disbursed_amount FROM supplier_payables WHERE order_id=?',[oid]);
+    const exact=require('../src/services/exactDecimal');
+    assert.equal(payable.delivery_fee_amount,'67.00');
+    assert.equal(payable.net_payable_amount,exact.exactDecimalSum([feeReview.prior_payable.net_payable_amount,'42.00'],2));
+    assert.equal(payable.available_amount,payable.net_payable_amount);assert.equal(payable.disbursed_amount,'0.00');
+    const payoutInput={payable_id:payable.id,beneficiary_title:'Synthetic paid reattempt supplier; external execution disabled',beneficiary_iban:'PK00TEST0000000000000000'};
+    const payoutIntent={'X-Idempotency-Key':key('complete-extra-payout-'+oid)};
+    const prepared=(await api(fixture.admin,'POST','/settlements/disbursements/prepare',payoutInput,201,null,payoutIntent)).disbursement;
+    assert.equal(prepared.status,'PREPARED');assert.equal(prepared.external_execution_status,'DISABLED');assert.equal(prepared.amount,payable.net_payable_amount);
+    const payoutReplay=(await api(fixture.admin,'POST','/settlements/disbursements/prepare',payoutInput,201,null,payoutIntent)).disbursement;assert.equal(payoutReplay.id,prepared.id);
+    const [[durable]]=await db.query("SELECT (SELECT COUNT(*) FROM procurement_line_receipts WHERE order_id=?) receipts,(SELECT COUNT(*) FROM procurement_line_receipt_submissions WHERE order_id=?) submissions,(SELECT COUNT(*) FROM procurement_delivery_evidence WHERE order_id=?) proofs,(SELECT COUNT(*) FROM supplier_disbursement_instructions WHERE order_id=?) instructions,(SELECT COUNT(*) FROM refund_obligations WHERE procurement_delivery_contract_id=?) extra_refunds",[oid,oid,oid,oid,cid]);
+    assert.deepEqual(Object.values(durable).map(Number),[2,1,1,1,0]);
+    const [[completed]]=await db.query('SELECT o.fulfillment_status,c.status contract_status,h.status hold_status,r.status route_status FROM orders o JOIN procurement_delivery_payment_contracts c ON c.order_id=o.id JOIN financial_holds h ON h.id=c.financial_hold_id JOIN procurement_delivery_runs r ON r.id=? WHERE o.id=? AND c.id=?',[newRunId,oid,cid]);
+    assert.deepEqual(completed,{fulfillment_status:'BUYER_CONFIRMED',contract_status:'REVIEWED',hold_status:'RELEASED',route_status:'DELIVERED'});
+    assert.deepEqual(await immutable(),original,'Completed reattempt must preserve original order charges, invoice and committed inventory');
+    await buyer.reload();panel=await buyerPanel(false);await panel.getByRole('button',{name:'Review ordered products',exact:true}).click();await panel.getByText(/Product line .*Final receipt recorded/).first().waitFor();assert.equal(await panel.getByText(/Product line .*Final receipt recorded/).count(),2);
+    await buyer.screenshot({path:require('node:path').join(artifactDir,'extra-fee-04-synthetic-confirmed-complete.png'),fullPage:true});
+    return {name:'extra-fee-second-delivery-complete',status:'PASS',order_id:oid,delivery_attempt_id:aid,contract_id:cid,reattempt_run_id:newRunId,disbursement_id:prepared.id,synthetic_provider:true,provider_navigation_blocked:true,original_order_unchanged:true,original_invoice_unchanged:true,external_execution_status:'DISABLED',end_state:'BUYER_CONFIRMED; second route DELIVERED; extra fee REVIEWED; canonical payout PREPARED with external execution DISABLED'};
+  }finally{
+    restore();
+    await buyer.context().unroute(providerPattern,intercept);
+  }
+};

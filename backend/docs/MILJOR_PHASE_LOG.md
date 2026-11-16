@@ -1698,3 +1698,7 @@ Mandatory notification plan amendment: notifications are required in all eight p
 
 PARTIAL: biweekly schedule/request/UI and forward migration 091 implemented; calendar validation hardened. Full phased plan: SMART_HUB_IMPLEMENTATION_PLAN.md. Execution evidence and blockers: SMART_HUB_EXECUTION_2026_11_15.md. No protected database mutation or main merge. PR #53 remains draft pending critical integration gates.
 
+# 2026-11-16 — Smart Hub financial closing
+
+Implemented individual delivery pricing, immutable partial-settlement approvals, separate buyer-approved reattempt payment contracts and admin UI using existing financial/notification services. Local focused backend 161/161, real SQL combined gate 20/20, Chromium full/80-20 partial/paid reattempt 3/3, frontend build and canonical/UCP source preflight PASS. Migration history 65/65; protected DB read-only orders/payments both zero. Genuine SMTP authentication/provider acceptance and Safepay authentication/tracker creation PASS; genuine payment completion/public webhook/settlement and inbox receipt NOT VERIFIED. SMS excluded by user. PR #53 stays draft; whole release PARTIAL/BLOCKED. Detailed files/commands/evidence: SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md. Exact-head CI pending push. CAN START NEXT PHASE: NO.
+

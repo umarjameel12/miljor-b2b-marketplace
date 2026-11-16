@@ -75,7 +75,7 @@ function fixture(options = {}) {
         refund = { id: 51, order_id: args[1], buyer_id: args[3], dispute_id: args[4], refund_type: args[9], total_refund_amount: args[8], status: args[10] };
         return [{ insertId: 51 }];
       }
-      if (q.startsWith('INSERT INTO supplier_disbursement_instructions')) { disbursement = { id: 61, order_id: 42, payment_id: 11, amount: '100.00', status: 'PREPARED' }; return [{ insertId: 61 }]; }
+      if (q.startsWith('INSERT INTO supplier_disbursement_instructions')) { disbursement = { id: 61, order_id: args[3], supplier_payable_id:args[2],payment_id: 11, amount:args[7],beneficiary_title:args[4],beneficiary_iban:args[5],beneficiary_bank_code:args[6],idempotency_key:args[8],external_execution_status:'DISABLED',status: 'PREPARED' }; return [{ insertId: 61 }]; }
       if (q.startsWith('UPDATE orders') && q.includes("payment_status = 'PAID'")) order.order_status = order.payment_status = 'PAID';
       if (q.startsWith('UPDATE order_disputes') && q.includes("status = 'CLOSED'")) dispute.status = 'CLOSED';
       if (q.startsWith('UPDATE order_disputes') && q.includes("remediation_status = 'COMPLETED'")) { dispute.status = 'SUPPLIER_REMEDIATION_COMPLETED'; dispute.remediation_status = 'COMPLETED'; }
@@ -139,6 +139,9 @@ test('webhook and server reconciliation share payment identity across delivery m
 test('invalid webhook signature and non-success event never notify', async () => {
   const bad = fixture({ authentic: false }); await assert.rejects(bad.checkout.processWebhookEvent(webhook()), { code: 'INVALID_WEBHOOK_SIGNATURE' }); assert.equal(bad.notices().length, 0);
   const failed = fixture(); await failed.checkout.processWebhookEvent(webhook({ eventType: 'payment.failed' })); assert.equal(failed.notices().length, 0);
+});
+test('authenticated success without explicit currency cannot fabricate PKR verification',async()=>{
+ const s=fixture();await assert.rejects(s.checkout.processWebhookEvent(webhook({rawBody:JSON.stringify({type:'payment.succeeded',data:{tracker:'track_test',amount:100}})})),{code:'CURRENCY_MISMATCH'});assert.equal(s.notices().length,0);assert.equal(s.commits(),0);
 });
 test('provider pending and foreign buyer never notify', async () => {
   const s = fixture({ providerState: 'PENDING' }); await s.checkout.reconcilePaymentWithProvider({ orderId: 42, actor: buyer }); assert.equal(s.notices().length, 0);

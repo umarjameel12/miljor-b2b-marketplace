@@ -40,8 +40,8 @@ class ProcurementLineReceiptService {
      AND pa.currency=?
    JOIN payment_webhook_events pe ON pe.attempt_id=pa.id AND pe.order_id=p.order_id
      AND pe.provider='SAFEPAY' AND pe.provider_tracker_token=pa.provider_tracker_token
-     AND pe.processed_status='PROCESSED' AND pe.event_type IN ('payment.completed','payment.reconciled')
-   WHERE p.order_id=? AND p.buyer_id=? AND p.status='PAID' AND p.amount=?
+     AND pe.processed_status='PROCESSED' AND pe.event_type IN ('payment.succeeded','payment:succeeded','payment.completed','payment:completed','payment.settled','payment:settled','payment.reconciled')
+   WHERE p.order_id=? AND p.buyer_id=? AND p.status='PAID' AND p.amount=? AND p.procurement_delivery_contract_id IS NULL AND pa.procurement_delivery_contract_id IS NULL
      AND (BINARY p.transaction_ref=BINARY pa.provider_tracker_token OR
        BINARY JSON_UNQUOTE(JSON_EXTRACT(p.provider_response,'$.tracker_token'))=BINARY pa.provider_tracker_token)
    ORDER BY p.id DESC LIMIT 1`,[order.currency,order.id,order.buyer_id,order.total_amount]);
@@ -130,11 +130,11 @@ class ProcurementLineReceiptService {
   const buyer=this._buyer(actor),oid=id(orderId),conn=await this.db.getConnection();
   try{
    await conn.beginTransaction();
-   await this._order(conn,oid,buyer);
+   const order=await this._order(conn,oid,buyer);
    const lines=await this._lines(conn,oid);
    const [receipts]=await conn.query('SELECT * FROM procurement_line_receipts WHERE order_id=? ORDER BY award_line_id',[oid]);
    const [assessments]=await conn.query('SELECT allocation_snapshot FROM procurement_receipt_financial_assessments WHERE order_id=?',[oid]);
-   const result={order_id:oid,...financialFlags(),quantities_are_per_line:true,
+   const result={order_id:oid,fulfillment_status:order.fulfillment_status,...financialFlags(),quantities_are_per_line:true,
     lines:lines.map(line=>({award_line_id:line.id,ordered_quantity:line.quantity,
      purchasing_unit:line.purchasing_unit,unit_price:line.unit_price,subtotal:line.subtotal,
      receipt:receipts.find(row=>String(row.award_line_id)===String(line.id))||null}))};

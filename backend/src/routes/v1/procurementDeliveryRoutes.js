@@ -4,7 +4,8 @@ const {protect,authorizeStrict}=require('../../middlewares/authGuard');
 const idem=require('../../middlewares/idempotencyGuard');
 const service=require('../../services/procurementDeliveryRunService');
 const attempts=require('../../services/procurementDeliveryAttemptService');
-const respond=action=>async(req,res)=>{res.set('Cache-Control','private, no-store');try{res.json({success:true,data:await action(req)});}catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.statusCode?error.code:'DELIVERY_OPERATION_FAILED',message:error.statusCode?error.message:'Unable to process delivery operation'}});}};
+const payments=require('../../services/procurementDeliveryPaymentService');
+const respond=action=>async(req,res)=>{res.set('Cache-Control','private, no-store');try{res.json({success:true,data:await action(req)});}catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.statusCode?error.code:'DELIVERY_OPERATION_FAILED',message:error.statusCode?error.message:'Unable to process delivery operation',retryable:error.code==='SUPPLEMENTAL_INITIALIZATION_REJECTED'}});}};
 const intent=req=>req.get('X-Idempotency-Key');
 router.get('/procurement/delivery/vehicles',protect,authorizeStrict('SUPPLIER'),respond(req=>service.listVehicles(req.user)));
 router.post('/procurement/delivery/vehicles',protect,authorizeStrict('SUPPLIER'),respond(req=>service.saveVehicle(req.user,req.body)));
@@ -20,4 +21,7 @@ router.post('/procurement/orders/:orderId/delivery-attempts',protect,authorizeSt
 router.post('/procurement/orders/:orderId/delivery-attempts/:attemptId/proposal',protect,authorizeStrict('SUPPLIER'),idem.required,respond(req=>attempts.propose(req.user,req.params.orderId,req.params.attemptId,req.body,intent(req))));
 router.post('/procurement/orders/:orderId/delivery-attempts/:attemptId/approval',protect,authorizeStrict('BUYER'),idem.required,respond(req=>attempts.approve(req.user,req.params.orderId,req.params.attemptId,req.body,intent(req))));
 router.post('/procurement/orders/:orderId/delivery-attempts/:attemptId/resume',protect,authorizeStrict('SUPPLIER'),idem.required,respond(req=>attempts.resume(req.user,req.params.orderId,req.params.attemptId,intent(req))));
+router.get('/procurement/orders/:orderId/delivery-attempts/:attemptId/payment',protect,authorizeStrict('BUYER'),respond(req=>payments.get(req.user,req.params.orderId,req.params.attemptId)));
+router.post('/procurement/orders/:orderId/delivery-attempts/:attemptId/payment',protect,authorizeStrict('BUYER'),idem.required,respond(req=>payments.initiate(req.user,req.params.orderId,req.params.attemptId,req.body,intent(req))));
+router.post('/procurement/orders/:orderId/delivery-attempts/:attemptId/payment/reconcile',protect,authorizeStrict('BUYER'),respond(req=>payments.reconcile(req.user,req.params.orderId,req.params.attemptId)));
 module.exports=router;
