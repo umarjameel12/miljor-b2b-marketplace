@@ -46,12 +46,12 @@ CREATE TABLE procurement_collective_order_lines (
  unit_price DECIMAL(12,2) NOT NULL,
  subtotal DECIMAL(14,2) NOT NULL,
  physical_snapshot JSON NOT NULL,
- UNIQUE KEY uq_collective_order_item (collective_order_id,request_item_id),
+ UNIQUE KEY uq_pr61_collective_order_item (collective_order_id,request_item_id),
  KEY idx_collective_order_line_listing (supplier_listing_id),
- CONSTRAINT fk_collective_line_order FOREIGN KEY(collective_order_id) REFERENCES procurement_collective_buyer_orders(id),
- CONSTRAINT fk_collective_line_request FOREIGN KEY(request_item_id) REFERENCES procurement_request_items(id),
- CONSTRAINT fk_collective_line_listing FOREIGN KEY(supplier_listing_id) REFERENCES supplier_listings(id),
- CONSTRAINT fk_collective_line_sku FOREIGN KEY(supplier_sku_id) REFERENCES supplier_skus(id),
- CONSTRAINT fk_collective_line_spec FOREIGN KEY(product_spec_id) REFERENCES product_specifications(id),
+ CONSTRAINT fk_pr61_collective_line_order FOREIGN KEY(collective_order_id) REFERENCES procurement_collective_buyer_orders(id),
+ CONSTRAINT fk_pr61_collective_line_request FOREIGN KEY(request_item_id) REFERENCES procurement_request_items(id),
+ CONSTRAINT fk_pr61_collective_line_listing FOREIGN KEY(supplier_listing_id) REFERENCES supplier_listings(id),
+ CONSTRAINT fk_pr61_collective_line_sku FOREIGN KEY(supplier_sku_id) REFERENCES supplier_skus(id),
+ CONSTRAINT fk_pr61_collective_line_spec FOREIGN KEY(product_spec_id) REFERENCES product_specifications(id),
  CONSTRAINT chk_collective_order_line_quantity CHECK(quantity>0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
