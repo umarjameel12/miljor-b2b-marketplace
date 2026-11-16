@@ -485,7 +485,8 @@ class AuthController {
         try {
           await emailService.createAndSendOtp({
             userId, email, userName: full_name || business_name || 'Buyer',
-            purpose: 'REGISTRATION_VERIFY'
+            purpose: 'REGISTRATION_VERIFY',
+            emailContext: 'verification'
           });
         } catch {
           console.warn('Buyer verification email delivery unavailable; resend OTP is available.');
