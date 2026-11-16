@@ -1307,19 +1307,21 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border-color: transparent !important;
 }
 
-/* MILJOR DARK LANDING NAV CONTROLS: QUIET BORDERLESS STYLE */
+/* MILJOR DARK LANDING NAV CONTROLS: MATCHED QUIET PREMIUM STYLE */
+/* Keep 1px borders for unchanged dimensions. Low-contrast neutral-champagne, never bright gold. */
 .dark .miljor-public-landing .landing-topbar :is(.landing-account-trigger, .miljor-theme-trigger) {
   background: var(--bg-card) !important;
-  border-color: transparent !important;
+  background-color: var(--bg-card) !important;
+  border-color: rgba(210, 199, 173, .24) !important;
   box-shadow: none !important;
 }
 .dark .miljor-public-landing .landing-topbar :is(.landing-account-trigger, .miljor-theme-trigger):hover {
-  border-color: transparent !important;
+  border-color: rgba(210, 199, 173, .32) !important;
   box-shadow: none !important;
 }
 .dark .miljor-public-landing .landing-topbar :is(.landing-account-trigger, .miljor-theme-trigger):focus-visible {
-  border-color: transparent !important;
-  outline: 2px solid rgba(239, 238, 229, .55) !important;
+  border-color: rgba(210, 199, 173, .32) !important;
+  outline: 2px solid rgba(239, 238, 229, .4) !important;
   outline-offset: 2px;
   box-shadow: none !important;
 }
