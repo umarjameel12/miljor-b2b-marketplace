@@ -48,6 +48,10 @@ async function main() {
       attempts.find(a=>a.id===params[1]).status='PAID';return [{affectedRows:1}];
     }
     if (sql.startsWith('INSERT INTO system_audit_logs')) return [{insertId:1}];
+    if (sql.startsWith('SELECT id,role FROM users WHERE id=?'))
+      return [[{id:params[0],role:'SUPPLIER'}]];
+    if (sql.includes('INSERT INTO procurement_notifications'))
+      return [{insertId:1,affectedRows:1}];
     throw new Error('Unexpected SQL: '+sql.slice(0,140));
   };
   const connection = {query,beginTransaction:async()=>{transactions++;},
@@ -95,6 +99,9 @@ async function main() {
     transactionStatus='FAILED';
     const declined=await svc.reconcile({actor,attemptId:1});
     assert.equal(declined.reconciled,false);
+    assert.equal(profile.subscription_plan,'STARTER');
+    transactionStatus='UNKNOWN';
+    assert.equal((await svc.reconcile({actor,attemptId:1})).reconciled,false);
     assert.equal(profile.subscription_plan,'STARTER');
     transactionStatus='SUCCESS';
     await assert.rejects(()=>svc.reconcile({actor:{id:8,role:'SUPPLIER'},attemptId:1}),e=>e.code==='ATTEMPT_NOT_FOUND');
