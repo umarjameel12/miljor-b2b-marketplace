@@ -19,7 +19,10 @@ const apiPort=Number(process.env.SMART_HUB_BACKEND_PORT||5217);
 assert.ok(Number.isSafeInteger(apiPort)&&apiPort>=1024&&apiPort<=65535&&apiPort!==browserPort,'Explicit separate local test API port required');
 process.env.MILJOR_TEST_API_PORT=String(apiPort);
 const apiOrigin='http://127.0.0.1:'+apiPort;
-const root=path.resolve(__dirname,'../..'),base='http://localhost:'+browserPort;
+// One explicit loopback family for both Vite binding and client readiness.
+// Linux localhost may resolve to IPv6 while Node fetch selects IPv4.
+const root=path.resolve(__dirname,'../..'),base='http://127.0.0.1:'+browserPort;
+process.env.APP_FRONTEND_URL=base;process.env.FRONTEND_URL=base;
 const artifactDir=path.join(root,'backend','artifacts','smart-hub-paid-browser');
 const evidence={status:'BLOCKED',provider_evidence:'SYNTHETIC signed sandbox callback; genuine provider success NOT VERIFIED',target_database:'miljor_test_db',database_identity_verified:false,tax_contract:'TEST ONLY: current no-tax-calculated contract; production tax approval NOT VERIFIED',checks:[],scenarios:[],deferred:[]};
 // Explicit future integration hooks: do not implement another owner's finance contract.
@@ -42,7 +45,7 @@ async function main(){
     server=require('../server').listen(apiPort,'127.0.0.1');
     await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
     // Strict port prevents accidentally exercising another developer's frontend.
-    vite=spawn(process.execPath,[path.join(root,'frontend/node_modules/vite/bin/vite.js'),'--host','localhost','--port',String(browserPort),'--strictPort'],{cwd:path.join(root,'frontend'),env:{...process.env},stdio:['ignore','pipe','pipe']});
+    vite=spawn(process.execPath,[path.join(root,'frontend/node_modules/vite/bin/vite.js'),'--host','127.0.0.1','--port',String(browserPort),'--strictPort'],{cwd:path.join(root,'frontend'),env:{...process.env},stdio:['ignore','pipe','pipe']});
     const logs=[];for(const stream of [vite.stdout,vite.stderr])stream.on('data',chunk=>{logs.push(String(chunk));if(logs.length>20)logs.shift();});
     let ready=false;
     for(let attempt=0;attempt<80;attempt++){
@@ -50,7 +53,7 @@ async function main(){
       try{if(logs.join('').includes('Local:')){const response=await fetch(base,{signal:AbortSignal.timeout(500)});if(response.ok){ready=true;break;}}}catch{}
       await new Promise(resolve=>setTimeout(resolve,250));
     }
-    assert.ok(ready,'Local frontend did not become ready');
+    assert.ok(ready,'Local frontend did not become ready: '+logs.join('').slice(-1500));
     const context=async()=>browser.newContext({baseURL:base,viewport:{width:1440,height:1100},timezoneId:'Asia/Karachi'});
     async function signin(user,ui=true,password=fixture.password){
       const ctx=await context();
