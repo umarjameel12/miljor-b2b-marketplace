@@ -1,0 +1,18 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: miljor-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: Umarcheif0
+      MYSQL_DATABASE: miljor_db
+      MYSQL_USER: miljor_app
+      MYSQL_PASSWORD: Umarcheif0
+    ports:
+      - "3306:3306"
+    volumes:
+      - miljor_mysql8_data:/var/lib/mysql
+
+volumes:
+  miljor_mysql8_data:
+    external: true

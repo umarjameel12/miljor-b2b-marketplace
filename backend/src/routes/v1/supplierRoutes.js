@@ -8,10 +8,14 @@ const router = express.Router();
 const profileController = require('../../controllers/supplierProfileController');
 const supDelivController = require('../../controllers/supplierDeliveryController');
 const subscriptionController = require('../../controllers/subscriptionController');
+const dashboardController = require('../../controllers/supplierDashboardController');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
 
 // All supplier portal routes require authenticated session
 router.use(protect);
+
+// Master Supplier Operations Center — Live KPIs & Priority Action Center
+router.get('/dashboard-kpis', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => dashboardController.getDashboardKpis(req, res));
 
 // Unified supplier management READ MODEL only. Mutations stay on B4/B5 routes.
 router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{
