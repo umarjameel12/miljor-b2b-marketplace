@@ -2,6 +2,7 @@ name: MilJor UCP Canonical Reconciliation Acceptance
 on:
   push:
     branches:
+      - plan/ucp-resilience-notification-coverage
       - feature/ucp-canonical-reconciliation-release
       - fix/ucp-final-reconciliation-thischat
       - fix/p0-provider-browser-stock-finance-acceptance
