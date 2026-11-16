@@ -220,7 +220,7 @@ class ProcurementCollectiveOrderService {
   const [records]=await conn.query('SELECT group_id FROM procurement_collective_buyer_orders WHERE order_id=?',[oid]);
   if(!records.length)return {handled:false};
   const gid=Number(records[0].group_id);
-  const [groups]=await conn.query('SELECT id,status FROM procurement_collective_groups WHERE id=? FOR UPDATE',[gid]);
+  const [groups]=await conn.query('SELECT id,status FROM procurement_collective_groups WHERE id=?',[gid]);
   if(!groups.length||groups[0].status!=='QUALIFIED')
     throw fail('GROUP_NOT_QUALIFIED','Paid order belongs to an invalid qualified group');
   const [orders]=await conn.query(`SELECT co.order_id,o.payment_status
