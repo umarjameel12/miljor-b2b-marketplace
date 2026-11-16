@@ -6,24 +6,19 @@ const {ProcurementCollectiveCommitmentService}=require('../src/services/procurem
 const tag=crypto.randomUUID(),users=[],groupIds=[],requestIds=[],fixtures={};let count=0;
 const pass=label=>console.log('PASS '+(++count)+' '+label);
 const denied=(fn,code)=>assert.rejects(fn,error=>error.code===code);
-async function clone(table,sourceId,overrides){
- const [[source]]=await db.query('SELECT * FROM '+table+' WHERE id=?',[sourceId]);assert.ok(source);
- const [metadata]=await db.query('SHOW COLUMNS FROM '+table);
- const row={...source,...overrides};delete row.id;
- const columns=metadata.filter(c=>c.Field!=='id'&&!String(c.Extra).includes('GENERATED')).map(c=>c.Field);
- const values=columns.map(c=>row[c]&&typeof row[c]==='object'&&!(row[c] instanceof Date)?JSON.stringify(row[c]):row[c]);
- const [created]=await db.query('INSERT INTO '+table+'('+columns.map(c=>'`'+c+'`').join(',')+') VALUES ('+columns.map(()=>'?').join(',')+')',values);return created.insertId;
-}
 async function main(){
  assert.equal((await db.query('SELECT DATABASE() name'))[0][0].name,'miljor_test_db');
- const [sources]=await db.query("SELECT sl.id,sl.supplier_sku_id,sl.product_spec_id,sk.supplier_product_id,sk.family_id FROM supplier_listings sl JOIN supplier_skus sk ON sk.id=sl.supplier_sku_id AND sk.status='PUBLISHED' JOIN product_specifications ps ON ps.id=sl.product_spec_id AND ps.approval_status='APPROVED' AND ps.lifecycle_status='PUBLISHED' WHERE sl.status='ACTIVE' AND sk.purchasing_unit='bag' ORDER BY sl.id LIMIT 1");assert.ok(sources.length,'Approved physical fixture source required');const source=sources[0];
+ const [families]=await db.query("SELECT f.id AS family_id FROM catalog_product_families f JOIN catalog_categories c ON c.id=f.category_id AND c.is_active=1 AND c.approval_status='APPROVED' WHERE f.is_active=1 AND f.approval_status='APPROVED' AND JSON_CONTAINS(f.allowed_purchasing_units,JSON_QUOTE('bag')) ORDER BY f.id LIMIT 1");assert.ok(families.length,'Approved canonical bag family required');const source=families[0];
  for(const role of ['SUPPLIER','BUYER','BUYER','BUYER']){const [u]=await db.query("INSERT INTO users(full_name,email,role,is_verified,verification_status) VALUES (?,?,?,1,'VERIFIED')",['Collective commitment fixture',users.length+'-'+tag+'@example.invalid',role]);users.push(u.insertId);}
  const [supplier,buyerA,buyerB,outsider]=users;
  await db.query("INSERT INTO supplier_profiles(supplier_id,business_type,verification_status,subscription_plan,subscription_status,transaction_fee_percent) VALUES (?,'WHOLESALER','VERIFIED','STARTER','STARTER_ACTIVE',2.5)",[supplier]);
- fixtures.product=await clone('supplier_products',source.supplier_product_id,{supplier_id:supplier,product_code:'T'+tag,product_identity_hash:crypto.randomBytes(32).toString('hex')});
- fixtures.sku=await clone('supplier_skus',source.supplier_sku_id,{supplier_id:supplier,supplier_product_id:fixtures.product,sku_code:'T'+tag,sku_hash:crypto.randomBytes(32).toString('hex')});
- fixtures.spec=await clone('product_specifications',source.product_spec_id,{supplier_id:supplier,supplier_sku_id:fixtures.sku,spec_code:'T'+tag,spec_hash:crypto.randomBytes(32).toString('hex')});
- fixtures.listing=await clone('supplier_listings',source.id,{supplier_id:supplier,supplier_sku_id:fixtures.sku,product_spec_id:fixtures.spec,listing_code:'T'+tag,available_stock:'5.0000',buyer_min_qty:'1.0000',base_unit_price:'100.00',delivery_zones:JSON.stringify(['all lahore'])});
+ const catalog=require('../src/services/catalogService');
+ const product=await catalog.createSupplierProduct(supplier,{family_id:source.family_id,is_unbranded:false,brand:'Gate collective',variety:tag});fixtures.product=product.id;
+ const sku=await catalog.createSupplierSku(supplier,{supplier_product_id:product.id,packaging_type:'PP Woven Bag',pack_size:25,pack_unit:'kg',purchasing_unit:'bag'});fixtures.sku=sku.id;
+ await catalog.publishSupplierSku(supplier,sku.id);
+ let listingResponse,listingStatus;
+ await require('../src/controllers/supplierListingController').createListing({user:{id:supplier,role:'SUPPLIER'},body:{supplier_sku_id:sku.id,available_stock:5,base_unit_price:100,supplier_min_qty:1,buyer_min_qty:1,delivery_zones:['all lahore']}},{status(code){listingStatus=code;return this;},json(body){listingResponse=body;return this;}});
+ assert.equal(listingStatus,201,JSON.stringify(listingResponse));fixtures.listing=listingResponse.data.listing.id;
  for(let index=0;index<2;index++){
   const draft=await requests.createDraft(buyerA,{ownership:'COLLECTIVE',delivery_area:'Lahore',join_deadline:new Date(Date.now()+3600000).toISOString(),quote_deadline:new Date(Date.now()+86400000).toISOString(),items:[{family_id:source.family_id,quantity:'2',unit:'bag'}]},'gc-draft-'+index+'-'+tag);requestIds.push(draft.request.id);
   const group=(await groups.createGroup(buyerA,draft.request.id,{minimum_buyers:2})).group;groupIds.push(group.id);

@@ -37,6 +37,7 @@ module.exports=async function cleanup(db,ids){
  await run('DELETE FROM procurement_requests WHERE buyer_id'+inside);
  await run('DELETE FROM supplier_inventory_allocations WHERE supplier_listing_id IN (SELECT id FROM supplier_listings WHERE supplier_id'+inside+')');
  await run('DELETE FROM supplier_listings WHERE supplier_id'+inside);
+  await run('UPDATE supplier_skus SET linked_spec_id=NULL WHERE supplier_id'+inside);
  await run('DELETE FROM product_specifications WHERE supplier_id'+inside);
  await run('DELETE FROM supplier_skus WHERE supplier_id'+inside);
  await run('DELETE FROM supplier_products WHERE supplier_id'+inside);
