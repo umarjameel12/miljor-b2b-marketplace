@@ -87,6 +87,37 @@ class ProcurementCollectiveReceiptService{
         x.shortage_value,JSON.stringify(x)]);
    }
    if(hasShortage){
+    // One canonical dispute per short physical line, with its OWN ordered
+    // quantity, actual receipt, immutable SKU price and exact claimed PKR.
+    // Never use orders.total_qty=1 (basket placeholder) for line shortages.
+    for(const line of assessed.filter(x=>exact.exactDecimalGte(x.shortage,'0.0001',4))){
+      const code='DSP-P1-'+order+'-'+crypto.randomBytes(3).toString('hex');
+      const disputeKey='collective-receipt-'+saved.insertId+'-line-'+line.line_id;
+      const [existingDisputes]=await conn.query(`SELECT id FROM order_disputes WHERE
+        order_id=? AND status NOT IN ('CLOSED','RESOLVED_REJECTED','SUPPLIER_REMEDIATION_COMPLETED')
+        FOR UPDATE`,[order]);
+      // This dedicated receipt is the sole originator of shortage disputes.
+      // No overlap may already exist for this order before creating new claims.
+      if(existingDisputes.some(d=>!assessed.some(x=>x.dispute_id===d.id)))
+        throw fail('EXISTING_DISPUTE_REQUIRES_REVIEW',
+          'An independent open dispute exists; manual financial review required');
+      const [dispute]=await conn.query(`INSERT INTO order_disputes
+        (dispute_code,order_id,reservation_id,buyer_id,supplier_id,reason,dispute_category,
+         reporting_actor_role,description,expected_quantity,reported_quantity,
+         disputed_quantity,claimed_amount,currency,evidence_metadata,status,
+         idempotency_key,created_at,updated_at)
+        VALUES (?,?,NULL,?,?,'SHORTAGE_IN_QUANTITY','SHORT_QUANTITY',
+          'BUYER',?,?,?,?,?,'PKR',?,'OPEN',?,UTC_TIMESTAMP(),UTC_TIMESTAMP())`,
+        [code,order,buyer,o.supplier_id,
+         'Buyer recorded exact short delivery for SKU line '+line.line_id,
+         line.ordered,line.received,line.shortage,line.shortage_value,
+         JSON.stringify({receipt_id:saved.insertId,line_id:line.line_id,
+           unit:line.unit,unit_price:line.price,source:'PR61_COLLECTIVE_RECEIPT'}),
+         disputeKey]);
+      line.dispute_id=dispute.insertId;
+      await notify.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'DISPUTE_OPENED',
+        eventKey:'collective:receipt:'+saved.insertId+':dispute:'+dispute.insertId,entityId:order});
+    }
     await conn.query(`UPDATE orders SET fulfillment_status='EXCEPTION',
       order_status='DISPUTED',exception_reason='QUANTITY_MISMATCH',
       exception_details=?,exception_recorded_at=UTC_TIMESTAMP(),updated_at=UTC_TIMESTAMP()
