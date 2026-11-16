@@ -81,6 +81,29 @@ router.get('/procurement/supplier/collectives/invitations',protect,authorizeStri
 router.post('/procurement/supplier/collectives/:groupId/bids',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitCollectiveBid(req,res));
 router.get('/procurement/collectives/:groupId/bids',protect,authorizeStrict('BUYER'),(req,res)=>controller.listCollectiveBids(req,res));
 router.post('/procurement/collectives/:groupId/qualify',protect,authorizeStrict('BUYER'),(req,res)=>controller.qualifyCollectiveGroup(req,res));
+// PR61 Part 2: buyer-specific payment authorization after qualified group.
+const collectiveOrders=require('../../services/procurementCollectiveOrderService');
+const collectiveRouteError=(res,error)=>res.status(error.statusCode||500).json({
+  success:false,error:{code:error.statusCode?error.code:'COLLECTIVE_ORDER_UNAVAILABLE',
+    message:error.statusCode?error.message:'Collective order unavailable'}
+});
+router.post('/procurement/collectives/:groupId/orders',protect,authorizeStrict('BUYER'),async(req,res)=>{
+  try{
+    const result=await collectiveOrders.prepare(req.user.id,req.params.groupId,req.body,
+      req.get('X-Idempotency-Key'));
+    return res.status(result.is_replay?200:201).json({success:true,data:result});
+  }catch(error){return collectiveRouteError(res,error);}
+});
+router.get('/procurement/collectives/:groupId/order',protect,authorizeStrict('BUYER'),async(req,res)=>{
+  try{return res.json({success:true,data:await collectiveOrders.getMine(req.user.id,req.params.groupId)});}
+  catch(error){return collectiveRouteError(res,error);}
+});
+router.get('/procurement/supplier/collectives/:groupId/orders',protect,
+  authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveOrders.supplierGroup(req.user.id,req.params.groupId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+
 // B6-K: individual buyer consent only, not an order or checkout.
 router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewCollectiveApproval(req,res));
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
