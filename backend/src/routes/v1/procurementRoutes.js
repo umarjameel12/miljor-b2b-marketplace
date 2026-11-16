@@ -128,6 +128,20 @@ router.post('/procurement/collectives/:groupId/delivery-route/decision',
     catch(error){return collectiveRouteError(res,error);}
   });
 
+// Line-specific buyer receipt evidence. No automatic refunds or payouts.
+const collectiveReceipts=require('../../services/procurementCollectiveReceiptService');
+router.post('/procurement/collectives/orders/:orderId/receipt',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.status(201).json({success:true,data:await collectiveReceipts.submit(
+      req.user.id,req.params.orderId,req.body,req.get('X-Idempotency-Key'))});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.get('/procurement/collectives/orders/:orderId/receipt',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveReceipts.get(req.user.id,req.params.orderId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+
 // B6-K: individual buyer consent only, not an order or checkout.
 router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewCollectiveApproval(req,res));
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
