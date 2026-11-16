@@ -13,12 +13,13 @@ const approvals=require('../src/services/procurementCollectiveApprovalService');
 const groupOrders=require('../src/services/procurementCollectiveOrderService');
 const groupDelivery=require('../src/services/procurementCollectiveDeliveryService');
 const groupReceipt=require('../src/services/procurementCollectiveReceiptService');
+const finance=require('../src/services/financialSettlementService');
 const invoiceService=require('../src/services/invoiceService');
 const {chromium}=require('playwright');
 const base=process.env.P0_BROWSER_BASE_URL||'http://127.0.0.1:3000';
 const password=process.env.P0_BROWSER_TEST_PASSWORD;
 const tag='pr61-'+crypto.randomUUID();
-const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{},groupOrders:[],addresses:[],routeId:null};
+const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{},groupOrders:[],addresses:[],routeId:null,paymentIds:[]};
 function assertEnvironment(){
  for(const [k,v] of Object.entries({NODE_ENV:'test',DB_NAME:'miljor_test_db',MILJOR_TEST_ONLY_MIGRATIONS:'1'}))
   assert.equal(process.env[k],v,'PROTECTED_DB_ABORT '+k);
@@ -318,6 +319,71 @@ async function verify(browser,fixture){
    const [refunds]=await db.query('SELECT COUNT(*) AS count FROM refund_obligations WHERE order_id IN (?,?)',created.groupOrders);
    assert.equal(Number(refunds[0].count),0,'Receipt shortage must not create automatic refund');
    console.log('PASS ISOLATED RECEIPT: per-item shortage 1 bag, other buyer separately confirmed, route exception and zero invented refund');
+   // Synthetic PAID payment rows are disposable financial fixtures ONLY.
+   // They do NOT certify a Safepay provider-origin callback/refund or settlement.
+   for(const [idx,oid] of created.groupOrders.entries()){
+     const [[owned]]=await db.query('SELECT buyer_id,total_amount FROM orders WHERE id=?',[oid]);
+     const [fake]=await db.query(`INSERT INTO payments
+       (payment_code,order_id,buyer_id,amount,payment_method,status,escrow_status,transaction_ref)
+       VALUES (?,?,?,?,'MOCK_GATEWAY','PAID','HELD_IN_ESCROW',?)`,
+       ['PR61F'+oid+'-'+idx,oid,owned.buyer_id,owned.total_amount,
+        tag+'-synthetic-finance-'+idx]);
+     created.paymentIds.push(fake.insertId);
+     const payable=await finance.accrueSupplierPayable({
+       orderId:oid,actor:{role:'SYSTEM',id:1},
+       idempotencyKey:tag+'-payable-'+idx
+     });
+     assert.ok(payable.data?.payable);
+   }
+   const [[heldPayable]]=await db.query(
+     'SELECT net_payable_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
+     [created.groupOrders[0]]);
+   const [[otherPayable]]=await db.query(
+     'SELECT net_payable_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
+     [created.groupOrders[1]]);
+   assert.equal(Number(heldPayable.held_amount),Number(heldPayable.net_payable_amount));
+   assert.equal(Number(heldPayable.available_amount),0);
+   assert.equal(Number(otherPayable.held_amount),0);
+   assert.ok(Number(otherPayable.available_amount)>0);
+   const disputeId=shortageDisputes[0].id,oid=created.groupOrders[0];
+   const refundInput={orderId:oid,disputeId,disputedQuantity:'1.0000',
+     refundType:'PARTIAL',reason:'Exact immutable shortage receipt',
+     actor:{id:fixture.firstBuyer.id,role:'BUYER'},
+     idempotencyKey:tag+'-refund-claim'};
+   await assert.rejects(()=>finance.assessRefundObligation({
+      ...refundInput,disputedQuantity:'2.0000',idempotencyKey:tag+'-overclaim'
+   }),e=>['REFUND_QUANTITY_EXCEEDS_DISPUTE','COLLECTIVE_REFUND_EVIDENCE_MISMATCH'].includes(e.code));
+   await assert.rejects(()=>finance.assessRefundObligation({
+      ...refundInput,actor:{id:created.secondBuyer.id,role:'BUYER'},
+      idempotencyKey:tag+'-cross-buyer'
+   }),e=>e.code==='FORBIDDEN');
+   const assessment=await finance.assessRefundObligation(refundInput);
+   assert.equal(String(assessment.data.refund.assessed_refund_amount),'250.00');
+   assert.equal(assessment.data.refund.external_execution_status,'DISABLED');
+   const replay=await finance.assessRefundObligation(refundInput);
+   assert.equal(replay.data.refund.id,assessment.data.refund.id);
+   const [secondBuyerRefunds]=await db.query(
+     'SELECT id FROM refund_obligations WHERE order_id=?',[created.groupOrders[1]]);
+   assert.equal(secondBuyerRefunds.length,0,'Other buyer cannot inherit shortage refund');
+   const approved=await finance.approveRefundObligation({
+      refundId:assessment.data.refund.id,
+      notes:'Disposable acceptance financial review',actor:{id:1,role:'SUPER_ADMIN'}
+   });
+   assert.equal(approved.data.refund.status,'APPROVED');
+   const [[heldAfter]]=await db.query(
+      'SELECT net_payable_amount,refund_deduction_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
+      [oid]);
+   assert.equal(Number(heldAfter.refund_deduction_amount),250);
+   assert.equal(Number(heldAfter.held_amount),
+      Number(heldAfter.net_payable_amount)-250);
+   assert.equal(Number(heldAfter.available_amount),0);
+   const [[otherAfter]]=await db.query(
+      'SELECT held_amount,available_amount FROM supplier_payables WHERE order_id=?',
+      [created.groupOrders[1]]);
+   assert.equal(Number(otherAfter.held_amount),0);
+   assert.ok(Number(otherAfter.available_amount)>0);
+   console.log('PASS PR61 FINANCE (SYNTHETIC): exact PKR 250 shortage assessment, replay, buyer isolation, refund approval and independent payable balances; NO external refund or payout');
+
 
 
 
@@ -350,6 +416,12 @@ async function cleanup(){
        await db.query('DELETE FROM order_disputes WHERE order_id=? AND dispute_code LIKE ?',
          [oid,'DSP-P1-'+oid+'-%']);
        await db.query('DELETE FROM procurement_collective_receipt_submissions WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM financial_audit_events WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM financial_holds WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM refund_obligations WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM supplier_payables WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM payments WHERE order_id=? AND transaction_ref LIKE ?',
+         [oid,tag+'-synthetic-finance-%']);
        await db.query('DELETE FROM invoices WHERE order_id=?',[oid]);
        await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (SELECT buyer_id FROM orders WHERE id=?) AND event_key LIKE ?',[oid,'collective:%']);
        await db.query('DELETE FROM supplier_inventory_allocations WHERE allocation_type=? AND reference_id=?',['ORDER_DIRECT',oid]);
