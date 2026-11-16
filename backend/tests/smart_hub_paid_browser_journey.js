@@ -50,7 +50,7 @@ async function main(){
     let ready=false;
     for(let attempt=0;attempt<80;attempt++){
       if(vite.exitCode!==null)throw Error('Vite failed to start (port must be free): '+logs.join('').slice(-1500));
-      try{if(logs.join('').includes('Local:')){const response=await fetch(base,{signal:AbortSignal.timeout(500)});if(response.ok){ready=true;break;}}}catch{}
+      try{if(require('node:util').stripVTControlCharacters(logs.join('')).includes('Local:')){const response=await fetch(base,{signal:AbortSignal.timeout(500)});if(response.ok){ready=true;break;}}}catch{}
       await new Promise(resolve=>setTimeout(resolve,250));
     }
     assert.ok(ready,'Local frontend did not become ready: '+logs.join('').slice(-1500));
