@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 const db = require('../config/db');
 const adapter = require('./safepayAdapter');
 const exact = require('./exactDecimal');
+const notificationService = require('./notificationService');
 
 function error(code, status, message) {
   const e = new Error(message); e.code = code; e.statusCode = status; return e;
@@ -220,6 +221,11 @@ class SupplierSubscriptionCheckoutService {
         "INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,previous_value,new_value) VALUES (?,'SUPPLIER','SUBSCRIPTION_VERIFIED_PAYMENT','supplier_subscriptions',?,?,?)",
         [supplierId,sub.insertId,JSON.stringify({plan:profiles[0].subscription_plan}),
           JSON.stringify({plan:attempt.plan_code,attempt:id,verified_provider:'SAFEPAY_SANDBOX'})]);
+      await notificationService.enqueueEvent(connection,{
+        userId:supplierId,role:'SUPPLIER',eventType:'SUBSCRIPTION_ACTIVATED',
+        eventKey:'supplier:subscription:'+sub.insertId+':activated',
+        entityId:sub.insertId
+      });
       await connection.commit();
       return { reconciled:true, replay:false, plan_code:attempt.plan_code };
     } catch(e) { await connection.rollback(); throw e; }
