@@ -1254,3 +1254,44 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .miljor-public-landing #landing-account-options .landing-signin-option:is(:hover,:focus-visible) svg {
   color: inherit !important;
 }
+
+/* MILJOR ACCOUNT BORDER + AUTH THEME HOVER ALIGNMENT */
+/* The Account keeps its original fill; the Theme icon keeps the same fill. */
+.miljor-public-landing .landing-topbar .landing-account-trigger,
+.miljor-public-landing .landing-topbar .miljor-theme-trigger {
+  background: var(--bg-card) !important;
+  border-color: var(--theme-menu-border, var(--border-default)) !important;
+  color: var(--text-primary) !important;
+}
+/* Login/Register theme options match the public landing dropdown interaction. */
+.miljor-auth-navbar .miljor-theme-trigger {
+  background: var(--bg-card) !important;
+  border-color: var(--theme-menu-border, var(--border-default)) !important;
+  color: var(--text-primary) !important;
+}
+.miljor-auth-navbar .miljor-theme-trigger svg {
+  color: var(--text-primary) !important;
+}
+.miljor-auth-navbar .miljor-theme-trigger:hover {
+  background: var(--theme-menu-hover) !important;
+  border-color: var(--theme-menu-border, var(--border-default)) !important;
+}
+.miljor-auth-navbar .miljor-theme-menu {
+  background: var(--theme-menu-bg) !important;
+  border-color: var(--theme-menu-border) !important;
+}
+.miljor-auth-navbar .miljor-theme-choice {
+  background: transparent !important;
+  color: var(--theme-menu-ink) !important;
+  border-color: transparent !important;
+}
+.miljor-auth-navbar .miljor-theme-choice:is(:hover, :focus-visible) {
+  background: var(--theme-menu-hover) !important;
+  color: var(--theme-menu-ink) !important;
+}
+.miljor-auth-navbar .miljor-theme-choice-selected,
+.miljor-auth-navbar .miljor-theme-choice-selected:is(:hover, :focus-visible) {
+  background: var(--theme-menu-selected) !important;
+  color: var(--theme-menu-selected-ink) !important;
+  border-color: var(--theme-menu-border) !important;
+}
