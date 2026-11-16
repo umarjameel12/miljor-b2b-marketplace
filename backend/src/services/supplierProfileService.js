@@ -269,6 +269,17 @@ class SupplierProfileService {
     }catch(error){await connection.rollback();throw error;}finally{connection.release();}
   }
 
+  async getVerificationHistory(supplierId) {
+    if(!Number.isSafeInteger(Number(supplierId)) || Number(supplierId)<=0)
+      throw Object.assign(new Error('Invalid supplier id'),{code:'INVALID_SUPPLIER',statusCode:400});
+    const [rows]=await defaultDb.query(
+      `SELECT revision,submitted_at,review_action,reviewed_at,review_reason
+       FROM supplier_verification_revisions WHERE supplier_id=?
+       ORDER BY revision DESC LIMIT 50`,[supplierId]);
+    // No document contents, banking details or private reviewer identities in the timeline.
+    return rows;
+  }
+
   async submitCorrections(supplierId, payload = {}, rawKey) {
     if(!rawKey || typeof rawKey!=='string' || !/^[A-Za-z0-9:_-]{12,120}$/.test(rawKey)) {
       throw Object.assign(new Error('Valid X-Idempotency-Key is required for corrections.'),
