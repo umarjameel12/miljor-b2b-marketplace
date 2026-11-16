@@ -29,6 +29,7 @@ const orderView=row=>({
   bid_version_id:Number(row.bid_version_id),
   total_amount:money(row.total_amount),
   payment_status:row.payment_status,order_status:row.order_status,
+  fulfillment_status:row.fulfillment_status,
   checkout_endpoint:'/api/v1/orders/'+row.order_id+'/checkout'
 });
 class ProcurementCollectiveOrderService {
