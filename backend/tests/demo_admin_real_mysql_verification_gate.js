@@ -49,14 +49,19 @@ async function main(){
     const info=await api('/suppliers/2/verify',5,'ADMIN','PUT',{
       verification_status:'MORE_INFORMATION_REQUIRED',
       rejection_reason:'Please provide updated food registration',
-      subscription_plan:'STARTER',max_active_listings:4});
+      correction_fields:['food_license_no'],
+      correction_notes:{food_license_no:'Please provide updated food registration'}});
     assert.equal(info.status,200,JSON.stringify(info.data));
     const [[needsInfo]]=await db.query('SELECT verification_status FROM supplier_profiles WHERE supplier_id=2');
     assert.equal(needsInfo.verification_status,'MORE_INFORMATION_REQUIRED');
-    pass('More information state does not reject application');
+    pass('More information state does not reject application or mutate paid entitlements');
+    // Independent review cycle fixture: Request Info requires corrected supplier
+    // submission before a fresh approval. Do not approve while corrections remain open.
+    const premature=await api('/suppliers/2/verify',5,'ADMIN','PUT',{verification_status:'VERIFIED'});
+    assert.equal(premature.status,409);
+    await db.query("UPDATE supplier_profiles SET verification_status='PENDING_REVIEW',correction_fields=NULL,correction_notes=NULL,correction_requested_revision=NULL,correction_requested_at=NULL WHERE supplier_id=2");
     const approved=await api('/suppliers/2/verify',5,'ADMIN','PUT',{
-      verification_status:'VERIFIED',verification_level:'LEVEL_2_BUSINESS',
-      subscription_plan:'STARTER',max_active_listings:4,transaction_fee_percent:1.5});
+      verification_status:'VERIFIED',verification_level:'LEVEL_2_BUSINESS'});
     assert.equal(approved.status,200,JSON.stringify(approved.data));
     const [[verified]]=await db.query(
       'SELECT verification_status,subscription_plan,max_active_listings FROM supplier_profiles WHERE supplier_id=2');
@@ -68,7 +73,7 @@ async function main(){
     const [[audit]]=await db.query(
       "SELECT COUNT(*) AS n FROM system_audit_logs WHERE actor_id=5 AND entity_name='supplier_profiles' AND entity_id=2 AND action='SUPPLIER_VERIFICATION_UPDATE'");
     assert.ok(Number(audit.n)>=2);
-    pass('Audited real supplier approval and plan entitlement');
+    pass('Audited real supplier approval without any paid-plan entitlement mutation');
     console.log('REAL MYSQL ADMIN APPROVAL: '+passed+'/'+passed+' PASS (disposable DB only)');
   } finally {
     await Promise.allSettled([
