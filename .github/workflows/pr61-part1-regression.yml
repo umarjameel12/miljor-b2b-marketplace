@@ -5,6 +5,10 @@ on:
       - 'backend/src/controllers/adminController.js'
       - 'backend/database/migrations/098_supplier_verification_revisions.sql'
       - 'backend/database/migrations/099_supplier_correction_replay_hash.sql'
+      - 'backend/database/migrations/100_supplier_verification_documents.sql'
+      - 'backend/src/services/supplierVerificationDocumentService.js'
+      - 'backend/tests/pr61_part1_document_mysql_gate.js'
+      - 'frontend/src/components/supplier/SupplierVerificationDocuments.jsx'
       - 'backend/tests/pr61_part1_mysql_gate.js'
       - 'frontend/src/components/supplier/SupplierVerificationCorrections.jsx'
       - 'frontend/src/pages/SupplierProfilePage.jsx'
@@ -37,6 +41,8 @@ jobs:
           node --check backend/src/routes/v1/procurementRoutes.js
           node --check backend/tests/pr61_part1_regression_gate.js
           node --check backend/tests/pr61_part1_mysql_gate.js
+          node --check backend/src/services/supplierVerificationDocumentService.js
+          node --check backend/tests/pr61_part1_document_mysql_gate.js
       - name: Supplier verification and opportunities regression
         run: node backend/tests/pr61_part1_regression_gate.js
       - name: Production frontend compile
@@ -92,4 +98,7 @@ jobs:
           node database/runMigrations.js
           node database/migrationManifest.js
       - name: Execute REAL MySQL verification revision and correction lifecycle
-        run: cd backend && node tests/pr61_part1_mysql_gate.js
+        run: |
+          cd backend
+          node tests/pr61_part1_mysql_gate.js
+          node tests/pr61_part1_document_mysql_gate.js
