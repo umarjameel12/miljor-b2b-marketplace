@@ -4,6 +4,7 @@
 // Handles business logic for onboarding, validation, draft saves, and verification submissions
 // =============================================================================
 const defaultDb = require('../config/db');
+const crypto = require('node:crypto');
 const supplierProfileRepo = require('../repositories/supplierProfileRepository');
 const validationService = require('./supplierValidationService');
 
@@ -278,6 +279,11 @@ class SupplierProfileService {
       throw Object.assign(new Error('Field-scoped changes object required.'),
         {code:'INVALID_CORRECTION_PAYLOAD',statusCode:400});
     }
+    const canonicalChanges=Object.fromEntries(Object.entries(payload.changes)
+      .sort(([a],[b])=>a.localeCompare(b)));
+    const replayHash=crypto.createHash('sha256')
+      .update(JSON.stringify({expected_revision:payload.expected_revision,changes:canonicalChanges}))
+      .digest('hex');
     const connection=await defaultDb.getConnection();
     try{
       await connection.beginTransaction();
@@ -287,6 +293,9 @@ class SupplierProfileService {
       if(profile.verification_status==='PENDING_REVIEW' &&
          profile.last_correction_key===rawKey &&
          Number(profile.last_correction_revision)===Number(profile.submitted_revision)) {
+        if(profile.last_correction_hash!==replayHash)
+          throw Object.assign(new Error('Correction key was reused with different values'),
+            {code:'IDEMPOTENCY_CONFLICT',statusCode:409});
         await connection.commit();
         return {success:true,alreadyPending:true,submitted_revision:Number(profile.submitted_revision),
           verification_status:'PENDING_REVIEW'};
@@ -318,8 +327,8 @@ class SupplierProfileService {
         `UPDATE supplier_profiles SET submitted_revision=?,submitted_at=UTC_TIMESTAMP(),
             verification_status='PENDING_REVIEW',correction_fields=NULL,correction_notes=NULL,
             correction_requested_revision=NULL,correction_requested_at=NULL,rejection_reason=NULL,
-            last_correction_key=?,last_correction_revision=?
-           WHERE supplier_id=?`,[revision,rawKey,revision,supplierId]);
+            last_correction_key=?,last_correction_hash=?,last_correction_revision=?
+           WHERE supplier_id=?`,[revision,rawKey,replayHash,revision,supplierId]);
       await connection.query(
         `INSERT INTO supplier_verification_revisions
            (supplier_id,revision,submitted_snapshot,submission_key) VALUES (?,?,?,?)`,
