@@ -557,11 +557,14 @@ class EmailService {
     const templateName = purpose === 'PASSWORD_RESET'
       ? 'PASSWORD_RESET_OTP'
       : (emailContext === 'verification' ? 'EMAIL_VERIFICATION_OTP' : 'REGISTRATION_OTP');
+    const supersededTemplates = purpose === 'PASSWORD_RESET'
+      ? ['PASSWORD_RESET_OTP']
+      : ['REGISTRATION_OTP', 'EMAIL_VERIFICATION_OTP'];
     await db.query(
-      `UPDATE transactional_email_outbox 
-       SET status = 'FAILED', last_error = 'SUPERSEDED_BY_NEWER_REQUEST' 
-       WHERE recipient_user_id = ? AND template_name IN ('REGISTRATION_OTP', 'EMAIL_VERIFICATION_OTP', 'PASSWORD_RESET_OTP') AND status = 'QUEUED'`,
-      [userId]
+      `UPDATE transactional_email_outbox
+       SET status = 'FAILED', last_error = 'SUPERSEDED_BY_NEWER_REQUEST'
+       WHERE recipient_user_id = ? AND template_name IN (?) AND status = 'QUEUED'`,
+      [userId, supersededTemplates]
     );
 
     // 3. Generate secure OTP and server-secret HMAC-SHA-256 hash (v2)
