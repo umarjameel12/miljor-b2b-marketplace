@@ -388,6 +388,20 @@ async function verify(browser,fixture){
       notes:'Disposable acceptance financial review',actor:{id:1,role:'SUPER_ADMIN'}
    });
    assert.equal(approved.data.refund.status,'APPROVED');
+   const [refNotices]=await db.query(
+     `SELECT recipient_id,recipient_role,event_type FROM procurement_notifications
+      WHERE event_key IN (?,?,?,?) ORDER BY event_key`,[
+       'collective:order:'+oid+':refund:'+assessment.data.refund.id+':assessed:BUYER',
+       'collective:order:'+oid+':refund:'+assessment.data.refund.id+':assessed:SUPPLIER',
+       'collective:order:'+oid+':refund:'+assessment.data.refund.id+':approved:BUYER',
+       'collective:order:'+oid+':refund:'+assessment.data.refund.id+':approved:SUPPLIER'
+     ]);
+   assert.equal(refNotices.length,4,'Both parties require truthful refund status receipts');
+   assert.equal(refNotices.filter(n=>n.event_type==='REFUND_ASSESSED').length,2);
+   assert.equal(refNotices.filter(n=>n.event_type==='REFUND_APPROVED').length,2);
+   assert.ok(refNotices.every(n=>Number(n.recipient_id)===Number(fixture.firstBuyer.id)||
+     Number(n.recipient_id)===Number(fixture.supplier.supplier_id)),
+     'Never notify a non-participant buyer about another buyer refund');
    const [[heldAfter]]=await db.query(
       'SELECT net_payable_amount,refund_deduction_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
       [oid]);
@@ -460,7 +474,8 @@ async function cleanup(){
        await db.query('DELETE FROM payments WHERE order_id=? AND transaction_ref LIKE ?',
          [oid,tag+'-synthetic-finance-%']);
        await db.query('DELETE FROM invoices WHERE order_id=?',[oid]);
-       await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (SELECT buyer_id FROM orders WHERE id=?) AND event_key LIKE ?',[oid,'collective:%']);
+       await db.query('DELETE FROM procurement_notifications WHERE event_key LIKE ?',
+         ['collective:order:'+oid+':%']);
        await db.query('DELETE FROM supplier_inventory_allocations WHERE allocation_type=? AND reference_id=?',['ORDER_DIRECT',oid]);
        await db.query('DELETE FROM procurement_collective_order_lines WHERE collective_order_id IN (SELECT id FROM procurement_collective_buyer_orders WHERE order_id=?)',[oid]);
        await db.query('DELETE FROM procurement_collective_buyer_orders WHERE order_id=?',[oid]);
