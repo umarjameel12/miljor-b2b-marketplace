@@ -21,6 +21,7 @@ function service(name, sql) {
     if (id==='./feeService')return {};
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
+    if (id==='./notificationService')return {enqueueEvent:async()=>{throw Error('Unexpected notification in legacy non-group order')}};
     return require(id);
   };
   const fn = new Function('require','module','exports','__filename','__dirname',source(name));
