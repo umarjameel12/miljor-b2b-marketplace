@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
+import { SupplierGroupDeliveryPanel } from '../components/procurement/SupplierGroupDeliveryPanel';
 
 const filters = ['all','single','grouped'];
 export const SupplierOpportunitiesPage = () => {
@@ -38,6 +39,7 @@ export const SupplierOpportunitiesPage = () => {
         {user?.role !== 'SUPPLIER' ? (
           <p role="alert">This workspace is available to supplier accounts only.</p>
         ) : <>
+          <SupplierGroupDeliveryPanel/>
           <div role="tablist" aria-label="Opportunity type" className="flex flex-wrap gap-2">
             {filters.map(f=>(
               <button key={f} type="button" role="tab" aria-selected={type===f}
