@@ -60,6 +60,15 @@ export const AdminVerificationPage = () => {
 
   // Rejection form state
   const [rejectionReason, setRejectionReason] = useState('');
+  const [correctionFields,setCorrectionFields] = useState([]);
+  const correctionFieldOptions = [
+    ['business_name','Business name'],['business_type','Business type'],
+    ['business_description','Description'],['contact_person_name','Contact person'],
+    ['contact_person_phone','Contact phone'],['warehouse_address','Warehouse address'],
+    ['lahore_service_area','Service area'],['tax_ntn','NTN'],
+    ['food_license_no','Food license number'],['food_license_type','Food license type'],
+    ['bank_name','Bank name'],['bank_account_title','Account title'],['bank_iban','IBAN']
+  ];
 
   const isAuthorizedAdmin =
     user && ['SUPER_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'].includes(user.role);
@@ -111,6 +120,7 @@ export const AdminVerificationPage = () => {
   const handleOpenReject = (supplier, mode = 'reject') => {
     setSelectedSupplier(supplier);
     setRejectionReason('');
+    setCorrectionFields([]);
     setModalMode(mode);
   };
 
@@ -118,6 +128,7 @@ export const AdminVerificationPage = () => {
     setSelectedSupplier(null);
     setModalMode(null);
     setRejectionReason('');
+    setCorrectionFields([]);
   };
 
   const handleSubmitApproval = async (e) => {
@@ -128,7 +139,9 @@ export const AdminVerificationPage = () => {
       setSubmitting(true);
       await adminApi.verifySupplier(selectedSupplier.supplier_id, {
         verification_status: 'VERIFIED',
-        verification_level: approvalForm.verification_level
+        verification_level: approvalForm.verification_level,
+        expected_revision: selectedSupplier.submitted_revision || 0,
+        expected_status: selectedSupplier.verification_status
       });
 
       toast.success(
@@ -159,9 +172,19 @@ export const AdminVerificationPage = () => {
 
     try {
       setSubmitting(true);
+      if(modalMode === 'request-info' && correctionFields.length===0){
+        toast.error('Select the exact fields needing correction.');
+        return;
+      }
       await adminApi.verifySupplier(selectedSupplier.supplier_id, {
         verification_status: modalMode === 'request-info' ? 'MORE_INFORMATION_REQUIRED' : 'REJECTED',
-        rejection_reason: rejectionReason.trim()
+        rejection_reason: rejectionReason.trim(),
+        expected_revision: selectedSupplier.submitted_revision || 0,
+        expected_status: selectedSupplier.verification_status,
+        ...(modalMode === 'request-info' ? {
+          correction_fields: correctionFields,
+          correction_notes: Object.fromEntries(correctionFields.map(field=>[field,rejectionReason.trim()]))
+        } : {})
       });
 
       toast.info(modalMode === 'request-info' ? 'More information requested. Supplier can see the guidance.' : 'Application rejected and reason recorded.');
@@ -505,6 +528,18 @@ export const AdminVerificationPage = () => {
             </p>
 
             <form onSubmit={handleSubmitRejection} className="space-y-4 text-xs">
+              {modalMode==='request-info' && <fieldset className="space-y-2">
+                <legend className="font-semibold">Select fields requiring correction</legend>
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--border-subtle)] p-3">
+                  {correctionFieldOptions.map(([field,label])=><label key={field} className="flex items-center gap-2">
+                    <input type="checkbox" checked={correctionFields.includes(field)}
+                      onChange={e=>setCorrectionFields(prev=>e.target.checked?[...prev,field]:prev.filter(v=>v!==field))} />
+                    <span>{label}</span>
+                  </label>)}
+                </div>
+                <p className="text-[var(--text-muted)]">Only checked fields will be editable by the supplier. Previously valid information remains saved.</p>
+              </fieldset>}
+
               <div>
                 <label className="font-semibold block mb-1">
                   Rejection Reason / Guidance <span className="text-red-500">*</span>
