@@ -1537,3 +1537,10 @@ html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [ro
 html.dark header.miljor-auth-navbar [role="menu"][aria-label="Select theme"] [role="menuitemradio"] svg {
   color: inherit !important;
 }
+
+/* MILJOR LIGHT AUTH TOGGLE: SUBTLE LIGHTER CREAM SURFACE */
+/* Login/Register header only; retain existing warm icon, border, and dropdown styling. */
+html:not(.dark) header.miljor-auth-navbar button[aria-label^="Theme setting:"] {
+  background: #fbf8f1 !important;
+  background-color: #fbf8f1 !important;
+}
