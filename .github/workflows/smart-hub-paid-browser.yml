@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   paid-browser:
-    runs-on: ubuntu-latest
+    # Match the explicitly pinned Playwright browser dependency support matrix.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       mysql:
