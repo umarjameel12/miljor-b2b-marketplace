@@ -46,6 +46,9 @@ const definitions={
   PAYMENT_INITIATED:['Payment initiated','ادائیگی شروع ہو گئی','order'],
   PAYMENT_VERIFIED:['Payment verified','ادائیگی کی تصدیق ہو گئی','order'],
   PAYMENT_FAILED:['Payment failed','ادائیگی ناکام ہو گئی','order'],
+  REFUND_ASSESSED:['Refund request recorded for review','واپسی کی درخواست جائزے کے لیے درج ہو گئی','order'],
+  REFUND_APPROVED:['Refund obligation approved; provider execution pending','واپسی کی منظوری دی گئی، ادائیگی زیر التوا ہے','order'],
+  SUBSCRIPTION_ACTIVATED:['Paid subscription activated','ادا شدہ سبسکرپشن فعال ہو گئی','account'],
   REFUND_INITIATED:['Refund initiated','رقم کی واپسی شروع ہو گئی','order'],
   REFUND_COMPLETED:['Refund completed','رقم کی واپسی مکمل ہو گئی','order'],
   DISPUTE_OPENED:['Dispute opened','تنازع درج ہو گیا','order'],
@@ -58,7 +61,7 @@ const definitions={
   SUSPICIOUS_ACTIVITY:['Suspicious activity detected','مشکوک سرگرمی کی نشاندہی ہوئی','account'],
   FINANCIAL_INCONSISTENCY:['Financial inconsistency detected','مالی حساب میں فرق کی نشاندہی ہوئی','account']
 };
-const mandatory=type=>/^(PAYMENT_|REFUND_|DISPUTE_|SETTLEMENT_|SUSPICIOUS_|FINANCIAL_)/.test(type);
+const mandatory=type=>/^(PAYMENT_|REFUND_|DISPUTE_|SETTLEMENT_|SUBSCRIPTION_|SUSPICIOUS_|FINANCIAL_)/.test(type);
 function eventProjection({eventType,entityId,locale='en'}){
   const definition=definitions[eventType];
   if(!definition)throw Error('Unsupported notification event');
