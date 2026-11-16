@@ -69,7 +69,11 @@ async function main() {
   const moduleStub={exports:{}};
   new Function('require','module','exports',source)(
     name=>name==='../config/db'?db:name==='./safepayAdapter'?adapter:
-      name==='./exactDecimal'?exact:require(name),moduleStub,moduleStub.exports);
+      name==='./exactDecimal'?exact:name==='./notificationService'?{enqueueEvent:async(conn,event)=>{
+        assert.equal(event.role,'SUPPLIER');
+        assert.equal(event.eventType,'SUBSCRIPTION_ACTIVATED');
+        assert.ok(event.entityId>0);
+      }}:require(name),moduleStub,moduleStub.exports);
   const Service=moduleStub.exports.SupplierSubscriptionCheckoutService;
   const svc=new Service(db,adapter);
   const actor={id:7,role:'SUPPLIER'};
