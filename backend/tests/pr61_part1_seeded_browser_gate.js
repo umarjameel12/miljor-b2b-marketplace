@@ -139,6 +139,18 @@ async function verify(browser,fixture){
      assert.equal(denied.status(),403,'Buyer cannot access supplier invitations');
    }
    console.log('PASS CHROMIUM: 3 live sessions, supplier-only invitations, real aggregate 2 buyers/5 bags, no buyer PII');
+   await Promise.all([
+     buyer1.page.goto(base+'/rfqs',{waitUntil:'domcontentloaded'}),
+     buyer2.page.goto(base+'/rfqs',{waitUntil:'domcontentloaded'})
+   ]);
+   await buyer1.page.getByText('Smart Procurement Hub',{exact:true}).first().waitFor({timeout:18000});
+   await buyer2.page.getByText('My Collective Invitations',{exact:true}).waitFor({timeout:18000});
+   await buyer2.page.getByText('Group #'+fixture.groupId+' · JOINED',{exact:false}).waitFor({timeout:18000});
+   const ownOnly=await buyer2.page.request.get(base+'/api/v1/procurement/requests/'+fixture.singleId,{
+     headers:{Authorization:'Bearer '+buyer2.token}});
+   assert.equal(ownOnly.status(),404,'Second buyer must not see organizer private one-time RFQ');
+   console.log('PASS CHROMIUM: organizer Smart Procurement Hub, second buyer joined group UI, buyer-owned RFQ isolation');
+
    await supplier.page.goto(base+'/supplier/procurement',{waitUntil:'domcontentloaded'});
    await supplier.page.getByRole('heading',{name:'Procurement Opportunities'}).waitFor({timeout:20000});
    const singleLabel='Request '+fixture.singleId;
