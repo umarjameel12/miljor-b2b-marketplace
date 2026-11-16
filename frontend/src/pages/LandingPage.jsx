@@ -68,6 +68,7 @@ export const LandingPage = () => {
   const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
+  const [poolLoadError, setPoolLoadError] = useState(false);
   const poolCarouselRef = useRef(null);
 
   useEffect(() => {
@@ -98,7 +99,7 @@ export const LandingPage = () => {
       .then((response) => {
         if (mounted) setFeaturedPools(Array.isArray(response?.data?.pools) ? response.data.pools.filter((pool) => pool?.id && ['ACTIVE', 'OPEN', 'PUBLISHED'].includes(String(pool.status || 'ACTIVE').toUpperCase())).slice(0, 12) : []);
       })
-      .catch(() => { if (mounted) setFeaturedPools([]); })
+      .catch(() => { if (mounted) { setFeaturedPools([]); setPoolLoadError(true); } })
       .finally(() => { if (mounted) setLoadingPools(false); });
     return () => { mounted = false; };
   }, []);
@@ -304,7 +305,13 @@ export const LandingPage = () => {
               Checking published supplier pools…
             </div>
           )}
-          {!loadingPools && featuredPools.length === 0 && (
+          {!loadingPools && poolLoadError && (
+            <div role="alert" className="landing-pool-empty mt-4 rounded-3xl border px-7 py-9 sm:px-10">
+              <h3 className="text-lg font-semibold">Unable to load published pools</h3>
+              <p className="mt-2 text-sm">Live supplier availability could not be checked right now. Please try again shortly.</p>
+            </div>
+          )}
+          {!loadingPools && !poolLoadError && featuredPools.length === 0 && (
             <div className="landing-pool-empty mt-4 rounded-3xl border px-7 py-9 sm:px-10" role="status">
               <h3 className="text-lg font-semibold">New wholesale pools are on the way</h3>
               <p className="mt-2 text-sm">There are no published active supplier pools right now. Check back for verified offers—nothing here is simulated inventory.</p>
