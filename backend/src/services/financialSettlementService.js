@@ -873,22 +873,19 @@ class FinancialSettlementService {
           ? '0.00' 
           : exactSub(maxEntitlement, newHeld, 2);
 
-        await connection.query(
-          `INSERT INTO financial_holds (
-            hold_code, order_id, supplier_payable_id, dispute_id,
-            hold_amount, currency, reason, status, placed_by_role,
-            placed_by_id, notes, created_at
-          ) VALUES (?, ?, ?, ?, ?, 'PKR', 'ACTIVE_DISPUTE', 'ACTIVE', 'SYSTEM', ?, ?, NOW())`,
-          [
-            holdCode,
-            orderId,
-            payable.id,
-            disputeId,
-            actualHold,
-            actor.id,
-            `Auto-hold (capped to remaining payable entitlement) for refund obligation ${refundCode}`
-          ]
-        );
+        if (exactDecimal.exactDecimalGte(actualHold,'0.01',2)) {
+          await connection.query(
+            `INSERT INTO financial_holds (
+              hold_code, order_id, supplier_payable_id, dispute_id,
+              hold_amount, currency, reason, status, placed_by_role,
+              placed_by_id, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, 'PKR', 'ACTIVE_DISPUTE', 'ACTIVE', 'SYSTEM', ?, ?, NOW())`,
+            [
+              holdCode,orderId,payable.id,disputeId,actualHold,actor.id,
+              `Auto-hold capped to remaining entitlement for refund obligation ${refundCode}`
+            ]
+          );
+        }
 
         await connection.query(
           `UPDATE supplier_payables
@@ -988,22 +985,23 @@ class FinancialSettlementService {
 
         // Forfeit the auto-hold
         const [holds] = await connection.query(
-          `SELECT id FROM financial_holds 
-           WHERE order_id = ? AND supplier_payable_id = ? AND status = 'ACTIVE' LIMIT 1 FOR UPDATE`,
-          [refund.order_id, payable.id]
+          `SELECT id,hold_amount FROM financial_holds
+           WHERE order_id = ? AND supplier_payable_id = ? AND dispute_id = ?
+             AND status = 'ACTIVE' FOR UPDATE`,
+          [refund.order_id, payable.id,refund.dispute_id]
         );
 
-        if (holds.length > 0) {
+        for (const hold of holds) {
           await connection.query(
             `UPDATE financial_holds SET status = 'FORFEITED_TO_REFUND', updated_at = NOW() WHERE id = ?`,
-            [holds[0].id]
+            [hold.id]
           );
         }
 
         const currentHeld = payable.held_amount.toString();
-        const newHeld = Number(currentHeld) >= Number(refundItemAmount)
-          ? exactSub(currentHeld, refundItemAmount, 2)
-          : '0.00';
+        const forfeitedHeld=exactDecimal.exactDecimalSum(
+          holds.map(hold=>String(hold.hold_amount)),2);
+        const newHeld=exactSub(currentHeld,forfeitedHeld,2);
 
         const maxEntitlement = exactSub(
           payable.net_payable_amount.toString(),
