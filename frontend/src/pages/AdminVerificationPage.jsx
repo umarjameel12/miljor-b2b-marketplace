@@ -128,10 +128,7 @@ export const AdminVerificationPage = () => {
       setSubmitting(true);
       await adminApi.verifySupplier(selectedSupplier.supplier_id, {
         verification_status: 'VERIFIED',
-        verification_level: approvalForm.verification_level,
-        subscription_plan: approvalForm.subscription_plan,
-        max_active_listings: parseInt(approvalForm.max_active_listings, 10),
-        transaction_fee_percent: parseFloat(approvalForm.transaction_fee_percent)
+        verification_level: approvalForm.verification_level
       });
 
       toast.success(
@@ -458,54 +455,10 @@ export const AdminVerificationPage = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="font-semibold block mb-1">Subscription Plan</label>
-                <select
-                  value={approvalForm.subscription_plan}
-                  onChange={(e) => handlePlanChange(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
-                >
-                  <option value="STARTER">Starter Tier (Up to 4 active listings — Free)</option>
-                  <option value="GROWTH">Growth Tier (Up to 13 active listings)</option>
-                  <option value="BUSINESS">Business Tier (Up to 25 active listings — Pro)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold block mb-1">Max Active Listings</label>
-                  <input
-                    type="number"
-                    value={approvalForm.max_active_listings}
-                    onChange={(e) =>
-                      setApprovalForm({ ...approvalForm, max_active_listings: e.target.value })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
-                    min="1"
-                    max={PLAN_LISTING_CAPS[approvalForm.subscription_plan] || 4}
-                  />
-                  <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
-                    Authorized cap: {PLAN_LISTING_CAPS[approvalForm.subscription_plan] || 4}
-                  </span>
-                </div>
-                <div>
-                  <label className="font-semibold block mb-1">Transaction Fee %</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={approvalForm.transaction_fee_percent}
-                    onChange={(e) =>
-                      setApprovalForm({
-                        ...approvalForm,
-                        transaction_fee_percent: e.target.value
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
-                    min="0"
-                    max="10"
-                  />
-                </div>
-              </div>
+              <p className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-[var(--text-secondary)]">
+                Business verification does not activate or change a paid subscription. The supplier manages
+                plans separately through the verified Safepay subscription checkout.
+              </p>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-[var(--border-subtle)]">
                 <Button type="button" variant="outline" onClick={handleCloseModal} disabled={submitting}>
