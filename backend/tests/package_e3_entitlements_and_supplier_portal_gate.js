@@ -765,6 +765,8 @@ async function runE3Gate() {
       await db.query(`DELETE FROM supplier_products WHERE id IN (${createdProductIds.join(',')})`);
     }
     if (supplierId) {
+      await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (?,?)',
+        [supplierId,testBuyerId || supplierId]);
       await db.query('DELETE FROM platform_notifications WHERE user_id IN (?,?)', [supplierId,testBuyerId || supplierId]);
       await db.query('DELETE FROM notification_preferences WHERE user_id IN (?,?)',[supplierId,testBuyerId||supplierId]);
       await db.query(`DELETE FROM supplier_listings WHERE supplier_id = ?`, [supplierId]);
