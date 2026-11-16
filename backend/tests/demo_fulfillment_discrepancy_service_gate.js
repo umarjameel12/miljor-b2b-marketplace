@@ -17,6 +17,8 @@ function instantiate(options={}){
   const connection={
     async query(sql,params){
       if(sql.includes('SELECT * FROM orders WHERE id = ? FOR UPDATE'))return [[order]];
+      if(sql.includes('COUNT(*) AS line_count') && sql.includes('procurement_collective_order_lines'))
+        return [[{line_count:0}]];
       if(sql.includes('COUNT(*) AS line_count') && sql.includes('procurement_award_lines'))
         return [[{line_count:options.awardLines||0}]];
       if(sql.includes('UPDATE orders')){updates.push(params);return [{affectedRows:1}]}
