@@ -24,6 +24,24 @@ function inspect(payload){
   const jpg=bytes.length>4&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff&&bytes.at(-2)===0xff&&bytes.at(-1)===0xd9;
   if(!((mime_type==='application/pdf'&&pdf)||(mime_type==='image/png'&&png)||(mime_type==='image/jpeg'&&jpg)))
     throw fail('DOCUMENT_TYPE_MISMATCH','Only authentic PDF, PNG or JPEG evidence is accepted');
+  const suffix=filename.toLowerCase().split('.').at(-1);
+  if(!({ 'application/pdf':['pdf'],'image/png':['png'],'image/jpeg':['jpg','jpeg'] }[mime_type]||[]).includes(suffix))
+    throw fail('DOCUMENT_EXTENSION_MISMATCH','File extension must match the verified document type');
+  // Magic headers alone do not make arbitrary embedded HTML or a script safe.
+  // Reject active PDF features and encrypted evidence that reviewers cannot inspect.
+  if(pdf){
+    const printable=bytes.toString('latin1');
+    if(!/%%EOF\s*$/.test(printable)||
+       /\/(?:JavaScript|JS|OpenAction|AA|Launch|EmbeddedFile|Encrypt)\b/i.test(printable))
+      throw fail('UNSAFE_DOCUMENT','PDF must be complete and contain no active/encrypted content');
+  }
+  if(png){
+    const ihdr=bytes.subarray(12,16).toString('ascii');
+    const tail=bytes.subarray(-12);
+    if(ihdr!=='IHDR'||tail.length!==12||tail.readUInt32BE(0)!==0||
+       tail.subarray(4,8).toString('ascii')!=='IEND')
+      throw fail('UNSAFE_DOCUMENT','PNG structure is incomplete');
+  }
   return {kind,filename,mime_type,bytes,sha256:crypto.createHash('sha256').update(bytes).digest('hex')};
 }
 const meta=row=>({id:row.id,kind:row.document_kind,version:Number(row.version_number),
