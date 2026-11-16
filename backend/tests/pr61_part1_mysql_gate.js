@@ -113,6 +113,10 @@ async function main(){
      expected_revision:1,changes:{warehouse_address:'Corrected Warehouse, Street 9, Badami Bagh Lahore'}
    },'correct_warehouse_replay_1234');
    assert.equal(replay.alreadyPending,true);
+   const tamperedReplay=await profileService.submitCorrections(sid,{
+     expected_revision:1,changes:{warehouse_address:'Malicious changed warehouse payload'}
+   },'correct_warehouse_replay_1234').then(()=>null,e=>e);
+   assert.equal(tamperedReplay.code,'IDEMPOTENCY_CONFLICT');
    const [versions]=await db.query('SELECT revision,review_action FROM supplier_verification_revisions WHERE supplier_id=? ORDER BY revision',[sid]);
    assert.equal(versions.length,2);
    assert.equal(versions[0].review_action,'REQUEST_INFO');
