@@ -1,9 +1,11 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 process.env.NODE_ENV = 'test';
 process.env.TRANSACTIONAL_EMAIL_MODE = 'mock';
 const email = require('../src/services/emailService');
+const db = require('../src/config/db');
+after(async () => { await db.end(); });
 
 for (const [type,heading] of [
   ['REGISTRATION_OTP','Your verification code'],
