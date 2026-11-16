@@ -43,6 +43,28 @@ export const supplierApi = {
     return res.data;
   },
 
+  getVerificationDocuments: async () => {
+    const res=await apiClient.get('/supplier/verification/documents');
+    return res.data;
+  },
+  uploadVerificationDocument: async (kind, file, idempotencyKey) => {
+    const base64=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+      reader.onerror=()=>reject(new Error('Could not read evidence file'));
+      reader.readAsDataURL(file);
+    });
+    const res=await apiClient.post('/supplier/verification/documents',
+      {kind,filename:file.name,mime_type:file.type,base64},
+      {headers:{'X-Idempotency-Key':idempotencyKey}});
+    return res.data;
+  },
+  downloadVerificationDocument: async (id) => {
+    const res=await apiClient.get(`/supplier/verification/documents/${id}/file`,
+      {responseType:'blob'});
+    return res.data;
+  },
+
   // 4. Get Lightweight Verification Status
   getVerificationStatus: async () => {
     const res = await apiClient.get('/supplier/verification/status');
