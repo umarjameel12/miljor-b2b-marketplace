@@ -74,6 +74,32 @@ router.post('/verification/corrections', authorizeStrict('SUPPLIER'), (req,res)=
 router.post('/verification/submit', authorizeStrict('SUPPLIER'), (req, res) => profileController.submitVerification(req, res));
 router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => profileController.getVerificationStatus(req, res));
 
+// PR61 append-only verification evidence. Never expose a public download URL.
+const supplierEvidence=require('../../services/supplierVerificationDocumentService');
+const evidenceError=(res,e)=>res.status(e.statusCode||500).json({success:false,error:{
+  code:e.statusCode?e.code:'EVIDENCE_UNAVAILABLE',
+  message:e.statusCode?e.message:'Unable to process private verification evidence'
+}});
+router.get('/verification/documents',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{return res.json({success:true,data:{documents:await supplierEvidence.versions(req.user.id)}});}
+  catch(e){return evidenceError(res,e);}
+});
+router.post('/verification/documents',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{return res.status(201).json({success:true,data:{document:await supplierEvidence.upload(
+    req.user.id,req.body,req.get('X-Idempotency-Key'))}});}
+  catch(e){return evidenceError(res,e);}
+});
+router.get('/verification/documents/:docId/file',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{
+    const doc=await supplierEvidence.download(req.user.id,req.params.docId);
+    res.set('Cache-Control','no-store');
+    res.set('Content-Type',doc.mime);
+    res.set('Content-Disposition','attachment; filename="verified-evidence"');
+    res.set('X-Content-Type-Options','nosniff');
+    return res.send(doc.bytes);
+  }catch(e){return evidenceError(res,e);}
+});
+
 // ---------------------------------------------------------------------------
 // 2. Supplier Subscriptions & Entitlements (Package E3)
 // ---------------------------------------------------------------------------
