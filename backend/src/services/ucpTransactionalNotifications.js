@@ -27,7 +27,7 @@ function validateRecipient(recipient) {
  * The durable event commits/rolls back with the domain mutation. The shared
  * projector handles inbox/email, preferences, localization and retries later.
  */
-async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVersion,transitionId,recipients,title,message,payload}) {
+async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVersion,transitionId,recipients,title,message,payload,actorId,actorRole,causationId,correlationId,occurredAt}) {
   if (!connection || typeof connection.query !== 'function') throw new Error('TRANSACTION_CONNECTION_REQUIRED');
   getEventDefinition(type);
   if (!Array.isArray(recipients) || !recipients.length || recipients.length > 100) throw new Error('INVALID_NOTIFICATION_RECIPIENTS');
@@ -46,13 +46,25 @@ async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVe
       throw Error('NOTIFICATION_RECIPIENT_ROLE_CONFLICT');
     roles.set(recipient.userId,recipient.role);
   }
+  const hasProspectiveMeta = actorId !== undefined || actorRole !== undefined || causationId !== undefined || correlationId !== undefined || occurredAt !== undefined;
+  const eventTime = hasProspectiveMeta ? (occurredAt || new Date().toISOString()) : null;
   for (const recipient of recipients) {
     validateRecipient(recipient);
     if (seen.has(recipient.userId)) continue;
     seen.add(recipient.userId);
     const entityId=Number(json?.order_id||json?.pool_id||json?.reservation_id||json?.account_id||json?.sku_id||aggregateId);
-    const [result] = await require('./notificationService').enqueueEvent(connection,{
-      userId:recipient.userId,role:recipient.role,eventType:type,eventKey:key,entityId});
+    const eventInput = {userId:recipient.userId,role:recipient.role,eventType:type,eventKey:key,entityId};
+    if (hasProspectiveMeta) {
+      eventInput.eventId = key;
+      eventInput.aggregateId = String(aggregateId);
+      eventInput.aggregateVersion = Number(aggregateVersion);
+      eventInput.actorId = actorId !== undefined ? actorId : 'SYSTEM';
+      eventInput.actorRole = actorRole !== undefined ? actorRole : 'SYSTEM';
+      eventInput.occurredAt = eventTime;
+      eventInput.causationId = causationId || String(transitionId);
+      eventInput.correlationId = correlationId || String(aggregateId);
+    }
+    const [result] = await require('./notificationService').enqueueEvent(connection, eventInput);
     if (result.affectedRows === 1) inserted++;
   }
   return {eventKey:key,inserted,recipients:seen.size};

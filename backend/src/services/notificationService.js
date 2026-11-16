@@ -15,18 +15,30 @@ class NotificationService {
 
   async enqueueEvent(connection,event){
     if(!connection||typeof connection.query!=='function')throw Error('Transaction connection required');
-    const allowed=['userId','role','eventType','eventKey','entityId'];
+    const allowed=['userId','role','eventType','eventKey','entityId','eventId','aggregateId','aggregateVersion','actorId','actorRole','occurredAt','causationId','correlationId','schemaVersion'];
     if(Object.keys(event).some(field=>!allowed.includes(field)))throw Error('Unsupported notification field');
     if(!/^[1-9]\d*$/.test(String(event.userId))||!Number.isSafeInteger(Number(event.userId)))throw Error('Invalid recipient');
     if(typeof event.eventKey!=='string'||!event.eventKey.length||event.eventKey.length>120)throw Error('Invalid notification event key');
     eventProjection(event);
     const [users]=await connection.query('SELECT id,role FROM users WHERE id=?',[event.userId]);
     if(!users.length||users[0].role!==event.role)throw Error('Invalid notification recipient role');
+    const hasMeta=event.eventId!==undefined||event.aggregateId!==undefined||event.actorId!==undefined||event.causationId!==undefined||event.correlationId!==undefined;
+    const payloadMeta={entityId:Number(event.entityId),schemaVersion:hasMeta?2:1};
+    if(hasMeta){
+      if(event.eventId!==undefined)payloadMeta.eventId=String(event.eventId).slice(0,128);
+      if(event.aggregateId!==undefined)payloadMeta.aggregateId=String(event.aggregateId).slice(0,120);
+      if(event.aggregateVersion!==undefined)payloadMeta.aggregateVersion=Number.isSafeInteger(Number(event.aggregateVersion))?Number(event.aggregateVersion):1;
+      payloadMeta.actorId=event.actorId==='SYSTEM'||event.actorId===0||event.actorId===null?'SYSTEM':Number(event.actorId);
+      if(event.actorRole!==undefined)payloadMeta.actorRole=String(event.actorRole).slice(0,32);
+      payloadMeta.occurredAt=event.occurredAt?new Date(event.occurredAt).toISOString():new Date().toISOString();
+      if(event.causationId!==undefined&&event.causationId!==null)payloadMeta.causationId=String(event.causationId).slice(0,128);
+      if(event.correlationId!==undefined&&event.correlationId!==null)payloadMeta.correlationId=String(event.correlationId).slice(0,128);
+    }
     return connection.query(
       `INSERT INTO procurement_notifications
        (recipient_id,recipient_role,event_key,event_type,payload)
        VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id`,
-      [event.userId,event.role,event.eventKey,event.eventType,JSON.stringify({entityId:Number(event.entityId),schemaVersion:1})]
+      [event.userId,event.role,event.eventKey,event.eventType,JSON.stringify(payloadMeta)]
     );
   }
 
@@ -57,7 +69,7 @@ class NotificationService {
       try{
         await connection.beginTransaction();
         const [rows]=await connection.query(
-          `SELECT * FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.schemaVersion'))='1'
+          `SELECT * FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.schemaVersion')) IN ('1','2')
            AND status IN ('PENDING','FAILED')
            AND attempt_count<5 AND (next_attempt_at IS NULL OR next_attempt_at<=UTC_TIMESTAMP())
            ${eventIds?'AND id IN ('+eventIds.map(()=>'?').join(',')+')':''}
@@ -66,7 +78,7 @@ class NotificationService {
         if(!notice){await connection.commit();break;}
         totals.processed++;
         const payload=typeof notice.payload==='string'?JSON.parse(notice.payload):notice.payload;
-        if(payload?.schemaVersion!==1)throw Error('LEGACY_EVENT_REQUIRES_ADAPTER');
+        if(payload?.schemaVersion!==1&&payload?.schemaVersion!==2)throw Error('LEGACY_EVENT_REQUIRES_ADAPTER');
         const [users]=await connection.query('SELECT id,role,email FROM users WHERE id=?',[notice.recipient_id]);
         if(!users.length||users[0].role!==notice.recipient_role)throw Error('RECIPIENT_UNAVAILABLE');
         const preference=await this.getPreferences(notice.recipient_id,connection);

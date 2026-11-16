@@ -1720,3 +1720,10 @@ Source commit00987fc pushed; direct branch-CI triggerf0bb9a3 preserves main merg
 ### Final CI evidence — PR54 continuation
 
 Qualified source/test SHA:b264cc62cc4df42c46b39fc43891e1b9ae982f50. Canonical Actions run43957629752 completed SUCCESS,3/3 jobs PASS (source/build, disposable MySQL, real Chromium buyer/supplier auth/retry/offline). Earlier failed run43788333296 retained; targeted fixes now independently pass remote CI. Evidence: evidence/ucp-ci-final-2026-11-16.json. Final evidence-only commit changes no tested application/test/workflow files. PR remains draft/unmerged with main conflicts; unrecognized protected-user update and remaining master-plan/provider/mail/delivery gates keep overall PARTIAL / RELEASE BLOCKED. CAN START NEXT PHASE: NO.
+
+### Phase A/B Continuation & Requirements-to-Code Matrix — 2026-11-16
+
+- **Implemented:** Prospective `schemaVersion: 2` notification metadata (`eventId`, `aggregateId`, `aggregateVersion`, `actorId`, `actorRole`, `occurredAt`, `causationId`, `correlationId`) in `notificationService.js` and `ucpTransactionalNotifications.js` (preserving `schemaVersion: 1` compatibility); Flash SQL-clock threshold reminders (`UCP.POOL_CLOSING`, `UCP.HOLD_EXPIRING`) with audit-log deduplication in `ucpRecoveryService.js`; requirements-to-code matrix added to `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md`.
+- **Verified on isolated MySQL 8.0.45 (`127.0.0.1:33321`):** `ucp_phase_ab_contract_gate.js` PASS (Flash SQL-clock step skipped due to empty `flash_pools` in fresh schema); `ucp_final_affected_gate.js` **13/13 groups PASS**.
+- **Protected DB (`miljor_db`, read-only):** `users: 567617374`, `pools: 2265355547`, `reservations/orders/payments/platform_ledger: 0`; attribution remains **UNRESOLVED**.
+- **Overall:** **PARTIAL / RELEASE BLOCKED** (Phase C delivery manifests/rerouting, Phase D replacement re-contracting business rule, Phase E live Safepay payment/refund proof, Phase F actual SMTP receipt & mobile/Urdu RTL browser E2E, Phase G main merge reconciliation). **CAN START NEXT PHASE: NO.**
