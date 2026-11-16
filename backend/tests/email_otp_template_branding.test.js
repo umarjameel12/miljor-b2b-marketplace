@@ -1,13 +1,21 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 process.env.NODE_ENV = 'test';
 process.env.TRANSACTIONAL_EMAIL_MODE = 'mock';
 const email = require('../src/services/emailService');
+const db = require('../src/config/db');
+// Only close the pool when this test runs inside the disposable MySQL acceptance
+// environment. Standalone branding CI has no MySQL server: its initial connection
+// attempt may still be resolving and closing the pool there causes a hook failure.
+if (process.env.TEST_DB_NAME === 'miljor_otp_acceptance_test') {
+  after(async () => { await db.end(); });
+}
 
 for (const [type,heading] of [
   ['REGISTRATION_OTP','Your verification code'],
   ['PASSWORD_RESET_OTP','Your reset code'],
+  ['EMAIL_VERIFICATION_OTP','Verify your email address'],
 ]) {
   test(type + ' renders branded responsive email and correct code', () => {
     const result = email._renderTemplate(type, { name: 'MilJor Buyer', otp: '123456' });
@@ -40,10 +48,13 @@ for (const [type,heading] of [
     const codeIndex=result.html.indexOf('class="mj-codebox"');
     assert.ok(footerIndex>codeIndex,'Footer must render after OTP in a separate row');
     assert.match(result.html.slice(footerIndex), /class="mj-rule"/);
-    assert.match(result.html.slice(footerIndex), /You can ignore this email\./);
+    assert.match(result.html.slice(footerIndex), /ignore this email\./);
     assert.match(result.html, /<tr><td class="mj-rule" style="border-top:1px solid/);
     if(type==='PASSWORD_RESET_OTP'){
       assert.match(result.html, /Not your request\? You can ignore this email\./);
+    } else if(type==='EMAIL_VERIFICATION_OTP') {
+      assert.match(result.html, /Didn't request email verification\? You can safely ignore this email\./);
+      assert.doesNotMatch(result.html, /Did not sign up/);
     } else {
       assert.match(result.html, /Did not sign up\? You can ignore this email\./);
     }
@@ -55,6 +66,8 @@ for (const [type,heading] of [
     assert.doesNotMatch(result.html, /enter this code to continue/i);
     if (type === 'PASSWORD_RESET_OTP') {
       assert.match(result.html, /Use this one-time code to reset your MilJor password\./);
+    } else if (type === 'EMAIL_VERIFICATION_OTP') {
+      assert.match(result.html, /Enter this one-time code to confirm your MilJor email address\./);
     } else {
       assert.match(result.html, /Use this one-time code to verify your MilJor email address\./);
     }
