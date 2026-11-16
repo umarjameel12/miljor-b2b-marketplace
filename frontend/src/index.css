@@ -1405,3 +1405,89 @@ html:not(.dark) #top header.landing-topbar button[aria-label^="Theme setting:"] 
   background-color: var(--bg-card) !important;
   border-color: var(--border-default) !important;
 }
+
+/* MILJOR PREMIUM ACCOUNT DROPDOWN V1: RESTORABLE */
+/* Intentionally scoped to the landing Account dropdown, not its navbar trigger. */
+#top #landing-account-options {
+  --mj-account-panel: #f6f0e5;
+  --mj-account-outline: rgba(166, 138, 91, .27);
+  --mj-account-ink: #17352b;
+  --mj-account-outline-hover: rgba(161, 126, 63, .4);
+  --mj-account-secondary: #fffaf2;
+  --mj-account-secondary-hover: #eee2cb;
+  --mj-account-primary: #c8b276;
+  --mj-account-primary-hover: #dcc58b;
+  --mj-account-primary-ink: #182f25;
+  background: var(--mj-account-panel) !important;
+  border: 1px solid var(--mj-account-outline) !important;
+  border-radius: 22px !important;
+  padding: 16px !important;
+  box-shadow: 0 18px 42px rgba(48, 39, 26, .14), 0 2px 8px rgba(48, 39, 26, .06) !important;
+  color: var(--mj-account-ink) !important;
+}
+html.dark #top #landing-account-options {
+  --mj-account-panel: #102e26;
+  --mj-account-outline: rgba(185, 198, 183, .21);
+  --mj-account-ink: #f6f0e4;
+  --mj-account-outline-hover: rgba(211, 189, 137, .33);
+  --mj-account-secondary: #193b30;
+  --mj-account-secondary-hover: #264c3b;
+  --mj-account-primary: #c8b276;
+  --mj-account-primary-hover: #dec88f;
+  --mj-account-primary-ink: #173027;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, .34), 0 2px 10px rgba(0, 0, 0, .13) !important;
+}
+#top #landing-account-options > div > .text-center {
+  padding-bottom: 3px !important;
+  margin-bottom: 1px;
+  border: 0 !important;
+}
+#top #landing-account-options > div > .text-center p {
+  color: var(--mj-account-ink) !important;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+#top #landing-account-options [role="menuitem"] {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  border-radius: 13px !important;
+  font-size: 12px;
+  font-weight: 650;
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+#top #landing-account-options [role="menuitem"][href="/login"] {
+  background: var(--mj-account-secondary) !important;
+  color: var(--mj-account-ink) !important;
+  border: 1px solid var(--mj-account-outline) !important;
+  box-shadow: none !important;
+}
+#top #landing-account-options [role="menuitem"][href="/login"]:is(:hover, :focus-visible) {
+  background: var(--mj-account-secondary-hover) !important;
+  border-color: var(--mj-account-outline-hover) !important;
+  color: var(--mj-account-ink) !important;
+  transform: translateY(-1px);
+}
+#top #landing-account-options [role="menuitem"][href="/login"] svg {
+  color: var(--mj-account-ink) !important;
+}
+#top #landing-account-options [role="menuitem"][href="/register"] {
+  background: var(--mj-account-primary) !important;
+  color: var(--mj-account-primary-ink) !important;
+  border: 1px solid transparent !important;
+  box-shadow: 0 3px 9px rgba(38, 29, 16, .09) !important;
+}
+#top #landing-account-options [role="menuitem"][href="/register"]:is(:hover, :focus-visible) {
+  background: var(--mj-account-primary-hover) !important;
+  color: var(--mj-account-primary-ink) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(38, 29, 16, .13) !important;
+}
+#top #landing-account-options [role="menuitem"]:focus-visible {
+  outline: 2px solid var(--mj-account-outline-hover) !important;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  #top #landing-account-options [role="menuitem"] { transition: none; transform: none !important; }
+}
