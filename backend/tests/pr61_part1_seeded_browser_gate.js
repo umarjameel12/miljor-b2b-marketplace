@@ -336,10 +336,10 @@ async function verify(browser,fixture){
      assert.ok(payable.data?.payable);
    }
    const [[heldPayable]]=await db.query(
-     'SELECT net_payable_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
+     'SELECT id,net_payable_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
      [created.groupOrders[0]]);
    const [[otherPayable]]=await db.query(
-     'SELECT net_payable_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
+     'SELECT id,net_payable_amount,held_amount,available_amount FROM supplier_payables WHERE order_id=?',
      [created.groupOrders[1]]);
    assert.equal(Number(heldPayable.held_amount),Number(heldPayable.net_payable_amount));
    assert.equal(Number(heldPayable.available_amount),0);
@@ -382,7 +382,25 @@ async function verify(browser,fixture){
       [created.groupOrders[1]]);
    assert.equal(Number(otherAfter.held_amount),0);
    assert.ok(Number(otherAfter.available_amount)>0);
-   console.log('PASS PR61 FINANCE (SYNTHETIC): exact PKR 250 shortage assessment, replay, buyer isolation, refund approval and independent payable balances; NO external refund or payout');
+   const disbursementArgs={
+     beneficiaryTitle:'PR61 Synthetic Supplier',
+     beneficiaryIban:'PK36SCBL0000001123456702',
+     actor:{id:1,role:'SUPER_ADMIN'}
+   };
+   await assert.rejects(()=>finance.prepareSupplierDisbursement({
+     ...disbursementArgs,payableId:heldPayable.id,
+     idempotencyKey:tag+'-held-disbursement'
+   }),e=>e.code==='ORDER_NOT_BUYER_CONFIRMED');
+   const prepared=await finance.prepareSupplierDisbursement({
+     ...disbursementArgs,payableId:otherPayable.id,
+     idempotencyKey:tag+'-confirmed-disbursement'
+   });
+   assert.equal(prepared.data.disbursement.status,'PREPARED');
+   assert.equal(prepared.data.disbursement.external_execution_status,'DISABLED');
+   const [[otherSettlement]]=await db.query(
+     'SELECT status FROM supplier_payables WHERE id=?',[otherPayable.id]);
+   assert.equal(otherSettlement.status,'DISBURSEMENT_PREPARED');
+   console.log('PASS PR61 FINANCE (SYNTHETIC): exact PKR 250 shortage assessment, replay, buyer isolation and refund approval; held buyer cannot prepare payout, other buyer can prepare non-executable payout; NO external refund or payout');
 
 
 
@@ -416,6 +434,7 @@ async function cleanup(){
        await db.query('DELETE FROM order_disputes WHERE order_id=? AND dispute_code LIKE ?',
          [oid,'DSP-P1-'+oid+'-%']);
        await db.query('DELETE FROM procurement_collective_receipt_submissions WHERE order_id=?',[oid]);
+       await db.query('DELETE FROM supplier_disbursement_instructions WHERE order_id=?',[oid]);
        await db.query('DELETE FROM financial_audit_events WHERE order_id=?',[oid]);
        await db.query('DELETE FROM financial_holds WHERE order_id=?',[oid]);
        await db.query('DELETE FROM refund_obligations WHERE order_id=?',[oid]);
