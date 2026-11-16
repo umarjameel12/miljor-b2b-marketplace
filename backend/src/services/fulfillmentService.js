@@ -55,6 +55,7 @@ const VALID_BUYER_DISCREPANCY_REASONS = [
 ];
 
 class FulfillmentService {
+  constructor(database=db){this.database=database;}
 
   // Use only the locked order's participants and immutable milestone identity.
   // Enqueue errors propagate to the enclosing mutation's rollback.
@@ -126,7 +127,7 @@ class FulfillmentService {
    * List paid orders assigned to the calling supplier with bounded pagination
    */
   async listSupplierFulfillmentOrders({ actor, status = null, page = 1, limit = 20 }) {
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       await this._assertVerifiedSupplier(actor, connection);
 
@@ -197,7 +198,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       await this._assertVerifiedSupplier(actor, connection);
 
@@ -289,7 +290,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -576,7 +577,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -754,7 +755,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       const parsedPage = Math.max(1, parseInt(page, 10) || 1);
       const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
@@ -830,7 +831,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       const [orderRows] = await connection.query(
         `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
@@ -920,7 +921,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -1005,6 +1006,15 @@ class FulfillmentService {
         throw err;
       }
 
+      // Procurement quantities are per award line; an aggregate receipt cannot
+      // establish physical acceptance of a basket or erase disputed units.
+      const [procurementLines] = await connection.query(
+        'SELECT COUNT(*) AS line_count FROM procurement_award_lines al JOIN procurement_award_orders ao ON ao.id=al.award_order_id WHERE ao.order_id=?',
+        [orderId]
+      );
+      if (Number(procurementLines[0]?.line_count || 0) > 0) {
+        await require('./procurementLineReceiptService').assertFullyAcceptedWithinTransaction(connection, orderId);
+      }
       // Advance to BUYER_CONFIRMED
       await connection.query(
         `UPDATE orders 
@@ -1138,7 +1148,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -1354,7 +1364,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       const [orderRows] = await connection.query(
         `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
@@ -1460,3 +1470,4 @@ class FulfillmentService {
 }
 
 module.exports = new FulfillmentService();
+module.exports.FulfillmentService = FulfillmentService;

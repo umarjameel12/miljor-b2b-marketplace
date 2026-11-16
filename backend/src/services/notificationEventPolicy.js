@@ -1,5 +1,8 @@
 'use strict';
 const definitions={
+  DELIVERY_WINDOW_REQUESTED:['Delivery window requested; supplier confirmation pending','ترسیل کا وقت درخواست کیا گیا؛ سپلائر کی تصدیق باقی ہے','order'],
+  DELIVERY_REATTEMPT_PROPOSED:['Review proposed delivery reattempt and fee','ترسیل کی نئی کوشش کے وقت اور فیس کا جائزہ لیں','order'],
+  DELIVERY_ROUTE_CANCELLED:['Predispatch route cancelled; delivery requires reassignment','روانگی سے پہلے راستہ منسوخ؛ ترسیل دوبارہ مقرر کرنا ضروری ہے','order'],
   DELIVERY_CHOICE_RECORDED:['Delivery choice requires supplier confirmation','ترسیل کے انتخاب پر سپلائر کی منظوری درکار ہے','request'],
   REQUEST_CREATED:['Request created','درخواست بن گئی','request',false],
   REQUEST_PUBLISHED:['Request published','درخواست شائع ہو گئی','request'],

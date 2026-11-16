@@ -50,6 +50,13 @@ async function main(){
     pass('Supplier pool dashboard session survives full reload');
     await s.page.goto(base+'/supplier/dashboard',{waitUntil:'domcontentloaded'});
     await s.page.getByRole('region',{name:'Supplier action center'}).waitFor({timeout:15000});
+    const deliveryWorkspace=s.page.getByRole('region',{name:'Supplier delivery coordination'});
+    await deliveryWorkspace.getByRole('button',{name:'Open or refresh delivery workspace',exact:true}).click();
+    await deliveryWorkspace.getByText('No unassigned paid delivery requests.',{exact:true}).waitFor({timeout:15000});
+    const supplierReport=s.page.getByRole('region',{name:'Procurement reliability report'});
+    await supplierReport.getByText(/Your supplier orders/).waitFor({timeout:15000});
+    await supplierReport.getByText(/Recorded savings: unavailable/).waitFor({timeout:15000});
+    pass('Supplier delivery workspace and owned reliability report read real backend state without fabricated savings');
     await s.page.getByRole('link',{name:/Invitations awaiting response: \d+/}).waitFor({timeout:15000});
     await s.page.getByRole('link',{name:/Active numeric counteroffers: \d+/}).click();
     await s.page.locator('#supplier-counteroffers').waitFor({timeout:15000});

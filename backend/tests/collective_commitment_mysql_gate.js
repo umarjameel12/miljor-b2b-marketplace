@@ -82,6 +82,7 @@ async function main(){
    await conn.query("UPDATE orders SET payment_status='PAID' WHERE id=?",[orderIds[1]]);
    await commitments.assertFunded(conn,orderIds[0]);
    pass('Funding policy fixture: one paid member cannot release group; all paid permits policy (rolled back, not provider evidence)');
+   if(process.env.SMART_HUB_OPERATIONS_GATE==='1')await require('./procurement_operations_mysql_extension')({conn,db,orderIds,buyers:[buyerA,buyerB],supplier,outsider,pass});
   }finally{await conn.rollback();conn.release();}
   assert.ok((await db.query('SELECT payment_status FROM orders WHERE id IN (?,?)',orderIds))[0].every(row=>row.payment_status==='AWAITING_PAYMENT'));
   await denied(()=>commitments.releaseMine(buyerA,winner),'GROUP_ORDER_REQUIRES_RESOLUTION');pass('Order-backed stock cannot be silently released; no payment was fabricated');
