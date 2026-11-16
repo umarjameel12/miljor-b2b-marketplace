@@ -45,6 +45,33 @@ async function main(){
     const cookies=await ctx.cookies();
     assert.ok(cookies.some(c=>c.name==='miljor_refresh'&&c.httpOnly));
     console.log('PASS CHROMIUM: authenticated supplier, unified inbox, All/Single/Grouped, empty/error safety and HttpOnly session');
+    // Exercise actual correction-only React view on a disposable supplier fixture,
+    // without creating any payments or editing a protected database.
+    const db=require('../src/config/db');
+    const [[fixture]]=await db.query("SELECT id FROM users WHERE email='p0_supplier@miljor.test'");
+    assert.ok(fixture?.id,'Disposable supplier fixture missing');
+    const [[previous]]=await db.query(
+      'SELECT verification_status,submitted_revision,correction_fields,correction_notes,correction_requested_revision FROM supplier_profiles WHERE supplier_id=?',
+      [fixture.id]);
+    try {
+      await db.query(
+        `UPDATE supplier_profiles SET verification_status='MORE_INFORMATION_REQUIRED', submitted_revision=1,
+          correction_fields=JSON_ARRAY('warehouse_address'),
+          correction_notes=JSON_OBJECT('warehouse_address','Please update exact dispatch street'),
+          correction_requested_revision=1 WHERE supplier_id=?`,[fixture.id]);
+      await page.goto(base+'/supplier/profile',{waitUntil:'domcontentloaded'});
+      await page.getByRole('heading',{name:'Requested verification corrections'}).waitFor({timeout:20000});
+      assert.equal(await page.locator('#correction-warehouse_address').count(),1);
+      assert.equal(await page.locator('#correction-bank_iban').count(),0,
+        'Unrequested bank information must never be requested');
+      assert.equal(await page.getByText('Please update exact dispatch street').count(),1);
+      console.log('PASS CHROMIUM: Request Info renders only requested correction field, retains all others');
+    } finally {
+      await db.query(
+        'UPDATE supplier_profiles SET verification_status=?,submitted_revision=?,correction_fields=?,correction_notes=?,correction_requested_revision=? WHERE supplier_id=?',
+        [previous.verification_status,previous.submitted_revision,previous.correction_fields,
+          previous.correction_notes,previous.correction_requested_revision,fixture.id]);
+    }
     await ctx.close();
   }finally{await browser.close();}
 }
