@@ -311,7 +311,7 @@ async function verify(browser,fixture){
    const [shortageDisputes]=await db.query(`SELECT id,claimed_amount,disputed_quantity
      FROM order_disputes WHERE order_id=? AND dispute_category='SHORT_QUANTITY'`,[created.groupOrders[0]]);
    assert.equal(shortageDisputes.length,1);
-   assert.equal(String(shortageDisputes[0].disputed_quantity),'1.00');
+   assert.equal(Number(shortageDisputes[0].disputed_quantity),1);
    assert.equal(String(shortageDisputes[0].claimed_amount),'250.00');
    assert.equal(finalStops.filter(x=>x.status==='EXCEPTION').length,1);
    assert.equal(finalStops.filter(x=>x.status==='BUYER_CONFIRMED').length,1);
