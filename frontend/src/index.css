@@ -1396,3 +1396,12 @@ html.dark #top header.landing-topbar button[aria-label^="Theme setting:"]:focus-
   outline: 2px solid rgba(169, 186, 175, .42) !important;
   outline-offset: 2px;
 }
+
+/* MILJOR LIGHT LANDING: MATCH THEME TO ACCOUNT CONTROL */
+/* Same fill and border on both controls, light landing only. Older local ThemeSelector has no .miljor-theme-trigger class. */
+html:not(.dark) #top header.landing-topbar button[aria-controls="landing-account-options"],
+html:not(.dark) #top header.landing-topbar button[aria-label^="Theme setting:"] {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-default) !important;
+}
