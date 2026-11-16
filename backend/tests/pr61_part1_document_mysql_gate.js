@@ -29,6 +29,10 @@ async function main(){
    await db.query("INSERT INTO supplier_profiles(supplier_id,verification_status) VALUES (?,'NOT_SUBMITTED')",[sid]);
    await fail(()=>evidence.upload(sid,payload(Buffer.from('<script>bad</script>').toString('base64')),'p1-invalid-magic-123'),'DOCUMENT_TYPE_MISMATCH');
    await fail(()=>evidence.upload(sid,{...payload(bytes),mime_type:'text/html'},'p1-invalid-type-123'),'DOCUMENT_TYPE_MISMATCH');
+  await fail(()=>evidence.upload(sid,{...payload(bytes),filename:'business-proof.png'},'p4-invalid-ext-123'),'DOCUMENT_EXTENSION_MISMATCH');
+  await fail(()=>evidence.upload(sid,payload(Buffer.from('%PDF-1.5\\n/JavaScript (app.alert(1))\\n%%EOF').toString('base64')),'p4-active-pdf-1234'),'UNSAFE_DOCUMENT');
+  await fail(()=>evidence.upload(sid,payload(Buffer.from('%PDF-1.5\\n/Encrypt << >>\\n%%EOF').toString('base64')),'p4-encrypt-pdf-12'),'UNSAFE_DOCUMENT');
+  await fail(()=>evidence.upload(sid,payload(Buffer.from('%PDF-1.5\\nMissing EOF').toString('base64')),'p4-truncated-pdf12'),'UNSAFE_DOCUMENT');
    await fail(()=>evidence.upload(sid,payload(Buffer.alloc(1048577).toString('base64')),'p1-oversized-12345'),'INVALID_DOCUMENT_SIZE');
    const first=await evidence.upload(sid,payload(bytes),'p1-evidence-first-123');
    assert.equal(first.version,1);
