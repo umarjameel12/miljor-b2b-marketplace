@@ -265,6 +265,26 @@ class ProcurementCollectiveOrderService {
     order:orders[0]?orderView(orders[0]):null,
     payment_requires_authoritative_safepay:true,group_payment_not_auto_authorized:true};
  }
+ async listSupplierGroups(supplierId){
+  const supplier=id(supplierId);
+  const [rows]=await this.database.query(`SELECT co.group_id,
+    COUNT(*) AS total_orders,
+    SUM(CASE WHEN o.payment_status='PAID' THEN 1 ELSE 0 END) AS paid_orders,
+    SUM(CASE WHEN o.fulfillment_status='BUYER_CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_orders,
+    SUM(CASE WHEN o.fulfillment_status='EXCEPTION' THEN 1 ELSE 0 END) AS exception_orders,
+    MAX(r.status) AS route_status
+    FROM procurement_collective_buyer_orders co JOIN orders o ON o.id=co.order_id
+    LEFT JOIN procurement_collective_delivery_routes cr ON cr.group_id=co.group_id
+    LEFT JOIN procurement_delivery_runs r ON r.id=cr.run_id
+    WHERE co.supplier_id=?
+    GROUP BY co.group_id ORDER BY co.group_id DESC LIMIT 50`,[supplier]);
+  return rows.map(row=>({group_id:Number(row.group_id),
+    total_orders:Number(row.total_orders),paid_orders:Number(row.paid_orders),
+    confirmed_orders:Number(row.confirmed_orders),
+    exception_orders:Number(row.exception_orders),
+    route_status:row.route_status||null,
+    all_paid:Number(row.total_orders)===Number(row.paid_orders)}));
+ }
  async supplierGroup(supplierId,groupId){
   const supplier=id(supplierId),gid=id(groupId);
   const [rows]=await this.database.query(`SELECT co.order_id,co.group_id,
