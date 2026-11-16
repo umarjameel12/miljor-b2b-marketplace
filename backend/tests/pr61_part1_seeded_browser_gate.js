@@ -11,12 +11,13 @@ const collectives=require('../src/services/procurementCollectiveService');
 const bids=require('../src/services/procurementCollectiveBidService');
 const approvals=require('../src/services/procurementCollectiveApprovalService');
 const groupOrders=require('../src/services/procurementCollectiveOrderService');
+const groupDelivery=require('../src/services/procurementCollectiveDeliveryService');
 const invoiceService=require('../src/services/invoiceService');
 const {chromium}=require('playwright');
 const base=process.env.P0_BROWSER_BASE_URL||'http://127.0.0.1:3000';
 const password=process.env.P0_BROWSER_TEST_PASSWORD;
 const tag='pr61-'+crypto.randomUUID();
-const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{},groupOrders:[],addresses:[]};
+const created={requestIds:[],groupId:null,secondBuyer:null,supplier:null,catalog:{},groupOrders:[],addresses:[],routeId:null};
 function assertEnvironment(){
  for(const [k,v] of Object.entries({NODE_ENV:'test',DB_NAME:'miljor_test_db',MILJOR_TEST_ONLY_MIGRATIONS:'1'}))
   assert.equal(process.env[k],v,'PROTECTED_DB_ABORT '+k);
@@ -247,6 +248,48 @@ async function verify(browser,fixture){
    await buyer2.page.getByText('Your own group payment',{exact:true}).waitFor({timeout:18000});
    assert.equal(await buyer2.page.getByText('Order #'+created.groupOrders[1],{exact:false}).count(),1);
    console.log('PASS PR61 PART2: two independent approved buyer orders, exact stock and invoices; no payment spoofing or cross-buyer checkout');
+   // Isolated-only fake-paid fixture: exercises group delivery controls, NOT
+   // Safepay or live payment certification. No provider event is forged.
+   await assert.rejects(()=>groupDelivery.propose(fixture.supplier.supplier_id,fixture.groupId,{
+      delivery_day:new Date(Date.now()+3*86400000).toISOString().slice(0,10),
+      delivery_window:'09:00-12:00'
+   },tag+'-route'),e=>e.code==='GROUP_PAYMENTS_INCOMPLETE');
+   await db.query(`UPDATE orders SET payment_status='PAID',order_status='PAID',
+      fulfillment_status='AWAITING_SUPPLIER_ACKNOWLEDGEMENT' WHERE id=?`,[created.groupOrders[0]]);
+   await assert.rejects(()=>groupDelivery.propose(fixture.supplier.supplier_id,fixture.groupId,{
+      delivery_day:new Date(Date.now()+3*86400000).toISOString().slice(0,10),
+      delivery_window:'09:00-12:00'
+   },tag+'-route'),e=>e.code==='GROUP_PAYMENTS_INCOMPLETE');
+   await db.query(`UPDATE orders SET payment_status='PAID',order_status='PAID',
+      fulfillment_status='AWAITING_SUPPLIER_ACKNOWLEDGEMENT' WHERE id=?`,[created.groupOrders[1]]);
+   const route=await groupDelivery.propose(fixture.supplier.supplier_id,fixture.groupId,{
+      delivery_day:new Date(Date.now()+3*86400000).toISOString().slice(0,10),
+      delivery_window:'09:00-12:00'
+   },tag+'-route');
+   created.routeId=route.run_id;
+   assert.equal(route.status,'PROPOSED');
+   await assert.rejects(()=>groupDelivery.assertDispatchReady(db,created.groupOrders[0]),
+     e=>e.code==='COLLECTIVE_ROUTE_CONSENT_REQUIRED');
+   const firstConsent=await groupDelivery.decide(fixture.firstBuyer.id,fixture.groupId,{
+     run_id:route.run_id,decision:'ACCEPT'});
+   assert.equal(firstConsent.decision,'ACCEPTED');
+   await assert.rejects(()=>groupDelivery.assertDispatchReady(db,created.groupOrders[0]),
+     e=>e.code==='COLLECTIVE_ROUTE_CONSENT_REQUIRED');
+   await assert.rejects(()=>groupDelivery.decide(fixture.supplier.supplier_id,fixture.groupId,{
+     run_id:route.run_id,decision:'ACCEPT'}),e=>e.code==='ROUTE_NOT_OWNED');
+   const secondConsent=await groupDelivery.decide(created.secondBuyer.id,fixture.groupId,{
+     run_id:route.run_id,decision:'ACCEPT'});
+   assert.equal(secondConsent.decision,'ACCEPTED');
+   assert.equal((await groupDelivery.assertDispatchReady(db,created.groupOrders[0])).is_collective,true);
+   const [confirmed]=await db.query('SELECT status FROM procurement_delivery_runs WHERE id=?',[route.run_id]);
+   assert.equal(confirmed[0].status,'CONFIRMED');
+   const buyerRoute=await buyer2.page.request.get(
+     base+'/api/v1/procurement/collectives/'+fixture.groupId+'/delivery-route',
+     {headers:{Authorization:'Bearer '+buyer2.token}});
+   assert.equal(buyerRoute.status(),200);
+   assert.equal((await buyerRoute.json()).data.approval_status,'ACCEPTED');
+   console.log('PASS ISOLATED SYNTHETIC-PAID ROUTE LOGIC: partial-payment gate, 2 buyer consents, protected schedule and dispatch; NOT genuine Safepay');
+
 
    // Buyer sessions cannot act on supplier RFQ routes, and invite is always owned.
    const buyerForbidden=await buyer2.page.request.get(base+'/api/v1/procurement/supplier/collectives/invitations',{
@@ -261,6 +304,13 @@ async function cleanup(){
  try{
    const [[identity]]=await db.query('SELECT DATABASE() AS name');
    assert.equal(identity.name,'miljor_test_db','Unsafe cleanup target');
+   if(created.routeId){
+     await db.query('DELETE FROM procurement_notifications WHERE event_key LIKE ?',['collective:'+created.groupId+':%']);
+     await db.query('DELETE FROM procurement_collective_route_acceptances WHERE route_id IN (SELECT id FROM procurement_collective_delivery_routes WHERE run_id=?)',[created.routeId]);
+     await db.query('DELETE FROM procurement_collective_delivery_routes WHERE run_id=?',[created.routeId]);
+     await db.query('DELETE FROM procurement_delivery_stops WHERE run_id=?',[created.routeId]);
+     await db.query('DELETE FROM procurement_delivery_runs WHERE id=?',[created.routeId]);
+   }
    if(created.groupOrders.length){
      for(const oid of created.groupOrders){
        await db.query('DELETE FROM invoices WHERE order_id=?',[oid]);
