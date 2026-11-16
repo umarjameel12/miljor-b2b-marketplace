@@ -1,0 +1,416 @@
+{
+  "timestamp": "2026-11-16T22:48:07.499Z",
+  "branch": "plan/ucp-resilience-notification-coverage",
+  "baseCommit": "c570a7b6f4263306f3fe95c88c2e54f5a7860b11",
+  "scope": "Prospective metadata and mandatory owned Flash reminder verification; no PhaseC work",
+  "database": {
+    "name": "miljor_test_db",
+    "host": "127.0.0.1",
+    "port": 33321
+  },
+  "commands": {
+    "cwd": "backend",
+    "final": "node tests/ucp_final_affected_gate.js",
+    "metadata": "node --test tests/ucp_notification_metadata.test.js",
+    "contract": "node tests/ucp_phase_ab_contract_gate.js",
+    "environment": {
+      "NODE_ENV": "test",
+      "DB_NAME": "miljor_test_db",
+      "TEST_DB_NAME": "miljor_test_db",
+      "DB_HOST": "127.0.0.1",
+      "DB_PORT": "33321",
+      "DB_USER": "root",
+      "DB_PASSWORD": "",
+      "MILJOR_TEST_ONLY_MIGRATIONS": "1",
+      "ALLOW_EXTERNAL_MONEY_MOVEMENT": "false"
+    },
+    "qualification": "Final gate ran without diagnostic-only or resume filters; baseline diagnostics intentionally ran exact c570a7b reminder code."
+  },
+  "metadataTests": {
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0
+  },
+  "sqlContract": {
+    "groups": 10,
+    "skipped": 0,
+    "fixtureCleanup": "PASS"
+  },
+  "groups": [
+    {
+      "name": "migration-audit",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 500,
+      "log": "logs/ucp-affected-gate/migration-audit.log",
+      "error": null,
+      "sha256": "d6f1d964496e592961ddfebad4baa4fb8db1e96fa8b5a3e83bb2b4f8b3d9bf2a",
+      "outputTail": [
+        "MIGRATION_READ_ONLY_AUDIT_PASS {\"status\":\"VERIFIED_HISTORY\",\"database\":\"miljor_test_db\",\"applied\":62,\"planned\":62,\"note\":\"Read-only manifest and journal integrity checked. No schema changes performed.\"}",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "source",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 4853,
+      "log": "logs/ucp-affected-gate/source.log",
+      "error": null,
+      "sha256": "86fdae9cc0350fc565858393087e1d792e8e0777e9c46840c8f83d3c20292e6e",
+      "outputTail": [
+        "✔ crash on final email attempt becomes a visible terminal failure after lease expiry (153.1178ms)",
+        "ℹ tests 3",
+        "ℹ suites 0",
+        "ℹ pass 3",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 380.5857",
+        "npm notice run backend@1.0.0 test:ucp:audit",
+        "npm notice run node tests/ucp_independent_audit_source_gate.js",
+        "npm notice run backend@1.0.0 test:ucp:notifications",
+        "npm notice run node tests/ucp_notification_catalog_gate.js && node tests/ucp_transactional_notifications_gate.js && node tests/ucp_domain_notifications_gate.js && node tests/ucp_email_claim_gate.js && node tests/ucp_flash_recovery_gate.js && node tests/ucp_payment_expiry_race_gate.js && node tests/ucp_fee_connection_gate.js && node --test tests/ucp_recovery_review_gate.js",
+        "[UCP recovery] Flash transition requires review { flashId: 2, code: 'RECOVERY_TRANSITION_FAILED' }"
+      ]
+    },
+    {
+      "name": "completion",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 2574,
+      "log": "logs/ucp-affected-gate/completion.log",
+      "error": null,
+      "sha256": "0df02010732c2456f9a64a2b52ea8b33ecba6d140e4519583076b03da7770122",
+      "outputTail": [
+        "✔ supplier reminder belongs only to the owning supplier and uses immutable snapshot deadline/version (1.9818ms)",
+        "✔ buyer reminder excludes accepted decisions, order-backed rows, and buyers outside snapshot cohort (1.925ms)",
+        "✔ payment reminders address only unpaid hold owner; unresolved attempts at any age suppress reminders (2.225ms)",
+        "✔ reminder rechecks DB clock after parent lock wait and never emits after expiry (0.7933ms)",
+        "✔ reminder audit and outbox roll back together; replay cannot lose an event (1.1906ms)",
+        "✔ reminder batches skip already recorded rows before limit and reach later commitments (13.7545ms)",
+        "ℹ tests 299",
+        "ℹ suites 0",
+        "ℹ pass 299",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 1052.6999"
+      ]
+    },
+    {
+      "name": "phase-ab-contract",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 3508,
+      "log": "logs/ucp-affected-gate/phase-ab-contract.log",
+      "error": null,
+      "sha256": "4c90432de53b98c111658a9b9a7f4f499d09639cf44be6111df2964ced0cbb8a",
+      "outputTail": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS 1: v2 SQL clock/persisted actor/replay/rollback and v1 projection compatibility",
+        "PASS 2: 24h/1h/15m exact SQL boundaries and replay notify only persisted owners",
+        "PASS 3: short windows, exact expiry and inactive offers do not manufacture reminders",
+        "PASS 4: exact15m hold is buyer-only; pending/paid/expired/aged unknown payments excluded",
+        "PASS 5: 10 concurrent InnoDB transactions produce one hold reminder/event",
+        "PASS 6: 100-row batches skip recorded reminders and reach later commitments",
+        "PASS 7: observed parent-lock wait and deadline crossing use a fresh post-lock SQL statement",
+        "PASS 8: outbox failure rolls back audit and earlier recipient; retry recovers once",
+        "PASS 9: actual worker lease excludes peers and recovers after holder disconnect",
+        "PASS 10: signed failed callback binds owned attempt/replays once and cannot downgrade PAID",
+        "UCP_PHASE_AB_CONTRACT_GATE_PASS 10 groups; 0 skipped; 33321/miljor_test_db; no provider/transport calls",
+        "CLEANUP PASS: only owned fixtures removed; no foreign-key overrides",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "review-regressions",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 1145,
+      "log": "logs/ucp-affected-gate/review-regressions.log",
+      "error": null,
+      "sha256": "cb275ecb0e517977fb205bc84d35db532ea01e9e896f8d2303d52e38ec20c8f5",
+      "outputTail": [
+        "> backend@1.0.0 test:ucp:reviewfixes",
+        "> node --test tests/ucp_review_regressions.test.js",
+        "✔ poison digest becomes a visible failure without blocking a different recipient (5.0012ms)",
+        "✔ optional digest and projection exceptions cannot stop mandatory outbox dispatch (2.9744ms)",
+        "✔ pool-wide recipients include confirmed and paid commitments and exclude terminal buyers (7.2247ms)",
+        "ℹ tests 3",
+        "ℹ suites 0",
+        "ℹ pass 3",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 186.7584"
+      ]
+    },
+    {
+      "name": "native-notification-actions",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 2271,
+      "log": "logs/ucp-affected-gate/native-notification-actions.log",
+      "error": null,
+      "sha256": "786d4d57db391ee9b3063885281beed536efc5dd61826f5d181c0264ced7586f",
+      "outputTail": [
+        "✔ PREPARING recipient write 1 failure rolls back both canonical events (10.1128ms)",
+        "✔ PREPARING recipient write 2 failure rolls back both canonical events (11.195ms)",
+        "✔ PREPARING recipient write 3 failure rolls back both canonical events (10.0512ms)",
+        "✔ PREPARING recipient write 4 failure rolls back both canonical events (9.4815ms)",
+        "✔ genuine createDraft captures owner event before commit (16.6781ms)",
+        "✔ outbox failure rejects and rolls back genuine createDraft (2.5913ms)",
+        "ℹ tests 74",
+        "ℹ suites 0",
+        "ℹ pass 74",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 1174.0197"
+      ]
+    },
+    {
+      "name": "notification-mysql",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 934,
+      "log": "logs/ucp-affected-gate/notification-mysql.log",
+      "error": null,
+      "sha256": "fd2d55c350ee5be222f4294a27f54270964f7f06b2f0e0a70e1aae0fc2157bfa",
+      "outputTail": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS: real MySQL owner isolation, domain rollback, post-commit inbox/email projection and replay dedupe, zero money movement",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "notification-controls-mysql",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 790,
+      "log": "logs/ucp-affected-gate/notification-controls-mysql.log",
+      "error": null,
+      "sha256": "f016b94e17e4f4f048f693b850cd4ce920098627aa36d0501573a60a108f0571",
+      "outputTail": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS: MySQL operations persisted authorization, EVENT/EMAIL recovery, exact audit evidence, replay409, health privacy",
+        "PASS: MySQL Urdu preferences, quiet deferral, mandatory override, mute suppression, locked hourly budget, durable digest",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "checkout-initiation-mysql",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 1061,
+      "log": "logs/ucp-affected-gate/checkout-initiation-mysql.log",
+      "error": null,
+      "sha256": "e47c0643b26e264fb80b8bbb577ac2f106d2586f2334380de125015880a24ea9",
+      "outputTail": [
+        "TARGET VERIFIED: 127.0.0.1:33321 / miljor_test_db / root; explicit pool limit 10; no .env or provider network",
+        "PASS 1: 50 distinct checkout keys: 1 provider invocation, 1 committed attempt, 49 pending conflicts, 1 ready checkout and buyer event",
+        "PASS 2: two-day-old INITIATED session replays/reuses across keys without a second provider invocation",
+        "PASS 3: timeout: old unresolved attempt and expired PAYMENT_PENDING hold retained; no fake-ready recovery or second session",
+        "PASS 4: incomplete: old unresolved attempt and expired PAYMENT_PENDING hold retained; no fake-ready recovery or second session",
+        "PASS 5: persisted tracker without checkout URL blocks fresh initiation and returns explicit pending recovery",
+        "PASS 6: RECONCILIATION_REQUIRED with persisted tracker permits independent owner-scoped provider lookup; null trackers stay pending without lookup",
+        "PASS 7: simulated authoritative PAID transition during passport call survives checkout finalization and retry",
+        "PASS 8: buyer/role isolation and real idempotency recovery never return another buyer/order session",
+        "PASS 9: all scenarios produced zero payments/financial transactions",
+        "CLEANUP VERIFIED: only this run's owned fixtures removed",
+        "CHECKOUT_ISOLATED_MYSQL_GATE_PASS: 9 scenario checks"
+      ]
+    },
+    {
+      "name": "regular-recovery-mysql",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 1151,
+      "log": "logs/ucp-affected-gate/regular-recovery-mysql.log",
+      "error": null,
+      "sha256": "35d7df148f07f68a3d6ccbba7d1322212882c83b2e73839d2d50b587d8fc3c84",
+      "outputTail": [
+        "TARGET miljor_test_db @ 127.0.0.1:33321; canonical schema ready",
+        "PASS real concurrent expiry commits each hold transition once; old unknown outcomes retain inventory",
+        "PASS both unresolved attempt statuses block fresh sessions and checkout-claim release at any age",
+        "PASS authorization, audited admin replay, payload conflict and atomic HTTP response persistence",
+        "PASS replacement requires explicit owning buyer consent; replay is audited without replacement or money movement",
+        "PASS supplier deadline timeout serializes to one real event without rewriting historical snapshot or creating decisions",
+        "PASS buyer deadline expires only unanswered snapshot commitments and preserves supplier acceptance",
+        "PASS real MySQL 24h/1h/15m reminder clocks, concurrent replay, owner isolation and production discovery SQL",
+        "PASS real MySQL 15m hold reminder is buyer-only and excludes both unresolved attempt statuses",
+        "PASS no payments created and no notification dispatch",
+        "CLEANUP PASS: exact owned fixtures removed; no foreign-key overrides",
+        "REGULAR_RECOVERY_MYSQL_PASS: 9 scenario groups; miljor_test_db:33321; provider/dispatch not invoked"
+      ]
+    },
+    {
+      "name": "flash-delivery-stock-50",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 7724,
+      "log": "logs/ucp-affected-gate/flash-delivery-stock-50.log",
+      "error": null,
+      "sha256": "395ad3c66677b090ed37ff0120cc94b5821a083a68f01d49b5e5d45e63af7883",
+      "outputTail": [
+        "--- PHASE 6: Section E — Discovery, Expiry & Countdown ---",
+        "  ✓ PASS 41: E01 Public discovery returns only ACTIVE, unexpired pools with server_time",
+        "  ✓ PASS 42: E02 Supplier cancellation transitions pool to CANCELLED and releases inventory allocation",
+        "  ✓ PASS 43: E03 closeExpiredOffer preserves committed stock allocations and releases unsold stock",
+        "  ✓ PASS 44: E04 Countdown parseDeadline handles MySQL strings as UTC, ISO, offsets, and invalid inputs",
+        "  ✓ PASS 45: F01 Flash supplier pickup is selected, priced and snapshot-locked in real MySQL",
+        "  ✓ PASS 46: F02 Flash Express buyer area/rate is snapshot-locked; injected fee ignored",
+        "  ✓ PASS 47: F03 Flash idempotency replays cannot switch pickup to Express",
+        "=================================================================",
+        "🎉 ALL PART 5 FLASH POOL GATE TESTS PASSED (47/47)",
+        "=================================================================",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "payment-fulfillment-settlement",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 2106,
+      "log": "logs/ucp-affected-gate/payment-fulfillment-settlement.log",
+      "error": null,
+      "sha256": "de32a209e52f7bddd503490bf61e449f457c3aa468ad9e5b9c5b37071ce71975",
+      "outputTail": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS G1 unpaid order blocks fulfillment and supplier accrual",
+        "PASS G2 invalid Safepay signature denied",
+        "PASS G3 synthetic signed HTTP callback creates ONE PAID order/payment, replay safe",
+        "PASS G4 exact commission, delivery, supplier payable conservation",
+        "PASS G5 no settlement or buyer receipt before supplier delivery",
+        "PASS G6 four verified supplier milestones, delivery NOT buyer confirmation",
+        "PASS G7 independent buyer-only receipt and idempotency",
+        "PASS G8 settlement prepared only after receipt: one payable, one instruction, external execution DISABLED",
+        "PASS G9 real financial/fulfillment outbox recipients and no false settlement completion",
+        "PASS REAL HTTP+MYSQL E2E with synthetic signed Safepay event; real provider and bank settlement NOT VERIFIED",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "payment-refund-concurrency",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 2473,
+      "log": "logs/ucp-affected-gate/payment-refund-concurrency.log",
+      "error": null,
+      "sha256": "26f615e10c866f5f9e0318654b2eb9177c089854e7a12ff88130ddff0dbee0e9",
+      "outputTail": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS S01 invalid signature and mismatched amount cannot mark PAID",
+        "PASS S02 30 concurrent valid sandbox-signed webhook events give 1 payment / 1 event / 1 invoice",
+        "PASS S03 50 webhook retries do not create duplicate money",
+        "PASS S04 cannot prepare supplier payout before buyer receipt",
+        "PASS S05A 20 concurrent identical refund requests create exactly one refund obligation",
+        "PASS S05 synthetic full refund assessed and approved once; provider money return NOT fabricated",
+        "PASS S06 full refund is capped; duplicate and privilege-escalation attempts rejected",
+        "PASS ALL SAFEPAY SYNTHETIC PAYMENT + REFUND + CONCURRENCY ACCEPTANCE TESTS",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "regular-flash-shared-stock",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 10178,
+      "log": "logs/ucp-affected-gate/regular-flash-shared-stock.log",
+      "error": null,
+      "sha256": "f4754bee3712f28d2612e889cdc1b017cfa75618eed0e3f39098aa35198a412f",
+      "outputTail": [
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":2,\"quantity_per_pool\":120,\"success\":1,\"rejected\":1,\"allocated\":120,\"stock\":200}",
+        "START SAME-SKU PUBLICATION WAVE 10 clients",
+        "DRAFTS READY 10 10",
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":10,\"quantity_per_pool\":25,\"success\":8,\"rejected\":2,\"allocated\":200,\"stock\":200}",
+        "START SAME-SKU PUBLICATION WAVE 50 clients",
+        "DRAFTS READY 50 50",
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":50,\"quantity_per_pool\":5,\"success\":40,\"rejected\":10,\"allocated\":200,\"stock\":200}",
+        "START SAME-SKU PUBLICATION WAVE 100 clients",
+        "DRAFTS READY 100 100",
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":100,\"quantity_per_pool\":3,\"success\":66,\"rejected\":34,\"allocated\":198,\"stock\":200}",
+        "PASS: 2/10/50/100 real simultaneous mixed-mode publication HTTP+InnoDB stress",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    }
+  ],
+  "diagnostics": [
+    {
+      "name": "baseline-red.log",
+      "sha256": "945a68986c0faa982725709230214e2556fb486c1943c3d59bea2ba86a21c343",
+      "outputTail": [
+        "DIAGNOSTIC: exact c570a7b Flash implementation; expected boundary regression failure",
+        "◇ injected env (0) from .env",
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS 1: v2 SQL clock/persisted actor/replay/rollback and v1 projection compatibility",
+        "PASS 2: 24h/1h/15m exact SQL boundaries and replay notify only persisted owners",
+        "PASS 3: short windows, exact expiry and inactive offers do not manufacture reminders",
+        "UCP_PHASE_AB_CONTRACT_GATE_FAIL AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+        "0 !== 1",
+        "    at C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\backend\\tests\\ucp_phase_ab_contract_gate.js:55:10",
+        "    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+        "    at async checked (C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\backend\\tests\\ucp_phase_ab_contract_gate.js:17:35)",
+        "    at async main (C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\backend\\tests\\ucp_phase_ab_contract_gate.js:53:2)",
+        "CLEANUP PASS: only owned fixtures removed; no foreign-key overrides"
+      ]
+    },
+    {
+      "name": "post-lock-baseline-red.log",
+      "sha256": "3e8b76d5fdf5ce341abaa89c3ceca53c3b3d09da06ff220496893eb110dbda32",
+      "outputTail": [
+        "DIAGNOSTIC: exact c570a7b Flash implementation; expected boundary regression failure",
+        "◇ injected env (0) from .env",
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "UCP_PHASE_AB_CONTRACT_GATE_FAIL AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+        "1 !== 0",
+        "    at C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\backend\\tests\\ucp_phase_ab_contract_gate.js:72:468",
+        "    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+        "    at async checked (C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\backend\\tests\\ucp_phase_ab_contract_gate.js:19:89)",
+        "    at async main (C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\backend\\tests\\ucp_phase_ab_contract_gate.js:68:2)",
+        "CLEANUP PASS: only owned fixtures removed; no foreign-key overrides"
+      ]
+    },
+    {
+      "name": "webhook-fixture-rerun.log",
+      "sha256": "228a429e4b240162251b074eb51c02b882c424c401135d84d1bcece179b915e2",
+      "outputTail": [
+        "◇ injected env (0) from .env",
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS 10: signed failed callback binds owned attempt/replays once and cannot downgrade PAID",
+        "UCP_PHASE_AB_DIAGNOSTIC_PASS 1 groups; selected group 10; 33321/miljor_test_db; no provider/transport calls",
+        "CLEANUP PASS: only owned fixtures removed; no foreign-key overrides"
+      ]
+    }
+  ],
+  "review": {
+    "scope": "Independent source review of reminder SQL/lock ordering and contract fixtures",
+    "result": "No proven critical findings"
+  },
+  "protectedCheck": {
+    "before": "2026-11-16T22:32:19.841Z",
+    "after": "2026-11-16T22:46:14.563Z",
+    "tablesChecked": 6,
+    "changedTables": [],
+    "status": "PASS",
+    "historicalDriftAttribution": "UNRESOLVED",
+    "scope": "Read-only before/after check for this phase; not a reset or closure of prior drift"
+  },
+  "migrationChanges": false,
+  "externalMoneyMovement": false,
+  "providerCalls": false,
+  "emailTransportCalls": false,
+  "phaseStatus": "LOCAL_PASS_REMOTE_CI_PENDING",
+  "fullMasterPlan": "PARTIAL_RELEASE_BLOCKED"
+}

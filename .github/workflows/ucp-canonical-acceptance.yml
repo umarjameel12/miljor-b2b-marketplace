@@ -69,6 +69,7 @@ jobs:
           cd backend
           npm run test:ucp
           npm run test:ucp:completion
+          node --test tests/ucp_notification_metadata.test.js
           npm run test:ucp:reviewfixes
           npm run test:ucp:nativeactions
           node tests/ucp_thischat_reconciliation_gate.js
@@ -132,6 +133,8 @@ jobs:
         run: cd backend && node tests/p0_finance_historical_upgrade_gate.js verify
       - name: Verify UCP notifications and email outbox in actual MySQL transactions
         run: cd backend && npm run test:ucp:notifications:mysql
+      - name: Verify prospective metadata and owned Flash SQL-clock reminders without skips
+        run: cd backend && node tests/ucp_phase_ab_contract_gate.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
         run: |
           cd backend

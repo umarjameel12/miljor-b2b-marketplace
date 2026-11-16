@@ -27,7 +27,7 @@ function validateRecipient(recipient) {
  * The durable event commits/rolls back with the domain mutation. The shared
  * projector handles inbox/email, preferences, localization and retries later.
  */
-async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVersion,transitionId,recipients,title,message,payload,actorId,actorRole,causationId,correlationId,occurredAt}) {
+async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVersion,transitionId,recipients,title,message,payload,actorId,actorRole,causationId,correlationId,occurredAt,schemaVersion}) {
   if (!connection || typeof connection.query !== 'function') throw new Error('TRANSACTION_CONNECTION_REQUIRED');
   getEventDefinition(type);
   if (!Array.isArray(recipients) || !recipients.length || recipients.length > 100) throw new Error('INVALID_NOTIFICATION_RECIPIENTS');
@@ -47,22 +47,39 @@ async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVe
     roles.set(recipient.userId,recipient.role);
   }
   const hasProspectiveMeta = actorId !== undefined || actorRole !== undefined || causationId !== undefined || correlationId !== undefined || occurredAt !== undefined;
-  const eventTime = hasProspectiveMeta ? (occurredAt || new Date().toISOString()) : null;
+  const prospective = hasProspectiveMeta || schemaVersion === 2;
+  if((schemaVersion!==undefined&&schemaVersion!==1&&schemaVersion!==2)||(schemaVersion===1&&prospective))
+    throw Error('INVALID_NOTIFICATION_SCHEMA_VERSION');
+  let eventTime=occurredAt;
+  if(prospective){
+    // Numeric legacy aggregate/transition IDs remain supported, but objects and
+    // malformed tokens must not acquire a fabricated identity through String().
+    const validIdentity=(value,max)=>(typeof value==='string'&&value.length>0&&value.length<=max&&!/[^\x21-\x7e]/.test(value))||
+      (Number.isSafeInteger(value)&&value>0);
+    if(!validIdentity(aggregateId,120)||!validIdentity(transitionId,128))throw Error('INVALID_NOTIFICATION_EVENT_IDENTITY');
+    if(actorId===undefined||actorRole===undefined)throw Error('INVALID_NOTIFICATION_ACTOR');
+    if(eventTime===undefined){
+      const [[clock]]=await connection.query("SELECT DATE_FORMAT(UTC_TIMESTAMP(3),'%Y-%m-%dT%H:%i:%s.%fZ') AS occurred_at");
+      if(typeof clock?.occurred_at!=='string')throw Error('INVALID_NOTIFICATION_OCCURRENCE_TIME');
+      eventTime=clock.occurred_at;
+    }
+  }
   for (const recipient of recipients) {
     validateRecipient(recipient);
     if (seen.has(recipient.userId)) continue;
     seen.add(recipient.userId);
     const entityId=Number(json?.order_id||json?.pool_id||json?.reservation_id||json?.account_id||json?.sku_id||aggregateId);
     const eventInput = {userId:recipient.userId,role:recipient.role,eventType:type,eventKey:key,entityId};
-    if (hasProspectiveMeta) {
+    if (prospective) {
+      eventInput.schemaVersion = 2;
       eventInput.eventId = key;
       eventInput.aggregateId = String(aggregateId);
-      eventInput.aggregateVersion = Number(aggregateVersion);
-      eventInput.actorId = actorId !== undefined ? actorId : 'SYSTEM';
-      eventInput.actorRole = actorRole !== undefined ? actorRole : 'SYSTEM';
+      eventInput.aggregateVersion = aggregateVersion;
+      eventInput.actorId = actorId;
+      eventInput.actorRole = actorRole;
       eventInput.occurredAt = eventTime;
-      eventInput.causationId = causationId || String(transitionId);
-      eventInput.correlationId = correlationId || String(aggregateId);
+      eventInput.causationId = causationId === undefined ? String(transitionId) : causationId;
+      eventInput.correlationId = correlationId === undefined ? String(aggregateId) : correlationId;
     }
     const [result] = await require('./notificationService').enqueueEvent(connection, eventInput);
     if (result.affectedRows === 1) inserted++;

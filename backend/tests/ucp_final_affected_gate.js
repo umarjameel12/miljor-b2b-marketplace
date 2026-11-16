@@ -14,6 +14,7 @@ const gates=[
   ['migration-audit',['database/readOnlyMigrationAudit.js','--test-only']],
   ['source',[npm,'run','test:ucp']],
   ['completion',[npm,'run','test:ucp:completion']],
+  ['phase-ab-contract',[npm,'run','test:ucp:phaseab']],
   ['review-regressions',[npm,'run','test:ucp:reviewfixes']],
   ['native-notification-actions',[npm,'run','test:ucp:nativeactions']],
   ['notification-mysql',['tests/ucp_notification_mysql_gate.js']],

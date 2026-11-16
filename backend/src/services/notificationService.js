@@ -22,17 +22,53 @@ class NotificationService {
     eventProjection(event);
     const [users]=await connection.query('SELECT id,role FROM users WHERE id=?',[event.userId]);
     if(!users.length||users[0].role!==event.role)throw Error('Invalid notification recipient role');
-    const hasMeta=event.eventId!==undefined||event.aggregateId!==undefined||event.actorId!==undefined||event.causationId!==undefined||event.correlationId!==undefined;
+    const metadataFields=['eventId','aggregateId','aggregateVersion','actorId','actorRole','occurredAt','causationId','correlationId'];
+    const hasMeta=event.schemaVersion===2||metadataFields.some(field=>event[field]!==undefined);
+    if(event.schemaVersion!==undefined&&event.schemaVersion!==1&&event.schemaVersion!==2)
+      throw Error('Invalid notification schema version');
+    if(event.schemaVersion===1&&hasMeta)throw Error('Invalid notification schema version');
     const payloadMeta={entityId:Number(event.entityId),schemaVersion:hasMeta?2:1};
     if(hasMeta){
-      if(event.eventId!==undefined)payloadMeta.eventId=String(event.eventId).slice(0,128);
-      if(event.aggregateId!==undefined)payloadMeta.aggregateId=String(event.aggregateId).slice(0,120);
-      if(event.aggregateVersion!==undefined)payloadMeta.aggregateVersion=Number.isSafeInteger(Number(event.aggregateVersion))?Number(event.aggregateVersion):1;
-      payloadMeta.actorId=event.actorId==='SYSTEM'||event.actorId===0||event.actorId===null?'SYSTEM':Number(event.actorId);
-      if(event.actorRole!==undefined)payloadMeta.actorRole=String(event.actorRole).slice(0,32);
-      payloadMeta.occurredAt=event.occurredAt?new Date(event.occurredAt).toISOString():new Date().toISOString();
-      if(event.causationId!==undefined&&event.causationId!==null)payloadMeta.causationId=String(event.causationId).slice(0,128);
-      if(event.correlationId!==undefined&&event.correlationId!==null)payloadMeta.correlationId=String(event.correlationId).slice(0,128);
+      // Opaque IDs are bounded printable tokens, never truncated or object-coerced.
+      const validId=(value,max)=>typeof value==='string'&&value.length>0&&value.length<=max&&!/[^\x21-\x7e]/.test(value);
+      if(!validId(event.eventId,128)||event.eventId!==event.eventKey)throw Error('Invalid notification event identity');
+      if(!validId(event.aggregateId,120))throw Error('Invalid notification aggregate ID');
+      if(!Number.isSafeInteger(event.aggregateVersion)||event.aggregateVersion<0)throw Error('Invalid notification aggregate version');
+      for(const field of ['causationId','correlationId']){
+        if(!validId(event[field],128))throw Error('Invalid notification '+field);
+        payloadMeta[field]=event[field];
+      }
+      const roles=['BUYER','SUPPLIER','ADMIN','SUPER_ADMIN','FINANCE_ADMIN','OPERATIONS_ADMIN','VERIFICATION_ADMIN','SUPPORT_ADMIN'];
+      if(event.actorId==='SYSTEM'){
+        if(event.actorRole!=='SYSTEM')throw Error('Invalid notification actor role');
+        payloadMeta.actorId='SYSTEM';
+      }else{
+        if(!['number','string'].includes(typeof event.actorId)||!/^[1-9]\d*$/.test(String(event.actorId))||/\D/.test(String(event.actorId))||
+          !Number.isSafeInteger(Number(event.actorId))||!roles.includes(event.actorRole))throw Error('Invalid notification actor');
+        const actorId=Number(event.actorId);
+        const [actors]=await connection.query('SELECT id,role FROM users WHERE id=?',[actorId]);
+        if(!actors.length||actors[0].role!==event.actorRole)throw Error('Invalid notification actor role');
+        payloadMeta.actorId=actorId;
+      }
+      payloadMeta.eventId=event.eventId;
+      payloadMeta.aggregateId=event.aggregateId;
+      payloadMeta.aggregateVersion=event.aggregateVersion;
+      payloadMeta.actorRole=event.actorRole;
+      let occurrence=event.occurredAt;
+      if(occurrence===undefined){
+        // Format UTC in SQL to avoid mysql session/driver/host timezone conversion.
+        const [[clock]]=await connection.query("SELECT DATE_FORMAT(UTC_TIMESTAMP(3),'%Y-%m-%dT%H:%i:%s.%fZ') AS occurred_at");
+        occurrence=clock?.occurred_at;
+      }
+      // Require an unambiguous ISO timestamp and reject calendar rollover (Feb 30).
+      const match=typeof occurrence==='string'&&/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?Z$/.exec(occurrence);
+      const date=match?new Date(occurrence):null;
+      if(!match||match[0]!==occurrence||!Number.isFinite(date.getTime())||Number(match[1])<1000||
+        date.getUTCFullYear()!==Number(match[1])||date.getUTCMonth()+1!==Number(match[2])||
+        date.getUTCDate()!==Number(match[3])||date.getUTCHours()!==Number(match[4])||
+        date.getUTCMinutes()!==Number(match[5])||date.getUTCSeconds()!==Number(match[6]))
+        throw Error('Invalid notification occurrence time');
+      payloadMeta.occurredAt=date.toISOString();
     }
     return connection.query(
       `INSERT INTO procurement_notifications

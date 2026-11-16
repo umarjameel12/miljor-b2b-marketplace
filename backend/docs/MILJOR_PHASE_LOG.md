@@ -1727,3 +1727,11 @@ Qualified source/test SHA:b264cc62cc4df42c46b39fc43891e1b9ae982f50. Canonical Ac
 - **Verified on isolated MySQL 8.0.45 (`127.0.0.1:33321`):** `ucp_phase_ab_contract_gate.js` PASS (Flash SQL-clock step skipped due to empty `flash_pools` in fresh schema); `ucp_final_affected_gate.js` **13/13 groups PASS**.
 - **Protected DB (`miljor_db`, read-only):** `users: 567617374`, `pools: 2265355547`, `reservations/orders/payments/platform_ledger: 0`; attribution remains **UNRESOLVED**.
 - **Overall:** **PARTIAL / RELEASE BLOCKED** (Phase C delivery manifests/rerouting, Phase D replacement re-contracting business rule, Phase E live Safepay payment/refund proof, Phase F actual SMTP receipt & mobile/Urdu RTL browser E2E, Phase G main merge reconciliation). **CAN START NEXT PHASE: NO.**
+
+## 2026-11-16 — Phase A/B no-skip hardening from c570a7b
+
+- Audited actual code; reproduced exact15-minute exclusion and stale statement-clock after real lock wait against c570a7b. Replaced arbitrary/optional Flash fixture with owned mandatory acceptance.
+- Hardened prospective v2 IDs, actor/role, causation/correlation and SQL timestamp validation while preserving v1 and first-write replay evidence. Flash uses fresh post-lock clocks, eligible unpaid hold ownership, unresolved-payment protection, persisted pool version and bounded fair100-hold batches.
+- Final isolated33321 affected gate14/14 PASS; metadata56/56 and mandatory SQL10/10 with0 skips. Real concurrency/lock-wait/lease/rollback/replay/negative checks and owned cleanup pass. New fixture enum failure corrected narrowly; original expected-red evidence retained.
+- Read-only contemporaneous protected comparison6/6 unchanged; historical drift attribution remains unresolved. No original DB mutations/migrations, provider calls, email dispatch or real funds movement.
+- Report: MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md; machine evidence:evidence/ucp-phase-ab-hardening-2026-11-16.json. Exact corrected source/remote CI is added after qualification. Full master-plan release remains PARTIAL/BLOCKED; no PhaseC/main merge. CAN START NEXT PHASE: NO.
