@@ -49,6 +49,8 @@ const definitions={
   REFUND_ASSESSED:['Refund request recorded for review','واپسی کی درخواست جائزے کے لیے درج ہو گئی','order'],
   REFUND_APPROVED:['Refund obligation approved; provider execution pending','واپسی کی منظوری دی گئی، ادائیگی زیر التوا ہے','order'],
   SUBSCRIPTION_ACTIVATED:['Paid subscription activated','ادا شدہ سبسکرپشن فعال ہو گئی','account'],
+  SUBSCRIPTION_DOWNGRADE_SCHEDULED:['Your plan will change at the end of its paid period','آپ کا پلان ادا شدہ مدت ختم ہونے پر تبدیل ہوگا','account'],
+  SUBSCRIPTION_DOWNGRADED:['Paid plan ended; Starter plan is now active','ادا شدہ پلان ختم ہو گیا؛ اسٹارٹر پلان فعال ہے','account'],
   REFUND_INITIATED:['Refund initiated','رقم کی واپسی شروع ہو گئی','order'],
   REFUND_COMPLETED:['Refund completed','رقم کی واپسی مکمل ہو گئی','order'],
   DISPUTE_OPENED:['Dispute opened','تنازع درج ہو گیا','order'],
