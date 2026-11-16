@@ -48,6 +48,12 @@ class SupplierProfileController {
         }
       });
     } catch (error) {
+      if (error.code === 'VERIFICATION_PROFILE_LOCKED') {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'VERIFICATION_PROFILE_LOCKED', message: error.message }
+        });
+      }
       if (error.code === 'VALIDATION_ERROR') {
         return res.status(400).json({
           success: false,
