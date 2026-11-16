@@ -4,6 +4,7 @@ on:
     paths:
       - 'backend/src/controllers/adminController.js'
       - 'backend/database/migrations/098_supplier_verification_revisions.sql'
+      - 'backend/database/migrations/099_supplier_correction_replay_hash.sql'
       - 'backend/tests/pr61_part1_mysql_gate.js'
       - 'frontend/src/components/supplier/SupplierVerificationCorrections.jsx'
       - 'frontend/src/pages/SupplierProfilePage.jsx'
