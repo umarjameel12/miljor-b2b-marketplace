@@ -295,7 +295,7 @@ class AdminController {
         await connection.beginTransaction();
         // Lock the reviewed profile before comparing its state; eliminate stale concurrent decisions.
         const [profiles] = await connection.query(
-          'SELECT supplier_id, verification_status, verification_level, subscription_plan, is_verified, submitted_revision FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+          'SELECT supplier_id, verification_status, verification_level, subscription_plan, submitted_revision FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
           [id]
         );
         const current = profiles[0];
