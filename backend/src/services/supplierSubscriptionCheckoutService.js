@@ -163,8 +163,15 @@ class SupplierSubscriptionCheckoutService {
       tracker.transaction && typeof tracker.transaction === 'object';
     if (!captured) return { reconciled: false, provider_state: tracker.state || 'UNKNOWN' };
     const transactionState = String(tracker.transaction.status || tracker.transaction.state || '').toUpperCase();
-    if (['FAILED','DECLINED','CANCELLED','REFUNDED','VOIDED','REVERSED'].includes(transactionState)) {
-      return {reconciled: false, provider_state: transactionState};
+    // Sandbox tracker completion is not proof of a captured subscription charge
+    // unless the nested transaction itself positively confirms success.
+    if (!['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'].includes(transactionState)) {
+      return {reconciled: false, provider_state: transactionState || 'UNVERIFIED_TRANSACTION'};
+    }
+    if(typeof tracker.transaction.id!=='string'||
+       !tracker.transaction.id.trim()||tracker.transaction.id.length>150){
+      throw error('PROVIDER_TRANSACTION_ID_MISSING',502,
+        'Provider transaction identity is required before subscription activation');
     }
 
     const currency = tracker.currency || tracker.transaction.currency;
