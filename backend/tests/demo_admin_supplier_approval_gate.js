@@ -104,7 +104,8 @@ async function main(){
   await check('request more information is not a rejection',async()=>{
     writes=[];const res=mockResponse();await controller.verifySupplier({
       params:{id:'2'},user:{id:99,role:'ADMIN'},
-      body:{verification_status:'MORE_INFORMATION_REQUIRED',rejection_reason:'Please supply food licence'}
+      body:{verification_status:'MORE_INFORMATION_REQUIRED',rejection_reason:'Please supply food licence',
+        correction_fields:['food_license_no'],correction_notes:{food_license_no:'Please supply food licence'}}
     },res);assert.equal(res.statusCode,200);
     assert.equal(res.body.data.verification_status,'MORE_INFORMATION_REQUIRED');
     assert.equal(writes.filter(w=>w?.table==='system_audit_logs').length,1);
