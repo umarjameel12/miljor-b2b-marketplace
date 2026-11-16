@@ -40,6 +40,9 @@ class AdminController {
            sp.max_active_listings,
            sp.transaction_fee_percent,
            sp.rejection_reason,
+           sp.submitted_revision,
+           sp.correction_fields,
+           sp.correction_notes,
            sp.submitted_at,
            sp.created_at,
            u.full_name,
@@ -99,6 +102,9 @@ class AdminController {
           max_active_listings: r.max_active_listings,
           transaction_fee_percent: r.transaction_fee_percent,
           rejection_reason: r.rejection_reason || null,
+          submitted_revision: Number(r.submitted_revision || 0),
+          correction_fields: typeof r.correction_fields==='string' ? JSON.parse(r.correction_fields) : (r.correction_fields || []),
+          correction_notes: typeof r.correction_notes==='string' ? JSON.parse(r.correction_notes) : (r.correction_notes || {}),
           submitted_at: r.submitted_at || null,
           created_at: r.created_at
         };
@@ -142,7 +148,7 @@ class AdminController {
         });
       }
 
-      const validStatuses = ['VERIFIED', 'REJECTED', 'SUSPENDED', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED'];
+      const validStatuses = ['VERIFIED', 'REJECTED', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED'];
       if (!validStatuses.includes(verification_status)) {
         return res.status(400).json({
           success: false,
@@ -251,12 +257,45 @@ class AdminController {
         return res.status(400).json({ success: false, error: { code: 'REVIEW_LEVEL_CHANGE_NOT_ALLOWED', message: 'Review-only decisions cannot change the verification level' } });
       }
 
+      const corrections = req.body.correction_fields;
+      const correctionNotes = req.body.correction_notes;
+      const correctionAllowlist = new Set([
+        'business_name','business_type','business_description','contact_person_name',
+        'contact_person_phone','warehouse_address','lahore_service_area','tax_ntn',
+        'food_license_no','food_license_type','bank_name','bank_account_title','bank_iban'
+      ]);
+      if (verification_status === 'MORE_INFORMATION_REQUIRED' &&
+        (!Array.isArray(corrections) || !corrections.length || corrections.length>13 ||
+          new Set(corrections).size !== corrections.length ||
+          corrections.some(field=>typeof field!=='string'||!correctionAllowlist.has(field)))) {
+        return res.status(400).json({success:false,error:{
+          code:'CORRECTION_FIELDS_REQUIRED',
+          message:'Select at least one valid field that the supplier must correct'
+        }});
+      }
+      if (verification_status === 'MORE_INFORMATION_REQUIRED' &&
+          (correctionNotes === null || typeof correctionNotes !== 'object' ||
+           Array.isArray(correctionNotes) || corrections.some(field =>
+             typeof correctionNotes[field] !== 'string' || correctionNotes[field].trim().length < 5 ||
+             correctionNotes[field].length > 1000))) {
+        return res.status(400).json({success:false,error:{
+          code:'FIELD_SPECIFIC_NOTES_REQUIRED',
+          message:'Explain each requested correction in at least five characters'
+        }});
+      }
+      if (verification_status !== 'MORE_INFORMATION_REQUIRED' &&
+          (corrections !== undefined || correctionNotes !== undefined)) {
+        return res.status(400).json({success:false,error:{
+          code:'UNEXPECTED_CORRECTION_FIELDS',message:'Correction requests are only allowed for Request Info'
+        }});
+      }
+
       const connection = await db.getConnection();
       try {
         await connection.beginTransaction();
         // Lock the reviewed profile before comparing its state; eliminate stale concurrent decisions.
         const [profiles] = await connection.query(
-          'SELECT supplier_id, verification_status, verification_level, subscription_plan, is_verified FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+          'SELECT supplier_id, verification_status, verification_level, subscription_plan, is_verified, submitted_revision FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
           [id]
         );
         const current = profiles[0];
@@ -280,16 +319,46 @@ class AdminController {
           return res.status(409).json({ success: false, error: { code: 'STALE_REVIEW', message: 'Review status has changed' } });
         }
 
+        // The admin must review the exact immutable revision, not a subsequently corrected form.
+        if (Number(current.submitted_revision || 0) > 0 &&
+            (!Number.isSafeInteger(Number(req.body.expected_revision)) ||
+             Number(req.body.expected_revision) !== Number(current.submitted_revision))) {
+          await connection.rollback();
+          return res.status(409).json({success:false,error:{
+            code:'STALE_REVIEW_REVISION',message:'Supplier application revision changed; refresh before deciding'
+          }});
+        }
         const isApproved = verification_status === 'VERIFIED';
         const effectiveRejectionReason = isApproved ? null : (rejection_reason || null);
         await connection.query(
           `UPDATE supplier_profiles SET verification_status = ?,
              verification_level = CASE WHEN ? = 1 THEN ? ELSE verification_level END,
              rejection_reason = ?,
-             verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END
+             verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END,
+             correction_fields = ?, correction_notes = ?,
+             correction_requested_revision = ?, correction_requested_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP() ELSE NULL END
            WHERE supplier_id = ?`,
-          [verification_status, isApproved ? 1 : 0, verification_level, effectiveRejectionReason, isApproved ? 1 : 0, id]
+          [verification_status, isApproved ? 1 : 0, verification_level, effectiveRejectionReason,
+           isApproved ? 1 : 0,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? JSON.stringify(corrections) : null,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? JSON.stringify(correctionNotes) : null,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? Number(current.submitted_revision||0) : null,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? 1 : 0, id]
         );
+        if (Number(current.submitted_revision || 0) > 0 && verification_status !== 'UNDER_REVIEW') {
+          const reviewAction = isApproved ? 'APPROVED' :
+            verification_status === 'REJECTED' ? 'REJECTED' : 'REQUEST_INFO';
+          const [revisionWrite] = await connection.query(
+            `UPDATE supplier_verification_revisions
+             SET review_action=?, reviewed_by=?, reviewed_at=UTC_TIMESTAMP(), review_reason=?
+             WHERE supplier_id=? AND revision=? AND review_action='PENDING'`,
+            [reviewAction,adminId,effectiveRejectionReason,id,Number(current.submitted_revision)]
+          );
+          if(revisionWrite.affectedRows!==1) {
+            const e=new Error('Reviewed revision already decided');
+            e.code='STALE_REVIEW_REVISION';e.statusCode=409;throw e;
+          }
+        }
         // Review-only actions do not strip existing account/trust status.
         if (isApproved) {
           await connection.query(
