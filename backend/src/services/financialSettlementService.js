@@ -1001,13 +1001,18 @@ class FinancialSettlementService {
         const currentHeld = payable.held_amount.toString();
         const forfeitedHeld=exactDecimal.exactDecimalSum(
           holds.map(hold=>String(hold.hold_amount)),2);
-        const newHeld=exactSub(currentHeld,forfeitedHeld,2);
+        const heldAfterForfeiture=exactSub(currentHeld,forfeitedHeld,2);
 
         const maxEntitlement = exactSub(
           payable.net_payable_amount.toString(),
           newDeductions,
           2
         );
+        // Accrual may already have held the entire payable for an active
+        // delivery exception. After refund deduction, never retain a held
+        // balance larger than the remaining supplier entitlement.
+        const newHeld=exactDecimal.exactDecimalGte(heldAfterForfeiture,maxEntitlement,2)
+          ? maxEntitlement:heldAfterForfeiture;
         const newAvailable = Number(newHeld) >= Number(maxEntitlement)
           ? '0.00'
           : exactSub(maxEntitlement, newHeld, 2);
