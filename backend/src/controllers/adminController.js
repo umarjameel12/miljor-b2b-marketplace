@@ -262,10 +262,12 @@ class AdminController {
       const correctionAllowlist = new Set([
         'business_name','business_type','business_description','contact_person_name',
         'contact_person_phone','warehouse_address','lahore_service_area','tax_ntn',
-        'food_license_no','food_license_type','bank_name','bank_account_title','bank_iban'
+        'food_license_no','food_license_type','bank_name','bank_account_title','bank_iban',
+        'document:BUSINESS_LICENSE','document:TAX_CERTIFICATE',
+        'document:WAREHOUSE_PROOF','document:BANK_PROOF'
       ]);
       if (verification_status === 'MORE_INFORMATION_REQUIRED' &&
-        (!Array.isArray(corrections) || !corrections.length || corrections.length>13 ||
+        (!Array.isArray(corrections) || !corrections.length || corrections.length>17 ||
           new Set(corrections).size !== corrections.length ||
           corrections.some(field=>typeof field!=='string'||!correctionAllowlist.has(field)))) {
         return res.status(400).json({success:false,error:{
