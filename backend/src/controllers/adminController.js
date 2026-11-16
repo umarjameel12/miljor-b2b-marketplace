@@ -127,9 +127,9 @@ class AdminController {
       const {
         verification_status,
         verification_level = 'LEVEL_2_BUSINESS',
-        subscription_plan = 'GROWTH',
+        subscription_plan,
         max_active_listings,
-        transaction_fee_percent = 1.50,
+        transaction_fee_percent,
         rejection_reason = null
       } = req.body;
       const adminId = req.user.id;
@@ -238,75 +238,84 @@ class AdminController {
         effectiveListingCap = requestedCap;
       }
 
-      // Check supplier profile exists
-      const [profiles] = await db.query('SELECT * FROM supplier_profiles WHERE supplier_id = ?', [id]);
-      if (!profiles[0]) {
-        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier profile not found' } });
+      // Verification and commercial subscription entitlements are independent.
+      // Admin review never changes supplier plan, fees or paid listing caps.
+      if (subscription_plan !== undefined || max_active_listings !== undefined || transaction_fee_percent !== undefined) {
+        return res.status(400).json({ success: false, error: {
+          code: 'SUBSCRIPTION_MANAGED_SEPARATELY',
+          message: 'Subscription plan, listing cap and transaction fee are managed only by verified billing flows'
+        } });
+      }
+      if (['UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED', 'REJECTED'].includes(verification_status) &&
+          verification_level !== 'LEVEL_2_BUSINESS') {
+        return res.status(400).json({ success: false, error: { code: 'REVIEW_LEVEL_CHANGE_NOT_ALLOWED', message: 'Review-only decisions cannot change the verification level' } });
       }
 
       const connection = await db.getConnection();
       try {
         await connection.beginTransaction();
+        // Lock the reviewed profile before comparing its state; eliminate stale concurrent decisions.
+        const [profiles] = await connection.query(
+          'SELECT supplier_id, verification_status, verification_level, subscription_plan, is_verified FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+          [id]
+        );
+        const current = profiles[0];
+        if (!current) {
+          await connection.rollback();
+          return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier profile not found' } });
+        }
+        const allowedTransitions = {
+          PENDING_REVIEW: ['UNDER_REVIEW', 'VERIFIED', 'MORE_INFORMATION_REQUIRED', 'REJECTED'],
+          UNDER_REVIEW: ['VERIFIED', 'MORE_INFORMATION_REQUIRED', 'REJECTED']
+        };
+        if (!(allowedTransitions[current.verification_status] || []).includes(verification_status)) {
+          await connection.rollback();
+          return res.status(409).json({ success: false, error: {
+            code: 'STALE_OR_INVALID_VERIFICATION_TRANSITION',
+            message: 'Supplier review changed or has already been decided. Refresh before proceeding.'
+          } });
+        }
+        if (req.body.expected_status && req.body.expected_status !== current.verification_status) {
+          await connection.rollback();
+          return res.status(409).json({ success: false, error: { code: 'STALE_REVIEW', message: 'Review status has changed' } });
+        }
 
         const isApproved = verification_status === 'VERIFIED';
         const effectiveRejectionReason = isApproved ? null : (rejection_reason || null);
-
-        // Update supplier profile
         await connection.query(
-          `UPDATE supplier_profiles
-           SET verification_status = ?,
-               verification_level = ?,
-               subscription_plan = ?,
-               max_active_listings = ?,
-               transaction_fee_percent = ?,
-               rejection_reason = ?,
-               verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END
+          `UPDATE supplier_profiles SET verification_status = ?,
+             verification_level = CASE WHEN ? = 1 THEN ? ELSE verification_level END,
+             rejection_reason = ?,
+             verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END
            WHERE supplier_id = ?`,
-          [verification_status, verification_level, effectivePlan, effectiveListingCap, transaction_fee_percent, effectiveRejectionReason, isApproved ? 1 : 0, id]
+          [verification_status, isApproved ? 1 : 0, verification_level, effectiveRejectionReason, isApproved ? 1 : 0, id]
         );
-
-        // Update users table
-        await connection.query(
-          `UPDATE users
-           SET role = CASE WHEN ? = 1 THEN 'SUPPLIER' ELSE role END,
-               is_verified = ?,
-               verification_status = ?
-           WHERE id = ?`,
-          [isApproved ? 1 : 0, isApproved ? 1 : 0, isApproved ? 'VERIFIED' : 'PENDING_SUPPLIER_VERIFICATION', id]
-        );
-
-        // Audit Log
+        // Review-only actions do not strip existing account/trust status.
+        if (isApproved) {
+          await connection.query(
+            `UPDATE users SET role = 'SUPPLIER', is_verified = 1, verification_status = 'VERIFIED' WHERE id = ?`,
+            [id]
+          );
+        }
         await connection.query(
           `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
            VALUES (?, ?, 'SUPPLIER_VERIFICATION_UPDATE', 'supplier_profiles', ?, ?, ?)`,
-          [
-            adminId,
-            req.user.role,
-            id,
-            JSON.stringify({ status: profiles[0].verification_status }),
-            JSON.stringify({ verification_status, verification_level, subscription_plan })
-          ]
+          [adminId, req.user.role, id,
+           JSON.stringify({ status: current.verification_status }),
+           JSON.stringify({ verification_status, verification_level: isApproved ? verification_level : current.verification_level, reason: effectiveRejectionReason })]
         );
-
         await connection.commit();
-        connection.release();
-
         return res.status(200).json({
-          success: true,
-          message: `Supplier verification status updated to '${verification_status}'`,
-          data: {
-            supplier_id: parseInt(id),
-            verification_status,
-            verification_level,
-            subscription_plan,
-            rejection_reason: effectiveRejectionReason
-          }
+          success: true, message: `Supplier verification status updated to '${verification_status}'`,
+          data: { supplier_id: Number(id), verification_status,
+            verification_level: isApproved ? verification_level : current.verification_level,
+            subscription_plan: current.subscription_plan, rejection_reason: effectiveRejectionReason }
         });
-
       } catch (err) {
         await connection.rollback();
-        connection.release();
         throw err;
+      } finally {
+        connection.release();
       }
 
     } catch (error) {
