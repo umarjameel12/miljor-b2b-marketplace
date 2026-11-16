@@ -169,8 +169,12 @@ class SupplierSubscriptionCheckoutService {
     if (!['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'].includes(transactionState)) {
       return {reconciled: false, provider_state: transactionState || 'UNVERIFIED_TRANSACTION'};
     }
-    if(typeof tracker.transaction.id!=='string'||
-       !tracker.transaction.id.trim()||tracker.transaction.id.length>150){
+    // Safepay responses can identify transactions as token, id or reference.
+    // All are provider-owned; never accept an identity from the client.
+    const providerTransactionId=tracker.transaction.token||
+      tracker.transaction.id||tracker.transaction.reference;
+    if(typeof providerTransactionId!=='string'||
+       !/^[A-Za-z0-9:_-]{4,150}$/.test(providerTransactionId)){
       throw error('PROVIDER_TRANSACTION_ID_MISSING',502,
         'Provider transaction identity is required before subscription activation');
     }
