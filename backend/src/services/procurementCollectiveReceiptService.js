@@ -113,6 +113,26 @@ class ProcurementCollectiveReceiptService{
     throw fail('RECEIPT_CONFLICT','Concurrent receipt was already recorded');
     throw error;}finally{conn.release();}
  }
+ async getContract(buyerId,orderId){
+  const buyer=id(buyerId),order=id(orderId);
+  const [orders]=await this.database.query(`SELECT co.order_id,o.payment_status,o.fulfillment_status
+    FROM procurement_collective_buyer_orders co JOIN orders o ON o.id=co.order_id
+    WHERE co.order_id=? AND co.buyer_id=?`,[order,buyer]);
+  if(!orders.length)throw fail('GROUP_ORDER_NOT_FOUND','Owned collective order not found',404);
+  const [lines]=await this.database.query(`SELECT gl.id AS line_id,gl.supplier_sku_id,
+    gl.quantity,gl.purchasing_unit,gl.unit_price,gl.subtotal,gl.physical_snapshot
+    FROM procurement_collective_order_lines gl
+    JOIN procurement_collective_buyer_orders co ON co.id=gl.collective_order_id
+    WHERE co.order_id=? AND co.buyer_id=? ORDER BY gl.id`,[order,buyer]);
+  return {order_id:order,payment_status:orders[0].payment_status,
+    fulfillment_status:orders[0].fulfillment_status,lines:lines.map(l=>({
+      line_id:l.line_id,supplier_sku_id:l.supplier_sku_id,
+      ordered_quantity:String(l.quantity),unit:l.purchasing_unit,
+      unit_price:money(l.unit_price),subtotal:money(l.subtotal),
+      physical_specification:typeof l.physical_snapshot==='string'?
+        JSON.parse(l.physical_snapshot):l.physical_snapshot
+    }))};
+ }
  async get(buyerId,orderId){
   const buyer=id(buyerId),order=id(orderId);
   const [rows]=await this.database.query(`SELECT r.id,r.order_id,r.status,r.shortage_value,r.created_at
