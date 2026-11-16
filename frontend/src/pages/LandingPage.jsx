@@ -201,9 +201,6 @@ export const LandingPage = () => {
                         <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
                           Welcome to MilJor
                         </p>
-                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          Wholesale Collective Procurement
-                        </p>
                       </div>
                       <div className="space-y-2">
                         <Link
