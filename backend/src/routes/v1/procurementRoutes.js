@@ -136,6 +136,11 @@ router.post('/procurement/collectives/orders/:orderId/receipt',
       req.user.id,req.params.orderId,req.body,req.get('X-Idempotency-Key'))});}
     catch(error){return collectiveRouteError(res,error);}
   });
+router.get('/procurement/collectives/orders/:orderId/lines',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveReceipts.getContract(req.user.id,req.params.orderId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
 router.get('/procurement/collectives/orders/:orderId/receipt',
   protect,authorizeStrict('BUYER'),async(req,res)=>{
     try{return res.json({success:true,data:await collectiveReceipts.get(req.user.id,req.params.orderId)});}
