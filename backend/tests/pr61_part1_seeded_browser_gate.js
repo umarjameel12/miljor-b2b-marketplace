@@ -12,6 +12,7 @@ const bids=require('../src/services/procurementCollectiveBidService');
 const approvals=require('../src/services/procurementCollectiveApprovalService');
 const groupOrders=require('../src/services/procurementCollectiveOrderService');
 const groupDelivery=require('../src/services/procurementCollectiveDeliveryService');
+const groupReceipt=require('../src/services/procurementCollectiveReceiptService');
 const invoiceService=require('../src/services/invoiceService');
 const {chromium}=require('playwright');
 const base=process.env.P0_BROWSER_BASE_URL||'http://127.0.0.1:3000';
@@ -289,6 +290,30 @@ async function verify(browser,fixture){
    assert.equal(buyerRoute.status(),200);
    assert.equal((await buyerRoute.json()).data.approval_status,'ACCEPTED');
    console.log('PASS ISOLATED SYNTHETIC-PAID ROUTE LOGIC: partial-payment gate, 2 buyer consents, protected schedule and dispatch; NOT genuine Safepay');
+   // Test-only delivery stage setup; this section never asserts a real provider capture.
+   await db.query("UPDATE orders SET fulfillment_status='SUPPLIER_DELIVERED' WHERE id IN (?,?)",created.groupOrders);
+   for(const [index,oid] of created.groupOrders.entries()){
+     const buyerId=index===0?fixture.firstBuyer.id:created.secondBuyer.id;
+     const contract=await groupReceipt.getContract(buyerId,oid);
+     assert.equal(contract.lines.length,1);
+     const ordered=Number(contract.lines[0].ordered_quantity);
+     const received=index===0?String(ordered-1):String(ordered);
+     const response=await groupReceipt.submit(buyerId,oid,{
+       lines:[{line_id:contract.lines[0].line_id,received_quantity:received}]
+     },tag+'-receipt-'+buyerId);
+     assert.equal(response.status,index===0?'EXCEPTION':'BUYER_CONFIRMED');
+     assert.equal(response.lines[0].shortage,index===0?'1.0000':'0.0000');
+     assert.equal(response.refund_executed,false);
+     assert.equal(response.supplier_settlement_authorized,false);
+   }
+   const [finalStops]=await db.query('SELECT status FROM procurement_delivery_stops WHERE run_id=? ORDER BY order_id',[route.run_id]);
+   assert.equal(finalStops.length,2);
+   assert.equal(finalStops.filter(x=>x.status==='EXCEPTION').length,1);
+   assert.equal(finalStops.filter(x=>x.status==='BUYER_CONFIRMED').length,1);
+   const [refunds]=await db.query('SELECT COUNT(*) AS count FROM refund_obligations WHERE order_id IN (?,?)',created.groupOrders);
+   assert.equal(Number(refunds[0].count),0,'Receipt shortage must not create automatic refund');
+   console.log('PASS ISOLATED RECEIPT: per-item shortage 1 bag, other buyer separately confirmed, route exception and zero invented refund');
+
 
 
    // Buyer sessions cannot act on supplier RFQ routes, and invite is always owned.
@@ -313,6 +338,11 @@ async function cleanup(){
    }
    if(created.groupOrders.length){
      for(const oid of created.groupOrders){
+       await db.query(`DELETE FROM procurement_notifications WHERE event_key LIKE ?`,
+         ['collective:receipt:%']);
+       await db.query(`DELETE FROM procurement_collective_receipt_lines WHERE receipt_id IN
+         (SELECT id FROM procurement_collective_receipt_submissions WHERE order_id=?)`,[oid]);
+       await db.query('DELETE FROM procurement_collective_receipt_submissions WHERE order_id=?',[oid]);
        await db.query('DELETE FROM invoices WHERE order_id=?',[oid]);
        await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (SELECT buyer_id FROM orders WHERE id=?) AND event_key LIKE ?',[oid,'collective:%']);
        await db.query('DELETE FROM supplier_inventory_allocations WHERE allocation_type=? AND reference_id=?',['ORDER_DIRECT',oid]);
