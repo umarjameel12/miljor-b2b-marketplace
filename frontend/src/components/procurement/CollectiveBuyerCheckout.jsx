@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import apiClient from '../../api/client';
+import { CollectiveLineReceipt } from './CollectiveLineReceipt';
 
 export function CollectiveBuyerCheckout({groupId}){
  const [state,setState]=useState(null),[addresses,setAddresses]=useState([]);
@@ -66,6 +67,8 @@ export function CollectiveBuyerCheckout({groupId}){
    <p className="text-xs text-[var(--text-muted)]">This is your independent payable order. Group consent did not charge you.</p>
    <a href={`/orders`} className="inline-block underline text-[var(--brand-accent)]">Open your order to pay with Safepay</a>
   </div>}
+  {!loading&&order&&order.payment_status==='PAID'&&
+   <CollectiveLineReceipt orderId={order.order_id}/>}
   {!loading&&route&&order&&<section aria-label="My group delivery window"
     className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
     <h5 className="font-semibold text-sm">Your proposed clustered delivery</h5>
