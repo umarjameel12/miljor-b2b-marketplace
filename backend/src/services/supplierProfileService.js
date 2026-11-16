@@ -135,7 +135,15 @@ class SupplierProfileService {
     try {
       await connection.beginTransaction();
 
+      // Serialize profile edits with review decisions and initial submissions.
+      await supplierProfileRepo.lockForUpdate(supplierId, connection);
       const currentProfile = await supplierProfileRepo.findBySupplierId(supplierId, connection);
+      if (['PENDING_REVIEW', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED', 'REJECTED'].includes(currentProfile.verification_status)) {
+        const err = new Error('The submitted application is locked. Corrections require a specific administrative request.');
+        err.code = 'VERIFICATION_PROFILE_LOCKED';
+        err.statusCode = 409;
+        throw err;
+      }
 
       // Material fields that trigger re-review if changed on a verified supplier
       const materialFieldKeys = ['business_name', 'tax_ntn', 'food_license_no', 'bank_iban', 'bank_account_title'];
@@ -246,7 +254,7 @@ class SupplierProfileService {
 
       return {
         success: true,
-        message: 'Supplier verification application submitted successfully. Verification team will review within 2 business days.',
+        message: 'Supplier verification application submitted successfully. Your submitted application is awaiting administrative review.',
         verification_status: 'PENDING_REVIEW',
         submitted_at: updated.submitted_at
       };
