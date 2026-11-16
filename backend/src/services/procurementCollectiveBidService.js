@@ -108,13 +108,25 @@ class ProcurementCollectiveBidService {
  }
  async supplierInbox(supplierId){
   const supplier=id(supplierId);
-  const [rows]=await this.database.query("SELECT i.id AS invitation_id,i.group_id,i.status,g.join_deadline,g.minimum_buyers,r.quote_deadline,r.delivery_area FROM procurement_collective_supplier_invitations i JOIN procurement_collective_groups g ON g.id=i.group_id JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.quote_deadline>UTC_TIMESTAMP() ORDER BY i.invited_at DESC LIMIT 100",[supplier]);
+  const [rows]=await this.database.query("SELECT i.id AS invitation_id,i.group_id,i.status,g.request_id,g.join_deadline,g.minimum_buyers,r.quote_deadline,r.delivery_area FROM procurement_collective_supplier_invitations i JOIN procurement_collective_groups g ON g.id=i.group_id JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.quote_deadline>UTC_TIMESTAMP() ORDER BY i.invited_at DESC LIMIT 100",[supplier]);
   // Only aggregate request lines are visible; buyer identities and addresses are excluded.
   for(const row of rows){
    const [items]=await this.database.query("SELECT ri.id AS request_item_id,ri.family_id,ri.unit,ri.requirements FROM procurement_request_items ri JOIN procurement_collective_groups g ON g.request_id=ri.request_id WHERE g.id=? ORDER BY ri.line_number",[row.group_id]);
-   row.items=items.map(x=>({...x,requirements:String(x.requirements||'')
-      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
-      .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')}));
+   const demand=await this.demand(this.database,{id:row.group_id,request_id:row.request_id});
+   const participating=demand.participants.filter(p=>p.status==='JOINED'&&p.consent_confirmed);
+   row.participant_count=participating.length;
+   // Never send the source participants, IDs, consent snapshots, or addresses.
+   row.items=items.map(x=>{
+     const quantities=participating.flatMap(p=>p.lines)
+       .filter(l=>Number(l.request_item_id)===Number(x.request_item_id));
+     const aggregateQuantity=exact.exactDecimalSum([
+       '0.0000',...quantities.map(l=>String(l.quantity))
+     ],4);
+     return {...x,aggregate_quantity:aggregateQuantity,
+       requirements:String(x.requirements||'')
+         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
+         .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')};
+   });
   }
   return rows;
  }
