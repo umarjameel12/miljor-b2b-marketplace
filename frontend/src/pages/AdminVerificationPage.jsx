@@ -40,6 +40,7 @@ export const AdminVerificationPage = () => {
 
   // Modal states
   const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [selectedDocuments,setSelectedDocuments] = useState([]);
   const [modalMode, setModalMode] = useState(null); // 'approve' | 'reject' | null
   const [submitting, setSubmitting] = useState(false);
 
@@ -67,7 +68,11 @@ export const AdminVerificationPage = () => {
     ['contact_person_phone','Contact phone'],['warehouse_address','Warehouse address'],
     ['lahore_service_area','Service area'],['tax_ntn','NTN'],
     ['food_license_no','Food license number'],['food_license_type','Food license type'],
-    ['bank_name','Bank name'],['bank_account_title','Account title'],['bank_iban','IBAN']
+    ['bank_name','Bank name'],['bank_account_title','Account title'],['bank_iban','IBAN'],
+    ['document:BUSINESS_LICENSE','Business license document'],
+    ['document:TAX_CERTIFICATE','Tax certificate document'],
+    ['document:WAREHOUSE_PROOF','Warehouse proof document'],
+    ['document:BANK_PROOF','Bank proof document']
   ];
 
   const isAuthorizedAdmin =
@@ -97,7 +102,12 @@ export const AdminVerificationPage = () => {
     }
   }, [isAuthenticated, isAuthorizedAdmin]);
 
+  const loadDocuments=async(supplier)=>{
+    try{const res=await adminApi.getSupplierDocuments(supplier.supplier_id);setSelectedDocuments(res.data?.documents||[]);}
+    catch{setSelectedDocuments([]);toast.error('Could not retrieve supplier evidence');}
+  };
   const handleOpenApprove = (supplier) => {
+    loadDocuments(supplier);
     setSelectedSupplier(supplier);
     const plan = supplier.subscription_plan || 'GROWTH';
     setApprovalForm({
@@ -118,6 +128,7 @@ export const AdminVerificationPage = () => {
   };
 
   const handleOpenReject = (supplier, mode = 'reject') => {
+    loadDocuments(supplier);
     setSelectedSupplier(supplier);
     setRejectionReason('');
     setCorrectionFields([]);
@@ -126,6 +137,7 @@ export const AdminVerificationPage = () => {
 
   const handleCloseModal = () => {
     setSelectedSupplier(null);
+    setSelectedDocuments([]);
     setModalMode(null);
     setRejectionReason('');
     setCorrectionFields([]);
@@ -463,6 +475,23 @@ export const AdminVerificationPage = () => {
             </p>
 
             <form onSubmit={handleSubmitApproval} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Supplier evidence versions</h4>
+                {selectedDocuments.length===0 ? <p>No uploaded documents</p> :
+                  selectedDocuments.map(doc=><div key={doc.id} className="flex justify-between gap-2">
+                    <span>{doc.kind.replaceAll('_',' ')} · v{doc.version} · {doc.filename}</span>
+                    <button type="button" className="underline text-[var(--brand-accent)]"
+                      onClick={async()=>{
+                        try{
+                          const blob=await adminApi.downloadSupplierDocument(selectedSupplier.supplier_id,doc.id);
+                          const url=URL.createObjectURL(blob);
+                          const link=document.createElement('a');link.href=url;link.download=doc.filename;
+                          link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                        }catch{toast.error('Unable to download evidence');}
+                      }}>Download</button>
+                  </div>)}
+              </div>
+
               <div>
                 <label className="font-semibold block mb-1">Verification Level</label>
                 <select
@@ -528,6 +557,23 @@ export const AdminVerificationPage = () => {
             </p>
 
             <form onSubmit={handleSubmitRejection} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Supplier evidence versions</h4>
+                {selectedDocuments.length===0 ? <p>No uploaded documents</p> :
+                  selectedDocuments.map(doc=><div key={doc.id} className="flex justify-between gap-2">
+                    <span>{doc.kind.replaceAll('_',' ')} · v{doc.version} · {doc.filename}</span>
+                    <button type="button" className="underline text-[var(--brand-accent)]"
+                      onClick={async()=>{
+                        try{
+                          const blob=await adminApi.downloadSupplierDocument(selectedSupplier.supplier_id,doc.id);
+                          const url=URL.createObjectURL(blob);
+                          const link=document.createElement('a');link.href=url;link.download=doc.filename;
+                          link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                        }catch{toast.error('Unable to download evidence');}
+                      }}>Download</button>
+                  </div>)}
+              </div>
+
               {modalMode==='request-info' && <fieldset className="space-y-2">
                 <legend className="font-semibold">Select fields requiring correction</legend>
                 <div className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--border-subtle)] p-3">
