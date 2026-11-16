@@ -21,6 +21,7 @@ const safepayAdapter = require('./safepayAdapter');
 const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
+const procurementCollectiveOrderService = require('./procurementCollectiveOrderService');
 
 class SafepayCheckoutService {
 
@@ -545,6 +546,7 @@ class SafepayCheckoutService {
       // For B6 supplier orders, atomically mark the shared ORDER_DIRECT
       // listing allocations COMMITTED only after verified provider payment.
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
+          await procurementCollectiveOrderService.reconcilePaidOrder(connection,order.id);
       await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // 8. Record Webhook Event as PROCESSED
@@ -981,6 +983,7 @@ class SafepayCheckoutService {
       );
 
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
+          await procurementCollectiveOrderService.reconcilePaidOrder(connection,order.id);
 
       // B4 pool outbox: only valid for actual pool-backed orders.
       // B5/B6 poolless orders use verified payment rows and their own lifecycle events.
