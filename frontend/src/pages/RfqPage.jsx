@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import { geoApi } from '../api/geo';
 import { deliveryApi } from '../api/delivery';
 import { RecurringCycleControls } from '../components/procurement/RecurringCycleControls';
+import { CollectiveBuyerCheckout } from '../components/procurement/CollectiveBuyerCheckout';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
@@ -1034,6 +1035,8 @@ export const RfqPage = () => {
                     <p className="text-xs font-semibold">
                       Group #{invite.group_id} · {invite.status} · Join by {String(invite.join_deadline)}
                     </p>
+                    {['QUALIFIED','QUOTING'].includes(invite.group_status)&&
+                       invite.status==='LOCKED'&&<CollectiveBuyerCheckout groupId={invite.group_id}/>}
                     {invite.status==='JOINED'&&invite.group_status==='QUOTING' &&
                       <button type="button" disabled={shoppingBusy}
                         onClick={()=>showCollectiveBids(invite.group_id)}
