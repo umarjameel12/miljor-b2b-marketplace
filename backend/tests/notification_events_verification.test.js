@@ -8,6 +8,7 @@
 // =============================================================================
 process.env.NODE_ENV = 'test';
 process.env.DB_NAME = 'miljor_test_db';
+process.env.TEST_DB_NAME = 'miljor_test_db';
 
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -22,13 +23,15 @@ async function testNotificationEvents() {
   const [[dbName]] = await db.query('SELECT DATABASE() as db');
   assert.equal(dbName.db, 'miljor_test_db', 'Must run strictly in miljor_test_db');
 
-  const buyerId = 5;
-  const supplierId = 2;
-  const adminId = 1;
   const runId = Date.now() + '_' + Math.floor(Math.random() * 10000);
-
-  // Clean test user notifications for this test cycle
-  await db.query('DELETE FROM platform_notifications WHERE user_id IN (?, ?, ?)', [buyerId, supplierId, adminId]);
+  const ownedUsers=[];
+  try{
+  for(const role of ['BUYER','SUPPLIER','ADMIN']){
+    const [created]=await db.query('INSERT INTO users(full_name,email,role) VALUES (?,?,?)',
+      ['Notification test '+runId,'notice_'+role.toLowerCase()+'_'+runId+'@example.invalid',role]);
+    ownedUsers.push(created.insertId);
+  }
+  const [buyerId,supplierId,adminId]=ownedUsers;
 
   console.log('\n--- 1. Testing Event Creation for All 9 Core Platform Events ---');
 
@@ -169,6 +172,13 @@ async function testNotificationEvents() {
   console.log('  [PASS] Unread counts and read state transitions verified (5 -> 4 -> 0)');
 
   console.log('\n🎉 ALL NOTIFICATION EVENT VERIFICATION TESTS PASSED (100% Green)');
+  }finally{
+    for(const userId of ownedUsers){
+      await db.query('DELETE FROM platform_notifications WHERE user_id=?',[userId]);
+      await db.query('DELETE FROM users WHERE id=? AND email LIKE ?',[userId,'notice_%_'+runId+'@example.invalid']);
+    }
+    await db.end();
+  }
 }
 
 testNotificationEvents()

@@ -4,6 +4,7 @@
 const crypto = require('node:crypto');
 const db = require('../config/db');
 const { normalizeRequestDraft } = require('./procurementRequestPolicy');
+const notifications = require('./notificationService');
 
 const issue = (code, message, statusCode = 400) => {
   const error = new Error(message);
@@ -144,6 +145,8 @@ class ProcurementRequestService {
         'UPDATE procurement_requests SET create_response_snapshot=? WHERE id=? AND buyer_id=?',
         [JSON.stringify(request),created.insertId,buyer]
       );
+      await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'REQUEST_CREATED',
+        eventKey:'request:'+created.insertId+':created',entityId:created.insertId});
       await conn.commit();
       return {request,is_replay:false};
     } catch (e) {
@@ -256,6 +259,8 @@ class ProcurementRequestService {
          VALUES (?,?,'PUBLISH',?,?,?)`,
         [id,buyer,idem,hash,JSON.stringify(request)]
       );
+      await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'REQUEST_PUBLISHED',
+        eventKey:'request:'+id+':published',entityId:id});
       await conn.commit();
       return {request,is_replay:false};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}

@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const ALLOWED_SUPPLIER_TRANSITIONS = {
   'AWAITING_SUPPLIER_ACKNOWLEDGEMENT': ['PREPARING'],
@@ -54,6 +55,20 @@ const VALID_BUYER_DISCREPANCY_REASONS = [
 ];
 
 class FulfillmentService {
+
+  // Use only the locked order's participants and immutable milestone identity.
+  // Enqueue errors propagate to the enclosing mutation's rollback.
+  async _enqueueOrderNotifications(connection, order, eventType, eventCode) {
+    for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+      await notificationService.enqueueEvent(connection, {
+        userId,
+        role,
+        eventType,
+        eventKey: `${eventCode}:${eventType}`,
+        entityId: order.id
+      });
+    }
+  }
 
   /**
    * Generates a deterministic event code for fulfillment milestone events
@@ -393,6 +408,11 @@ class FulfillmentService {
       }
 
       // Update order state and timestamps
+      if(toStatus==='DISPATCHED' && order.procurement_delivery_snapshot &&
+         order.delivery_type!=='SUPPLIER_PICKUP' && deliveryMethod==='BUYER_PICKUP') {
+        const err=new Error('Bound procurement delivery requires the buyer-approved delivery type.');
+        err.code='PROCUREMENT_DELIVERY_METHOD_MISMATCH';err.statusCode=422;throw err;
+      }
       let updateSql = 'UPDATE orders SET fulfillment_status = ?, updated_at = NOW()';
       const updateParams = [toStatus];
 
@@ -487,10 +507,25 @@ class FulfillmentService {
       );
       }
 
-      const notificationType={PREPARING:'FULFILLMENT.PACKING',READY_FOR_DISPATCH:'FULFILLMENT.READY_FOR_DISPATCH',
-        DISPATCHED:'FULFILLMENT.DISPATCHED',SUPPLIER_DELIVERED:'FULFILLMENT.SUPPLIER_MARKED_DELIVERED'}[toStatus];
-      if(notificationType)await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
-        orderId:order.id,type:notificationType,transitionId:trimmedKey});
+      // PREPARING persists both acknowledgement and processing timestamps.
+      // These canonical notices share that actual milestone, not invented states.
+      if (toStatus === 'PREPARING') {
+        for (const type of ['FULFILLMENT.ACCEPTED', 'FULFILLMENT.PACKING']) {
+          await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection, {
+            orderId: order.id, type, transitionId: eventCode
+          });
+        }
+      }
+
+      const notificationType = {
+        READY_FOR_DISPATCH: 'DISPATCH_SCHEDULED',
+        DISPATCHED: 'OUT_FOR_DELIVERY',
+        SUPPLIER_DELIVERED: 'DELIVERY_REPORTED'
+      }[toStatus];
+      if (notificationType) {
+        await this._enqueueOrderNotifications(connection, order, notificationType, eventCode);
+      }
+
       await connection.commit();
 
       return {
@@ -682,6 +717,15 @@ class FulfillmentService {
           trimmedKey
         ]
       );
+      }
+
+      const notificationType = {
+        SUPPLIER_DELIVERY_DELAYED: 'DELIVERY_DELAYED',
+        SUPPLIER_LOGISTICS_FAILURE: 'DELIVERY_FAILED'
+      }[reason];
+      // Inventory shortage does not establish partial delivery or a failed attempt.
+      if (notificationType) {
+        await this._enqueueOrderNotifications(connection, order, notificationType, eventCode);
       }
 
       await connection.commit();
@@ -1034,8 +1078,8 @@ class FulfillmentService {
       );
       }
 
-      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
-        orderId:order.id,type:'FULFILLMENT.BUYER_ACCEPTED',transitionId:trimmedKey});
+      await this._enqueueOrderNotifications(connection, order, 'RECEIPT_CONFIRMED', eventCode);
+
       await connection.commit();
 
       return {
@@ -1276,8 +1320,13 @@ class FulfillmentService {
       );
       }
 
-      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
-        orderId:order.id,type:shortageEvidence?'FULFILLMENT.PARTIAL_DELIVERY':'FULFILLMENT.DELIVERY_FAILED',transitionId:trimmedKey});
+      // Only a persisted, validated single-item shortage with some goods received
+      // establishes partial delivery. Other discrepancies and B6 aggregate claims
+      // cannot safely produce this event; no failure is inferred from non-receipt.
+      if (shortageEvidence && Number(shortageEvidence.received_quantity) > 0) {
+        await this._enqueueOrderNotifications(connection, order, 'PARTIAL_DELIVERY', eventCode);
+      }
+
       await connection.commit();
 
       return {

@@ -697,7 +697,7 @@ class FlashPoolService {
         const [paidPayments]=await conn.query("SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[hold.order_id]);
         if(paidPayments.length)continue;
         const [activeAttempts]=await conn.query(
-          "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' LIMIT 1",
+          "SELECT id FROM payment_attempts WHERE order_id=? AND status IN ('INITIATED','RECONCILIATION_REQUIRED') LIMIT 1",
           [hold.order_id]);
         if(activeAttempts.length)continue;
         await conn.query(

@@ -48,6 +48,17 @@ async function main(){
     assert.ok(!(await s.page.getByText('Supplier access required').isVisible().catch(()=>false)),
       'Supplier lost session after refresh');
     pass('Supplier pool dashboard session survives full reload');
+    await s.page.goto(base+'/supplier/dashboard',{waitUntil:'domcontentloaded'});
+    await s.page.getByRole('region',{name:'Supplier action center'}).waitFor({timeout:15000});
+    await s.page.getByRole('link',{name:/Invitations awaiting response: \d+/}).waitFor({timeout:15000});
+    await s.page.getByRole('link',{name:/Active numeric counteroffers: \d+/}).click();
+    await s.page.locator('#supplier-counteroffers').waitFor({timeout:15000});
+    assert.ok(s.page.url().endsWith('/procurement#supplier-counteroffers'));
+    await s.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
+    await s.page.getByRole('region',{name:'Paid supplier fulfillment',exact:true}).waitFor({timeout:15000});
+    await s.page.getByText('No paid orders in this queue.',{exact:true}).waitFor({timeout:15000});
+    assert.equal(await s.page.getByRole('button',{name:/Start preparation|Record dispatch/}).count(),0,'Unpaid browser fixture must not allow fulfillment');
+    pass('Supplier dashboard real counters, numeric deep link and paid-only queue with no unpaid advancement');
     await b.page.goto(base+'/orders',{waitUntil:'domcontentloaded'});
     await b.page.getByRole('heading',{name:'Procurement Orders & Reservations'}).waitFor({timeout:15000});
     // Real order row from isolated MySQL, rendered through actual backend GET /orders.

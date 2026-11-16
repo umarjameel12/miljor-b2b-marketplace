@@ -1,0 +1,50 @@
+name: Smart Procurement Hub Counteroffer Source Gate
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/pages/RfqPage.jsx'
+      - 'frontend/src/App.jsx'
+      - 'frontend/src/components/layout/AppShell.jsx'
+      - 'backend/src/services/procurementCounterofferPolicy.js'
+      - 'backend/src/services/procurementDeliveryOptionsService.js'
+      - 'backend/tests/smart_hub_delivery_options_gate.js'
+      - 'backend/src/services/procurementProductCounterofferService.js'
+      - 'backend/src/controllers/procurementController.js'
+      - 'backend/src/routes/v1/procurementRoutes.js'
+      - 'backend/database/migrations/090_smart_procurement_product_counteroffers.sql'
+      - 'backend/tests/smart_hub_counteroffer_policy_gate.js'
+      - 'backend/src/services/procurementSchedulePolicy.js'
+      - 'backend/src/services/procurementRequestPolicy.js'
+      - 'backend/tests/b6_procurement_schedule_policy_gate.js'
+      - 'backend/database/migrations/091_procurement_biweekly_cadence.sql'
+      - '.github/workflows/smart-hub-counteroffers.yml'
+  push:
+    branches:
+      - 'feature/smart-procurement-hub-unified-entry'
+jobs:
+  source-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Product-wise numeric counteroffer policy tests
+        run: node backend/tests/smart_hub_counteroffer_policy_gate.js
+      - name: Recurring calendar and request policy
+        working-directory: backend
+        run: |
+          node tests/b6_procurement_schedule_policy_gate.js
+          node tests/b6_procurement_request_policy_gate.js
+          node tests/canonical_migration_manifest_gate.js
+      - name: Install backend dependencies for delivery eligibility tests
+        run: npm ci --prefix backend
+      - name: Authenticated procurement delivery-options policy tests
+        run: node backend/tests/smart_hub_delivery_options_gate.js
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Frontend production build
+        run: npm run build --prefix frontend

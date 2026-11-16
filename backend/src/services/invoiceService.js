@@ -241,6 +241,7 @@ class InvoiceService {
       }];
 
       const snapshot = {
+        ...(o.procurement_delivery_snapshot?{delivery_terms:typeof o.procurement_delivery_snapshot==='string'?JSON.parse(o.procurement_delivery_snapshot):o.procurement_delivery_snapshot}:{}),
         invoice_number: invoiceNumber,
         order_id: o.id,
         order_code: o.order_code,
@@ -283,6 +284,11 @@ class InvoiceService {
       );
 
       const [created] = await conn.query('SELECT * FROM invoices WHERE id = ?', [res.insertId]);
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(conn, {
+        orderId: o.id,
+        type: 'PAYMENT.INVOICE_ISSUED',
+        transitionId: 'invoice-' + res.insertId
+      });
       await conn.commit();
       return created[0];
     } catch (err) {

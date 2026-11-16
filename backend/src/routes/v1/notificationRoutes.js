@@ -11,6 +11,19 @@ const { protect } = require('../../middlewares/authGuard');
 
 router.use(protect);
 
+router.get('/operations',async(req,res)=>{
+  try{return res.json({success:true,data:await require('../../services/notificationOperationsService').health({actor:req.user})});}
+  catch(error){return res.status(error.statusCode||500).json({success:false,error:{message:error.statusCode?error.message:'Unable to load notification operations'}});}
+});
+router.post('/operations/:id/retry',async(req,res)=>{
+  try{return res.json({success:true,data:await require('../../services/notificationOperationsService').retryNotice({actor:req.user,id:req.params.id,reason:req.body?.reason})});}
+  catch(error){return res.status(error.statusCode||500).json({success:false,error:{message:error.statusCode?error.message:'Unable to recover notification'}});}
+});
+router.post('/operations/email/:id/retry',async(req,res)=>{
+  try{return res.json({success:true,data:await require('../../services/notificationOperationsService').retryEmail({actor:req.user,id:req.params.id,reason:req.body?.reason})});}
+  catch(error){return res.status(error.statusCode||500).json({success:false,error:{message:error.statusCode?error.message:'Unable to recover email'}});}
+});
+
 router.get('/', async (req, res) => {
   try {
     const unreadOnly = req.query.unread === 'true';
@@ -55,6 +68,16 @@ router.patch('/mark-all-read', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ success: false, error: { message: err.message } });
   }
+});
+
+router.get('/preferences',async(req,res)=>{
+  try{return res.json({success:true,data:await notificationService.getPreferences(req.user.id)});}
+  catch{return res.status(500).json({success:false,error:{message:'Unable to load notification preferences'}});}
+});
+
+router.put('/preferences',async(req,res)=>{
+  try{return res.json({success:true,data:await notificationService.setPreferences(req.user.id,req.body)});}
+  catch(error){return res.status(error.statusCode||500).json({success:false,error:{message:error.statusCode===400?error.message:'Unable to save notification preferences'}});}
 });
 
 module.exports = router;

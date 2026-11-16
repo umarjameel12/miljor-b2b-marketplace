@@ -528,6 +528,9 @@ class DeliveryEligibilityService {
       }
 
       // Validate Single-Use / Replay Prevention
+      if(quote.procurement_request_id&&(!isExternalConn||Number(options.procurementRequestId)!==Number(quote.procurement_request_id))){
+        throw Object.assign(new Error('Procurement delivery terms must be accepted through gated award checkout.'),{code:'PROCUREMENT_AWARD_REQUIRED',statusCode:409});
+      }
       if (quote.status === 'ACCEPTED') {
         const err = new Error('This delivery quote has already been accepted (replay prevented).');
         err.code = 'QUOTE_ALREADY_ACCEPTED';

@@ -46,9 +46,19 @@ router.post('/procurement/supplier/quotes/:quoteId/withdraw',protect,authorizeSt
 
 // B6-F — Buyer comparison and non-binding improvement requests.
 router.get('/procurement/requests/:id/compare',protect,authorizeStrict('BUYER'),(req,res)=>controller.compareSmartQuotes(req,res));
-router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>controller.requestSmartBetterOffer(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>res.status(410).json({success:false,error:{code:'LEGACY_FREE_TEXT_NEGOTIATION_DISABLED',message:'Use selected-product numeric counteroffers in the Smart Procurement Hub.'}}));
 router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
 router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
+
+router.get('/procurement/requests/:id/quotes/:quoteId/delivery-options',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartDeliveryOptions(req,res));
+
+// Smart Hub product-wise numeric counteroffers (no free-text or chat).
+router.post('/procurement/requests/:id/quotes/:quoteId/delivery-choice',protect,authorizeStrict('BUYER'),(req,res)=>controller.chooseDelivery(req,res));
+router.get('/procurement/supplier/requests/:id/delivery-choices',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.supplierDeliveryChoices(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitProductCounteroffers(req,res));
+router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerProductCounteroffers(req,res));
+router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierProductCounteroffers(req,res));
+router.post('/procurement/supplier/counteroffers/:offerId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondProductCounteroffer(req,res));
 
 // B6-G/H award preview: buyer explicitly selects quote version and physical SKU.
 // No order, hold, ledger or checkout route is exposed before inventory/Safepay gate.

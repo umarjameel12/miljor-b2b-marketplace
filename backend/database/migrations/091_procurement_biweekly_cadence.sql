@@ -1,0 +1,5 @@
+ALTER TABLE procurement_requests
+  MODIFY COLUMN frequency ENUM('ONE_TIME','WEEKLY','MONTHLY','BIWEEKLY') NOT NULL DEFAULT 'ONE_TIME';
+
+ALTER TABLE procurement_recurring_contracts
+  MODIFY COLUMN cadence ENUM('WEEKLY','MONTHLY','BIWEEKLY') NOT NULL;

@@ -5,6 +5,7 @@ const crypto=require('node:crypto');
 const db=require('../config/db');
 const exact=require('./exactDecimal');
 const {buildCollectiveBidPreview}=require('./procurementCollectiveBidPolicy');
+const notifications=require('./notificationService');
 const err=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=v=>{if(v==null||typeof v==='boolean'||!/^[1-9]\d*$/.test(String(v))||
   !Number.isSafeInteger(Number(v)))throw err('INVALID_ID','Positive identifier required.');return Number(v)};
@@ -59,6 +60,12 @@ class ProcurementCollectiveBidService {
    const count=demand.participants.filter(p=>p.status==='JOINED'&&p.consent_confirmed).length;
    if(count<Number(group.minimum_buyers))throw err('GROUP_NOT_QUALIFIED','Not enough consenting buyers.',409);
    await conn.query("UPDATE procurement_collective_groups SET status='QUOTING' WHERE id=? AND status='FORMING'",[group.id]);
+   for(const participant of demand.participants.filter(member=>member.status==='JOINED'&&member.consent_confirmed)){
+    for(const eventType of ['GROUP_MINIMUM_REACHED','GROUP_CUTOFF']){
+     await notifications.enqueueEvent(conn,{userId:participant.buyer_id,role:'BUYER',eventType,
+      eventKey:'group:'+group.id+':'+eventType,entityId:group.id});
+    }
+   }
    await conn.commit();return {group_id:group.id,status:'QUOTING',qualified_buyers:count,is_replay:false};
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
@@ -170,6 +177,11 @@ class ProcurementCollectiveBidService {
     await conn.query("INSERT INTO procurement_collective_bid_lines(bid_version_id,request_item_id,supplier_listing_id,supplier_sku_id,product_spec_id,aggregate_quantity,min_aggregate_quantity,purchasing_unit,unit_price,subtotal,physical_snapshot) VALUES (?,?,?,?,?,?,?,?,?,?,?)",[saved.insertId,l.request_item_id,l.supplier_listing_id,l.supplier_sku_id,l.product_spec_id,l.aggregate_quantity,l.min_aggregate_quantity,l.purchasing_unit,l.unit_price,l.subtotal,JSON.stringify(l.physical_snapshot)]);
    }
    await conn.query('UPDATE procurement_collective_bids SET current_version=? WHERE id=?',[version,bid.id]);
+   const [recipients]=await conn.query("SELECT buyer_id FROM procurement_collective_participants WHERE group_id=? AND status='JOINED'",[gid]);
+   for(const recipient of recipients){
+    await notifications.enqueueEvent(conn,{userId:recipient.buyer_id,role:'BUYER',eventType:'CONSENT_REQUIRED',
+     eventKey:'group-bid:'+bid.id+':version:'+version+':consent',entityId:group.request_id});
+   }
    await conn.commit();return {bid:snapshot,is_replay:false};
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw err('BID_CONFLICT','Concurrent supplier bid conflict.',409);throw e}finally{conn.release()}
  }

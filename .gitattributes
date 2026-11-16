@@ -1,2 +1,3 @@
-# Migration journals hash exact SQL bytes; Windows checkouts must preserve LF.
+# Preserve original migration bytes and canonical LF for forward SQL.
+backend/database/migrations/** -text
 backend/database/migrations/*.sql text eol=lf

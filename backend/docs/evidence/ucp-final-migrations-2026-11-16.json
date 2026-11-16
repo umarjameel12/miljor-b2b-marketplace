@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-11-16T01:37:46.824Z",
+  "runtimePort": 33319,
+  "finalFreshPort": 33321,
+  "finalUpgradePort": 33320,
+  "result": "PASS",
+  "equivalentBusinessTables": 105,
+  "schemaSha256": "4d503b220b338a47f59ce6ec127a4901be91bb5c6e68f00c68dc1d31e77fec4a",
+  "freshFinalHistory": [
+    {
+      "version": "096",
+      "name": "096_ucp_recovery_cursor.sql"
+    },
+    {
+      "version": "097",
+      "name": "097_ucp_notification_controls.sql"
+    },
+    {
+      "version": "098",
+      "name": "098_ucp_notification_event_types.sql"
+    }
+  ],
+  "upgradeFinalHistory": [
+    {
+      "version": "096",
+      "name": "096_ucp_recovery_cursor.sql"
+    },
+    {
+      "version": "097",
+      "name": "097_ucp_notification_controls.sql"
+    },
+    {
+      "version": "098",
+      "name": "098_ucp_notification_event_types.sql"
+    }
+  ],
+  "restoredCommercialChecksums": {
+    "users": 3903776369,
+    "pools": 3967211801,
+    "reservations": 2932238194,
+    "orders": 953071171,
+    "payments": 1900603711,
+    "platform_ledger": 0
+  }
+}

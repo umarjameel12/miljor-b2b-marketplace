@@ -89,31 +89,25 @@ export const LoginPage = () => {
 
         {preferences.showBrandHeading && (
           <h1
-            className="font-display font-black text-xl sm:text-2xl tracking-tight"
+            className="auth-heading text-2xl sm:text-[29px] leading-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             Sign In to MilJor
           </h1>
         )}
 
-        <p
-          className="text-xs font-sans mt-0.5"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          Smarter procurement for commercial food businesses
-        </p>
       </div>
 
       {/* Segmented Quick-Switch Tabs [Sign In | Create Account] */}
       <div
-        className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+        className="auth-auth-tabs grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
         style={{
           backgroundColor: 'var(--bg-input)',
           borderColor: 'var(--border-subtle)',
         }}
       >
         <span
-          className="py-1.5 text-center rounded-lg transition-all shadow-xs cursor-default"
+          className="auth-segment-active py-1.5 text-center rounded-lg transition-all cursor-default"
           style={{
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
@@ -167,7 +161,7 @@ export const LoginPage = () => {
       {/* Sign-In Form Fields */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <Input
-          label="Business Email"
+          label="Email"
           type="email"
           required
           autoComplete="email"
@@ -195,10 +189,10 @@ export const LoginPage = () => {
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded text-emerald-700 focus:ring-[var(--brand-accent)] border-[var(--border-default)] cursor-pointer"
+              className="w-4 h-4 rounded cursor-pointer accent-[var(--brand-accent)] focus:ring-2 focus:ring-[var(--brand-accent)]"
             />
             <span className="transition-colors group-hover:text-[var(--text-primary)]" style={{ color: 'var(--text-secondary)' }}>
-              Remember device
+              Remember me
             </span>
           </label>
           <Link

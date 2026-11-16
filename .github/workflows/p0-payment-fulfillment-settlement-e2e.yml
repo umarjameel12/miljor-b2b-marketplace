@@ -69,6 +69,15 @@ jobs:
       - name: Real HTTP and InnoDB payment to settlement acceptance
         timeout-minutes: 9
         run: cd backend && node tests/p0_payment_fulfillment_settlement_http_e2e.js
+      - name: Real request notification outbox and inbox acceptance
+        env:
+          APP_FRONTEND_URL: http://localhost:5173
+        run: |
+          cd backend
+          node tests/notification_mysql_action_gate.js
+          node tests/notification_events_verification.test.js
+          node tests/procurement_delivery_binding_mysql_gate.js
+          node tests/supplier_operations_mysql_gate.js
       - name: Safepay synthetic payment, refund and 80 concurrent callback/retry stress checks
         timeout-minutes: 9
         env:

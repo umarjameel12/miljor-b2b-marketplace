@@ -1,0 +1,10 @@
+{
+  "database": "miljor_test_db",
+  "originalPort": 3306,
+  "restorePort": 33320,
+  "distinctServer": true,
+  "backupSha256": "91e3003e82e06f825ec977aef81bb3430f0fbd1d71f8ed32a746d28799403cfe",
+  "restoredTables": 101,
+  "matchingCurrentSourceTables": 98,
+  "result": "RESTORED_SOURCE_CHANGED_SINCE_BACKUP"
+}

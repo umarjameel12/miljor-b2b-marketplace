@@ -19,12 +19,10 @@ function service(name, sql) {
     if (id==='./exactDecimal')return exact;
     if (id==='./deliveryQuantityPolicy')return quantity;
     if (id==='./feeService')return {};
+    if (id==='./notificationService')return service('notificationService.js',sql);
+    if (id==='./notificationEventPolicy')return require('../src/services/notificationEventPolicy');
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
-    if (id==='./ucpTransactionalNotifications')return {recordOrderOnConnection:async(conn,event)=>{
-      assert.equal(conn,sql,'notice must use the dispute/refund transaction');
-      sql.recordedNotifications.push(event);
-    }};
     return require(id);
   };
   const fn = new Function('require','module','exports','__filename','__dirname',source(name));
@@ -32,7 +30,7 @@ function service(name, sql) {
   return m.exports;
 }
 function fixture(cfg={}) {
-  const trace={writes:[],commits:0,rollbacks:0,notifications:[]};
+  const trace={writes:[],notifications:[],commits:0,rollbacks:0,active:false};
   const order={
     id:31,order_code:'DEMO-31',buyer_id:4,supplier_id:8,
     payment_status:'PAID',fulfillment_status:'SUPPLIER_DELIVERED',
@@ -41,9 +39,21 @@ function fixture(cfg={}) {
     delivery_fee:'0.00',buyer_platform_fee:'0.00',currency:'PKR'
   };
   const sql={
-    recordedNotifications:trace.notifications,
     async query(query,args) {
       if(query.startsWith('SET TRANSACTION'))return [[]];
+      if(query==='SELECT id, buyer_id, supplier_id FROM orders WHERE id = ?' ||
+         query==='SELECT id, supplier_id FROM orders WHERE id = ?') {
+        assert.deepEqual(args,[31]);
+        return [[{id:order.id,buyer_id:order.buyer_id,supplier_id:order.supplier_id}]];
+      }
+      if(query==='SELECT id,role FROM users WHERE id=?')
+        return [[{id:args[0],role:args[0]===4?'BUYER':'SUPPLIER'}]];
+      if(query.includes('INSERT INTO procurement_notifications')) {
+        assert.equal(trace.active,true,'notification must precede action commit on the same connection');
+        trace.notifications.push(args);
+        trace.writes.push({query,args});
+        return [{insertId:101,affectedRows:1}];
+      }
       if(query.includes('SELECT * FROM orders WHERE id = ? FOR UPDATE'))return [[order]];
       if(query.includes('JOIN payments p ON p.order_id'))return [[order]];
       if(query.includes('FROM refund_obligations WHERE idempotency_key=?'))
@@ -63,9 +73,9 @@ function fixture(cfg={}) {
       }
       throw Error('Unexpected SQL '+query.slice(0,100));
     },
-    async beginTransaction(){},
-    async commit(){trace.commits++},
-    async rollback(){trace.rollbacks++},
+    async beginTransaction(){trace.active=true},
+    async commit(){trace.commits++;trace.active=false},
+    async rollback(){trace.rollbacks++;trace.active=false;trace.notifications.length=0},
     release(){}
   };
   return {sql,trace,order};
@@ -84,6 +94,12 @@ async function run() {
     assert.equal(f.trace.commits,1);
     assert.equal(f.trace.rollbacks,0);
     assert.ok(f.trace.writes.some(x=>x.query.includes('INSERT INTO order_disputes')));
+    assert.deepEqual(f.trace.notifications.map(x=>x.slice(0,4)),[
+      [4,'BUYER','dispute:100:opened','DISPUTE_OPENED'],
+      [8,'SUPPLIER','dispute:100:opened','DISPUTE_OPENED']
+    ]);
+    for(const notice of f.trace.notifications)
+      assert.deepEqual(JSON.parse(notice[4]),{entityId:31,schemaVersion:1});
   });
   for(const [name,changes,code,flags] of [
     ['wrong disputed quantity',{disputedQuantity:'30'},'DISPUTED_QUANTITY_MISMATCH',{}],
@@ -95,6 +111,7 @@ async function run() {
     await assert.rejects(s.createBuyerDispute({...disputeParams,...changes}),e=>e.code===code);
     assert.equal(f.trace.rollbacks,1);
     assert.equal(f.trace.writes.length,0);
+    assert.equal(f.trace.notifications.length,0);
   });
   const refundParams={orderId:31,actor:{id:4,role:'BUYER'},refundType:'PARTIAL',
     disputeId:17,disputedQuantity:'20',reason:'Twenty kilograms short',
@@ -110,13 +127,23 @@ async function run() {
     await assert.rejects(s.assessRefundObligation({...refundParams,...changes}),e=>e.code===code);
     assert.equal(f.trace.rollbacks,1);
     assert.equal(f.trace.writes.length,0);
+    assert.equal(f.trace.notifications.length,0);
   });
   await check('identical retry returns same refund without writes',async()=>{
+    const fresh=fixture(),freshService=service('financialSettlementService.js',fresh.sql);
+    await freshService.assessRefundObligation(refundParams);
+    assert.deepEqual(fresh.trace.notifications.map(x=>x.slice(0,4)),[
+      [4,'BUYER','refund:100:initiated','REFUND_INITIATED']
+    ]);
+    assert.deepEqual(JSON.parse(fresh.trace.notifications[0][4]),{entityId:31,schemaVersion:1});
+    assert.equal(fresh.trace.commits,1);
+    assert.equal(fresh.trace.rollbacks,0);
     const f=fixture({replay:true}),s=service('financialSettlementService.js',f.sql);
     const res=await s.assessRefundObligation(refundParams);
     assert.equal(res.data.refund.id,81);
     assert.equal(f.trace.commits,1);
     assert.equal(f.trace.writes.length,0);
+    assert.equal(f.trace.notifications.length,0);
   });
   console.log('DISPUTE + REFUND SAFETY: '+n+'/'+n+' PASS (in-memory service tests)');
 }

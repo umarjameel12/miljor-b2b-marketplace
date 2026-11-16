@@ -20,6 +20,7 @@ const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const feeService = require('./feeService');
 const reservationEventService = require('./reservationEventService');
+const notificationService = require('./notificationService');
 
 function exactSub(a, b, scale = 2) {
   const bStr = exactDecimal.toCanonical(b, scale);
@@ -856,8 +857,11 @@ class FinancialSettlementService {
         notes: `Assessed refund obligation: PKR ${totalRefundAmount} (${refundType})`
       });
 
-      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
-        orderId:order.id,type:'PAYMENT.REFUND_REQUESTED',transitionId:'refund-'+refundId});
+      // Record the requested obligation without implying a provider refund began.
+      await notificationService.enqueueEvent(connection, {
+        userId: order.buyer_id, role: 'BUYER', eventType: 'PAYMENT.REFUND_REQUESTED',
+        eventKey: `refund:${refundId}:requested`, entityId: order.id
+      });
       await connection.commit();
 
       const [createdRefund] = await connection.query('SELECT * FROM refund_obligations WHERE id = ?', [refundId]);
@@ -1186,6 +1190,15 @@ class FinancialSettlementService {
         notes: `Prepared disbursement instruction of PKR ${availableAmount} to IBAN ${cleanIban.slice(0, 4)}...${cleanIban.slice(-4)}. External execution DISABLED.`
       });
 
+      // Preparation means settlement is pending; it is never proof of payout.
+      const [notificationOrders] = await connection.query(
+        'SELECT id, supplier_id FROM orders WHERE id = ?', [payable.order_id]
+      );
+      if (!notificationOrders.length) throw new Error('Settlement notification order not found');
+      await notificationService.enqueueEvent(connection, {
+        userId: notificationOrders[0].supplier_id, role: 'SUPPLIER', eventType: 'SETTLEMENT_PENDING',
+        eventKey: `disbursement:${disbId}:pending`, entityId: notificationOrders[0].id
+      });
       await connection.commit();
 
       const [createdDisb] = await connection.query('SELECT * FROM supplier_disbursement_instructions WHERE id = ?', [disbId]);

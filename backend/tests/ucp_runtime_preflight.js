@@ -37,7 +37,9 @@ async function main(){
     if(!text.includes('-- Dump completed on')||definitions!==tables.length)throw Error('TEST_BACKUP_INCOMPLETE');
     const evidence={history,protectedSnapshot,testBackup:{file,bytes:bytes.length,tables:definitions,
       sha256:crypto.createHash('sha256').update(bytes).digest('hex')},restoreReplay:'NOT_TESTED'};
-    fs.writeFileSync(path.join(directory,'ucp-preflight.json'),JSON.stringify(evidence,null,2));
+    const evidencePath=file.replace(/\.sql$/,'.json');
+    fs.writeFileSync(evidencePath,JSON.stringify(evidence,null,2));
+    evidence.evidencePath=evidencePath;
     console.log('UCP_PREFLIGHT_EVIDENCE',JSON.stringify(evidence));
     if(history.status!=='VERIFIED_HISTORY')throw Error('MIGRATION_AUDIT_BLOCKED_NO_DDL_AUTHORIZED');
   }finally{await connection.end();}

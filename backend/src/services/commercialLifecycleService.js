@@ -98,6 +98,89 @@ const ALLOCATION_STATE_TRANSITIONS = {
 
 class CommercialLifecycleService {
 
+  // Internal recovery entry point. The caller owns the transaction; this method
+  // acquires the parent lock itself and never manufactures a party's decision.
+  async expireCommercialDeadlinesOnConnection(connection, poolId, {limit=100, eventService, notifications}={}) {
+    if(!Number.isInteger(limit)||limit<1||limit>100)throw new Error('INVALID_RECOVERY_LIMIT');
+    const [[pool]]=await connection.query('SELECT * FROM pools WHERE id=? FOR UPDATE',[poolId]);
+    if(!pool)throw new Error('POOL_NOT_FOUND');
+    if(!pool.product_spec_id||!pool.supplier_listing_id)throw new Error('LEGACY_POOL_READ_ONLY');
+    if(!['AWAITING_SUPPLIER_CONFIRMATION','CONFIRMED'].includes(pool.status))return {supplierTimedOut:false,buyersTimedOut:0};
+    const [[snapshot]]=await connection.query(`SELECT * FROM pool_commercial_snapshots
+      WHERE pool_id=? ORDER BY snapshot_version DESC,id DESC LIMIT 1 FOR UPDATE`,[poolId]);
+    if(!snapshot||Number(snapshot.supplier_id)!==Number(pool.supplier_id))throw new Error('RECOVERY_SNAPSHOT_REQUIRED');
+    if(!(pool.status==='AWAITING_SUPPLIER_CONFIRMATION'?
+      snapshot.supplier_confirmation_deadline||pool.supplier_confirmation_deadline:
+      snapshot.buyer_commitment_deadline||pool.buyer_commitment_deadline))throw new Error('RECOVERY_DEADLINE_REQUIRED');
+    // This statement starts AFTER all lock waits. Snapshot deadlines are the
+    // contractual authority; old pools may use their existing configured deadline.
+    const [[clock]]=await connection.query(`SELECT
+      (NOW()>=?) AS supplier_expired,(NOW()>=?) AS buyer_expired`,[
+      snapshot.supplier_confirmation_deadline||pool.supplier_confirmation_deadline,
+      snapshot.buyer_commitment_deadline||pool.buyer_commitment_deadline]);
+    const events=eventService||require('./reservationEventService');
+    const notices=notifications||require('./ucpTransactionalNotifications');
+    const emit=async(type,reservation=null)=>{
+      const key=`regular-timeout:${snapshot.id}:${reservation?.id||0}:${type}`;
+      const eventId=events.generateEventId({event_type:type,pool_id:pool.id,reservation_id:reservation?.id||null,
+        actor_id:0,mutation_type:'DEADLINE_TIMEOUT',idempotency_key:key,event_sequence:1});
+      await events.recordEvent({event_id:eventId,event_type:type,pool_id:pool.id,reservation_id:reservation?.id||null,
+        actor_id:0,actor_role:'SYSTEM',idempotency_key:key,event_payload:{snapshot_id:snapshot.id,reason:type}},connection);
+      await connection.query(`INSERT INTO system_audit_logs
+        (actor_id,actor_role,action,entity_name,entity_id,previous_value,new_value)
+        VALUES (NULL,'SYSTEM',?,'pools',?,?,?)`,[type,pool.id,
+        JSON.stringify({status:reservation?.status||pool.status}),JSON.stringify({event_id:eventId,snapshot_id:snapshot.id,
+          reservation_id:reservation?.id||null,status:reservation?'EXPIRED':'SUPPLIER_FAILED'})]);
+      const [users]=await connection.query(reservation?
+        `SELECT id,role FROM users WHERE id IN (?,?)`:
+        `SELECT DISTINCT u.id,u.role FROM users u WHERE u.id=? OR u.role IN ('ADMIN','SUPER_ADMIN')
+         OR EXISTS (SELECT 1 FROM reservations r WHERE r.pool_id=? AND r.buyer_id=u.id
+                    AND r.status IN ('RESERVED','CONFIRMED','PAID'))`,
+        reservation?[pool.supplier_id,reservation.buyer_id]:[pool.supplier_id,pool.id]);
+      for(const user of users){
+        const expected=Number(user.id)===Number(pool.supplier_id)?'SUPPLIER':
+          ['ADMIN','SUPER_ADMIN'].includes(user.role)?user.role:'BUYER';
+        if(user.role!==expected)throw new Error('NOTIFICATION_RECIPIENT_ROLE_MISMATCH');
+      }
+      for(let offset=0;offset<users.length;offset+=100)await notices.recordInAppOnConnection(connection,{
+        type:reservation?'UCP.HOLD_EXPIRED':'UCP.POOL_FAILED',aggregateId:'pool-'+pool.id,
+        aggregateVersion:Number(snapshot.snapshot_version),transitionId:eventId,
+        recipients:users.slice(offset,offset+100).map(u=>({userId:Number(u.id),role:u.role})),
+        title:reservation?'Buyer commitment window expired':'Supplier confirmation timed out',
+        message:reservation?'The commitment deadline passed without a buyer decision. Existing accepted commitments are preserved.':
+          'The supplier confirmation deadline passed. Support review is required; no replacement or refund has been executed.',
+        payload:{pool_id:Number(pool.id),mode:'REGULAR',notification_path:'/pools'}});
+    };
+    const [supplierDecisions]=await connection.query('SELECT id,decision FROM pool_supplier_commercial_decisions WHERE snapshot_id=? FOR UPDATE',[snapshot.id]);
+    if(pool.status==='AWAITING_SUPPLIER_CONFIRMATION'){
+      if(!Number(clock.supplier_expired))return {supplierTimedOut:false,buyersTimedOut:0};
+      if(snapshot.status!=='PENDING_SUPPLIER_DECISION'||supplierDecisions.length)throw new Error('RECOVERY_DECISION_STATE_CONFLICT');
+      await connection.query("UPDATE pools SET status='SUPPLIER_FAILED',closed_at=NOW(),updated_at=NOW() WHERE id=?",[pool.id]);
+      await emit('SUPPLIER_CONFIRMATION_TIMED_OUT');
+      return {supplierTimedOut:true,buyersTimedOut:0};
+    }
+    if(!Number(clock.buyer_expired))return {supplierTimedOut:false,buyersTimedOut:0};
+    if(snapshot.status!=='ACCEPTED'||supplierDecisions.length!==1||supplierDecisions[0].decision!=='ACCEPT')
+      throw new Error('RECOVERY_DECISION_STATE_CONFLICT');
+    const summary=typeof snapshot.participating_reservations_summary==='string'?
+      JSON.parse(snapshot.participating_reservations_summary):snapshot.participating_reservations_summary;
+    if(!Array.isArray(summary)||summary.some(r=>!Number.isSafeInteger(Number(r.id))||Number(r.id)<1))
+      throw new Error('RECOVERY_COHORT_REQUIRED');
+    if(!summary.length)return {supplierTimedOut:false,buyersTimedOut:0};
+    // Limit by eligible rows, not all historic reservations, so a large pool
+    // progresses across restart/replay without repeatedly scanning accepted rows.
+    const [pending]=await connection.query(`SELECT r.* FROM reservations r
+      WHERE r.pool_id=? AND r.status='RESERVED' AND r.id IN (${summary.map(()=>'?').join(',')})
+      AND NOT EXISTS (SELECT 1 FROM pool_buyer_commercial_decisions d WHERE d.reservation_id=r.id)
+      AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.reservation_id=r.id)
+      ORDER BY r.id LIMIT ? FOR UPDATE`,[pool.id,...summary.map(r=>r.id),limit]);
+    for(const reservation of pending){
+      await connection.query("UPDATE reservations SET status='EXPIRED',updated_at=NOW() WHERE id=? AND status='RESERVED'",[reservation.id]);
+      await emit('BUYER_COMMITMENT_TIMED_OUT',reservation);
+    }
+    return {supplierTimedOut:false,buyersTimedOut:pending.length};
+  }
+
   /**
    * Pure qualification calculation evaluating eligible demand against supplier requirements
    */

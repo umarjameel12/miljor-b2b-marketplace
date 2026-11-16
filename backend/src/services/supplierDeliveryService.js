@@ -2,10 +2,32 @@
 // src/services/supplierDeliveryService.js
 // MilJor Special Phase G2: Supplier-Controlled Delivery Mode & Pricing Service
 // =============================================================================
+const defaultDb = require('../config/db');
+const identityNotifications = require('./supplierProfileService');
 const supDelivRepo = require('../repositories/supplierDeliveryRepository');
 const geoRepo = require('../repositories/geographicRepository');
 
 class SupplierDeliveryService {
+  async _transaction(action) {
+    const connection = await defaultDb.getConnection();
+    try {
+      await connection.beginTransaction();
+      const result = await action(connection);
+      await connection.commit();
+      return result;
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
+  }
+
+  async _lockOwner(supplierId, connection) {
+    const [users] = await connection.query('SELECT id, role FROM users WHERE id = ? FOR UPDATE', [supplierId]);
+    if (!users[0] || users[0].role !== 'SUPPLIER') {
+      const error = new Error('Supplier account not found'); error.statusCode = 403;
+      error.code = 'SUPPLIER_REQUIRED'; throw error;
+    }
+    return users[0];
+  }
+
   /**
    * Fetch supplier's complete delivery configuration, rates and pickup points
    */
@@ -41,6 +63,9 @@ class SupplierDeliveryService {
    * Update supplier fulfillment modes and cluster rates
    */
   async updateSupplierSettings(supplierId, payload, connection) {
+    if (!connection) return this._transaction(tx => this.updateSupplierSettings(supplierId, payload, tx));
+    const owner = await this._lockOwner(supplierId, connection);
+    const previous = await this.getSupplierSettings(owner.id, connection);
     const {
       standard_delivery_enabled = true,
       pickup_enabled = false,
@@ -108,13 +133,25 @@ class SupplierDeliveryService {
       await supDelivRepo.upsertSupplierClusterRate(vRate, connection);
     }
 
-    return this.getSupplierSettings(supplierId, connection);
+    const updated = await this.getSupplierSettings(supplierId, connection);
+    const modeFields = ['standard_delivery_enabled', 'pickup_enabled', 'express_enabled'];
+    const modesChanged = modeFields.some(key => Boolean(previous.configuration[key]) !== Boolean(updated.configuration[key]));
+    const coverageChanged = updated.cluster_rates.some(rate => {
+      const before = previous.cluster_rates.find(row => Number(row.cluster_id) === Number(rate.cluster_id) && row.mode === rate.mode);
+      return before ? Boolean(before.is_eligible) !== Boolean(rate.is_eligible) : Boolean(rate.is_eligible);
+    });
+    if (!is_draft && (modesChanged || coverageChanged)) {
+      await identityNotifications.recordIdentityEvent(connection, owner.id, 'CATALOG.SERVICE_AREA_CHANGED');
+    }
+    return updated;
   }
 
   /**
    * Add a pickup point for supplier
    */
   async addPickupPoint(supplierId, pointData, connection) {
+    if (!connection) return this._transaction(tx => this.addPickupPoint(supplierId, pointData, tx));
+    const owner = await this._lockOwner(supplierId, connection);
     const {
       point_name,
       cluster_id,
@@ -172,13 +209,20 @@ class SupplierDeliveryService {
     }, connection);
 
     const points = await supDelivRepo.getSupplierPickupPoints(supplierId, connection);
-    return points.find(p => p.id === pointId);
+    const point = points.find(p => Number(p.id) === Number(pointId));
+    if (!point || Number(point.supplier_id) !== Number(owner.id)) throw new Error('PICKUP_POINT_NOT_FOUND');
+    await identityNotifications.recordIdentityEvent(connection, point.supplier_id, 'CATALOG.SERVICE_AREA_CHANGED');
+    return point;
   }
 
   /**
    * Update pickup point
    */
   async updatePickupPoint(pointId, supplierId, updateData, connection) {
+    if (!connection) return this._transaction(tx => this.updatePickupPoint(pointId, supplierId, updateData, tx));
+    await this._lockOwner(supplierId, connection);
+    const previousPoints = await supDelivRepo.getSupplierPickupPoints(supplierId, connection);
+    const previous = previousPoints.find(point => Number(point.id) === Number(pointId));
     if (updateData.pickup_handling_fee_pkr !== undefined) {
       const fee = Number(updateData.pickup_handling_fee_pkr);
       if (isNaN(fee) || !isFinite(fee) || fee < 0) {
@@ -199,7 +243,14 @@ class SupplierDeliveryService {
     }
 
     const points = await supDelivRepo.getSupplierPickupPoints(supplierId, connection);
-    return points.find(p => p.id === Number(pointId));
+    const updated = points.find(p => Number(p.id) === Number(pointId));
+    if (previous && updated && (
+        Number(previous.cluster_id) !== Number(updated.cluster_id) ||
+        Boolean(previous.is_active) !== Boolean(updated.is_active) ||
+        previous.address_line !== updated.address_line)) {
+      await identityNotifications.recordIdentityEvent(connection, updated.supplier_id, 'CATALOG.SERVICE_AREA_CHANGED');
+    }
+    return updated;
   }
 }
 

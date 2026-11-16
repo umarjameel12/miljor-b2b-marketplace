@@ -1,11 +1,10 @@
 'use strict';
-// UCP transactional in-app receipts and critical email outbox writer.
+// UCP domain-event adapter into the shared transactional notification outbox.
 // Called with the SAME mysql2 transaction connection as the committed domain mutation.
 // Domain service is responsible for resolving authorized recipients; never accept recipient IDs from the buyer request.
 const {getEventDefinition,buildEventKey} = require('./ucpNotificationEventCatalog');
-const crypto = require('node:crypto');
-const ALLOWED_ROLES = new Set(['BUYER','SUPPLIER','ADMIN','SUPER_ADMIN']);
-const SAFE_PAYLOAD_KEYS = new Set(['pool_id','order_id','reservation_id','delivery_id','dispute_id','status','mode','quantity','unit','notification_path']);
+const ALLOWED_ROLES = new Set(['BUYER','SUPPLIER','ADMIN','SUPER_ADMIN','FINANCE_ADMIN','OPERATIONS_ADMIN','VERIFICATION_ADMIN','SUPPORT_ADMIN']);
+const SAFE_PAYLOAD_KEYS = new Set(['pool_id','order_id','reservation_id','delivery_id','dispute_id','account_id','sku_id','status','mode','quantity','unit','notification_path']);
 function sanitizePayload(payload) {
   if (payload == null) return null;
   if (typeof payload !== 'object' || Array.isArray(payload)) throw new Error('INVALID_NOTIFICATION_PAYLOAD');
@@ -25,12 +24,12 @@ function validateRecipient(recipient) {
 }
 /**
  * Must execute BEFORE commit, on the owning business transaction connection.
- * Failing SQL should roll back the domain mutation instead of silently losing critical in-app receipt.
- * Critical EMAIL is queued on the same transaction; transport runs after commit.
+ * The durable event commits/rolls back with the domain mutation. The shared
+ * projector handles inbox/email, preferences, localization and retries later.
  */
 async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVersion,transitionId,recipients,title,message,payload}) {
   if (!connection || typeof connection.query !== 'function') throw new Error('TRANSACTION_CONNECTION_REQUIRED');
-  const definition=getEventDefinition(type);
+  getEventDefinition(type);
   if (!Array.isArray(recipients) || !recipients.length || recipients.length > 100) throw new Error('INVALID_NOTIFICATION_RECIPIENTS');
   if (typeof title !== 'string' || !title.trim() || title.length > 140
     || typeof message !== 'string' || !message.trim() || message.length > 1000)
@@ -39,7 +38,6 @@ async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVe
   const json = sanitizePayload(payload);
   const seen = new Set();
   let inserted = 0;
-  let emailUnavailable = 0;
   // Validate the entire batch before writing anything, including duplicate roles.
   const roles=new Map();
   for(const recipient of recipients){
@@ -52,31 +50,12 @@ async function recordInAppOnConnection(connection, {type,aggregateId,aggregateVe
     validateRecipient(recipient);
     if (seen.has(recipient.userId)) continue;
     seen.add(recipient.userId);
-    // Existing unique (user_id, event_key) enforces replay safety.
-    const [result] = await connection.query(
-      `INSERT INTO platform_notifications
-       (user_id,role,event_type,event_key,title,message,payload,is_read,created_at)
-       VALUES (?,?,?,?,?,?,?,0,NOW())
-       ON DUPLICATE KEY UPDATE id=id`,
-      [recipient.userId,recipient.role,type,key,title.trim(),message.trim(),json ? JSON.stringify(json) : null]
-    );
+    const entityId=Number(json?.order_id||json?.pool_id||json?.reservation_id||json?.account_id||json?.sku_id||aggregateId);
+    const [result] = await require('./notificationService').enqueueEvent(connection,{
+      userId:recipient.userId,role:recipient.role,eventType:type,eventKey:key,entityId});
     if (result.affectedRows === 1) inserted++;
-    if(definition.channels.includes('EMAIL')){
-      const [users]=await connection.query('SELECT id,role,email FROM users WHERE id=?',[recipient.userId]);
-      if(!users.length||users[0].role!==recipient.role)throw Error('NOTIFICATION_RECIPIENT_ROLE_MISMATCH');
-      if(typeof users[0].email==='string'&&users[0].email.includes('@')){
-        await require('./emailService').enqueueEmail(connection,{
-          recipientEmail:users[0].email,recipientUserId:recipient.userId,
-          templateName:'UCP_NOTIFICATION',payload:{title:title.trim(),message:message.trim()},
-          idempotencyKey:'ucp:'+crypto.createHash('sha256').update(recipient.userId+':EMAIL:'+key).digest('hex')
-        });
-      }else{
-        // Keep the committed in-app receipt. No fabricated email delivery claim.
-        emailUnavailable++;
-      }
-    }
   }
-  return {eventKey:key,inserted,recipients:seen.size,emailUnavailable};
+  return {eventKey:key,inserted,recipients:seen.size};
 }
 
 // These resolvers read persisted ownership on the caller's transaction, never
@@ -111,7 +90,7 @@ async function recordReservationEventOnConnection(connection,event){
   const individual=/^RESERVATION_|^BUYER_OFFER_/.test(event.event_type);
   const [buyers]=await connection.query(individual?
     'SELECT buyer_id FROM reservations WHERE id=? AND pool_id=?':
-    "SELECT DISTINCT buyer_id FROM reservations WHERE pool_id=? AND status IN ('RESERVED','PRICE_LOCKED','ORDERED')",
+    'SELECT DISTINCT buyer_id FROM reservations WHERE pool_id=? AND '+require('./reservationDemandPolicy').SQL_ELIGIBLE_DEMAND_CONDITION,
     individual?[event.reservation_id,event.pool_id]:[event.pool_id]);
   const recipients=[{userId:Number(pools[0].supplier_id),role:'SUPPLIER'},
     ...buyers.map(row=>({userId:Number(row.buyer_id),role:'BUYER'}))];

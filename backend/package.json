@@ -22,7 +22,10 @@
     "admin:provision": "node database/secureAdminProvision.js",
     "test:ucp:ci": "npm run migration:preflight && npm run test:ucp:reconciliation && npm run test:ucp && npm --prefix ../frontend run build",
     "test:ucp:notifications": "node tests/ucp_notification_catalog_gate.js && node tests/ucp_transactional_notifications_gate.js && node tests/ucp_domain_notifications_gate.js && node tests/ucp_email_claim_gate.js && node tests/ucp_flash_recovery_gate.js && node tests/ucp_payment_expiry_race_gate.js && node tests/ucp_fee_connection_gate.js && node --test tests/ucp_recovery_review_gate.js",
-    "test:ucp:notifications:mysql": "node tests/ucp_notification_mysql_gate.js"
+    "test:ucp:notifications:mysql": "node tests/ucp_notification_mysql_gate.js",
+    "test:ucp:reviewfixes": "node --test tests/ucp_review_regressions.test.js",
+    "test:ucp:nativeactions": "node tests/notification_transaction_gate.js && node --test tests/financial_notification_action_gate.js tests/fulfillment_notification_hooks.test.js tests/notification_request_action_gate.js tests/demo_b6_invoice_exact_service_gate.js",
+    "test:ucp:completion": "node tests/ucp_notification_delivery_controls_gate.js && node tests/email_outbox_queue_gate.js && node tests/notification_projection_gate.js && node tests/notification_route_ownership_gate.js && node tests/ucp_otp_transaction_gate.js && node --test tests/ucp_regular_recovery_gate.test.js tests/checkout_initiation_recovery_safety.test.js tests/identity_catalog_notification_hooks.test.js tests/notification_operations_authorization.test.js"
   },
   "keywords": [],
   "author": "",

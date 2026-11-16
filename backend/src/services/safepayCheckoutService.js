@@ -21,6 +21,7 @@ const safepayAdapter = require('./safepayAdapter');
 const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
+const notificationService = require('./notificationService');
 
 class SafepayCheckoutService {
 
@@ -80,183 +81,178 @@ class SafepayCheckoutService {
       throw err;
     }
 
-    // Step 1: Stage 1 DB validation (verify order state & ownership under consistent read)
-    const [orders] = await db.query(
-      `SELECT o.*, u.buyer_trust_status
-       FROM orders o
-       JOIN users u ON o.buyer_id = u.id
-       WHERE o.id = ?`,
-      [orderId]
+    if (trimmedKey.length > 100) {
+      throw this._checkoutError('INVALID_IDEMPOTENCY_KEY', 'Checkout idempotency key must not exceed 100 characters', 400);
+    }
+
+    // Fail known local configuration errors before any inventory claim or
+    // durable reservation. A failure after reservation is an unknown outcome.
+    safepayAdapter.validateConfig();
+    const [initialOrders] = await db.query(
+      `SELECT o.*, u.role AS buyer_role, u.buyer_trust_status
+       FROM orders o JOIN users u ON o.buyer_id = u.id WHERE o.id = ?`, [orderId]
     );
+    this._validateCheckoutOrder(initialOrders[0], actor);
 
-    if (orders.length === 0) {
-      const err = new Error('Order not found');
-      err.code = 'ORDER_NOT_FOUND';
-      err.statusCode = 404;
-      throw err;
-    }
+    // Existing hold engines acquire their parent locks first. Never call them
+    // while holding the order lock (their transactions use other connections).
+    await require('./flashPoolService').claimCheckout(orderId, actor.id);
+    await require('./regularPoolPaymentHoldService').claimCheckout(orderId, actor.id);
 
-    const order = orders[0];
-
-    // Ownership check (tenant isolation)
-    if (Number(order.buyer_id) !== Number(actor.id)) {
-      const err = new Error('You do not have permission to checkout this order');
-      err.code = 'FORBIDDEN';
-      err.statusCode = 403;
-      throw err;
-    }
-
-    // Order status check
-    if (order.order_status === 'PAID' || order.payment_status === 'PAID') {
-      const err = new Error('Order has already been paid in full');
-      err.code = 'ORDER_ALREADY_PAID';
-      err.statusCode = 409;
-      throw err;
-    }
-
-    if (order.order_status !== 'AWAITING_PAYMENT') {
-      const err = new Error(`Order is in '${order.order_status}' status and cannot be paid`);
-      err.code = 'INVALID_ORDER_STATUS';
-      err.statusCode = 422;
-      throw err;
-    }
-
-    // B5 Flash: claim the hold before contacting Safepay. For non-Flash
-    // orders this is a no-op; B6's separate award hooks remain untouched.
-    await require('./flashPoolService').claimCheckout(orderId,actor.id);
-    await require('./regularPoolPaymentHoldService').claimCheckout(orderId,actor.id);
-
-    // Financial component check (OBS-79 fail-closed guard)
-    const totalPayable = Number(order.total_amount);
-    if (!totalPayable || totalPayable <= 0 || isNaN(totalPayable)) {
-      const err = new Error('Order does not have a complete, valid payable total');
-      err.code = 'INVALID_PAYABLE_TOTAL';
-      err.statusCode = 422;
-      throw err;
-    }
-
-    // Check for existing active attempt with same idempotency key (idempotent replay)
-    const [existingAttempts] = await db.query(
-      `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND idempotency_key = ?
-       ORDER BY id DESC LIMIT 1`,
-      [orderId, trimmedKey]
-    );
-
-    if (existingAttempts.length > 0) {
-      const existing = existingAttempts[0];
-      return {
-        is_replay: true,
-        attempt: this._formatAttempt(existing, order)
-      };
-    }
-
-    // Check for currently active attempt to prevent duplicate concurrent sessions
-    const [activeAttempts] = await db.query(
-      `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND status = 'INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
-       ORDER BY id DESC LIMIT 1`,
-      [orderId]
-    );
-
-    if (activeAttempts.length > 0) {
-      const active = activeAttempts[0];
-      // Return the current active session
-      return {
-        is_replay: false,
-        is_existing_active: true,
-        attempt: this._formatAttempt(active, order)
-      };
-    }
-
-    // A pre-existing Safepay attempt can still be reconciled after deadline.
-    // A NEW attempt cannot be created after the original 15-minute hold ends.
+    let order, attemptId;
+    const reservation = await db.getConnection();
     try {
-      await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
-    } catch (holdError) {
-      // If the deadline elapsed between claim and provider call, do not strand
-      // the order in PAYMENT_PENDING when no checkout was actually created.
-      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
-        .catch(error => console.error('[B4] Could not unwind uninitiated checkout:',error));
-      throw holdError;
+      await reservation.beginTransaction();
+      const [orders] = await reservation.query(
+        `SELECT o.*, u.role AS buyer_role, u.buyer_trust_status
+         FROM orders o JOIN users u ON o.buyer_id = u.id WHERE o.id = ? FOR UPDATE`, [orderId]
+      );
+      order = orders[0];
+      this._validateCheckoutOrder(order, actor);
+      const [existing] = await reservation.query(
+        `SELECT * FROM payment_attempts WHERE order_id = ? AND idempotency_key = ?
+         ORDER BY id DESC LIMIT 1 FOR UPDATE`, [order.id, trimmedKey]
+      );
+      if (existing.length) {
+        this._assertCheckoutReady(existing[0], actor);
+        await reservation.commit();
+        return { is_replay: true, attempt: this._formatAttempt(existing[0], order) };
+      }
+      // No age cutoff: elapsed local time cannot prove provider failure.
+      const [active] = await reservation.query(
+        `SELECT * FROM payment_attempts WHERE order_id = ?
+         AND status IN ('INITIATED', 'RECONCILIATION_REQUIRED')
+         ORDER BY id DESC LIMIT 1 FOR UPDATE`, [order.id]
+      );
+      if (active.length) {
+        this._assertCheckoutReady(active[0], actor);
+        await reservation.commit();
+        return { is_replay: false, is_existing_active: true, attempt: this._formatAttempt(active[0], order) };
+      }
+      // Reuse the read-only policy on this connection. Acquiring another pool
+      // connection here can stall when concurrent callers occupy the pool
+      // waiting for this order lock. The policy only depends on this.db.query.
+      const regularHolds = require('./regularPoolPaymentHoldService');
+      await regularHolds.assertCanCreateFreshCheckout.call({ db: reservation }, order.id, actor.id);
+      const attemptCode = `ATT-${crypto.randomBytes(16).toString('hex')}`;
+      const [insert] = await reservation.query(
+        `INSERT INTO payment_attempts (
+          attempt_code, order_id, buyer_id, provider, environment,
+          amount, currency, status, idempotency_key, created_at
+        ) VALUES (?, ?, ?, 'SAFEPAY', 'sandbox', ?, ?, 'RECONCILIATION_REQUIRED', ?, NOW())`,
+        [attemptCode, order.id, order.buyer_id, order.total_amount, order.currency, trimmedKey]
+      );
+      attemptId = insert.insertId;
+      await reservation.commit();
+    } catch (error) {
+      await reservation.rollback();
+      throw error;
+    } finally {
+      reservation.release();
     }
 
-    // Step 2: Call Safepay API OUTSIDE transaction lock
-    let trackerToken, rawResponse;
+    // A committed unresolved attempt now serializes every key for this order.
+    // Never unwind holds on timeout, malformed response, or persistence failure:
+    // the provider may have created a session even when its reply was lost.
     try {
       const tracker = await safepayAdapter.createTracker({
-        amount: totalPayable,
-        currency: order.currency || 'PKR',
-        orderCode: order.order_code,
-        mockClient
+        amount: order.total_amount, currency: order.currency, orderCode: order.order_code, mockClient
       });
-      trackerToken = tracker.trackerToken;
-      rawResponse = tracker.rawResponse;
-    } catch (trackerError) {
-      await require('./flashPoolService').releaseCheckoutClaim(orderId,actor.id)
-        .catch(releaseError => {
-          console.error('[B5/B6] Flash checkout claim release failed:', releaseError);
+      const trackerToken = tracker && tracker.trackerToken;
+      if (typeof trackerToken !== 'string' || !trackerToken.trim() || trackerToken.length > 128) {
+        throw this._checkoutError('CHECKOUT_RECONCILIATION_REQUIRED', 'Provider initiation outcome requires reconciliation', 409);
+      }
+      // Persist immediately, before any optional passport request or URL work.
+      // Do not overwrite a terminal state written by a verified webhook.
+      const [saved] = await db.query(
+        `UPDATE payment_attempts SET provider_tracker_token = ?, updated_at = NOW()
+         WHERE id = ? AND provider_tracker_token IS NULL`, [trackerToken, attemptId]
+      );
+      if (saved.affectedRows !== 1) throw new Error('Tracker persistence could not be confirmed');
+
+      let tbtToken = null;
+      try { tbtToken = await safepayAdapter.createPassportToken({ mockClient }); } catch (_) {
+        // Passport remains optional for the existing hosted checkout contract.
+      }
+      const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const checkoutUrl = safepayAdapter.constructCheckoutUrl({
+        trackerToken, orderCode: order.order_code, tbtToken,
+        redirectUrl: redirectUrl || `${frontendBase}/payment/return?order_id=${order.id}&beacon=${trackerToken}`,
+        cancelUrl: cancelUrl || `${frontendBase}/payment/cancelled?order_id=${order.id}`
+      });
+      if (typeof checkoutUrl !== 'string' || !checkoutUrl.trim()) throw new Error('Checkout URL unavailable');
+
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        const [orders] = await connection.query(
+          `SELECT o.*, u.role AS buyer_role, u.buyer_trust_status
+           FROM orders o JOIN users u ON o.buyer_id = u.id WHERE o.id = ? FOR UPDATE`, [order.id]
+        );
+        this._validateCheckoutOrder(orders[0], actor);
+        const [attempts] = await connection.query('SELECT * FROM payment_attempts WHERE id = ? FOR UPDATE', [attemptId]);
+        const attempt = attempts[0];
+        if (!attempt || Number(attempt.buyer_id) !== Number(actor.id) || Number(attempt.order_id) !== Number(order.id) ||
+            attempt.provider_tracker_token !== trackerToken || !['RECONCILIATION_REQUIRED', 'INITIATED'].includes(attempt.status)) {
+          throw new Error('Checkout attempt requires reconciliation');
+        }
+        await connection.query(
+          `UPDATE payment_attempts SET checkout_url = ?, status = 'INITIATED', updated_at = NOW() WHERE id = ?`,
+          [checkoutUrl, attemptId]
+        );
+        const [updatedOrder] = await connection.query(
+          `UPDATE orders SET payment_status = 'PAYMENT_INITIATED', updated_at = NOW()
+           WHERE id = ? AND (payment_status IS NULL OR payment_status <> 'PAID')
+             AND order_status = 'AWAITING_PAYMENT'`, [order.id]
+        );
+        if (updatedOrder.affectedRows !== 1) throw new Error('Order checkout transition could not be confirmed');
+        await notificationService.enqueueEvent(connection, {
+          userId: order.buyer_id, role: 'BUYER', eventType: 'PAYMENT_INITIATED',
+          eventKey: `payment-initiated:${attemptId}`, entityId: order.id
         });
-      await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
-        .catch(error => console.error('[B4] Regular pool payment claim recovery:', error));
-      throw trackerError;
+        const [rows] = await connection.query('SELECT * FROM payment_attempts WHERE id = ?', [attemptId]);
+        await connection.commit();
+        return { is_replay: false, attempt: this._formatAttempt(rows[0], orders[0]) };
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      if (error.code === 'ORDER_ALREADY_PAID') throw error;
+      const pending = this._checkoutError('CHECKOUT_RECONCILIATION_REQUIRED',
+        'Checkout initiation is pending reconciliation. Do not create another payment session.', 409);
+      pending.cause = error;
+      throw pending;
     }
+  }
 
-    let tbtToken = null;
+  _checkoutError(code, message, statusCode) {
+    return Object.assign(new Error(message), { code, statusCode });
+  }
+
+  _validateCheckoutOrder(order, actor) {
+    if (!order) throw this._checkoutError('ORDER_NOT_FOUND', 'Order not found', 404);
+    if (Number(order.buyer_id) !== Number(actor.id)) throw this._checkoutError('FORBIDDEN', 'You do not have permission to checkout this order', 403);
+    if (order.buyer_role !== 'BUYER') throw this._checkoutError('UNAUTHORIZED_ROLE', 'Checkout requires a current buyer account', 403);
+    if (order.buyer_trust_status === 'SUSPENDED') throw this._checkoutError('ACCOUNT_SUSPENDED', 'Suspended buyer accounts are prohibited from checkout', 403);
+    if (order.order_status === 'PAID' || order.payment_status === 'PAID') throw this._checkoutError('ORDER_ALREADY_PAID', 'Order has already been paid in full', 409);
+    if (order.order_status !== 'AWAITING_PAYMENT') throw this._checkoutError('INVALID_ORDER_STATUS', `Order is in '${order.order_status}' status and cannot be paid`, 422);
     try {
-      tbtToken = await safepayAdapter.createPassportToken({ mockClient });
-    } catch (e) {
-      // Non-fatal if mock client does not implement passport token
+      exactDecimal.toDecimalString(order.total_amount, { maxPrecision: 12, maxScale: 2, allowNegative: false });
+      if (!/[1-9]/.test(String(order.total_amount))) throw new Error('Zero amount');
+    } catch (_) {
+      throw this._checkoutError('INVALID_PAYABLE_TOTAL', 'Order does not have a complete, valid payable total', 422);
     }
+    if (order.currency !== 'PKR') throw this._checkoutError('UNSUPPORTED_CURRENCY', 'Safepay integration currently only accepts PKR', 422);
+  }
 
-    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const effectiveRedirectUrl = redirectUrl || `${frontendBase}/payment/return?order_id=${order.id}&beacon=${trackerToken}`;
-    const effectiveCancelUrl = cancelUrl || `${frontendBase}/payment/cancelled?order_id=${order.id}`;
-
-    const checkoutUrl = safepayAdapter.constructCheckoutUrl({
-      trackerToken,
-      orderCode: order.order_code,
-      tbtToken,
-      redirectUrl: effectiveRedirectUrl,
-      cancelUrl: effectiveCancelUrl
-    });
-
-    // Step 3: Record durable payment attempt in DB
-    const attemptCode = `ATT-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
-
-    const [attemptInsert] = await db.query(
-      `INSERT INTO payment_attempts (
-        attempt_code, order_id, buyer_id, provider, environment,
-        provider_tracker_token, checkout_url, amount, currency,
-        status, idempotency_key, created_at
-      ) VALUES (?, ?, ?, 'SAFEPAY', 'sandbox', ?, ?, ?, ?, 'INITIATED', ?, NOW())`,
-      [
-        attemptCode,
-        order.id,
-        order.buyer_id,
-        trackerToken,
-        checkoutUrl,
-        totalPayable,
-        order.currency || 'PKR',
-        trimmedKey
-      ]
-    );
-
-    // Update order payment_status to PAYMENT_INITIATED
-    await db.query(
-      `UPDATE orders SET payment_status = 'PAYMENT_INITIATED', updated_at = NOW() WHERE id = ?`,
-      [order.id]
-    );
-
-    const [newAttemptRows] = await db.query(
-      `SELECT * FROM payment_attempts WHERE id = ?`,
-      [attemptInsert.insertId]
-    );
-
-    return {
-      is_replay: false,
-      attempt: this._formatAttempt(newAttemptRows[0], order)
-    };
+  _assertCheckoutReady(attempt, actor) {
+    if (Number(attempt.buyer_id) !== Number(actor.id)) throw this._checkoutError('FORBIDDEN', 'Checkout attempt belongs to another buyer', 403);
+    if (attempt.status === 'RECONCILIATION_REQUIRED' || !attempt.provider_tracker_token || !attempt.checkout_url) {
+      throw this._checkoutError('CHECKOUT_RECONCILIATION_REQUIRED', 'Checkout initiation is pending reconciliation. Do not create another payment session.', 409);
+    }
   }
 
   /**
@@ -602,8 +598,14 @@ class SafepayCheckoutService {
         );
       }
 
-      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
-        orderId:order.id,type:'PAYMENT.CONFIRMED',transitionId:'paid'});
+      // One order payment transition identity across webhook and reconciliation.
+      for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+        await notificationService.enqueueEvent(connection, {
+          userId, role, eventType: 'PAYMENT_VERIFIED',
+          eventKey: `order:${order.id}:payment:verified`, entityId: order.id
+        });
+      }
+
       await connection.commit();
 
       // B5 Flash pool stock transitions only AFTER an authentic confirmed
@@ -778,7 +780,7 @@ class SafepayCheckoutService {
     }
 
     // If order is already PAID, return idempotent confirmation
-    if (order.order_status === 'PAID') {
+    if (order.order_status === 'PAID' || order.payment_status === 'PAID') {
       const [existingPayments] = await db.query(
         `SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1`,
         [orderId]
@@ -802,16 +804,17 @@ class SafepayCheckoutService {
       throw err;
     }
 
-    // Find latest payment attempt
+    // A crash after tracker persistence can leave an unresolved reservation
+    // without a checkout URL. It still has a real provider identity to recover.
     const [attempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND status = 'INITIATED'
+       WHERE order_id = ? AND status IN ('INITIATED', 'RECONCILIATION_REQUIRED')
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );
 
     if (attempts.length === 0) {
-      const err = new Error('No initiated payment attempt found for this order');
+      const err = new Error('No unresolved payment attempt found for this order');
       err.code = 'NO_ACTIVE_PAYMENT_ATTEMPT';
       err.statusCode = 422;
       throw err;
@@ -819,6 +822,10 @@ class SafepayCheckoutService {
 
     const attempt = attempts[0];
     const trackerToken = attempt.provider_tracker_token;
+    if (typeof trackerToken !== 'string' || !trackerToken.trim()) {
+      throw this._checkoutError('CHECKOUT_RECONCILIATION_REQUIRED',
+        'Checkout initiation is pending reconciliation; no provider tracker has been persisted.', 409);
+    }
 
     // Step 2: Fetch authoritative tracker status from Safepay OUTSIDE transaction lock
     const providerResponse = await safepayAdapter.fetchTracker(trackerToken, { mockClient });
@@ -910,7 +917,7 @@ class SafepayCheckoutService {
       );
 
       const lockedOrder = lockedOrders[0];
-      if (lockedOrder.order_status === 'PAID') {
+      if (lockedOrder.order_status === 'PAID' || lockedOrder.payment_status === 'PAID') {
         await connection.commit();
         return {
           success: true,
@@ -1025,9 +1032,13 @@ class SafepayCheckoutService {
       );
       }
 
-      // Same identity as webhook confirmation: either path produces one receipt.
-      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
-        orderId:order.id,type:'PAYMENT.CONFIRMED',transitionId:'paid'});
+      for (const [userId, role] of [[lockedOrder.buyer_id, 'BUYER'], [lockedOrder.supplier_id, 'SUPPLIER']]) {
+        await notificationService.enqueueEvent(connection, {
+          userId, role, eventType: 'PAYMENT_VERIFIED',
+          eventKey: `order:${lockedOrder.id}:payment:verified`, entityId: lockedOrder.id
+        });
+      }
+
       await connection.commit();
 
       try {

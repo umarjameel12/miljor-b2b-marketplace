@@ -6,6 +6,10 @@ import { Logo } from '../ui/Logo';
 import { Drawer } from '../ui/Drawer';
 import FLAGS from '../../config/featureFlags';
 import { unifiedPoolsApi } from '../../api/unifiedPools';
+import { startNotificationInbox, startNotificationPreferences, safeNotificationLink, isNotificationRead, canManageNotificationOperations, NOTIFICATION_PAGE_SIZE } from '../../api/notifications';
+import { NotificationOperations } from '../notifications/NotificationOperations.jsx';
+import { bindNotificationPanel } from '../notifications/panelAccessibility.js';
+import { parseDeadline } from '../../utils/parseDeadline';
 import {
   Layers,
   ClipboardList,
@@ -92,42 +96,254 @@ export const AppShell = ({ children }) => {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [operationsOpen, setOperationsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNotificationsOpen, setMobileNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [readNotificationIds, setReadNotificationIds] = useState(new Set());
+  const accountKey = isAuthenticated && user?.id != null ? `${user.id}:${role}` : null;
+  const inboxRef = useRef(null);
+  const preferencesRef = useRef(null);
+  const [preferencesState, setPreferencesState] = useState(null);
+  const [inboxState, setInboxState] = useState(null);
+  const [legacyState, setLegacyState] = useState(null);
+  const inbox = inboxState?.owner === accountKey && accountKey ? inboxState : null;
+  const preferences = preferencesState?.owner === accountKey && accountKey ? preferencesState : null;
+  const notifications = inbox?.notifications || [];
+  const unreadCount = inbox?.unreadCount ?? null;
+  const legacyAlerts = legacyState?.owner === accountKey && accountKey ? legacyState.alerts : [];
 
-  // Genuine backend alerts/notifications loader
   useEffect(() => {
-    let isMounted = true;
-    async function loadNotifications() {
-      if (!isAuthenticated) {
-        if (isMounted) setNotifications([]);
-        return;
-      }
-      try {
-        if (role === 'SUPPLIER') {
-          const res = await unifiedPoolsApi.alerts();
-          if (isMounted && res?.alerts) {
-            setNotifications(res.alerts);
-          }
-        } else {
-          // For buyer / admin, genuine notifications come from backend events; if none, array remains empty
-          if (isMounted) setNotifications([]);
-        }
-      } catch {
-        if (isMounted) setNotifications([]);
-      }
+    setNotificationsOpen(false);
+    setMobileNotificationsOpen(false);
+    setInboxState(null);
+    setLegacyState(null);
+    setPreferencesState(null);
+    setOperationsOpen(false);
+    if (!accountKey) return undefined;
+    const session = startNotificationInbox({
+      onChange: state => setInboxState({ ...state, owner: accountKey }),
+    });
+    inboxRef.current = session;
+    const preferencesSession = startNotificationPreferences({
+      onChange: state => setPreferencesState({ ...state, owner: accountKey }),
+    });
+    preferencesRef.current = preferencesSession;
+    let active = true;
+    // UCP alerts are operational projections, not durable inbox entries.
+    if (role === 'SUPPLIER') {
+      unifiedPoolsApi.alerts().then(res => {
+        if (active) setLegacyState({ owner: accountKey, alerts: Array.isArray(res?.alerts) ? res.alerts : [], error: '' });
+      }).catch(() => {
+        if (active) setLegacyState({ owner: accountKey, alerts: [], error: 'Operational alerts unavailable.' });
+      });
     }
-    loadNotifications();
-  }, [isAuthenticated, role]);
+    const catchUp = () => { void session.refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') catchUp(); };
+    window.addEventListener('online', catchUp);
+    window.addEventListener('focus', catchUp);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      session.stop();
+      preferencesSession.stop();
+      if (preferencesRef.current === preferencesSession) preferencesRef.current = null;
+      if (inboxRef.current === session) inboxRef.current = null;
+      window.removeEventListener('online', catchUp);
+      window.removeEventListener('focus', catchUp);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [accountKey, role]);
 
-  const unreadNotifications = notifications.filter(n => !readNotificationIds.has(n.id));
-  const unreadCount = unreadNotifications.length;
+  useEffect(() => {
+    if (notificationsOpen || mobileNotificationsOpen) void inboxRef.current?.refresh();
+  }, [notificationsOpen, mobileNotificationsOpen]);
 
-  const markAllAsRead = () => {
-    setReadNotificationIds(new Set(notifications.map(n => n.id)));
+  const notificationLink = (notification) => {
+    let payload = notification.payload;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch { payload = null; }
+    }
+    return safeNotificationLink(notification.deep_link || payload?.deep_link || payload?.deepLink || payload?.url);
   };
+
+  const openNotification = (notification) => {
+    const link = notificationLink(notification);
+    if (link) {
+      setNotificationsOpen(false);
+      setMobileNotificationsOpen(false);
+      navigate(link);
+    }
+  };
+
+  const renderNotificationPanel = () => (
+    <div className="space-y-3 text-xs" style={{ color: 'var(--text-primary)' }}>
+      <button type="button" data-notification-close className="underline min-h-9" onClick={() => {
+        const root = mobileNotificationsOpen ? mobileNotificationsRef.current : notificationsRef.current;
+        setNotificationsOpen(false); setMobileNotificationsOpen(false);
+        root?.querySelector('[data-notification-trigger]')?.focus();
+      }}>Close notifications</button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">Notifications{unreadCount !== null ? ` (${unreadCount} unread)` : ''}</span>
+        {unreadCount > 0 && (
+          <button type="button" disabled={inbox?.loading} onClick={() => inboxRef.current?.markAllRead()}
+            className="text-[10px] underline disabled:opacity-50">Mark all read</button>
+        )}
+      </div>
+      {!accountKey ? <Link to="/login">Sign in to view notifications.</Link> : (
+        <>
+          {inbox?.error && <p role="alert">{inbox.error} <button type="button" disabled={inbox.loading}
+            className="underline" onClick={() => inboxRef.current?.refresh()}>Retry</button></p>}
+          {(!inbox || inbox.loading) && <p role="status">Updating notifications…</p>}
+          <label className="flex items-center gap-2 min-h-9">
+            <input type="checkbox" checked={inbox?.unread ?? false} disabled={!inbox || inbox.loading}
+              onChange={event => inboxRef.current?.filterUnread(event.target.checked)} />
+            Unread only
+          </label>
+          {inbox && !inbox.loading && !inbox.error && notifications.length === 0 && (
+            <div className="py-4 text-center"><BellOff className="w-4 h-4 mx-auto mb-2" />No notifications on this page.</div>
+          )}
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {notifications.map(n => {
+              const isRead = isNotificationRead(n);
+              const timestamp = parseDeadline(n.created_at);
+              return (
+                <div key={n.id} className={`p-2.5 rounded-xl border ${isRead ? 'opacity-65' : ''}`}
+                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+                  <p className="font-semibold" dir="auto">{n.title || n.event_type || 'Notification'}{!isRead && <span className="sr-only"> — Unread</span>}</p>
+                  <p className="mt-1" dir="auto">{n.message}</p>
+                  {Number.isFinite(timestamp) && <time dateTime={new Date(timestamp).toISOString()}
+                    className="block mt-1 text-[10px]">{new Date(timestamp).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' })}</time>}
+                  <div className="flex gap-3 mt-2">
+                    {notificationLink(n) && <button type="button" className="underline" onClick={() => openNotification(n)}>View details<span className="sr-only">: {n.title || n.event_type || 'Notification'}</span></button>}
+                    {!isRead && <button type="button" className="underline disabled:opacity-50" disabled={inbox.loading}
+                      onClick={() => inboxRef.current?.markRead(n.id)}>Mark read<span className="sr-only">: {n.title || n.event_type || 'Notification'}</span></button>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between gap-3">
+            <button type="button" disabled={!inbox || inbox.loading || !inbox.offset}
+              className="disabled:opacity-40" onClick={() => inboxRef.current?.page(inbox.offset - NOTIFICATION_PAGE_SIZE)}>Newer</button>
+            <button type="button" disabled={!inbox || inbox.loading || notifications.length < NOTIFICATION_PAGE_SIZE}
+              className="disabled:opacity-40" onClick={() => inboxRef.current?.page(inbox.offset + NOTIFICATION_PAGE_SIZE)}>Older</button>
+          </div>
+          <details key={accountKey} className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+            <summary className="font-semibold cursor-pointer">Notification preferences</summary>
+            <div className="space-y-2 mt-2">
+              <p className="text-[10px]">Financial and security alerts are mandatory and cannot be disabled.</p>
+              {(!preferences || preferences.loading) && <p role="status">Loading preferences…</p>}
+              {preferences?.error && <p role="alert">{preferences.error}
+                {!preferences.values && <button type="button" className="underline ml-1" disabled={preferences.loading}
+                  onClick={() => preferencesRef.current?.load()}>Retry</button>}
+              </p>}
+              {preferences?.values && (
+                <form className="space-y-2" onSubmit={event => { event.preventDefault(); void preferencesRef.current?.save(); }}>
+                  <fieldset className="space-y-2" disabled={preferences.loading || preferences.pending}>
+                    <legend className="sr-only">Notification delivery preferences</legend>
+                    <label className="flex items-center justify-between gap-2">
+                      <span>Notification language</span>
+                      <select value={preferences.values.locale} onChange={event => preferencesRef.current?.edit({ locale: event.target.value })}
+                        className="rounded border p-1" style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border-subtle)' }}>
+                        <option value="en">English</option>
+                        <option value="ur">Urdu / اردو</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={preferences.values.optional_email}
+                        onChange={event => preferencesRef.current?.edit({ optional_email: event.target.checked })} />
+                      Optional email notifications
+                    </label>
+                    <label className="flex items-center gap-2 min-h-9">
+                      <input type="checkbox" checked={preferences.values.optional_sms}
+                        onChange={event => preferencesRef.current?.edit({ optional_sms: event.target.checked })} />
+                      Optional SMS notifications
+                    </label>
+                    <p className="text-[10px]">Email and SMS delivery depend on available delivery services.</p>
+                    <label className="flex items-center gap-2 min-h-9">
+                      <input type="checkbox" checked={preferences.values.muted_info}
+                        onChange={event => preferencesRef.current?.edit({ muted_info: event.target.checked })} />
+                      Mute routine information
+                    </label>
+                    <p className="text-[10px]">Quiet hours use 24-hour time and may cross midnight. Clear both times to disable them.</p>
+                    <label className="flex items-center justify-between gap-2">
+                      Quiet hours start
+                      <input type="time" step="60" value={preferences.values.quiet_start ?? ''}
+                        className="rounded border p-1 min-w-0" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                        onChange={event => preferencesRef.current?.edit({ quiet_start: event.target.value || null })} />
+                    </label>
+                    <label className="flex items-center justify-between gap-2">
+                      Quiet hours end
+                      <input type="time" step="60" value={preferences.values.quiet_end ?? ''}
+                        className="rounded border p-1 min-w-0" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                        onChange={event => preferencesRef.current?.edit({ quiet_end: event.target.value || null })} />
+                    </label>
+                    <button type="button" className="underline min-h-9"
+                      onClick={() => preferencesRef.current?.edit({ quiet_start: null, quiet_end: null })}>Clear quiet hours</button>
+                    <label className="block space-y-1">
+                      <span>Timezone offset from UTC (minutes)</span>
+                      <input type="number" required min="-840" max="840" step="1" value={preferences.values.timezone_offset_minutes}
+                        className="block w-full rounded border p-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                        onChange={event => preferencesRef.current?.edit({ timezone_offset_minutes: event.target.value === '' ? '' : Number(event.target.value) })} />
+                    </label>
+                    <p className="text-[10px]">For Pakistan, enter 300 (UTC+05:00). Negative values are west of UTC.</p>
+                    <button type="submit" className="underline disabled:opacity-50">{preferences.pending ? 'Saving…' : 'Save preferences'}</button>
+                  </fieldset>
+                  {preferences.saved && <p role="status">Preferences saved.</p>}
+                </form>
+              )}
+            </div>
+          </details>
+          {canManageNotificationOperations(role) && (
+            <details open={operationsOpen} className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}
+              onToggle={event => setOperationsOpen(event.currentTarget.open)}>
+              <summary className="font-semibold cursor-pointer">Notification operations</summary>
+              {operationsOpen && <NotificationOperations key={accountKey} role={role} />}
+            </details>
+          )}
+          {role === 'SUPPLIER' && (
+            <section className="border-t pt-3 space-y-2" style={{ borderColor: 'var(--border-subtle)' }}>
+              <h3 className="font-semibold">Supplier operational alerts</h3>
+              <p className="text-[10px]">Current pool conditions, separate from inbox read status.</p>
+              {legacyState?.owner === accountKey && legacyState.error && <p role="status">{legacyState.error}</p>}
+              {legacyState?.owner === accountKey && !legacyState.error && legacyAlerts.length === 0 && <p>No operational alerts.</p>}
+              {legacyAlerts.map((alert, index) => <div key={`${alert.id ?? index}`} className="p-2 rounded-xl"
+                style={{ backgroundColor: 'var(--bg-elevated)' }}>
+                <p className="font-semibold">{alert.title || alert.type || 'Operational alert'}</p>
+                <p>{alert.message}</p>
+                {alert.source && <span className="text-[10px]">{String(alert.source).replace(/_/g, ' ')}</span>}
+              </div>)}
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    return bindNotificationPanel(notificationsRef.current, () => setNotificationsOpen(false));
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (!mobileNotificationsOpen) return undefined;
+    return bindNotificationPanel(mobileNotificationsRef.current, () => setMobileNotificationsOpen(false));
+  }, [mobileNotificationsOpen]);
+
+  useEffect(() => {
+    const viewport = window.matchMedia('(min-width: 768px)');
+    const closeHiddenPanel = () => {
+      const previousRoot = viewport.matches ? mobileNotificationsRef.current : notificationsRef.current;
+      const restoreFocus = previousRoot?.contains(document.activeElement);
+      setNotificationsOpen(false);
+      setMobileNotificationsOpen(false);
+      if (restoreFocus) {
+        const visibleRoot = viewport.matches ? notificationsRef.current : mobileNotificationsRef.current;
+        visibleRoot?.querySelector('[data-notification-trigger]')?.focus();
+      }
+    };
+    viewport.addEventListener('change', closeHiddenPanel);
+    return () => viewport.removeEventListener('change', closeHiddenPanel);
+  }, []);
 
   // Outside click listener: Close notifications dropdown when clicking outside
   useEffect(() => {
@@ -223,7 +439,7 @@ export const AppShell = ({ children }) => {
         { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
         { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
         { label: 'Pool Management', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
-        { label: 'Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Smart Procurement Hub', path: '/procurement', icon: ClipboardList, active: is('/procurement') },
         { label: 'Subscription', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
         { label: 'Business Profile', path: '/supplier/profile', icon: User, active: is('/supplier/profile') || is('/supplier/onboarding') },
       ]
@@ -233,8 +449,7 @@ export const AppShell = ({ children }) => {
         ...(isAuthenticated
           ? [
               { label: 'Orders', path: '/orders', icon: ClipboardList, active: is('/orders') },
-              { label: 'Procurement', path: '/rfqs', icon: Tag, active: is('/rfqs') },
-              { label: 'Demand Requests', path: '/demand-requests', icon: Users, active: is('/demand-requests') },
+              { label: 'Smart Procurement Hub', path: '/procurement', icon: Tag, active: is('/procurement') },
             ]
           : []),
       ];
@@ -333,7 +548,7 @@ export const AppShell = ({ children }) => {
             {/* Search Button */}
             <button
               type="button"
-              onClick={() => setMobileSearchOpen(true)}
+              onClick={() => { setMobileNotificationsOpen(false); setMobileSearchOpen(true); }}
               aria-label="Search commodities"
               title="Search Commodities"
               className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
@@ -350,8 +565,12 @@ export const AppShell = ({ children }) => {
             <div className="relative" ref={mobileNotificationsRef}>
               <button
                 type="button"
-                onClick={() => setMobileNotificationsOpen(!mobileNotificationsOpen)}
-                aria-label="Notifications"
+                onClick={() => { setNotificationsOpen(false); setMobileNotificationsOpen(!mobileNotificationsOpen); }}
+                data-notification-trigger
+                aria-haspopup="dialog"
+                aria-controls={mobileNotificationsOpen ? 'mobile-notification-panel' : undefined}
+                aria-label={unreadCount === null ? 'Notifications' : `Notifications, ${unreadCount} unread`}
+                aria-expanded={mobileNotificationsOpen}
                 title="Notifications"
                 className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95 relative"
                 style={{
@@ -363,94 +582,24 @@ export const AppShell = ({ children }) => {
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
                 {unreadCount > 0 && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
-                    aria-label={`${unreadCount} unread alerts`}
-                  />
+                    className="min-w-4 px-1 text-[9px] rounded-full bg-emerald-600 text-white absolute -top-1 -right-1"
+                    aria-label={`${unreadCount} unread notifications`}
+                  >{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
               </button>
 
               {/* Mobile Notifications Popover */}
-              {FLAGS.headerNotificationsPopover && mobileNotificationsOpen && (
+              {mobileNotificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-32px)] p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  id="mobile-notification-panel" role="dialog" aria-label="Notifications" tabIndex={-1}
+                  className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-32px)] max-h-[70dvh] overflow-y-auto p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
                     boxShadow: 'var(--shadow-elevated)',
                   }}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
-                    {unreadCount > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                          {unreadCount} New
-                        </span>
-                        <button
-                          type="button"
-                          onClick={markAllAsRead}
-                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
-                        >
-                          Mark all read
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-stone-400">All caught up</span>
-                    )}
-                  </div>
-
-                  {notifications.length === 0 ? (
-                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
-                        style={{
-                          backgroundColor: 'var(--bg-elevated)',
-                          color: 'var(--brand-accent)',
-                        }}
-                      >
-                        <BellOff className="w-4 h-4 opacity-75" />
-                      </div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        You're all caught up.
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        No new notifications at this time.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
-                      {notifications.map((n) => {
-                        const isRead = readNotificationIds.has(n.id);
-                        return (
-                          <div
-                            key={n.id}
-                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
-                            style={{
-                              backgroundColor: 'var(--bg-elevated)',
-                              borderColor: 'var(--border-subtle)',
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                                {n.title || n.type || 'Alert'}
-                              </p>
-                              {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              )}
-                            </div>
-                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                              {n.message}
-                            </p>
-                            {n.source && (
-                              <span className="text-[9px] text-stone-400 mt-1 block">
-                                {n.source.replace(/_/g, ' ')}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {renderNotificationPanel()}
                 </div>
               )}
             </div>
@@ -889,8 +1038,12 @@ export const AppShell = ({ children }) => {
             <div className="relative" ref={notificationsRef}>
               <button
                 type="button"
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
-                aria-label="Notifications"
+                onClick={() => { setMobileNotificationsOpen(false); setNotificationsOpen(!notificationsOpen); }}
+                data-notification-trigger
+                aria-haspopup="dialog"
+                aria-controls={notificationsOpen ? 'desktop-notification-panel' : undefined}
+                aria-label={unreadCount === null ? 'Notifications' : `Notifications, ${unreadCount} unread`}
+                aria-expanded={notificationsOpen}
                 title="Notifications"
                 className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95 relative"
                 style={{
@@ -902,93 +1055,23 @@ export const AppShell = ({ children }) => {
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
                 {unreadCount > 0 && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
-                    aria-label={`${unreadCount} unread alerts`}
-                  />
+                    className="min-w-4 px-1 text-[9px] rounded-full bg-emerald-600 text-white absolute -top-1 -right-1"
+                    aria-label={`${unreadCount} unread notifications`}
+                  >{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
               </button>
 
-              {FLAGS.headerNotificationsPopover && notificationsOpen && (
+              {notificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-80 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  id="desktop-notification-panel" role="dialog" aria-label="Notifications" tabIndex={-1}
+                  className="absolute right-0 top-full mt-2 w-80 max-h-[70dvh] overflow-y-auto p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
                     boxShadow: 'var(--shadow-elevated)',
                   }}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</span>
-                    {unreadCount > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                          {unreadCount} New
-                        </span>
-                        <button
-                          type="button"
-                          onClick={markAllAsRead}
-                          className="text-[10px] text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition cursor-pointer"
-                        >
-                          Mark all read
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-stone-400">All caught up</span>
-                    )}
-                  </div>
-
-                  {notifications.length === 0 ? (
-                    <div className="py-6 px-3 flex flex-col items-center justify-center text-center">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center mb-2"
-                        style={{
-                          backgroundColor: 'var(--bg-elevated)',
-                          color: 'var(--brand-accent)',
-                        }}
-                      >
-                        <BellOff className="w-4 h-4 opacity-75" />
-                      </div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        You're all caught up.
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        No new notifications at this time.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs max-h-60 overflow-y-auto">
-                      {notifications.map((n) => {
-                        const isRead = readNotificationIds.has(n.id);
-                        return (
-                          <div
-                            key={n.id}
-                            className={`p-2.5 rounded-xl border transition ${isRead ? 'opacity-65' : ''}`}
-                            style={{
-                              backgroundColor: 'var(--bg-elevated)',
-                              borderColor: 'var(--border-subtle)',
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                                {n.title || n.type || 'Alert'}
-                              </p>
-                              {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              )}
-                            </div>
-                            <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                              {n.message}
-                            </p>
-                            {n.source && (
-                              <span className="text-[9px] text-stone-400 mt-1 block">
-                                {n.source.replace(/_/g, ' ')}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {renderNotificationPanel()}
                 </div>
               )}
             </div>

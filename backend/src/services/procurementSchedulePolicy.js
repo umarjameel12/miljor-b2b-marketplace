@@ -29,8 +29,8 @@ function normalizeSchedule(value){
   if(!value||typeof value!=='object'||Array.isArray(value))
     throw error('INVALID_SCHEDULE','Schedule must be an object.');
   const cadence=value.cadence;
-  if(!['WEEKLY','MONTHLY'].includes(cadence))
-    throw error('INVALID_CADENCE','Choose WEEKLY or MONTHLY.');
+  if(!['WEEKLY','BIWEEKLY','MONTHLY'].includes(cadence))
+    throw error('INVALID_CADENCE','Choose WEEKLY, BIWEEKLY or MONTHLY.');
   if(value.timezone_name!==undefined&&value.timezone_name!=='Asia/Karachi')
     throw error('INVALID_TIMEZONE','Lahore launch schedules must use Asia/Karachi.');
   if(value.payment_policy!==undefined&&value.payment_policy!=='EXPLICIT_PER_CYCLE')
@@ -42,13 +42,13 @@ function normalizeSchedule(value){
   if(end!==null&&end<start)throw error('INVALID_SCHEDULE_RANGE','Schedule end precedes start.');
   const time=localTime(value.local_run_time);
   let weekday=null,monthDay=null,endPolicy='LAST_DAY';
-  if(cadence==='WEEKLY'){
+  if(cadence==='WEEKLY'||cadence==='BIWEEKLY'){
     weekday=Number(value.weekday_number);
-    if(!Number.isInteger(weekday)||weekday<0||weekday>6||value.month_day!=null)
-      throw error('INVALID_WEEKDAY','WEEKLY requires weekday 0=Sunday through 6=Saturday.');
+    if(!/^[0-6]$/.test(String(value.weekday_number))||!Number.isInteger(weekday)||value.month_day!=null)
+      throw error('INVALID_WEEKDAY','Weekly schedules require weekday 0=Sunday through 6=Saturday.');
   }else{
     monthDay=Number(value.month_day);
-    if(!Number.isInteger(monthDay)||monthDay<1||monthDay>31||value.weekday_number!=null)
+    if(!/^(?:[1-9]|[12][0-9]|3[01])$/.test(String(value.month_day))||!Number.isInteger(monthDay)||value.weekday_number!=null)
       throw error('INVALID_MONTH_DAY','MONTHLY requires a calendar day 1–31.');
     endPolicy=value.month_end_policy||'LAST_DAY';
     if(!['LAST_DAY','SKIP_MONTH'].includes(endPolicy))
@@ -93,8 +93,12 @@ function nextCycles(schedule,{from=new Date().toISOString(),limit=6}={}){
     if(end!==null&&dayMs>end)break;
     const calendar=new Date(dayMs);
     let matches=false;
-    if(normalized.cadence==='WEEKLY'){
+    if(normalized.cadence==='WEEKLY'||normalized.cadence==='BIWEEKLY'){
       matches=calendar.getUTCDay()===normalized.weekday_number;
+      if(matches&&normalized.cadence==='BIWEEKLY'){
+        const firstWeekday=start+((normalized.weekday_number-new Date(start).getUTCDay()+7)%7)*86400000;
+        matches=(dayMs-firstWeekday)%(14*86400000)===0;
+      }
     }else{
       const year=calendar.getUTCFullYear(),month=calendar.getUTCMonth()+1;
       matches=calendar.getUTCDate()===

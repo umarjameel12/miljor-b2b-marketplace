@@ -9,6 +9,7 @@ const exact=require('./exactDecimal');
 const feeService=require('./feeService');
 const matching=require('./procurementMatchingService');
 const {buildAwardPreview}=require('./procurementAwardPolicy');
+const notifications=require('./notificationService');
 
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=(raw,label)=>{
@@ -92,7 +93,7 @@ class ProcurementAwardService{
         ?JSON.parse(row.immutable_snapshot):row.immutable_snapshot;
       return {quote_id:row.quote_id,supplier_id:row.supplier_id,status:row.status,
         version_number:row.current_version,valid_until:fromDbDate(row.valid_until),
-        delivery_fee:row.delivery_fee,lines:data.lines||[]};
+        delivery_fee:row.delivery_fee,lines:data.lines||[],...(data.delivery_terms?{delivery_terms:data.delivery_terms}:{})};
     });
   }
   async _validatedPreview(conn,buyerId,requestId,selections,lock=false){
@@ -289,6 +290,15 @@ class ProcurementAwardService{
           throw fail('SHARED_INVENTORY_EXHAUSTED',
             'B4/B5 pools or another buyer already allocated this supplier stock.',409);
       }
+      for(const group of preview.groups){
+        const [live]=await conn.query(
+          `SELECT q.id FROM procurement_quotes q JOIN procurement_quote_versions v
+           ON v.quote_id=q.id AND v.version_number=q.current_version
+           WHERE q.id=? AND q.request_id=? AND q.current_version=? AND q.status='ACTIVE'
+             AND v.valid_until>UTC_TIMESTAMP() AND ?>UTC_TIMESTAMP() FOR UPDATE`,
+          [group.quote_id,rid,group.version_number,request.quote_deadline]);
+        if(!live.length)throw fail('AWARD_QUOTE_EXPIRED','Request or supplier quote expired while waiting for stock locks.',409);
+      }
       const calculated=await this._money(conn,preview);
       if(!exact.exactDecimalEquals(calculated.total_payable,expected,2))
         throw fail('BUYER_REAPPROVAL_REQUIRED',
@@ -307,6 +317,20 @@ class ProcurementAwardService{
       );
       const orderSummary=[];
       for(const group of calculated.groups){
+        let boundAddress=address;
+        let deliveryType='DOORSTEP';
+        let acceptedDelivery=null;
+        if(group.delivery_terms){
+          const binding=require('./procurementDeliveryBindingService');
+          const currentTerms=await binding.validate(conn,{buyerId:buyer,supplierId:group.supplier_id,
+            requestId:rid,quoteId:group.quote_id,code:group.delivery_terms.quote_code,fee:group.delivery_fee});
+          require('./procurementDeliveryBindingPolicy').assertDeliveryConsent(currentTerms,group.delivery_terms.hash);
+          const verified=await require('./deliveryEligibilityService').verifyAndAcceptQuote(buyer,currentTerms.quote_code,{procurementRequestId:rid},conn);
+          acceptedDelivery=typeof verified.destination_address_snapshot==='string'?JSON.parse(verified.destination_address_snapshot):verified.destination_address_snapshot;
+          if(currentTerms.mode!=='PICKUP'&&acceptedDelivery?.full_address!==address)throw fail('DELIVERY_ADDRESS_REAPPROVAL_REQUIRED','Submitted address differs from locked destination',409);
+          deliveryType=currentTerms.mode==='PICKUP'?'SUPPLIER_PICKUP':currentTerms.mode==='STANDARD_CLUSTERED'?'GROUPED_CLUSTER':'DOORSTEP';
+          boundAddress=currentTerms.mode==='PICKUP'?'Supplier pickup point #'+currentTerms.pickup_point_id:acceptedDelivery.full_address;
+        }
         // Keep generated code within the existing orders.order_code varchar(20)
         // while preserving a random unique key and DB uniqueness enforcement.
         const code='MJQ-'+crypto.randomBytes(6).toString('hex');
@@ -316,13 +340,15 @@ class ProcurementAwardService{
            subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,
            supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,
            order_status,notes)
-          VALUES (?,?,?,1.0000,?,?,?,?,?,?,'PKR','DOORSTEP',?,
+          VALUES (?,?,?,1.0000,?,?,?,?,?,?,'PKR',?,?,
                   'AWAITING_PAYMENT','AWAITING_PAYMENT','SMART_PROCUREMENT_BASKET')`,
           [code,buyer,group.supplier_id,group.item_subtotal,
            group.item_subtotal,group.delivery_fee,group.buyer_platform_fee,
-           group.total_amount,group.supplier_commission_percent,address]
+           group.total_amount,group.supplier_commission_percent,deliveryType,boundAddress]
         );
         const orderId=createdOrder.insertId;
+        if(group.delivery_terms)await conn.query('UPDATE orders SET procurement_delivery_snapshot=? WHERE id=?',
+          [JSON.stringify({...group.delivery_terms,destination_address_snapshot:acceptedDelivery}),orderId]);
         const [link]=await conn.query(
           `INSERT INTO procurement_award_orders
            (award_id,order_id,supplier_id,item_subtotal,delivery_fee,
@@ -381,6 +407,12 @@ class ProcurementAwardService{
         'UPDATE procurement_awards SET original_response_snapshot=? WHERE id=?',
         [JSON.stringify(snapshot),awardResult.insertId]
       );
+      await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'TERMS_LOCKED',
+        eventKey:'award:'+awardResult.insertId+':locked',entityId:rid});
+      for(const order of orderSummary){
+        await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'PAYMENT_PENDING',
+          eventKey:'order:'+order.order_id+':payment_pending',entityId:order.order_id});
+      }
       await conn.commit();
       return {award:snapshot,is_replay:false};
     }catch(e){

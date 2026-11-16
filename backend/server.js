@@ -190,6 +190,7 @@ app.use('/api/v1', deliveryQuotationRoutes);
 app.use('/api/v1', procurementRoutes);
 app.use('/api/v1', marketplaceOperationsRoutes);
 app.use('/api/v1/notifications', require('./src/routes/v1/notificationRoutes'));
+app.use('/api/v1/ucp/recovery', require('./src/routes/v1/ucpRecoveryRoutes').createRecoveryRouter());
 app.post('/api/v1/webhooks/safepay', (req, res) => paymentController.handleSafepayWebhook(req, res));
 
 // =============================================================================

@@ -888,6 +888,10 @@ async function runPart5FlashPoolGate() {
       }
       // Remove dependent delivery fixtures before deleting supplier/buyers.
       if (cleanupFixtures.userIds.length) {
+        await db.query('DELETE d FROM notification_digest_events d JOIN procurement_notifications n ON n.id=d.notice_id WHERE n.recipient_id IN (?)',[cleanupFixtures.userIds]);
+        await db.query('DELETE FROM procurement_notifications WHERE recipient_id IN (?)',[cleanupFixtures.userIds]);
+        await db.query('DELETE FROM notification_email_budgets WHERE user_id IN (?)',[cleanupFixtures.userIds]);
+        await db.query('DELETE FROM notification_preferences WHERE user_id IN (?)',[cleanupFixtures.userIds]);
         await db.query('DELETE FROM transactional_email_outbox WHERE recipient_user_id IN (?)',[cleanupFixtures.userIds]);
         await db.query('DELETE FROM platform_notifications WHERE user_id IN (?)',[cleanupFixtures.userIds]);
         await db.query('DELETE FROM buyer_delivery_addresses WHERE user_id IN (?)', [cleanupFixtures.userIds]);

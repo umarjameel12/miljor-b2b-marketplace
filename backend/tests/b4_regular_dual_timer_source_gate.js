@@ -21,10 +21,10 @@ check(migration.includes('regular_pool_payment_holds')&&migration.includes('UNIQ
 check(!/DROP TABLE|DELETE FROM orders|DELETE FROM reservations/i.test(migration),'No destructive historical migrations');
 check(service.includes('HOLD_MINUTES = 15'),'15-minute payment initiation window');
 check(order.includes('createForOrder(connection')&&order.includes('orderId, reservationId:reservation.id'),'Hold created inside buyer order transaction');
-check(checkout.includes('claimCheckout(orderId,actor.id)'),'Checkout claims regular B4 hold');
-check(checkout.includes('assertCanCreateFreshCheckout(orderId,actor.id)'),'Deadline blocks new Safepay session');
-check(checkout.includes('releaseCheckoutClaim(orderId,actor.id)'),'Uninitiated failed provider requests can unwind');
-check(service.includes("status='INITIATED'"),'Never release an initiated provider attempt');
+check(/regularPoolPaymentHoldService'\)\.claimCheckout\(orderId,\s*actor.id\)/.test(checkout),'Checkout claims regular B4 hold');
+check(checkout.includes('assertCanCreateFreshCheckout.call({ db: reservation }, order.id, actor.id)'),'Deadline checked on reservation connection before reserving a session');
+check(!checkout.includes('releaseCheckoutClaim(')&&checkout.includes("'RECONCILIATION_REQUIRED'"),'Unknown provider outcomes retain durable attempts and holds');
+check(service.includes("'INITIATED','RECONCILIATION_REQUIRED'")||service.includes("'INITIATED', 'RECONCILIATION_REQUIRED'"),'Both unresolved provider states prevent release');
 check(checkout.includes('markPaid(connection,order.id)'),'Provider verified transaction marks hold paid');
 check(checkout.includes('regular_pool_payment_hold: regularPoolPaymentHold'),'Authenticated payment status returns server clock and deadline');
 check(checkout.includes("['ADMIN','SUPER_ADMIN','FINANCE_ADMIN']"),'Payment status access protected');

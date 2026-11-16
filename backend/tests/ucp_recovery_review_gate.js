@@ -50,7 +50,7 @@ test('system expiry works for a suspended supplier and preserves committed stock
 test('crash on final email attempt becomes a visible terminal failure after lease expiry',async()=>{
   let terminalized=false;
   database.query=async sql=>{
-    if(sql.includes('EMAIL_ATTEMPTS_EXHAUSTED'))terminalized=true;
+    if(sql.includes("SET status = 'FAILED'")&&sql.includes("status = 'SENDING'")&&sql.includes('attempt_count >= 3'))terminalized=true;
     if(sql.includes('SELECT id, recipient_email'))return [[]];
     return [{affectedRows:1}];
   };

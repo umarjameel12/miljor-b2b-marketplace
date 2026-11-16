@@ -144,7 +144,19 @@ async function main(){
    assert.deepEqual([totals.payments,totals.payables,totals.instructions,totals.events].map(Number),
      [1,1,1,5]);
    console.log('PASS G8 settlement prepared only after receipt: one payable, one instruction, external execution DISABLED');
+   const [notices]=await db.query(
+     "SELECT recipient_id,event_type FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=?",
+     [String(orderId)]);
+   assert.ok(notices.some(row=>row.event_type==='PAYMENT_VERIFIED'&&Number(row.recipient_id)===5));
+   assert.ok(notices.some(row=>row.event_type==='RECEIPT_CONFIRMED'&&Number(row.recipient_id)===2));
+   assert.ok(notices.some(row=>row.event_type==='SETTLEMENT_PENDING'&&Number(row.recipient_id)===2));
+   assert.ok(notices.every(row=>[2,5].includes(Number(row.recipient_id))));
+   assert.ok(notices.every(row=>!['SETTLEMENT_COMPLETED','REFUND_COMPLETED'].includes(row.event_type)));
+   console.log('PASS G9 real financial/fulfillment outbox recipients and no false settlement completion');
    console.log('PASS REAL HTTP+MYSQL E2E with synthetic signed Safepay event; real provider and bank settlement NOT VERIFIED');
- }finally{await new Promise(resolve=>server.close(resolve));}
+ }finally{
+   await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=? AND event_type IN ('PAYMENT_VERIFIED','DISPATCH_SCHEDULED','OUT_FOR_DELIVERY','DELIVERY_REPORTED','RECEIPT_CONFIRMED','SETTLEMENT_PENDING')",[String(orderId)]);
+   await new Promise(resolve=>server.close(resolve));
+ }
 }
 main().then(()=>process.exit(0)).catch(e=>{console.error('FAIL PAYMENT→FULFILLMENT→BUYER RECEIPT→SETTLEMENT E2E',e.stack||e);process.exit(1)});

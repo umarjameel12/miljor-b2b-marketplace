@@ -91,12 +91,12 @@ export const RegisterPage = () => {
 
     // 1. Mandatory Identity Validations
     if (!formData.business_name.trim()) {
-      setError(role === 'SUPPLIER' ? 'Supplier / Mill Business Name is required.' : 'Buyer Business Name is required.');
+      setError(role === 'SUPPLIER' ? 'Business name is required.' : 'Business name is required.');
       return;
     }
 
     if (!formData.full_name.trim()) {
-      setError('Authorized contact person name is required.');
+      setError('Full name is required.');
       return;
     }
 
@@ -218,21 +218,16 @@ export const RegisterPage = () => {
         )}
 
         {preferences.showBrandHeading && (
-          <h1 className="font-display font-black text-lg sm:text-xl tracking-tight leading-tight" style={{ color: 'var(--text-primary)' }}>
-            {role === 'SUPPLIER' ? 'Create Supplier Account' : 'Create Buyer Account'}
+          <h1 className="auth-heading text-xl sm:text-[26px] leading-tight" style={{ color: 'var(--text-primary)' }}>
+            Create your MilJor account
           </h1>
         )}
 
-        <p className="text-[11px] sm:text-xs font-sans mt-0.5" style={{ color: 'var(--text-muted)' }}>
-          {role === 'SUPPLIER'
-            ? 'Wholesale mills, importers & commercial food distributors'
-            : 'Commercial kitchens & restaurants pooling wholesale commodity demand'}
-        </p>
       </div>
 
       {/* Segmented Quick-Switch Tabs [Sign In | Create Account] */}
       <div
-        className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+        className="auth-auth-tabs grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
         style={{
           backgroundColor: 'var(--bg-input)',
           borderColor: 'var(--border-subtle)',
@@ -246,7 +241,7 @@ export const RegisterPage = () => {
           Sign In
         </Link>
         <span
-          className="py-1 text-center rounded-lg transition-all shadow-xs cursor-default"
+          className="auth-segment-active py-1 text-center rounded-lg transition-all cursor-default"
           style={{
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
@@ -260,7 +255,7 @@ export const RegisterPage = () => {
       {/* Account Type Selector: Buyer vs Supplier */}
       <div className="flex flex-col gap-1">
         <label className="text-[11px] font-sans font-medium" style={{ color: 'var(--text-secondary)' }}>
-          Account Type
+          Register as
         </label>
         <div
           className="grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
@@ -273,7 +268,7 @@ export const RegisterPage = () => {
             type="button"
             onClick={() => handleRoleChange('BUYER')}
             className={`py-1.5 text-center rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              role === 'BUYER' ? 'shadow-xs font-bold' : 'hover:text-[var(--text-primary)]'
+              role === 'BUYER' ? 'auth-segment-active font-semibold' : 'hover:text-[var(--text-primary)]'
             }`}
             style={{
               backgroundColor: role === 'BUYER' ? 'var(--bg-surface)' : 'transparent',
@@ -282,13 +277,13 @@ export const RegisterPage = () => {
             }}
           >
             <Store className="w-3.5 h-3.5" />
-            <span>Buyer (Kitchen / Caterer)</span>
+            <span>Buyer</span>
           </button>
           <button
             type="button"
             onClick={() => handleRoleChange('SUPPLIER')}
             className={`py-1.5 text-center rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              role === 'SUPPLIER' ? 'shadow-xs font-bold' : 'hover:text-[var(--text-primary)]'
+              role === 'SUPPLIER' ? 'auth-segment-active font-semibold' : 'hover:text-[var(--text-primary)]'
             }`}
             style={{
               backgroundColor: role === 'SUPPLIER' ? 'var(--bg-surface)' : 'transparent',
@@ -297,7 +292,7 @@ export const RegisterPage = () => {
             }}
           >
             <Truck className="w-3.5 h-3.5" />
-            <span>Supplier (Mill / Trader)</span>
+            <span>Supplier</span>
           </button>
         </div>
       </div>
@@ -326,7 +321,7 @@ export const RegisterPage = () => {
         {/* Row 1: Business Name & Authorized Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <Input
-            label={role === 'SUPPLIER' ? 'Supplier Business Name' : 'Buyer Business Name'}
+            label="Business Name"
             type="text"
             name="business_name"
             placeholder={role === 'SUPPLIER' ? 'e.g. Al-Rehman Rice Mills' : 'e.g. Royal Caterers'}
@@ -337,7 +332,7 @@ export const RegisterPage = () => {
           />
 
           <Input
-            label="Contact Person Name"
+            label="Full Name"
             type="text"
             name="full_name"
             placeholder="e.g. Tariq Mehmood"
@@ -351,7 +346,7 @@ export const RegisterPage = () => {
         {/* Row 2: Email & Phone */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <Input
-            label="Business Email"
+            label="Email"
             type="email"
             name="email"
             autoComplete="email"
@@ -363,7 +358,7 @@ export const RegisterPage = () => {
           />
 
           <Input
-            label="Mobile Number (11 digits)"
+            label="Mobile Number"
             type="tel"
             name="phone"
             autoComplete="tel"
@@ -371,7 +366,6 @@ export const RegisterPage = () => {
             value={formData.phone}
             onChange={handleChange}
             icon={Phone}
-            helperText="For order & dispatch SMS updates"
           />
         </div>
 
@@ -382,21 +376,19 @@ export const RegisterPage = () => {
             <label className="text-xs font-sans font-medium flex items-center justify-between h-4" style={{ color: 'var(--text-secondary)' }}>
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-stone-400" />
-                <span>Operating City</span>
+                <span>City</span>
               </span>
-              <span className="text-[10px] text-stone-400">Local District Only</span>
             </label>
             <input
               type="text"
               readOnly
-              value="Lahore District, Pakistan"
+              value="Lahore"
               aria-label="Launch City"
-              className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-not-allowed select-none h-[42px]"
+              className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-medium cursor-default select-none h-[42px]"
               style={{
                 backgroundColor: 'var(--bg-input)',
                 borderColor: 'var(--border-default)',
                 color: 'var(--text-primary)',
-                opacity: 0.9,
               }}
             />
           </div>
@@ -405,9 +397,10 @@ export const RegisterPage = () => {
           <LahoreClusterSelector
             value={formData.cluster_id}
             onChange={handleClusterChange}
-            label="Marketplace Cluster"
-            badge="Local District Only"
+            label="Local Area"
+            badge=""
             helperText=""
+            compact
           />
         </div>
 
@@ -416,7 +409,7 @@ export const RegisterPage = () => {
           <div className="space-y-1.5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <Input
-                label="Society / Area (Optional)"
+                label="Area"
                 type="text"
                 name="society_area"
                 placeholder="e.g. Johar Town Block G1, DHA Phase 6"
@@ -426,7 +419,7 @@ export const RegisterPage = () => {
               />
 
               <Input
-                label="Commercial Address (Optional)"
+                label="Address"
                 type="text"
                 name="address"
                 placeholder="e.g. Shop 4B, Main Market"
@@ -440,7 +433,7 @@ export const RegisterPage = () => {
           <div className="space-y-1.5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <Input
-                label="Society / Industrial Area"
+                label="Area"
                 type="text"
                 name="society_area"
                 placeholder="e.g. Badami Bagh, Quaid-e-Azam Estate"
@@ -450,7 +443,7 @@ export const RegisterPage = () => {
               />
 
               <Input
-                label="Facility Street Address"
+                label="Business Address"
                 type="text"
                 name="address"
                 placeholder="e.g. Plot 14-B, Industrial Area, Kot Lakhpat"
@@ -467,7 +460,7 @@ export const RegisterPage = () => {
         <div className="space-y-1.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <PasswordField
-              label="Account Password"
+              label="Password"
               value={formData.password}
               onChange={handleChange}
               name="password"
@@ -509,11 +502,11 @@ export const RegisterPage = () => {
             color: 'var(--text-on-champagne)',
           }}
         >
-          Create {role === 'SUPPLIER' ? 'Supplier' : 'Buyer'} Account
+          Create Account
         </Button>
 
         <p className="text-[11px] text-center text-stone-500">
-          By registering, you agree to MilJor's B2B collective procurement terms and Lahore delivery policies.
+          By creating an account, you agree to MilJor's terms.
         </p>
       </form>
     </div>
