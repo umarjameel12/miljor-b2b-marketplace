@@ -54,11 +54,13 @@ async function main(){
     const [[previous]]=await db.query(
       'SELECT verification_status,submitted_revision,correction_fields,correction_notes,correction_requested_revision FROM supplier_profiles WHERE supplier_id=?',
       [fixture.id]);
+    const [[evidenceBefore]]=await db.query('SELECT COALESCE(MAX(id),0) AS max_id FROM supplier_verification_documents WHERE supplier_id=?',[fixture.id]);
     try {
       await db.query(
         `UPDATE supplier_profiles SET verification_status='MORE_INFORMATION_REQUIRED', submitted_revision=1,
-          correction_fields=JSON_ARRAY('warehouse_address'),
-          correction_notes=JSON_OBJECT('warehouse_address','Please update exact dispatch street'),
+          correction_fields=JSON_ARRAY('warehouse_address','document:BUSINESS_LICENSE'),
+          correction_notes=JSON_OBJECT('warehouse_address','Please update exact dispatch street',
+            'document:BUSINESS_LICENSE','Please provide readable license evidence'),
           correction_requested_revision=1 WHERE supplier_id=?`,[fixture.id]);
       await page.goto(base+'/supplier/profile',{waitUntil:'domcontentloaded'});
       await page.getByRole('heading',{name:'Requested verification corrections'}).waitFor({timeout:20000});
@@ -66,8 +68,26 @@ async function main(){
       assert.equal(await page.locator('#correction-bank_iban').count(),0,
         'Unrequested bank information must never be requested');
       assert.equal(await page.getByText('Please update exact dispatch street').count(),1);
+      assert.equal(await page.locator('#evidence-BUSINESS_LICENSE').count(),1);
+      assert.equal(await page.locator('#evidence-BANK_PROOF').count(),0);
+      await page.locator('#evidence-BUSINESS_LICENSE').setInputFiles({
+        name:'corrected-license.pdf',mimeType:'application/pdf',
+        buffer:Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF')
+      });
+      await page.getByText('Latest v1 · corrected-license.pdf',{exact:false}).waitFor({timeout:18000});
+      const [added]=await db.query(`SELECT id,version_number,review_revision,sha256 FROM supplier_verification_documents
+        WHERE supplier_id=? AND id>? AND document_kind='BUSINESS_LICENSE'`,[fixture.id,evidenceBefore.max_id]);
+      assert.equal(added.length,1);
+      assert.equal(Number(added[0].review_revision),1);
+      assert.match(added[0].sha256,/^[a-f0-9]{64}$/);
+      console.log('PASS CHROMIUM: requested-only PDF uploaded through real React and persisted as immutable review-scoped evidence');
       console.log('PASS CHROMIUM: Request Info renders only requested correction field, retains all others');
     } finally {
+      await db.query(`DELETE FROM system_audit_logs WHERE entity_name='supplier_verification_documents'
+        AND entity_id IN (SELECT id FROM supplier_verification_documents WHERE supplier_id=? AND id>?)`,
+        [fixture.id,evidenceBefore.max_id]);
+      await db.query('DELETE FROM supplier_verification_documents WHERE supplier_id=? AND id>?',
+        [fixture.id,evidenceBefore.max_id]);
       await db.query(
         'UPDATE supplier_profiles SET verification_status=?,submitted_revision=?,correction_fields=?,correction_notes=?,correction_requested_revision=? WHERE supplier_id=?',
         [previous.verification_status,previous.submitted_revision,previous.correction_fields,
