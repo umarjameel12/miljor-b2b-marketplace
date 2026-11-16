@@ -104,6 +104,25 @@ router.get('/procurement/supplier/collectives/:groupId/orders',protect,
     catch(error){return collectiveRouteError(res,error);}
   });
 
+// PR61 Part 2: one supplier-operated route, each paid buyer confirms own schedule.
+const collectiveDelivery=require('../../services/procurementCollectiveDeliveryService');
+router.post('/procurement/supplier/collectives/:groupId/delivery-route',
+  protect,authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try{return res.status(201).json({success:true,data:await collectiveDelivery.propose(
+      req.user.id,req.params.groupId,req.body,req.get('X-Idempotency-Key'))});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.get('/procurement/collectives/:groupId/delivery-route',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveDelivery.getBuyer(req.user.id,req.params.groupId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.post('/procurement/collectives/:groupId/delivery-route/decision',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveDelivery.decide(req.user.id,req.params.groupId,req.body)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+
 // B6-K: individual buyer consent only, not an order or checkout.
 router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewCollectiveApproval(req,res));
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
