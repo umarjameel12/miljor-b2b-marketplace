@@ -142,11 +142,6 @@ export const LandingPage = () => {
   const changeSlide = (direction) => setSlide((index) => (index + direction + COMMODITIES.length) % COMMODITIES.length);
   const dashboardPath = user?.role === 'SUPPLIER' ? '/supplier/dashboard' : ['ADMIN', 'SUPER_ADMIN'].includes(user?.role) ? '/admin/dashboard' : '/pools';
 
-  const navLinks = [
-    { title: 'Browse Pools', to: '#live-pools', icon: Layers },
-    { title: 'For Suppliers', to: '#suppliers', icon: Store },
-  ];
-  const navClass = 'landing-top-link inline-flex items-center gap-2 text-xs sm:text-sm font-semibold transition-colors';
   const requestQuoteDestination = isAuthenticated ? '/rfqs' : '/login';
   const quoteState = isAuthenticated ? undefined : { from: { pathname: '/rfqs' } };
   const buttonGold = { color: 'var(--text-on-champagne)' };
@@ -156,12 +151,8 @@ export const LandingPage = () => {
   return (
     <div id="top" className="miljor-public-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
       <header className="landing-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-sidebar)', color: 'var(--text-primary)' }}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-3 sm:px-8 lg:px-10">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8 lg:px-10">
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
-          <nav className="hidden lg:flex items-center gap-7" aria-label="Public navigation">
-            {navLinks.map((link) => <a key={link.title} href={link.to} className={navClass}><link.icon size={15} className="landing-nav-icon" />{link.title}</a>)}
-            <Link to={requestQuoteDestination} state={quoteState} className={navClass}><FileText size={15} className="landing-nav-icon" />Request Quote</Link>
-          </nav>
           <div className="hidden sm:flex items-center gap-3">
             <ThemeSelector minimal />
             {isAuthenticated ? (
@@ -176,7 +167,7 @@ export const LandingPage = () => {
                   aria-expanded={accountMenuOpen}
                   aria-controls="landing-account-options"
                   title="Account Menu"
-                  className="flex items-center gap-2.5 h-9 px-3 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+                  className="landing-account-trigger flex items-center gap-2.5 h-9 px-3 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
                   style={{
                     backgroundColor: 'var(--bg-card)',
                     borderColor: 'var(--border-default)',
@@ -252,8 +243,6 @@ export const LandingPage = () => {
         </div>
         {mobileMenu && (
           <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
-            {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><link.icon size={16} className="landing-nav-icon" />{link.title}</a>)}
-            <Link to={requestQuoteDestination} state={quoteState} onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm"><FileText size={16} className="landing-nav-icon" />Request Quote</Link>
             {isAuthenticated ? (
               <Link to={dashboardPath} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Open Marketplace</Link>
             ) : (
@@ -268,7 +257,7 @@ export const LandingPage = () => {
       </header>
 
       <main>
-        <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-12 sm:px-8 md:pt-16 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-12">
+        <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-10 sm:px-8 md:pt-14 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-12">
           <div className="max-w-xl">
             <span className="landing-tagline inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)' }}>Mil Kar Khareedo, Behtar Pao</span>
             <h1 className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]">
