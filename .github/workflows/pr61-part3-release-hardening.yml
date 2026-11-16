@@ -1,0 +1,105 @@
+name: PR61 Part 3 Safepay Boundary, Subscription, Notifications and Release
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/services/safepayCheckoutService.js'
+      - 'backend/src/services/supplierSubscriptionCheckoutService.js'
+      - 'backend/src/services/financialSettlementService.js'
+      - 'backend/src/services/notificationEventPolicy.js'
+      - 'backend/tests/pr61_part3_release_gate.test.js'
+      - 'backend/tests/p0_safepay_signed_http_acceptance.js'
+      - 'backend/tests/supplier_subscription_checkout_mysql_gate.js'
+      - 'backend/tests/supplier_subscription_checkout_contract_gate.js'
+      - 'backend/tests/part4e3_6_payment_recovery_gate.js'
+      - 'backend/docs/PR61_PART3_RELEASE_ACCEPTANCE.md'
+      - '.github/workflows/pr61-part3-release-hardening.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fail-closed-source-contracts:
+    name: No-provider-traffic security, notification and subscription contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NODE_ENV: test
+      SAFEPAY_ENV: sandbox
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      DB_NAME: miljor_test_db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax of payment, refund, subscription and test code
+        run: |
+          node --check backend/src/services/safepayCheckoutService.js
+          node --check backend/src/services/supplierSubscriptionCheckoutService.js
+          node --check backend/src/services/financialSettlementService.js
+          node --check backend/tests/pr61_part3_release_gate.test.js
+          node --check backend/tests/p0_safepay_signed_http_acceptance.js
+      - name: Fail-closed pure security and provider-origin truth tests
+        run: node --test backend/tests/pr61_part3_release_gate.test.js
+      - name: Static sandbox readiness (must NOT claim genuine charge/refund)
+        run: node backend/scripts/safepaySandboxPreflight.js
+
+  disposable-sandbox-integration:
+    name: Synthetic signed HTTP, real MySQL subscription and critical notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      SAFEPAY_ENV: sandbox
+      SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install canonical backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Disposable MySQL ONLY with canonical migrations
+        run: |
+          cd backend
+          node database/financeCompatibilityGate.js
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node database/migrationManifest.js
+      - name: Negative signed-webhook HTTP tests and retry/capture isolation (synthetic HMAC)
+        run: cd backend && node tests/p0_safepay_signed_http_acceptance.js
+      - name: Real MySQL supplier subscription negative states, replay and activation
+        run: cd backend && node tests/supplier_subscription_checkout_mysql_gate.js
+      - name: Subscription service contract and notification source regressions
+        run: |
+          cd backend
+          node tests/supplier_subscription_checkout_contract_gate.js
+          node tests/notification_projection_gate.js
+          node tests/notification_transaction_gate.js
+      - name: Final canonical migration journal integrity (read only)
+        run: cd backend && node database/readOnlyMigrationAudit.js --test-only
