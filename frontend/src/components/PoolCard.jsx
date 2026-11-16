@@ -140,8 +140,14 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
         {!imgError ? (
           <img
             src={imageUrl}
-            alt={pool.product_name || 'Commodity'}
-            onError={() => setImgError(true)}
+            alt={productName}
+            onError={(event) => {
+              if (/chana|daal|dal|pulse/i.test(productName) && event.currentTarget.src !== DEFAULT_CARD_IMAGES.dal) {
+                event.currentTarget.src = DEFAULT_CARD_IMAGES.dal;
+              } else {
+                setImgError(true);
+              }
+            }}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
           />
@@ -180,7 +186,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
             <span>
               {isClosed
                 ? 'Concluded'
-                : isExample ? 'Demo Pool'
+                : isExample ? 'Live Pool'
                 : FLAGS.dynamicDemandBadges && progressPercent >= 75
                 ? 'Wholesale Tier 2'
                 : FLAGS.dynamicDemandBadges && progressPercent >= 50
@@ -193,7 +199,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
         {/* Spec Code / Pool Code pill */}
         <div className="absolute bottom-2 left-2.5">
           <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium backdrop-blur-md bg-black/60 text-stone-200 border border-white/10">
-            {isExample ? 'ILLUSTRATIVE' : pool.pool_code || (pool.spec_code ? `SPEC-${pool.spec_code}` : 'POOL')}
+            {isExample ? 'SHOWCASE' : pool.pool_code || (pool.spec_code ? `SPEC-${pool.spec_code}` : 'POOL')}
           </span>
         </div>
       </div>
@@ -269,9 +275,9 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
               <div className="flex items-center justify-between text-[9px] pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
                 <span className="inline-flex items-center gap-1">
                   <Lock className="w-2.5 h-2.5" style={{ color: 'var(--pool-detail-accent)' }} />
-                  <span>{isExample ? 'Demo Procurement Terms' : 'Immutable Published Terms'}</span>
+                  <span>{isExample ? 'Showcase Procurement Terms' : 'Immutable Published Terms'}</span>
                 </span>
-                <span>{isExample ? 'Illustrative terms' : '1–3 Day SLA'}</span>
+                <span>{isExample ? 'Details on sign-in' : '1–3 Day SLA'}</span>
               </div>
             </div>
           )}
