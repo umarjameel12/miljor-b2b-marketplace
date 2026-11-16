@@ -20,6 +20,7 @@ const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const feeService = require('./feeService');
 const reservationEventService = require('./reservationEventService');
+const notificationService = require('./notificationService');
 
 function exactSub(a, b, scale = 2) {
   const bStr = exactDecimal.toCanonical(b, scale);
@@ -910,6 +911,16 @@ class FinancialSettlementService {
         notes: `Assessed refund obligation: PKR ${totalRefundAmount} (${refundType})`
       });
 
+      if(order.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',order.buyer_id],['SUPPLIER',order.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'REFUND_ASSESSED',
+            eventKey:'collective:order:'+order.id+':refund:'+refundId+':assessed:'+role,
+            entityId:order.id
+          });
+        }
+      }
+
       await connection.commit();
 
       const [createdRefund] = await connection.query('SELECT * FROM refund_obligations WHERE id = ?', [refundId]);
@@ -946,7 +957,7 @@ class FinancialSettlementService {
 
     try {
       const [refunds] = await connection.query(
-        `SELECT r.*, o.order_code
+        `SELECT r.*, o.order_code,o.notes AS collective_order_notes,o.supplier_id
          FROM refund_obligations r
          JOIN orders o ON r.order_id = o.id
          WHERE r.id = ? FOR UPDATE`,
@@ -1049,6 +1060,16 @@ class FinancialSettlementService {
         amountDelta: refund.total_refund_amount.toString(),
         notes: `Admin approved refund obligation of PKR ${refund.total_refund_amount}. External execution remains DISABLED.`
       });
+
+      if(refund.collective_order_notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',refund.buyer_id],['SUPPLIER',refund.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'REFUND_APPROVED',
+            eventKey:'collective:order:'+refund.order_id+':refund:'+refundId+':approved:'+role,
+            entityId:refund.order_id
+          });
+        }
+      }
 
       await connection.commit();
 
