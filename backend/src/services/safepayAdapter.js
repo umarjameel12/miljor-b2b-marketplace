@@ -278,8 +278,12 @@ class SafepayAdapter {
   async fetchTracker(trackerToken, { mockClient = null } = {}) {
     this.validateConfig();
 
-    if (!trackerToken || typeof trackerToken !== 'string') {
-      const err = new Error('Valid tracker token is required');
+    // Tracker is read from durable payment attempts, but must still be an
+    // opaque, single HTTP path segment. A corrupted/malicious DB value may not
+    // escape /order/v1/ or alter the request sent with the merchant secret.
+    if (typeof trackerToken!=='string' ||
+        !/^track_[A-Za-z0-9_-]{3,180}$/.test(trackerToken)) {
+      const err = new Error('Valid opaque Safepay tracker token is required');
       err.code = 'INVALID_TRACKER_TOKEN';
       err.statusCode = 400;
       throw err;
