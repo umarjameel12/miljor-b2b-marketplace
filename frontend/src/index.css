@@ -1505,3 +1505,8 @@ html:not(.dark) header.miljor-auth-navbar button[aria-label^="Theme setting:"] {
 html.dark #top header.landing-topbar button[aria-label^="Theme setting:"] svg {
   color: var(--text-primary) !important;
 }
+
+/* MILJOR DARK LANDING ICON: MATCH LOGIN ACTUAL COLOR */
+html.dark #top header.landing-topbar button[aria-label^="Theme setting:"] > svg {
+  color: #e4c78c !important;
+}
