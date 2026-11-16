@@ -38,6 +38,11 @@ export const supplierApi = {
     return res.data;
   },
 
+  getVerificationHistory: async () => {
+    const res = await apiClient.get('/supplier/verification/history');
+    return res.data;
+  },
+
   // 4. Get Lightweight Verification Status
   getVerificationStatus: async () => {
     const res = await apiClient.get('/supplier/verification/status');
