@@ -296,12 +296,10 @@ export const LandingPage = () => {
               <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
               <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>Published supplier offers and showcase listings. Availability is confirmed after sign-in.</p>
             </div>
-            {isAuthenticated ? (
+            {isAuthenticated && (
               <Link to={user?.role === 'SUPPLIER' ? '/supplier/pools' : '/pools'} className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">
                 {user?.role === 'SUPPLIER' ? 'Manage your pools' : 'View All Pools'} <ArrowRight size={16} />
               </Link>
-            ) : (
-              <button type="button" onClick={scrollToPools} className="landing-live-offers-link inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold">Explore live offers</button>
             )}
           </div>
           <div className="mb-3 flex items-center justify-end gap-2">
