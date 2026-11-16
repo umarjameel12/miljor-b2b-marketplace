@@ -66,8 +66,10 @@ async function main(){
     const [[verified]]=await db.query(
       'SELECT verification_status,subscription_plan,max_active_listings FROM supplier_profiles WHERE supplier_id=2');
     assert.equal(verified.verification_status,'VERIFIED');
-    assert.equal(verified.subscription_plan,'STARTER');
-    assert.equal(Number(verified.max_active_listings),4);
+    assert.equal(verified.subscription_plan,profile.subscription_plan,
+      'Admin approval must not change the existing paid supplier plan');
+    assert.equal(Number(verified.max_active_listings),Number(profile.max_active_listings),
+      'Admin approval must preserve the existing listing entitlement');
     const [[u]]=await db.query('SELECT role,is_verified FROM users WHERE id=2');
     assert.equal(u.role,'SUPPLIER');assert.equal(Number(u.is_verified),1);
     const [[audit]]=await db.query(
