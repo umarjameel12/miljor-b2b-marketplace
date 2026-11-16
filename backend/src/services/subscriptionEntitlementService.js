@@ -6,6 +6,7 @@
 // =============================================================================
 
 const db = require('../config/db');
+const notificationService = require('./notificationService');
 
 const PLAN_LIMITS = {
   STARTER: { maxFamilies: 4, maxListings: 4, name: 'Starter Supplier' },
@@ -385,6 +386,11 @@ class SubscriptionEntitlementService {
            JSON.stringify({ pending_plan_code: row.pending_plan_code }),
            JSON.stringify({ pending_plan_code: 'STARTER', effective_at: row.current_period_end })]
         );
+        await notificationService.enqueueEvent(connection,{
+          userId:supplierId,role:'SUPPLIER',eventType:'SUBSCRIPTION_DOWNGRADE_SCHEDULED',
+          eventKey:'supplier:subscription:'+row.id+':starter-scheduled',
+          entityId:row.id
+        });
       }
       await connection.commit();
       return { current_plan: row.plan_code, pending_plan_code: 'STARTER',
@@ -439,6 +445,12 @@ class SubscriptionEntitlementService {
              JSON.stringify({ plan: row.plan_code, subscription_id: row.id }),
              JSON.stringify({ plan: 'STARTER' })]
           );
+          await notificationService.enqueueEvent(connection,{
+            userId:candidate.supplier_id,role:'SUPPLIER',
+            eventType:'SUBSCRIPTION_DOWNGRADED',
+            eventKey:'supplier:subscription:'+row.id+':starter-effective',
+            entityId:row.id
+          });
           processed++;
         }
         await connection.commit();
