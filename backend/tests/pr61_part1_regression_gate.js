@@ -22,7 +22,7 @@ async function opportunities(){
   const s=new Opportunities(fakeMatching,fakeCollective),actor={role:'SUPPLIER',id:123};
   const all=await s.list(actor);
   assert.equal(all.items.length,2);
-  assert.deepEqual(all.items.map(x=>x.type).sort(),['grouped','single']);
+  assert.equal(Array.from(all.items,x=>x.type).sort().join(','),'grouped,single');
   assert.equal(all.items.some(x=>'buyer_id' in x||'bank_iban' in x),false);
   assert.equal((await s.list(actor,{type:'single'})).items.length,1);
   assert.equal((await s.list(actor,{type:'grouped'})).items.length,1);
