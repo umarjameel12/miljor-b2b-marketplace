@@ -273,3 +273,6 @@ jobs:
       - name: PR61 supplier unified opportunities Chromium tabs and API acceptance
         timeout-minutes: 5
         run: cd backend && node tests/pr61_part1_chromium_gate.js
+      - name: PR61 real buyer organizer, second buyer and invited supplier Chromium acceptance
+        timeout-minutes: 8
+        run: cd backend && node tests/pr61_part1_seeded_browser_gate.js
