@@ -1295,3 +1295,13 @@ h1, h2, h3, h4, h5, h6, .font-display {
   color: var(--theme-menu-selected-ink) !important;
   border-color: var(--theme-menu-border) !important;
 }
+
+/* MILJOR DARK-ONLY NAVBAR CONTROL MATCH 2026-11-16 */
+.dark .miljor-public-landing .landing-topbar .landing-account-trigger {
+  border-color: var(--brand-accent) !important;
+}
+.dark .miljor-public-landing .landing-topbar .miljor-theme-trigger {
+  background: var(--bg-card) !important;
+  background-color: var(--bg-card) !important;
+  border-color: var(--brand-accent) !important;
+}
