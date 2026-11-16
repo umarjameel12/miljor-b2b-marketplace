@@ -18,6 +18,16 @@ export const adminApi = {
     return res.data;
   },
 
+  getSupplierDocuments: async (supplierId) => {
+    const res=await apiClient.get(`/admin/suppliers/${supplierId}/documents`);
+    return res.data;
+  },
+  downloadSupplierDocument: async (supplierId,docId) => {
+    const res=await apiClient.get(`/admin/suppliers/${supplierId}/documents/${docId}/file`,
+      {responseType:'blob'});
+    return res.data;
+  },
+
   // 3. Suspend a user
   suspendUser: async (userId, reason) => {
     const res = await apiClient.put(`/admin/users/${userId}/suspend`, { reason });
