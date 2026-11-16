@@ -47,6 +47,13 @@ async function main() {
     state='TRACKER_ENDED';
     transactionStatus='FAILED';
     assert.equal((await svc.reconcile({actor,attemptId:started.attempt.id})).reconciled,false);
+    transactionStatus='UNKNOWN';
+    assert.equal((await svc.reconcile({actor,attemptId:started.attempt.id})).reconciled,false);
+    transactionStatus='';
+    assert.equal((await svc.reconcile({actor,attemptId:started.attempt.id})).reconciled,false);
+    const [stillStarter]=await db.query(
+      'SELECT subscription_plan FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
+    assert.equal(stillStarter[0].subscription_plan,'STARTER');
     transactionStatus='SUCCESS';
     const paid=await svc.reconcile({actor,attemptId:started.attempt.id});
     assert.equal(paid.reconciled,true);
