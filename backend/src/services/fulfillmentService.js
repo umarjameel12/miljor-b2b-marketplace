@@ -369,6 +369,12 @@ class FulfillmentService {
         throw err;
       }
 
+      // A qualified collective cannot dispatch on the supplier's assertion
+      // alone: all independently paid buyers must accept the proposed run.
+      if (toStatus === 'DISPATCHED' && order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT') {
+        await require('./procurementCollectiveDeliveryService').assertDispatchReady(connection,orderId);
+      }
+
       // Stage-specific validations
       if (toStatus === 'DISPATCHED') {
         if (!deliveryMethod || !VALID_DELIVERY_METHODS.includes(deliveryMethod)) {
@@ -412,6 +418,10 @@ class FulfillmentService {
       updateParams.push(orderId);
 
       await connection.query(updateSql, updateParams);
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,toStatus);
+      }
 
       // Rule P10: Track actual_dispatched_at and actual_delivered_at on parent pool without mutating promised_delivery_at
       if (order.pool_id && (toStatus === 'DISPATCHED' || toStatus === 'SUPPLIER_DELIVERED')) {
@@ -625,6 +635,10 @@ class FulfillmentService {
         [reason, description.trim(), orderId]
       );
 
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,'EXCEPTION');
+      }
       // Record milestone event
       const eventCode = this._generateEventCode(orderId, 'SUPPLIER_EXCEPTION', trimmedKey);
       await connection.query(
@@ -977,6 +991,10 @@ class FulfillmentService {
         [orderId]
       );
 
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,'BUYER_CONFIRMED');
+      }
       // Record milestone event
       const eventCode = this._generateEventCode(orderId, 'BUYER_CONFIRMED', trimmedKey);
       await connection.query(
@@ -1206,6 +1224,10 @@ class FulfillmentService {
         [reason, description.trim(), orderId]
       );
 
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,'EXCEPTION');
+      }
       // Record milestone event
       const eventCode = this._generateEventCode(orderId, 'BUYER_DISCREPANCY', trimmedKey);
       await connection.query(
