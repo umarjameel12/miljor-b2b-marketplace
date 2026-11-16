@@ -72,6 +72,7 @@ async function main(){
       if(name==='../config/db')return mockDb;
       if(name==='./exactDecimal')return exact;
       if(name==='./feeService'||name==='./reservationEventService')return {};
+      if(name==='./notificationService')return {enqueueEvent:async()=>{throw Error('Read-only audit attempted notification')}};
       throw Error('Unexpected financial import '+name);
     }
   },{timeout:5000});
