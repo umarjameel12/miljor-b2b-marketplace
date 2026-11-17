@@ -135,6 +135,8 @@ async function main(){
     assert.equal(r.status,422,'V3 authorization is not capture');
     r=await post({...v3Event(),merchant_api_key:'sec_wrong_merchant'});
     assert.equal(r.status,422,'V3 merchant mismatch must fail');
+    r=await post({...v3Event(),data:{...v3Event().data,metadata:{}}});
+    assert.equal(r.status,422,'V3 signed callback missing order reference must fail closed');
     r=await post(v3Event());
     assert.equal(r.status,200,JSON.stringify(r.data));
     assert.equal(r.data.data.payment_status,'PAID');
