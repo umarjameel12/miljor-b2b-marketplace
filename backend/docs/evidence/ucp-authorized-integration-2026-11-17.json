@@ -274,12 +274,20 @@
     "changedTables": []
   },
   "provider": {
-    "sandboxInitiationAndReadback": "TRACKER_STARTED",
-    "actualPaid": false,
-    "refundCapability": "UNVERIFIED",
+    "sandboxInitiationAndReadback": "TRACKER_ENDED, authenticated actual transaction present",
+    "actualPaid": true,
+    "refundCapability": "UNVERIFIED / NOT_EXECUTED",
     "externalExecution": "DISABLED",
     "priorReportedPreparedOrder": "absent from preserved pre-upgrade backup; not attributed",
-    "newOwnedCheckout": "persisted privately, requires human test-card/3DS"
+    "newOwnedCheckout": "User completed hosted test-card flow; independently reconciled as PAID",
+    "gross": "100.00",
+    "fees": "6.34",
+    "net": "93.66",
+    "applicationPaymentRows": 1,
+    "replayCount": 5,
+    "duplicatePayments": 0,
+    "actualPaymentEvidence": "ucp-actual-sandbox-payment-2026-11-17.json",
+    "providerSignedWebhook": "NOT_VERIFIED"
   },
   "exactSourceCI": {
     "runId": 44151658700,
