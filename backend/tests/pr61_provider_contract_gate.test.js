@@ -17,9 +17,9 @@ const sources={
 };
 const example={
   SAFEPAY_ENV:'sandbox',ALLOW_EXTERNAL_MONEY_MOVEMENT:'false',
-  DB_NAME:'miljor_test_db',SAFEPAY_PUBLIC_KEY:'sandbox-public-unit-only',
-  SAFEPAY_SECRET_KEY:'sandbox-secret-unit-only',
-  SAFEPAY_WEBHOOK_SECRET:'sandbox-webhook-unit-only'
+  DB_NAME:'miljor_test_db',SAFEPAY_PUBLIC_KEY:'sec_sand_randompublickey1234',
+  SAFEPAY_SECRET_KEY:'sec_sand_randomsecretkey1234',
+  SAFEPAY_WEBHOOK_SECRET:'sandbox-long-random-hmac-123456789abc'
 };
 test('unknown provider contract or v3 minor units cannot pass legacy v1 readiness',()=>{
   for(const extra of [
