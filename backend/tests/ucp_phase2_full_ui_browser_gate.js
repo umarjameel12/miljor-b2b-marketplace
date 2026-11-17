@@ -158,9 +158,11 @@ async function run() {
     // Payment return pending/reload check (must NOT fabricate PAID)
     await page.goto(`${BASE_UI}/payment/return?order_id=${pendingOrderId}`, { waitUntil: 'networkidle' });
     await page.getByText(/Pending|Verifying|Awaiting/i).first().waitFor({ timeout: 15000 });
-    assert.equal(await page.getByText('Payment Confirmed & Secured in Escrow').count(), 0, 'Pending order must never show PAID');
+    assert.equal(await page.getByText('Payment Confirmed').count(), 0, 'Pending order must never show PAID');
+    assert.equal(await page.getByText('Order Payment Recorded').count(), 0, 'Pending order must never show confirmed payment heading');
     await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(await page.getByText('Payment Confirmed & Secured in Escrow').count(), 0, 'Reloaded pending order must remain non-PAID');
+    assert.equal(await page.getByText('Payment Confirmed').count(), 0, 'Reloaded pending order must remain non-PAID');
+    assert.equal(await page.getByText('Order Payment Recorded').count(), 0, 'Reloaded pending order must never show confirmed payment heading');
     console.log('[PASS CHROMIUM] /payment/return pending outcome & reload recovery (no fabricated PAID)');
 
     // Notification inbox, Urdu ('ur') preference persistence via UI, Urdu rendering (dir="auto"), and Mark read

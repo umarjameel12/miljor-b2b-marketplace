@@ -139,16 +139,16 @@ export function PaymentReturnPage() {
             </div>
             <div className="space-y-2">
               <h1 className="text-2xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
-                Reconciling Safepay Settlement
+                Verifying Safepay Payment
               </h1>
               <p className="text-xs sm:text-sm max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-                Authoritatively synchronizing payment confirmation with Safepay sandbox and updating your order escrow records…
+                Authoritatively synchronizing payment confirmation with Safepay and updating your order payment records…
               </p>
             </div>
           </div>
         )}
 
-        {/* State 2: PAID (Confirmed Escrow) */}
+        {/* State 2: PAID */}
         {state === 'PAID' && (
           <div
             className="p-8 sm:p-12 rounded-3xl border text-center space-y-6 shadow-sm"
@@ -163,13 +163,13 @@ export function PaymentReturnPage() {
 
             <div className="space-y-2">
               <span className="text-[11px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
-                Payment Confirmed & Secured in Escrow
+                Payment Confirmed
               </span>
               <h1 className="text-2xl sm:text-3xl font-display font-bold" style={{ color: 'var(--text-primary)' }}>
-                Procurement Order Funded
+                Order Payment Recorded
               </h1>
               <p className="text-xs sm:text-sm max-w-lg mx-auto" style={{ color: 'var(--text-muted)' }}>
-                Your payment has been verified with Safepay. Funds are held in escrow custody and the supplier has been notified to commence batch packaging and cold-chain dispatch.
+                Your payment has been verified with Safepay and recorded for this order. Fulfillment and settlement remain subject to delivery and verification rules.
               </p>
             </div>
 
@@ -189,7 +189,7 @@ export function PaymentReturnPage() {
               </div>
 
               <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="font-medium" style={{ color: 'var(--text-muted)' }}>Settled Amount</span>
+                <span className="font-medium" style={{ color: 'var(--text-muted)' }}>Paid Amount</span>
                 <span className="font-mono font-bold text-sm" style={{ color: 'var(--brand-accent)' }}>
                   {formatCurrency(paymentData?.total_amount, paymentData?.currency)}
                 </span>
@@ -198,7 +198,7 @@ export function PaymentReturnPage() {
               <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                 <span className="font-medium" style={{ color: 'var(--text-muted)' }}>Gateway Status</span>
                 <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                  Captured (Safepay Sandbox)
+                  Payment Verified (Safepay)
                 </span>
               </div>
 

@@ -429,3 +429,27 @@ User completed the owned hosted test checkout and reported a return-page screens
 Actual authenticated Safepay API readback: TRACKER_ENDED, exact tracker match, PKR100.00, transaction present. Provider transaction reports fees6.34/net93.66; integer-minor-unit conservation634+9366=10000 verified. Existing application reconcilePaymentWithProvider validated the provider transaction and changed only the owning isolated order to PAID; exactly1 payment row for100.00. Five concurrent replay checks returned already_paid and created0 duplicate payments. This is actual provider reconciliation evidence, not a seeded PAID row or synthetic callback. Direct provider-signed webhook delivery and the actual-paid return browser journey were not separately proven. No external refund/payout was executed; fees are observed provider metadata, not a newly authorized fee/settlement formula.
 
 Application source unchanged at qualifieda6df244; no application-suite rerun was necessary. Sanitized evidence: evidence/ucp-actual-sandbox-payment-2026-11-17.json. Raw response, tokens, card/contact fields and private checkout link remain ignored/local. Only the preserved test database was reopened/mutated, then backed up and shut down cleanly; protected database was not queried/mutated in this verification step. Prior integration limitations/newer-ref/divergent-history review and historical attribution remain unresolved. RESULT: actual sandbox payment/readback/reconciliation and replay PASS; overall release PARTIAL. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — PAID Return-Browser Acceptance, Wording Fix, Webhook/Refund Audit & Newer-Delta Review
+
+- **Actual PAID Return-Browser Acceptance (`ucp_paid_return_browser_gate.js`, restored `miljor_test_db:33326`, owned `35152`/`35153`):**
+  - Reused already-paid isolated order `253` (`UCP-SBX-9f07a5d171`, `PKR 100.00`, `payment_count = 1`); zero new payments created.
+  - Owning synthetic buyer (`376`) verified `Payment Confirmed`, `Order Payment Recorded`, `UCP-SBX-9f07a5d171`, `PKR 100.00`, and `Payment Verified (Safepay)` in Chromium (zero unsupported escrow wording).
+  - Reload + `POST /api/v1/orders/253/reconcile` retry preserved `payment_count = 1`.
+  - Non-owner buyer blocked (`Verification Error`, `403`/`404` on `/reconcile`).
+- **Financial Wording Hardening (`frontend/src/pages/PaymentReturnPage.jsx`):**
+  - Replaced unsupported `"escrow records"`, `"Secured in Escrow"`, `"escrow custody"`, `"Settled Amount"`, and `"Captured (Safepay Sandbox)"` with accurate payment-confirmed wording (`"Verifying Safepay Payment"`, `"Payment Confirmed"`, `"Order Payment Recorded"`, `"Paid Amount"`, `"Payment Verified (Safepay)"`).
+  - `ucp_phase2_full_ui_browser_gate.js` (`35144`/`35145`, pending/unpaid + Mobile/Urdu): **PASS**; `npm --prefix frontend run build` (`2,243` modules, `2.63s`): **PASS**.
+- **Provider Webhook vs Reconciliation:**
+  - `payment_webhook_events` row `id=31` for `order_id=253` has `event_type='payment.reconciled'` (internal reconciliation audit row, not an external Safepay HTTP webhook). Direct provider-signed webhook delivery remains **BLOCKED** (local `127.0.0.1` server unexposed; public tunnel/dashboard webhook registration not authorized).
+- **Refund Capability Classification (Zero External Execution):**
+  - **Safepay Merchant Dashboard (`sandbox.getsafepay.com`):** **Documented & account-enabled** (full/partial refunds via Payments > All Payments > Refund; over-refund blocked; card refunds reverse to card; account-based rails are ledger-only; standard processing fees generally still apply).
+  - **Public Self-Serve REST API Refunds:** **Unavailable** publicly / **private-support-gated, account capability unverified** (`support@getsafepay.com`; no refund method in `safepayAdapter.js`).
+  - **Sandbox Refund Proposal (if execution required):** Human executes partial/full sandbox dashboard refund on `UCP-SBX-9f07a5d171` (`PKR 20.00` or `100.00`) after explicit authorization.
+- **Newer Remote Source Deltas (Read-Only):**
+  - `origin/main` (`9fb07cf`): **0** newer commits.
+  - `origin/feature/smart-procurement-hub-unified-entry`: moved `a0b6ea3 -> aee8b89` (`4` commits: demo docs + unified buyer request entry). `git merge-tree` shows **0 code conflicts** and **1 doc conflict** (`MILJOR_PHASE_LOG.md`); zero new migrations. Not auto-merged.
+- **Supported Migration Histories:** Fresh (`001`–`106`), replay, `101 -> 106`, and historical `054 -> 106` (`miljor_db` is at `054`) are **SUPPORTED & VERIFIED**. Divergent Smart-Hub-applied `096`–`100` histories fail closed (`MIGRATION_HISTORY_FILENAME_MISMATCH`) and are **UNSUPPORTED** without a dedicated forward bridge.
+- **Protected DB (`miljor_db`, `3306`, read-only):** Checksums unchanged (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
+
+CAN START NEXT PHASE: NO
