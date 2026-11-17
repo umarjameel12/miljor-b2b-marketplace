@@ -126,7 +126,8 @@ class SafepayV3SandboxClient{
     }
     try{
       return validateReportedTracker({response:data,expectedTrackerToken:trackerToken,
-        expectedAmountPkr:amountPkr,expectedOrderCode:orderCode});
+        expectedAmountPkr:amountPkr,expectedOrderCode:orderCode,
+        expectedMerchantApiKey:this.env.SAFEPAY_PUBLIC_KEY});
     }catch(_){
       throw fail('SAFEPAY_V3_REPORT_UNVERIFIED','Provider reporter identity or quote unverifiable',502);
     }
