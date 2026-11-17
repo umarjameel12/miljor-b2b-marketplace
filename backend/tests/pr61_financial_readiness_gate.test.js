@@ -52,6 +52,17 @@ test('unapproved, unverified provider, other buyer or currency mismatch fails cl
     assert.equal(result.can_execute_external_refund,false);
   }
 });
+test('admin finance UI route is role-scoped and has no external action',()=>{
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/src/pages/AdminFinancePage.jsx'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../../frontend/src/App.jsx'),'utf8');
+  const dash=fs.readFileSync(path.join(__dirname,'../../frontend/src/pages/AdminDashboardPage.jsx'),'utf8');
+  assert.match(src,/\/settlements\/refunds\/\$\{refundId\}\/provider-readiness/);
+  assert.match(src,/new Set\(\['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'\]\)/);
+  assert.match(src,/can_execute_external_refund|external_execution_status/);
+  assert.doesNotMatch(src,/apiClient\.post|apiClient\.put|apiClient\.delete/);
+  assert.match(app,/\/admin\/finance/);
+  assert.match(dash,/canFinance && <Link to="\/admin\/finance"/);
+});
 test('read-only admin route queries ownership and cap but cannot write or execute refunds',async()=>{
   const data={
     ...base.refund,captured_amount:base.payment.amount,captured_status:'PAID',
