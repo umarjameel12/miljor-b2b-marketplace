@@ -375,6 +375,20 @@ class SafepayCheckoutService {
     const effectiveEventId='evt_sha256_'+bodyHash;
     const effectiveEventType = signedEventType;
 
+    // Supplier one-time plan invoices have a separate ledger and never belong
+    // to a buyer order/escrow. Route ONLY after verified raw HMAC and signed
+    // event-type comparison, with an immutable MILJOR-SUB-<attempt> reference.
+    // The supplier service validates ownership, tracker, merchant, PKR minor
+    // amount and capture state again under serialized MySQL locks.
+    const signedSubscriptionOrder=parsedPayload?.data?.metadata?.order_id;
+    if(effectiveEventType==='payment.succeeded'&&
+       typeof signedSubscriptionOrder==='string'&&
+       signedSubscriptionOrder.startsWith('MILJOR-SUB-')){
+      return require('./supplierSubscriptionCheckoutService').acceptSignedV3Capture({
+        payload:parsedPayload,eventType:effectiveEventType,eventId:effectiveEventId
+      });
+    }
+
     // 2. Check for duplicate webhook receipt (Idempotency)
     const [existingEvent] = await db.query(
       `SELECT * FROM payment_webhook_events WHERE event_id = ?`,
