@@ -80,9 +80,11 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
   if(!quoted||quoted.currency!=='PKR'||
       fromMinorPkr(quoted.amount)!==exact.toCanonicalString(expectedAmountPkr,2))
     throw fail('V3_TRACKER_AMOUNT_MISMATCH','Provider reporter amount/currency mismatch');
-  if(tracker.metadata?.order_id!==undefined&&
-      tracker.metadata.order_id!==expectedOrderCode)
-    throw fail('V3_TRACKER_ORDER_MISMATCH','Reporter metadata differs from original order');
+  // Checkout creation pins order metadata. Reporter must return the same
+  // immutable reference; missing metadata is not evidence of ownership.
+  if(typeof expectedOrderCode!=='string'||!expectedOrderCode||
+      tracker.metadata?.order_id!==expectedOrderCode)
+    throw fail('V3_TRACKER_ORDER_MISMATCH','Reporter metadata missing or differs from original order');
   // A reported state alone is never sufficient to mark an order PAID in
   // MilJor. Provider-origin signed webhook plus exact locked order reconciliation
   // and transactional ledger acceptance are separate requirements.
