@@ -10,6 +10,8 @@ const root=path.resolve(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 const sources={
   adapter:read('src/services/safepayAdapter.js'),
+  v3Client:read('src/services/safepayV3SandboxClient.js'),
+  v3Contract:read('src/services/safepayV3ContractService.js'),
   provider:read('src/services/paymentProviderService.js'),
   settlement:read('src/services/financialSettlementService.js')
 };
@@ -38,6 +40,14 @@ test('confirmed legacy contract permits only an attempted Sandbox test, not cert
   assert.equal(outcome.provider_checkout,'READY_FOR_AUTHORIZED_SANDBOX_ATTEMPT_NOT_YET_EXECUTED');
   assert.equal(outcome.real_funds_moved,false);
   assert.match(outcome.provider_refund,/BLOCKED/);
+});
+test('Payments v3 contract is ready only when explicitly enabled and implementation sources exist',()=>{
+  const outcome=inspect({...example,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor',
+    SAFEPAY_V3_SANDBOX_ENABLED:'true'},sources);
+  assert.equal(outcome.safe_to_attempt_provider_test,true);
+  assert.equal(outcome.checks.v3_hosted_checkout_and_reporter_present,true);
+  assert.equal(outcome.checks.v3_amount_and_webhook_contract_present,true);
+  assert.match(outcome.tracker_contract_review,/PAYMENTS_V3_MINOR_IMPLEMENTED/);
 });
 test('supplier unverified contract does not create INITIATING or UNKNOWN attempt',async()=>{
   const {SupplierSubscriptionCheckoutService}=require('../src/services/supplierSubscriptionCheckoutService');
