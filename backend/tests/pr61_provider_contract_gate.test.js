@@ -39,6 +39,30 @@ test('confirmed legacy contract permits only an attempted Sandbox test, not cert
   assert.equal(outcome.real_funds_moved,false);
   assert.match(outcome.provider_refund,/BLOCKED/);
 });
+test('supplier unverified contract does not create INITIATING or UNKNOWN attempt',async()=>{
+  const {SupplierSubscriptionCheckoutService}=require('../src/services/supplierSubscriptionCheckoutService');
+  let dbTouches=0;
+  const db={getConnection:async()=>{dbTouches++;throw Error('DB_MUST_NOT_BE_TOUCHED');},
+    query:async()=>{dbTouches++;throw Error('DB_MUST_NOT_BE_TOUCHED')}};
+  const fakeAdapter={assertTrackerContract:()=>{
+    const error=Error('not verified');error.code='SAFEPAY_TRACKER_CONTRACT_UNVERIFIED';throw error;
+  }};
+  const svc=new SupplierSubscriptionCheckoutService(db,fakeAdapter);
+  const previous={env:process.env.SAFEPAY_ENV,flag:process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT};
+  try{
+    process.env.SAFEPAY_ENV='sandbox';process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT='false';
+    await assert.rejects(()=>svc.start({
+      actor:{id:9,role:'SUPPLIER'},
+      planCode:'GROWTH',idempotencyKey:'contract-reject-1234'
+    }),e=>e.code==='SAFEPAY_TRACKER_CONTRACT_UNVERIFIED');
+    assert.equal(dbTouches,0);
+  }finally{
+    if(previous.env===undefined)delete process.env.SAFEPAY_ENV;
+    else process.env.SAFEPAY_ENV=previous.env;
+    if(previous.flag===undefined)delete process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT;
+    else process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT=previous.flag;
+  }
+});
 test('real adapter checkout blocks before outgoing HTTPS if merchant contract unverified',async()=>{
   const old={
     env:adapter.env,publicKey:adapter.publicKey,
