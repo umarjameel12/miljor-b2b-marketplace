@@ -88,11 +88,11 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
     providerSignedWebhookVerified:false
   });
 }
-function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedOrderCode,expectedMerchantApiKey}){
+function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedMerchantApiKey,expectedTrackerToken,expectedOrderCode}){
   if(eventType!=='payment.succeeded'||data?.success!==true||data?.state!=='TRACKER_ENDED')
     throw fail('V3_WEBHOOK_NOT_CAPTURED','Only signed payment.succeeded TRACKER_ENDED events may confirm capture');
   if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
-     merchantApiKey!==expectedMerchantApiKey)
+     typeof merchantApiKey!=='string'||merchantApiKey!==expectedMerchantApiKey)
     throw fail('V3_WEBHOOK_MERCHANT_MISMATCH','Webhook merchant identity does not match configured account');
   const amount=fromMinorPkr(data.amount);
   if(data.currency!=='PKR')
@@ -100,6 +100,8 @@ function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedOrderC
   const tracker=typeof data.tracker==='string'?data.tracker:data.tracker?.token;
   if(!tokenPattern.test(String(tracker||'')))
     throw fail('INVALID_TRACKER_TOKEN','Webhook tracker token invalid');
+  if(expectedTrackerToken&&tracker!==expectedTrackerToken)
+    throw fail('V3_WEBHOOK_TRACKER_MISMATCH','Webhook tracker differs from durable payment attempt');
   if(data.metadata?.order_id!==undefined&&
       data.metadata.order_id!==expectedOrderCode)
     throw fail('V3_WEBHOOK_ORDER_MISMATCH','Webhook order metadata does not match locked order');
