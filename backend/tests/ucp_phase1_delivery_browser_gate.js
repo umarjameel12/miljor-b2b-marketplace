@@ -69,7 +69,7 @@ async function run() {
 
   const tag = `ph1b_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const passHash = await bcrypt.hash(PASS, 10);
-  const createdIds = { users: [], addresses: [], orders: [], runs: [], stops: [], disputes: [], quotes: [] };
+  const createdIds = { users: [], addresses: [], listings: [], orders: [], runs: [], stops: [], disputes: [], quotes: [] };
 
   const logDir = path.resolve(__dirname, '../logs/ucp-phase1-browser');
   fs.mkdirSync(logDir, { recursive: true });
@@ -193,10 +193,10 @@ async function run() {
     createdIds.runs.push(runRes.run.id);
     for (const s of runRes.stops) createdIds.stops.push(s.id);
 
-    // Launch real Chromium
-    const executablePath = process.env.CHROME_EXECUTABLE_PATH ||
-      'C:\\Users\\Umar Jameel\\AppData\\Local\\ms-playwright\\chromium-1194\\chrome-win\\chrome.exe';
-    browser = await chromium.launch({ headless: true, executablePath });
+    // Launch real Chromium (works on Linux CI & Windows local cache)
+    const winDefault = 'C:\\Users\\Umar Jameel\\AppData\\Local\\ms-playwright\\chromium-1194\\chrome-win\\chrome.exe';
+    const executablePath = process.env.CHROME_EXECUTABLE_PATH || (process.platform === 'win32' && fs.existsSync(winDefault) ? winDefault : undefined);
+    browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
 
     const supCtx = await browser.newContext();
     await supCtx.tracing.start({ screenshots: true, snapshots: true });
@@ -247,21 +247,42 @@ async function run() {
     await b1Page.getByText(/Partial Receipt: 80\.0000 accepted/i).waitFor({ timeout: 15000 });
     console.log('[PASS CHROMIUM] Buyer 1 100/80/20 partial receipt & dispute rendered');
 
-    // 5. Propose replacement quote via service, Buyer 1 reloads & accepts in UI
+    // 5. Propose replacement quote for the 20 disputed units with mandatory listing & supplier acceptance, then Buyer 1 accepts in UI
+    const [specs] = await db.query('SELECT id FROM product_specifications WHERE is_active = 1 AND approval_status = ? LIMIT 1', ['APPROVED']);
+    assert.ok(specs.length > 0, 'Active approved product_specification required for browser replacement fixture');
+    const lstCode = `LST-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const [lstRes] = await db.query(
+      `INSERT INTO supplier_listings (listing_code, supplier_id, product_spec_id, base_unit_price, available_stock, delivery_zones, status)
+       VALUES (?, ?, ?, 100.00, 50.00, JSON_ARRAY('Lahore'), 'ACTIVE')`,
+      [lstCode, replSupplier.id, specs[0].id]
+    );
+    createdIds.listings.push(lstRes.insertId);
+
     const propRes = await supplierReplacementService.proposeReplacementQuote({
       actor: admin,
       originalOrderId: ord1.id,
       replacementSupplierId: replSupplier.id,
+      replacementListingId: lstRes.insertId,
+      quantity: '20.0000',
       skuMatchType: 'EXACT_SKU',
       newUnitPricePkr: '100.00',
-      newDeliveryFeePkr: '150.00',
+      newDeliveryFeePkr: '0.00',
       costResponsibility: 'SUPPLIER_CARRIER_FAILURE',
       proposedEtaAt: new Date(Date.now() + 10800 * 1000).toISOString(),
       expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
-      reason: 'Browser E2E replacement quote test',
+      reason: 'Browser E2E replacement quote test for 20 disputed units',
       idempotencyKey: `${tag}-browser-repl`
     });
     createdIds.quotes.push(propRes.quote.id);
+
+    await supplierReplacementService.supplierAcceptQuote({
+      actor: replSupplier,
+      quoteId: propRes.quote.id,
+      quoteVersion: propRes.quote.quote_version,
+      quoteHash: propRes.quote.quote_hash,
+      decision: 'ACCEPTED',
+      idempotencyKey: `${tag}-browser-sup-acc`
+    });
 
     await b1Page.reload({ waitUntil: 'networkidle' });
     await b1Page.getByText(propRes.quote.quote_code).waitFor({ timeout: 15000 });
@@ -316,6 +337,9 @@ async function run() {
       }
       if (createdIds.orders.length) {
         await db.query(`DELETE FROM orders WHERE id IN (${createdIds.orders.map(() => '?').join(',')})`, createdIds.orders);
+      }
+      if (createdIds.listings.length) {
+        await db.query(`DELETE FROM supplier_listings WHERE id IN (${createdIds.listings.map(() => '?').join(',')})`, createdIds.listings);
       }
       if (createdIds.addresses.length) {
         await db.query(`DELETE FROM buyer_delivery_addresses WHERE id IN (${createdIds.addresses.map(() => '?').join(',')})`, createdIds.addresses);

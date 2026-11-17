@@ -287,4 +287,4 @@ jobs:
         run: |
           cd backend
           node tests/p0_real_browser_journey.js
-          node tests/ucp_phase1_delivery_browser_gate.js
+          P0_BROWSER_BASE_URL=http://127.0.0.1:35100 PHASE1_BROWSER_API_PORT=35101 node tests/ucp_phase1_delivery_browser_gate.js

@@ -293,4 +293,21 @@ TASK: Complete independent review of Phase C (`bf4155b`), real Chromium delivery
 - **Protected DB (`miljor_db`, port 3306, read-only):** Before and after checksums identical (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
 - **Skills applied:** `systematic-debugging` (isolated Vite/Express port conflict & `supplier_listings.available_stock` column alignment), `verification-before-completion` (real Chromium E2E, rollback/re-apply, protected DB checks).
 
+### 2026-11-17 — Completion Phase 1 Hardening (CI 44110125022 Failure & Replacement/Browser Fixes)
+
+- **Historical CI Failure Preserved:** Commit `9a5af5b6ff7e7f33ab93f1573c40b75c96c8f24b` failed CI run `44110125022` (browser job port collision against `p0_real_browser_journey.js` on `3000`/`5000` and hardcoded Windows Chromium path).
+- **Hardening Implemented:**
+  - `.github/workflows/ucp-canonical-acceptance.yml`: Separated `ucp_phase1_delivery_browser_gate.js` onto isolated ports `35100`/`35101` while keeping `assertPortsAvailable` intact.
+  - `ucp_phase1_delivery_browser_gate.js`: Linux/Windows Chromium executable discovery (`CHROME_EXECUTABLE_PATH` or `win32` cache check only; Playwright default on Linux).
+  - `101_ucp_replacement_supplier_offer_and_qty_binding.sql` (+ rollback) & `supplierReplacementService.js` & `deliveryRunRoutes.js`: Mandatory `replacement_listing_id` + full SKU/spec/family/category validation; outstanding eligible obligation binding (`100` ordered / `80` accepted / `20` disputed -> max `20` units eligible, preventing duplicate 100-unit orders/charges/allocations); authorized replacement supplier acceptance (`POST /replacements/:quoteId/supplier-accept` -> `SUPPLIER_ACCEPTED` + `supplier_offer_hash`) revalidated at buyer consent and execution.
+- **Verified on Isolated `miljor_test_db` (`127.0.0.1:33322`):**
+  - `101` rollback/re-apply + `readOnlyMigrationAudit.js --test-only` (`65/65` VERIFIED_HISTORY): **PASS** (exit 0).
+  - `ucp_phase1_replacement_gate.js`: **PASS** (exit 0; missing listing 422, 100-unit on 20-unit partial 422, supplier acceptance gate 409/403, concurrent execute 200/409, stock `120 -> 100`, duplicate 20-unit proposal 422, rollback 0 rows).
+  - `ucp_phase_c_delivery_gate.js`: **PASS** (exit 0).
+  - `phase1_browser_server_guard.test.js`: **PASS** (3/3, exit 0).
+  - `ucp_phase1_delivery_browser_gate.js` (`35100`/`35101`): **PASS** (exit 0).
+  - `npm run test:ucp`: **PASS** (exit 0, 81/81).
+  - `npm --prefix frontend run build`: **PASS** (2,237 modules, 2.75s, exit 0).
+- **Protected DB (`miljor_db`, port 3306, read-only):** Identical (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
+
 CAN START NEXT PHASE: NO

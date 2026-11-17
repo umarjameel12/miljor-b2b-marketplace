@@ -168,7 +168,8 @@ function createDeliveryRunRouter(service = deliveryRunService, replacementServic
       actor: req.user,
       originalOrderId: req.body?.original_order_id,
       replacementSupplierId: req.body?.replacement_supplier_id,
-      replacementListingId: req.body?.replacement_listing_id || null,
+      replacementListingId: req.body?.replacement_listing_id,
+      quantity: req.body?.quantity ?? null,
       skuMatchType: req.body?.sku_match_type || 'EXACT_SKU',
       replacementSkuSnapshot: req.body?.replacement_sku_snapshot || {},
       newUnitPricePkr: req.body?.new_unit_price_pkr,
@@ -180,6 +181,16 @@ function createDeliveryRunRouter(service = deliveryRunService, replacementServic
       reason: req.body?.reason,
       idempotencyKey: req.idempotency.key
     }), 201));
+
+  router.post('/replacements/:quoteId/supplier-accept', authorizeStrict('SUPPLIER'), idempotencyGuard.required,
+    handle(req => replacementService.supplierAcceptQuote({
+      actor: req.user,
+      quoteId: req.params.quoteId,
+      quoteVersion: req.body?.quote_version,
+      quoteHash: req.body?.quote_hash,
+      decision: req.body?.decision || 'ACCEPTED',
+      idempotencyKey: req.idempotency.key
+    })));
 
   router.post('/replacements/:quoteId/decide', authorizeStrict('BUYER'), idempotencyGuard.required,
     handle(req => replacementService.decideReplacementQuote({
