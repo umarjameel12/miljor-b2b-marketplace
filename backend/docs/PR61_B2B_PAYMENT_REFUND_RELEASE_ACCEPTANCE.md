@@ -25,26 +25,12 @@ The canonical event ID in `safepayCheckoutService.processWebhookEvent` now comes
 - [Webhook types](https://safepay.alihamas.pk/docs/developers/webhooks/webhook-types): `payment.succeeded`, `payment.failed`, `payment.refunded`, `authorization.reversed`.
 - [Webhook overview](https://safepay.alihamas.pk/docs/developers/webhooks/overview): HTTPS, authenticity, deduplication and retries.
 
-### Payments v3 sandbox contract and isolated client (implemented; NOT active buyer checkout)
-- `backend/src/services/safepayV3ContractService.js` prepares exact PKR integer minor-unit payment tracker requests for `POST /order/payments/v3/`, checks documented `data.tracker` shape, sandbox identity, locked order metadata and immutable quoted amount, and produces a **non-executable** v3 refund preview.
-- `backend/src/services/safepayV3SandboxClient.js` sends that request only from an isolated **disposable MySQL configuration** when `SAFEPAY_V3_SANDBOX_ENABLED=true` and all sandbox secrets are privately configured. It does not write to a DB, mark any order paid, confirm a refund or execute payouts. Its HTTP contract is verified through injected no-network fixtures in CI.
-- Existing real buyer/supplier checkout and settlement still use their legacy compatibility boundary; **there is no v3 webhook/reporter-to-ledger integration yet**. Do not enable v3 buyer payment until actual provider-origin signed callbacks and reconciliation have been mapped and externally tested.
-- Provider version, amount denomination, merchant permission and webhooks must be validated in actual Safepay Sandbox; credentials must never appear in git or PR comments.
+### Payments v3 Sandbox checkout, signed webhook and supplier subscription (implemented; Sandbox-only opt-in)
+- `backend/src/services/safepayV3ContractService.js`: exact PKR-to-minor-unit conversion, strict tracker/reporter response validation, signed `payment.succeeded` envelope validation, exact order amount and merchant identity checks, and non-executable refund preview.
+- `backend/src/services/safepayV3SandboxClient.js`: authenticated tracker creation, short-lived Passport token, hosted Express Checkout URL, read-only reporter GET and allowlisted redirect origins. All calls are fixed to the Safepay Sandbox host and require an isolated test/sandbox DB plus explicit `SAFEPAY_V3_SANDBOX_ENABLED=true`.
+- Buyer checkout now has an explicit `SAFEPAY_TRACKER_CONTRACT=payments-v3-minor` path. Each `payment_attempts.provider_contract` is pinned by migration 104; webhook amount interpretation comes only from that stored contract. V3 capture requires a cryptographically verified Safepay `payment.succeeded` event, `TRACKER_ENDED`, matching merchant key, tracker, PKR amount in minor units and locked order reference before the normal transactional PAID/escrow transition. Legacy attempts retain their major-unit path.
+- Supplier subscription checkout also supports v3 tracker + hosted checkout and authenticated reporter reconciliation, with its own independent `provider_contract` journal column (migration 105). It never reuses buyer order escrow. Subscription activation still requires exact provider status, merchant, order and amount match.
+- The real MySQL signed HTTP test now includes synthetic v3 webhook scenarios: 114500 minor units -> PKR 1145.00; wrong amount, wrong state and wrong merchant all reject. These are synthetic HMAC fixtures, **not Safepay-origin callbacks**.
+- Neither Sandbox v3 path is auto-enabled; operator must explicitly select contract and configure Sandbox merchant credentials. No production host, production key, production DB or external money movement is permitted by these clients.
+- Existing active subscription upgrades/downgrades remain governed by the current period-end/free-tier rules; no proration or automatic recurring debit has been invented.
 
-**Important mismatch:** MilJor's current operational adapter uses legacy `/order/v1/init` and major PKR amounts, not published Payments v3. The existing adapter intentionally **fails closed** until `SAFEPAY_TRACKER_CONTRACT=legacy-v1-major` and `SAFEPAY_LEGACY_CONTRACT_VERIFIED=true` have been confirmed with the merchant; for a v3 merchant, a separate versioned adapter and end-to-end provider verification are still required. Do not blindly convert amounts 100x in existing code.
-
-## Genuine external Sandbox acceptance — still requires merchant-side access
-
-1. Confirm merchant contract, API version, authorization and money-unit semantics. Configure `SAFEPAY_PUBLIC_KEY`, `SAFEPAY_SECRET_KEY`, `SAFEPAY_WEBHOOK_SECRET` **privately** in isolated Sandbox runtime; never commit or share the values in a chat.
-2. Real hosted checkout Sandbox capture → actual provider-delivered signed webhook → authoritative status fetch → exactly-once MySQL payment and stock reconciliation. Capture redacted provider dashboard transaction and delivery ID.
-3. Test failed, canceled, duplicated and mismatched signed callbacks; verify no PAID state or duplicate stock allocation.
-4. Test buyer and supplier Chromium journeys through grouped delivery, partial receipt and dispute. Confirm no supplier settlement before buyer acceptance.
-5. Test authorized real Sandbox refund using the *provider-supported* card refund/reversal method. Confirm provider-origin completion, amount, event id, retry handling, ledger and notification once.
-6. For bank disbursement, acquire a documented Sandbox payout contract and permitted environment. **Do not** assume payment/refund APIs enable bank payout.
-7. Supplier verification documents now require a **fail-closed ClamAV INSTREAM scan in production** (blocked if `CLAMAV_HOST` is absent or scanner reports malware/failure). Deploy and independently verify a trusted internal ClamAV server; separately commission full CDR/content-sanitization review, security review, rollback and backup rehearsals before production release.
-
-## Release labels
-
-- **PASS (internal):** GitHub source/HTTP/Chromium and disposable MySQL acceptance only, after exact PR-head CI results are green.
-- **BLOCKED (external):** genuine Safepay capture, actual provider refund and payout, plus production malware/security sign-off, until independently evidenced.
-- **PR #61 remains Draft.** Internal acceptance never certifies external money movement.
