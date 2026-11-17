@@ -56,7 +56,7 @@ test('signed v3 payment webhook requires capture, merchant, tracker and locked o
   const data={success:true,state:'TRACKER_ENDED',amount:114500,currency:'PKR',
     tracker,metadata:{order_id:'ORD-123'}};
   const args={eventType:'payment.succeeded',data,merchantApiKey:key,
-    expectedMerchantApiKey:key,expectedOrderCode:'ORD-123'};
+    expectedMerchantApiKey:key,expectedTrackerToken:tracker,expectedOrderCode:'ORD-123'};
   assert.deepEqual(normalizeSucceededWebhook(args),{
     trackerToken:tracker,amountPkr:'1145.00',currency:'PKR',
     state:'TRACKER_ENDED',eventType:'payment.succeeded',
