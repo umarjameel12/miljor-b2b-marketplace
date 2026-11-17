@@ -11,6 +11,8 @@ on:
       - 'backend/tests/pr61_part1_document_mysql_gate.js'
       - 'backend/tests/pr61_part4_release_gate.test.js'
       - 'backend/src/services/safepayRefundReadinessService.js'
+      - 'backend/src/services/documentMalwareScanService.js'
+      - 'backend/tests/pr61_document_malware_scan_gate.test.js'
       - 'backend/src/routes/v1/financialSettlementRoutes.js'
       - 'backend/src/controllers/financialSettlementController.js'
       - 'backend/tests/pr61_financial_readiness_gate.test.js'
@@ -49,6 +51,10 @@ jobs:
           node --check backend/tests/pr61_provider_contract_gate.test.js
           node --test backend/tests/pr61_provider_contract_gate.test.js
           node --test backend/tests/safepay_sandbox_readiness_gate.test.js
+      - name: Fail-closed private business verification malware scanner contracts
+        run: |
+          node --check backend/src/services/documentMalwareScanService.js
+          node --test backend/tests/pr61_document_malware_scan_gate.test.js
       - name: Exact B2B partial-refund and no-external-execution boundary
         run: |
           node --check backend/src/services/safepayRefundReadinessService.js
