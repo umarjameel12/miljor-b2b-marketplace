@@ -260,6 +260,32 @@ Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three s
 ## 4. Remaining Blocker & Release Decision
 - **Pakistan Tax Policy (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`):** Remains `DRAFT / AWAITING QUALIFIED TAX REVIEW & OWNER BUSINESS FACTS` (NTN/STRN/PRA registration, intermediary vs. principal role, and Punjab/Lahore supply scope).
 - **PR #53 Status:** **RETAINED AS DRAFT** (not merged to `main` and not integrated into `MilJor Project` until accountable tax policy approval and exact-head CI pass). Temporary tunnel/callback daemons stopped cleanly. `CAN START NEXT PHASE: NO`.
+
+---
+
+# 2026-11-17 — `8f78c56` Security Follow-Up: Live Provider Webhook Check, Full Fulfillment, Buyer Receipt & Internal Settlement Closure
+
+1. **GitHub Head & CI Verification (`8f78c56f681673815bf867251aa764d07568a324`):**
+   - Fast-forwarded local PR #53 checkout to `8f78c56f681673815bf867251aa764d07568a324`.
+   - GitHub `check-runs` on `8f78c56`: **16/16 `completed / success`**.
+2. **Post-`8f78c56` Provider-Signed Webhook & Redelivery Check:**
+   - Started a fresh isolated tunnel (`https://emperor-lovers-logs-tops.trycloudflare.com/api/v1/webhooks/safepay`, `/health` -> `200`, invalid signature -> `401`) and updated Safepay Sandbox Row 0.
+   - Inspected `Webhook Logs` for `DBU6S15L2AHS7395PKC0` (`completed`, 1 attempt) and `DBU6EODL2AHS7395PJVG` (`failed`, 5 attempts): Safepay's UI/detail drawer has **no** manual `"Resend"` / `"Redeliver"` / `"Replay"` button for already-delivered events.
+   - Triggered a live provider-signed `payment:created` test event (`DBU78JTL2AHS7395PKF0`) against the `8f78c56` handler -> **`200 OK`** (`data512: true`, `RECONCILIATION_REQUIRED` for untracked test token; **`completed` in 1 attempt** on Safepay Dashboard).
+3. **Full Fulfillment, Buyer Line Receipt & Internal Settlement (`miljor_test_db`):**
+   - **Order `234` (`MJQ-b7fa0a34989b`, live `payment:created` captured):**
+     - Supplier fulfillment: `AWAITING_SUPPLIER_ACKNOWLEDGEMENT` -> `PREPARING` -> `READY_FOR_DISPATCH` -> `DISPATCHED` (`SUPPLIER_FLEET`) -> `SUPPLIER_DELIVERED`.
+     - Buyer line receipt (`recordBuyerReceipt`, `R4_ACCEPTED_MERCHANDISE_V1`): `CANONICAL_FULL_RECEIPT`, `accepted_merchandise_amount=300.00`, `accepted_commission_amount=7.50` (`2.50%`), `accepted_supplier_net=317.50`, `recognized_buyer_platform_fee=30.00`, `external_execution_status=DISABLED`.
+     - Buyer confirmation (`confirmBuyerReceipt`): `fulfillment_status='BUYER_CONFIRMED'`, `order_status='DELIVERED'`.
+     - Internal payable accrual (`accrueSupplierPayable`): `supplier_payables.id=38` (`SPAY-0a34989b-8019`), `gross_amount=300.00`, `delivery_fee_amount=25.00`, `commission_amount=7.50`, `net_payable_amount=317.50`, `available_amount=317.50`, `disbursed_amount=0.00`, `status='ACCRUED'`, `policy_status='APPROVED'`.
+     - Preserved immutable counts: `payments_cnt=1`, `invoices_cnt=1` (`INV-2026-000234`, `355.00`), `alloc_cnt=2` (`COMMITTED`).
+   - **Order `231` (`MJQ-37a661b05ba7`, reconciled via `TRACKER_ENDED` API):**
+     - Advanced through `PREPARING` -> `READY_FOR_DISPATCH` -> `DISPATCHED` -> `SUPPLIER_DELIVERED`.
+     - `confirmBuyerReceipt` cleanly failed closed (`LINE_RECEIPTS_NOT_FULLY_ACCEPTED` / `procurementLineReceiptService._verifiedPayment` requires a `PROCESSED` webhook row, which `231` lacked because its earlier delivery failed prior to the `data`-envelope fix).
+4. **Protected Databases & Release Status:**
+   - `miljor_db` (`orders: 0, payments: 0`), `miljor_sandbox_db` (`orders: 0, payments: 0`).
+   - Temporary tunnel/bridge daemons stopped cleanly.
+   - **PR #53 remains DRAFT** (not merged to `main` or local `MilJor Project`) solely because Pakistan FBR/PRA tax applicability (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`) remains unapproved for production release. `CAN START NEXT PHASE: NO`.
 # 2026-11-17 — Review correction: authenticate the financial field boundary
 
 Reviewed Antigravity commit `34bca7909cd6a2e4640dc486135be9ecf07976d0`; independently observed all eleven PR workflows SUCCESS, including genuine-envelope-compatible synthetic Chromium (44111766523), P0 (44111766497) and UCP (44111766592). Genuine provider capture/callback evidence recorded for this commit remains historical evidence of the observed sandbox operation, not a new post-correction charge or delivery.

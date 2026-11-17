@@ -4,6 +4,10 @@
 
 - **Branch:** `feature/smart-procurement-hub-unified-entry` (PR #53 retained as **DRAFT** — not merged to `main`)
 - **Authoritative Reports:** `backend/docs/SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md`, `backend/docs/MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`
+- **8f78c56 Security Follow-Up & Full Journey Closure:**
+  - Verified `8f78c56f681673815bf867251aa764d07568a324` CI: **16/16 check-runs `completed / success`**.
+  - Verified live provider-signed `payment:created` test event (`DBU78JTL2AHS7395PKF0`) against `8f78c56` via fresh tunnel -> `200 OK` (`completed` in 1 attempt; Safepay UI has no manual resend button for historical `DBU6S15L2AHS7395PKC0` / `DBU6EODL2AHS7395PJVG`).
+  - Completed full fulfillment -> buyer line receipt (`CANONICAL_FULL_RECEIPT`, `317.50` supplier net, `7.50` commission) -> `BUYER_CONFIRMED` / `DELIVERED` -> internal payable accrual (`SPAY-0a34989b-8019`, `ACCRUED`, external payout `DISABLED`) on Order `234` (`payments_cnt=1`, `invoices_cnt=1`, `alloc_cnt=2`). Order `231` advanced to `SUPPLIER_DELIVERED` and failed closed at buyer receipt without a `PROCESSED` webhook row.
 - **Safepay Live Provider Compatibility & Fixes:**
   - `safepayAdapter.verifyWebhookSignature`: Added fallback verification for Safepay's `{ data: { ... } }` envelope signed with `HMAC-SHA512(secret, JSON.stringify(payload.data))` alongside `rawBody` `HMAC-SHA512`.
   - `safepayCheckoutService.processWebhookEvent`: Extracted `envelopeData.token` / `envelopeData.type` (`payment:created`), normalized nested `notification`, enforced `state === 'PAID'` for payment capture, excluded PII `user` from `payments.provider_response`, and updated `procurementDeliveryPaymentService.js` / `procurementLineReceiptService.js` event allowlists.
