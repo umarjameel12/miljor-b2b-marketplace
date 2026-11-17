@@ -1,0 +1,61 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const {toMinorPkr,fromMinorPkr,buildPaymentV3,validateCreatedTracker,refundPreview}
+  =require('../src/services/safepayV3ContractService');
+const key='sec_sandboxmerchantpublickey_2026';
+const tracker='track_8ad42dcd-test';
+test('exact PKR major -> v3 minor conversion without binary floating point',()=>{
+  for(const [major,minor] of [['0.01','1'],['10','1000'],['1145.00','114500'],
+    ['192450.99','19245099'],['999999.99','99999999']]){
+    assert.equal(toMinorPkr(major),minor);
+    assert.equal(fromMinorPkr(minor),require('../src/services/exactDecimal').toCanonicalString(major,2));
+  }
+});
+test('invalid/overflow or fractional-paisa values cannot reach provider',()=>{
+  for(const value of ['0.00','-1','NaN','1e3','0.001','10.999','1.001',null,
+    '90071992547410.00']){
+    assert.throws(()=>toMinorPkr(value));
+  }
+  for(const value of ['-1','1.2','1e3','NaN','01',null,{},'9007199254740992']){
+    assert.throws(()=>fromMinorPkr(value));
+  }
+});
+test('build exact v3 merchant-authorized payload and immutable order reference',()=>{
+  const a=buildPaymentV3({amountPkr:'1145.00',merchantApiKey:key,orderCode:'ORD-123'});
+  assert.equal(a.path,'/order/payments/v3/');
+  assert.equal(a.sandboxHost,'sandbox.api.getsafepay.com');
+  assert.deepEqual(a.body,{merchant_api_key:key,intent:'CYBERSOURCE',mode:'payment',
+    entry_mode:'raw',currency:'PKR',amount:114500,
+    metadata:{source:'miljor',order_id:'ORD-123'}});
+  assert.equal(Object.isFrozen(a.body),true);
+  assert.throws(()=>buildPaymentV3({amountPkr:'1.00',merchantApiKey:'abc',orderCode:'ORD-1'}));
+});
+test('v3 tracker creation must match amount, sandbox, order, mode and expected STARTED',()=>{
+  const response={data:{tracker:{token:tracker,environment:'sandbox',
+    mode:'payment',state:'TRACKER_STARTED',
+    purchase_totals:{quote_amount:{currency:'PKR',amount:114500}},
+    metadata:{order_id:'ORD-123'}}}};
+  assert.deepEqual(validateCreatedTracker({response,expectedAmountPkr:'1145.00',
+    expectedOrderCode:'ORD-123'}),{trackerToken:tracker,
+      providerContract:'payments-v3-minor',amountPkr:'1145.00',
+      currency:'PKR',captured:false,providerOriginVerified:false});
+  for(const patch of [
+    {purchase_totals:{quote_amount:{currency:'PKR',amount:1145}}},
+    {purchase_totals:{quote_amount:{currency:'USD',amount:114500}}},
+    {state:'TRACKER_ENDED'},{environment:'production'},
+    {mode:'instrument'},{metadata:{order_id:'ORD-DIFFERENT'}},
+    {token:'track_../../other'}
+  ]){
+    const mutated={data:{tracker:{...response.data.tracker,...patch}}};
+    assert.throws(()=>validateCreatedTracker({response:mutated,
+      expectedAmountPkr:'1145.00',expectedOrderCode:'ORD-123'}));
+  }
+});
+test('refund v3 preview remains nonexecutable for exact buyer item shortage',()=>{
+  const r=refundPreview({trackerToken:tracker,amountPkr:'5000.00'});
+  assert.equal(r.payload.amount,500000);
+  assert.equal(r.executable,false);
+  assert.equal(r.providerConfirmation,'NOT_VERIFIED');
+  assert.throws(()=>refundPreview({trackerToken:'../../attack',amountPkr:'10'}));
+});
