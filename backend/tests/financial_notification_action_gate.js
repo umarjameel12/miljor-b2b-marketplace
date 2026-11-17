@@ -88,6 +88,7 @@ function fixture(options = {}) {
   const lifecycle = { claimCheckout: async () => {}, assertCanCreateFreshCheckout: async () => {}, markPaid: async () => {}, reconcilePaidOrder: async () => {}, releaseCheckoutClaim: async () => {} };
   const adapter = {
     verifyWebhookSignature: () => options.authentic !== false,
+    verifyWebhookSignatureScope: () => options.authentic !== false ? 'raw_body' : null,
     fetchTracker: async () => ({ data: { token: 'track_test', state: options.providerState || 'PAID', currency: options.currency || 'PKR', amount: options.amount || '100.00', transaction: { token: 'txn_test' } } })
   };
   const dependencies = { '../config/db': database, './notificationService': notification,
@@ -100,7 +101,7 @@ function fixture(options = {}) {
     order: () => order, dispute: () => dispute, trace, commits: () => commits, rollbacks: () => rollbacks };
 }
 const buyer = { id: 7, role: 'BUYER' }, supplier = { id: 8, role: 'SUPPLIER' }, admin = { id: 90, role: 'ADMIN' };
-const webhook = (extra = {}) => ({ rawBody: JSON.stringify({ type: 'payment.succeeded', data: { tracker: 'track_test', amount: 100, currency: 'PKR' } }), signature: 'mocked-signature', timestamp: '1', eventId: 'delivery-one', ...extra });
+const webhook = (extra = {}) => ({ rawBody: JSON.stringify({ type: extra.eventType || 'payment.succeeded', data: { tracker: 'track_test', amount: 100, currency: 'PKR' } }), signature: 'mocked-signature', timestamp: '1', eventId: 'delivery-one', ...extra });
 const openBuyer = (s, extra = {}) => s.disputes.createBuyerDispute({ orderId: 42, actor: buyer, category: 'DAMAGED_GOODS', description: 'Goods arrived damaged', disputedQuantity: 1, idempotencyKey: 'http-open', ...extra });
 const close = (s, key = 'http-close') => s.disputes.closeDispute({ disputeId: 21, actor: admin, closureReason: 'Case reviewed and closed', idempotencyKey: key });
 const assess = (s, key = 'http-refund') => s.finance.assessRefundObligation({ orderId: 42, actor: buyer, refundType: 'FULL', reason: 'Order refund requested', idempotencyKey: key });

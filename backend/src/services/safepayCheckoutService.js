@@ -280,12 +280,12 @@ class SafepayCheckoutService {
     eventType
   }) {
     // 1. Signature Verification (Official Safepay HMAC-SHA512 over untouched raw body bytes)
-    const isAuthentic = safepayAdapter.verifyWebhookSignature({
+    const signatureScope = safepayAdapter.verifyWebhookSignatureScope({
       rawBody,
       signature
     });
 
-    if (!isAuthentic) {
+    if (!signatureScope) {
       const err = new Error('Cryptographic signature verification failed');
       err.code = 'INVALID_WEBHOOK_SIGNATURE';
       err.statusCode = 401;
@@ -295,6 +295,8 @@ class SafepayCheckoutService {
     let parsedPayload;
     try {
       parsedPayload = typeof rawBody === 'string' ? JSON.parse(rawBody) : JSON.parse(rawBody.toString('utf8'));
+      if (signatureScope === 'data') parsedPayload = parsedPayload.data;
+      if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) throw new Error('Object payload required');
     } catch (e) {
       const err = new Error('Malformed webhook JSON payload');
       err.code = 'INVALID_PAYLOAD';
@@ -305,19 +307,23 @@ class SafepayCheckoutService {
     const envelopeData = (parsedPayload.data && typeof parsedPayload.data === 'object' && !Array.isArray(parsedPayload.data))
       ? parsedPayload.data
       : null;
-    const effectiveEventId = eventId
-      || parsedPayload.token
+    const effectiveEventId = parsedPayload.token
       || parsedPayload.id
       || envelopeData?.token
       || envelopeData?.id
-      || `evt_${Date.now()}`;
-    const effectiveEventType = eventType
-      || parsedPayload.type
+      || (signatureScope === 'raw_body' ? eventId : null)
+      || (signatureScope === 'raw_body' ? `evt_${Date.now()}` : null);
+    if (!effectiveEventId) {
+      const err = new Error('Authenticated webhook payload requires a stable event identity');
+      err.code = 'MISSING_WEBHOOK_EVENT_ID'; err.statusCode = 400; throw err;
+    }
+    const effectiveEventType = parsedPayload.type
       || parsedPayload.event
       || parsedPayload.webhook_event_type
       || envelopeData?.type
       || envelopeData?.event
       || envelopeData?.webhook_event_type
+      || (signatureScope === 'raw_body' ? eventType : null)
       || 'unknown';
 
     // 2. Check for duplicate webhook receipt (Idempotency)
@@ -360,7 +366,7 @@ class SafepayCheckoutService {
       ? data.tracker.amount
       : (data.amount !== undefined
           ? data.amount
-          : (!isCreatedEvent && data.net !== undefined && data.net !== null ? data.net : null));
+          : null);
     const providerAmount = (rawProviderAmount !== null && rawProviderAmount !== '' && !Number.isNaN(Number(rawProviderAmount)))
       ? Number(rawProviderAmount)
       : null;
@@ -381,10 +387,11 @@ class SafepayCheckoutService {
       'payment:settled'
     ].includes(effectiveEventType);
     const isCreatedPaidEvent = isCreatedEvent && normalizedProviderState === 'PAID';
-    const isSuccessEvent = isExplicitSuccessType || isCreatedPaidEvent;
+    const explicitStateAllowsSuccess = !normalizedProviderState || ['PAID', 'COMPLETED', 'SUCCEEDED', 'SETTLED'].includes(normalizedProviderState);
+    const isSuccessEvent = (isExplicitSuccessType && explicitStateAllowsSuccess) || isCreatedPaidEvent;
 
     if (!isSuccessEvent) {
-      const recordedEventType = isCreatedEvent
+      const recordedEventType = (isCreatedEvent || (isExplicitSuccessType && normalizedProviderState))
         ? `${effectiveEventType}:${normalizedProviderState || 'UNKNOWN'}`.slice(0, 100)
         : effectiveEventType;
       // Record event but take no financial mutation

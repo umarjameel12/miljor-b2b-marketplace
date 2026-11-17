@@ -108,6 +108,86 @@ function sign(payload) {
   return { rawBody, signature };
 }
 
+function signData(data, outer = {}) {
+  return {
+    rawBody: Buffer.from(JSON.stringify({ ...outer, data })),
+    signature: crypto.createHmac('sha512', process.env.SAFEPAY_WEBHOOK_SECRET).update(JSON.stringify(data)).digest('hex')
+  };
+}
+function signedNotification(state = 'PAID') {
+  return { token:'SIGNED-EVENT', type:'payment:created', notification:{tracker:'track_69b331f2-5ef0-4dd5-bcb4-d288fbdac0ef',state,amount:'1000.00',currency:'PKR'} };
+}
+
+test('data-only authentication ignores unsigned outer event identity, type and notification', async () => {
+  const fx=makeFixture();
+  try {
+    const data=signedNotification('PENDING');
+    const input=signData(data,{token:'FORGED-EVENT',type:'payment.succeeded',notification:{...data.notification,state:'PAID'}});
+    await safepayCheckoutService.processWebhookEvent(input);
+    assert.equal(fx.queries.some(q=>q.sql.includes('INSERT INTO payments')),false);
+    const event=fx.queries.find(q=>q.sql.includes('INSERT INTO payment_webhook_events'));
+    assert.equal(event.params[0],'SIGNED-EVENT');
+    assert.equal(event.params[1],'payment:created:PENDING');
+  } finally {fx.restore();}
+});
+
+test('unsigned event headers cannot upgrade a data-signed pending notification', async () => {
+  const fx=makeFixture();
+  try {
+    await safepayCheckoutService.processWebhookEvent({...signData(signedNotification('PENDING')),eventId:'FORGED-HEADER-ID',eventType:'payment.succeeded'});
+    assert.equal(fx.queries.some(q=>q.sql.includes('INSERT INTO payments')),false);
+    assert.equal(fx.queries.find(q=>q.sql.includes('INSERT INTO payment_webhook_events')).params[0],'SIGNED-EVENT');
+  } finally {fx.restore();}
+});
+
+test('authenticated amount and currency cannot be replaced by unsigned outer notification', async () => {
+  const fx=makeFixture();
+  try {
+    const data=signedNotification();
+    const result=await safepayCheckoutService.processWebhookEvent(signData(data,{notification:{...data.notification,amount:'1.00',currency:'USD'}}));
+    assert.equal(result.payment_status,'PAID');
+  } finally {fx.restore();}
+});
+
+test('data-signed financial notifications require their own stable event identity', async () => {
+  const fx=makeFixture();
+  try {
+    const data=signedNotification();delete data.token;
+    await assert.rejects(()=>safepayCheckoutService.processWebhookEvent({...signData(data,{token:'UNSIGNED-ID'}),eventId:'UNSIGNED-HEADER'}),{code:'MISSING_WEBHOOK_EVENT_ID'});
+    assert.equal(fx.queries.length,0);
+  } finally {fx.restore();}
+});
+
+test('raw-body signed refund type cannot be promoted by unsigned success header', async () => {
+  const fx=makeFixture();
+  try {
+    const payload={...signedNotification(),type:'refund:created'};
+    await safepayCheckoutService.processWebhookEvent({...sign(payload),eventType:'payment.succeeded'});
+    assert.equal(fx.queries.some(q=>q.sql.includes('INSERT INTO payments')),false);
+  } finally {fx.restore();}
+});
+
+test('net proceeds never substitute for missing gross capture amount', async () => {
+  const fx=makeFixture();
+  try {
+    const payload={...signedNotification(),type:'payment.succeeded'};
+    delete payload.notification.amount;payload.notification.net='1000.00';
+    await assert.rejects(()=>safepayCheckoutService.processWebhookEvent(sign(payload)),{code:'INVALID_PAYLOAD'});
+    assert.equal(fx.queries.some(q=>q.sql.includes('INSERT INTO payments')),false);
+  } finally {fx.restore();}
+});
+
+test('explicit non-paid provider states cannot be captured by a success event label', async () => {
+  for (const state of ['PENDING','FAILED','CANCELLED','UNKNOWN']) {
+    const fx=makeFixture();
+    try {
+      await safepayCheckoutService.processWebhookEvent(sign({...signedNotification(state),type:'payment.succeeded'}));
+      assert.equal(fx.queries.some(q=>q.sql.includes('INSERT INTO payments')),false);
+      assert.equal(fx.queries.find(q=>q.sql.includes('INSERT INTO payment_webhook_events')).params[1],`payment.succeeded:${state}`);
+    } finally {fx.restore();}
+  }
+});
+
 test('official payment:created 1.0.0 with nested notification state=PAID captures once with fee metadata', async () => {
   const fx = makeFixture();
   try {

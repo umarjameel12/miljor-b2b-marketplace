@@ -405,7 +405,7 @@ class SafepayAdapter {
    * Cryptographically verifies incoming Safepay webhook signature.
    *
    * Official Safepay Webhook specification:
-   * - Algorithm: HMAC-SHA512 strictly over raw untouched JSON request body bytes.
+   * - Algorithm: HMAC-SHA512 over raw bytes or the provider data-envelope profile.
    * - Signature Header: X-SFPY-SIGNATURE (hex string, with optional 'sha512=' prefix).
    * - Security: Constant-time comparison using crypto.timingSafeEqual.
    * - No legacy SHA256 / timestamp fallbacks (strictly fails closed).
@@ -416,13 +416,20 @@ class SafepayAdapter {
    * @returns {boolean} True if signature is cryptographically valid
    */
   verifyWebhookSignature({ rawBody, signature }) {
+    return this.verifyWebhookSignatureScope({ rawBody, signature }) !== null;
+  }
+
+  // Return 'raw_body', 'data', or null. The boolean API above stays compatible.
+  // Return the authenticated boundary so callers cannot trust unsigned envelope
+  // fields when the provider signature covers only JSON.stringify(data).
+  verifyWebhookSignatureScope({ rawBody, signature }) {
     if (!signature || !rawBody) {
-      return false;
+      return null;
     }
 
     const secret = this.webhookSecret;
     if (!secret) {
-      return false;
+      return null;
     }
 
     try {
@@ -445,7 +452,7 @@ class SafepayAdapter {
       const expectedBuffer512 = Buffer.from(computedSha512.toLowerCase(), 'utf8');
 
       if (receivedBuffer.length === expectedBuffer512.length && crypto.timingSafeEqual(receivedBuffer, expectedBuffer512)) {
-        return true;
+        return 'raw_body';
       }
 
       // Official Safepay v1 webhooks (e.g. payment:created 1.0.0) sign JSON.stringify(payload.data)
@@ -459,16 +466,16 @@ class SafepayAdapter {
             .digest('hex');
           const expectedDataBuffer = Buffer.from(dataDigest.toLowerCase(), 'utf8');
           if (receivedBuffer.length === expectedDataBuffer.length && crypto.timingSafeEqual(receivedBuffer, expectedDataBuffer)) {
-            return true;
+            return 'data';
           }
         }
       } catch (_) {
         // Non-JSON rawBody cannot match JSON data envelope signature
       }
 
-      return false;
+      return null;
     } catch (e) {
-      return false;
+      return null;
     }
   }
 }
