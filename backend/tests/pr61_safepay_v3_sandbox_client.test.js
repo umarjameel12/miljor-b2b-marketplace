@@ -122,6 +122,18 @@ test('v3 reporter rejects wrong order, amount, tracker and malformed path before
     error=>error.code==='INVALID_TRACKER_TOKEN');
   assert.equal(n,0);
 });
+test('provider wrong amount, wrong order, mismatched or missing merchant cannot confirm',async()=>{
+  for(const badClient of ['sec_other_sandbox_merchant',undefined]){
+    let calls=0;
+    const client=new SafepayV3SandboxClient({env,fetchImpl:async()=>{
+      calls++;
+      return {status:201,json:async()=>({data:{tracker:{...reply.data.tracker,client:badClient}}})};
+    }});
+    await assert.rejects(()=>client.createPaymentTracker({amountPkr:'1145.00',orderCode:'MILJOR-100'}),
+      e=>e.code==='SAFEPAY_V3_RESPONSE_UNVERIFIED');
+    assert.equal(calls,1);
+  }
+});
 test('provider wrong amount, wrong order and unknown network cannot confirm',async()=>{
   for(const provider of [
     {status:201,json:async()=>({data:{tracker:{...reply.data.tracker,
