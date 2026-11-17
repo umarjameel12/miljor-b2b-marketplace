@@ -3,6 +3,7 @@
 // No public object URL, image transformations or executable document types.
 const crypto=require('node:crypto');
 const db=require('../config/db');
+const malwareScanner=require('./documentMalwareScanService');
 const KINDS=Object.freeze(['BUSINESS_LICENSE','TAX_CERTIFICATE','WAREHOUSE_PROOF','BANK_PROOF']);
 const TOKENS=Object.freeze(KINDS.map(x=>'document:'+x));
 const fail=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
@@ -72,6 +73,10 @@ class SupplierVerificationDocumentService {
     if(typeof key!=='string'||!/^[A-Za-z0-9:_-]{12,120}$/.test(key))
       throw fail('INVALID_IDEMPOTENCY_KEY','Valid X-Idempotency-Key required');
     const file=inspect(payload);
+    // In production every private KYC/evidence file MUST pass a configured AV
+    // scanner BEFORE any DB transaction, version increment or document receipt.
+    // Scanner outage or malware blocks upload; it cannot silently bypass KYC.
+    await malwareScanner.scan(file.bytes);
     const connection=await this.database.getConnection();
     try{
       await connection.beginTransaction();
