@@ -1739,3 +1739,7 @@ Qualified source/test SHA:b264cc62cc4df42c46b39fc43891e1b9ae982f50. Canonical Ac
 ### 2026-11-17 — Phase A/B correction exact-source acceptance
 
 Source/test/workflow SHA1e3bc6c54b38112730da8e1e5e014d4b22683477 qualified by canonical run43973636310 SUCCESS,3/3 jobs. Dedicated mandatory owned Flash SQL-clock step PASS on fresh CI schema. Local14/14 groups,56 metadata tests and10 owned SQL scenario groups had0 skips. Evidence: evidence/ucp-phase-ab-ci-2026-11-17.json and evidence/ucp-phase-ab-hardening-2026-11-16.json. Scoped PhaseA/B correction PASS; full master plan PARTIAL/RELEASE BLOCKED. Evidence-only follow-up changes no qualified application/tests/workflows. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — remaining delivery/replacement cost policy selected
+
+User delegated selection of the most feasible rule. Recorded the conservative fresh-quote/versioned-buyer-acceptance policy in MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md and referenced it from the master plan. Buyer-requested extra cost requires exact-quote acceptance; supplier/carrier remediation cannot impose compulsory extra buyer charges. No silent repricing, automatic penalty/subsidy/supplier debit, implied consent or external money movement. This resolves the policy-choice blocker only; PhaseC/D implementation and testing remain outstanding. Documentation-only change; no application/DB behavior altered and no test suite needed. CAN START NEXT PHASE: NO.
