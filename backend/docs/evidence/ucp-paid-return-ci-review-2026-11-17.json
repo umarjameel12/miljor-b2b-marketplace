@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-17",
+  "qualifiedSource": "d3ea95e13fe9ef13c3a2e5320d1e4973977873fe",
+  "ci": {
+    "runId": 44169319582,
+    "url": "https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44169319582",
+    "jobs": 3,
+    "conclusion": "SUCCESS"
+  },
+  "newPaidReturnGateScope": "Reported local restored actual-paid fixture acceptance; new gate is not explicitly invoked by canonical CI",
+  "remoteVerification": {
+    "method": "git ls-remote, not cached origin refs",
+    "main": "9c0a81979b852198c04c00de42ba763a1aa09c2f",
+    "smartHub": "2e179e62baa30eaae1fe0d7d873c69b8e0395c73",
+    "feature": "d3ea95e13fe9ef13c3a2e5320d1e4973977873fe"
+  },
+  "implementedWebhookRoutes": [
+    "POST /api/v1/webhooks/safepay",
+    "POST /api/v1/payments/webhook/safepay"
+  ],
+  "incorrectProposedRoute": "POST /api/v1/payments/webhooks/safepay",
+  "refundEvidenceLimit": "Documentation/no adapter method does not prove actual account-enabled capability or absence of a public API; account-specific refund support/execution remains UNVERIFIED",
+  "actions": "Read-only CI/ref/source verification and documentation corrections only; no DB/provider mutation, merge, exposure or refund",
+  "result": "Source CI PASS; full release PARTIAL"
+}

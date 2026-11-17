@@ -453,3 +453,16 @@ Application source unchanged at qualifieda6df244; no application-suite rerun was
 - **Protected DB (`miljor_db`, `3306`, read-only):** Checksums unchanged (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
 
 CAN START NEXT PHASE: NO
+
+
+### 2026-11-17 — PAID-return exact-source CI and audit corrections
+
+Verified source `d3ea95e13fe9ef13c3a2e5320d1e4973977873fe`: canonical CI [44169319582](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44169319582) completed3/3 jobs SUCCESS. The new `ucp_paid_return_browser_gate.js` has reported local restored actual-paid acceptance; it is not explicitly invoked by this canonical workflow, so local actual-paid gate evidence remains separate from CI scope. No application code change or redundant suite rerun in this correction.
+
+Fresh `git ls-remote` differs from cached refs in the previous audit: main=`9c0a81979b852198c04c00de42ba763a1aa09c2f`, Smart Hub=`2e179e62baa30eaae1fe0d7d873c69b8e0395c73`, feature=`d3ea95e13fe9ef13c3a2e5320d1e4973977873fe`. The previous statement that main9fb07cf has no newer commits is superseded. Use explicit refspec fetch/actual remote SHAs for subsequent delta review; do not silently merge newer source.
+
+Correct implemented callback routes are `POST /api/v1/webhooks/safepay` and `POST /api/v1/payments/webhook/safepay`. The previously proposed `/api/v1/payments/webhooks/safepay` (plural webhook segment under payments) is not mounted. Any future endpoint proposal must use a real route, preserve signature/raw-body verification and receive explicit exposure/dashboard approval.
+
+The previous refund statement “documented & account-enabled” is not established by account-level observation in this closeout. Documentation availability and absence of a method in safepayAdapter do not prove account enablement or public-API unavailability. Classify account-specific refund capability and execution as UNVERIFIED / NOT_EXECUTED until direct account/current authoritative evidence exists; do not execute refund/reversal/payout without the required authorization.
+
+Evidence: `evidence/ucp-paid-return-ci-review-2026-11-17.json`. No database connection/mutation, provider action, branch merge, public exposure or deployment performed. RESULT: exact-source canonical CI PASS; master-plan PARTIAL on direct webhook/refund evidence and actual latest-source review. Historical supplier-verification attribution remains separate from newer buyer metadata. CAN START NEXT PHASE: NO.
