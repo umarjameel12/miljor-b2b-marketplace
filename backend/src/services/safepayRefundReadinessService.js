@@ -64,13 +64,18 @@ function capturedTracker(row){
   }catch(_){return null;}
   const token=payload&&typeof payload==='object'
     ?payload.tracker_token:null;
-  if(typeof token==='string'&&/^track_[A-Za-z0-9_-]{3,180}$/.test(token))
+  const validToken=value=>typeof value==='string'&&
+    /^track_[A-Za-z0-9_-]{3,180}$/.test(value);
+  const ref=row.transaction_ref;
+  // A persisted but malformed tracker is an integrity failure; do not
+  // silently fall back to a different reference.
+  if(token!==undefined&&token!==null){
+    if(!validToken(token))return null;
+    if(validToken(ref)&&ref!==token)return null;
     return token;
+  }
   // Legacy signed-webhook payments store the tracker as transaction_ref.
-  if(typeof row.transaction_ref==='string'&&
-     /^track_[A-Za-z0-9_-]{3,180}$/.test(row.transaction_ref))
-    return row.transaction_ref;
-  return null;
+  return validToken(ref)?ref:null;
 }
 class SafepayRefundReadinessService{
   constructor(database=db){this.db=database;}
