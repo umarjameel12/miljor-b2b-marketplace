@@ -27,7 +27,7 @@ function evaluate({refund,payment,attempt,otherApprovedMinor=0n,now=Date.now()})
   if(requested<=0n)faults.push('NON_POSITIVE_REFUND');
   if(requested>paid||requested+otherApprovedMinor>paid)
     faults.push('CAPTURED_REFUND_CEILING_EXCEEDED');
-  const time=new Date(payment.paid_at).getTime();
+  const time=payment.paid_at==null?NaN:new Date(payment.paid_at).getTime();
   const ageHours=(now-time)/3600000;
   if(!Number.isFinite(time)||!Number.isFinite(ageHours)||ageHours<0)
     faults.push('CAPTURE_TIMESTAMP_UNVERIFIED');
