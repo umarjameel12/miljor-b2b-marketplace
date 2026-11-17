@@ -51,6 +51,39 @@ test('documented v3 Sandbox POST is exact, validates response, does not mark pai
   assert.equal(result.trackerToken,tracker);
   assert.ok(!JSON.stringify(result).includes(env.SAFEPAY_SECRET_KEY));
 });
+test('hosted Express Checkout creates tracker then passport token and allowlisted hosted URL',async()=>{
+  const calls=[];
+  const client=new SafepayV3SandboxClient({env:{...env,FRONTEND_URL:'https://miljor.example'},
+    fetchImpl:async(url,options)=>{
+      calls.push({url,options});
+      if(url.endsWith('/order/payments/v3/'))return {status:201,json:async()=>reply};
+      if(url.endsWith('/client/passport/v1/token'))return {status:200,json:async()=>({data:'temporary_passport_token_123456'})};
+      throw Error('Unexpected provider path');
+    }});
+  const result=await client.createHostedCheckout({amountPkr:'1145.00',
+    orderCode:'MILJOR-100'});
+  assert.equal(calls.length,2);
+  assert.equal(calls[0].options.method,'POST');
+  assert.equal(calls[1].options.method,'POST');
+  const url=new URL(result.checkoutUrl);
+  assert.equal(url.origin,'https://sandbox.api.getsafepay.com');
+  assert.equal(url.pathname,'/checkout/pay');
+  assert.equal(url.searchParams.get('beacon'),tracker);
+  assert.equal(url.searchParams.get('tbt'),'temporary_passport_token_123456');
+  assert.equal(url.searchParams.get('source'),'hosted');
+  assert.equal(url.searchParams.get('env'),'sandbox');
+  assert.equal(url.searchParams.get('webhooks'),'true');
+  assert.equal(new URL(url.searchParams.get('redirect_url')).origin,'https://miljor.example');
+});
+test('hosted checkout rejects external redirect before any provider tracker is created',async()=>{
+  let calls=0;
+  const client=new SafepayV3SandboxClient({env:{...env,FRONTEND_URL:'https://miljor.example'},
+    fetchImpl:async()=>{calls++;throw Error('Must not call')}});
+  await assert.rejects(()=>client.createHostedCheckout({amountPkr:'10.00',
+    orderCode:'MILJOR-100',redirectUrl:'https://attacker.example/steal'}),e=>
+      e.code==='SAFEPAY_V3_REDIRECT_ORIGIN_INVALID');
+  assert.equal(calls,0);
+});
 test('v3 Sandbox reporter is read-only and cannot credit a buyer from state alone',async()=>{
   let n=0;
   const client=new SafepayV3SandboxClient({env,fetchImpl:async(url,options)=>{
