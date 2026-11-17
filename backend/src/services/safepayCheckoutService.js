@@ -23,6 +23,7 @@ const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
 const procurementCollectiveOrderService = require('./procurementCollectiveOrderService');
 const notificationService = require('./notificationService');
+const { SafepayV3SandboxClient } = require('./safepayV3SandboxClient');
 
 class SafepayCheckoutService {
 
@@ -183,7 +184,53 @@ class SafepayCheckoutService {
       throw holdError;
     }
 
-    // Step 2: Call Safepay API OUTSIDE transaction lock
+    // Explicit Payments v3 Sandbox migration path. Never silently fall back to
+    // legacy major-unit v1 when an operator selects v3.
+    if(process.env.SAFEPAY_TRACKER_CONTRACT==='payments-v3-minor'){
+      if(process.env.SAFEPAY_V3_SANDBOX_ENABLED!=='true'){
+        const err=new Error('Safepay v3 is selected but the isolated Sandbox feature flag is disabled');
+        err.code='SAFEPAY_V3_SANDBOX_DISABLED';err.statusCode=503;throw err;
+      }
+      let v3Checkout;
+      try{
+        const v3Client=mockClient&&typeof mockClient.createHostedCheckout==='function'
+          ? mockClient : new SafepayV3SandboxClient();
+        const frontendBase=process.env.FRONTEND_URL||'http://localhost:3000';
+        v3Checkout=await v3Client.createHostedCheckout({
+          amountPkr:exactDecimal.toCanonicalString(order.total_amount,2),
+          orderCode:order.order_code,
+          redirectUrl:redirectUrl||new URL('/payment/return?order_id='+order.id,frontendBase).toString(),
+          cancelUrl:cancelUrl||new URL('/payment/cancelled?order_id='+order.id,frontendBase).toString()
+        });
+      }catch(providerError){
+        await require('./flashPoolService').releaseCheckoutClaim(orderId,actor.id)
+          .catch(()=>{});
+        await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+          .catch(()=>{});
+        throw providerError;
+      }
+      const attemptCode=`ATT-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
+      const [attemptInsert]=await db.query(
+        `INSERT INTO payment_attempts (
+          attempt_code,order_id,buyer_id,provider,environment,provider_contract,
+          provider_tracker_token,checkout_url,amount,currency,status,idempotency_key,created_at
+        ) VALUES (?, ?, ?, 'SAFEPAY', 'sandbox', 'payments-v3-minor', ?, ?, ?, ?, 'INITIATED', ?, NOW())`,
+        [attemptCode,order.id,order.buyer_id,v3Checkout.trackerToken,
+          v3Checkout.checkoutUrl,exactDecimal.toCanonicalString(order.total_amount,2),
+          order.currency||'PKR',trimmedKey]
+      );
+      await db.query(
+        `UPDATE orders SET payment_status='PAYMENT_INITIATED',updated_at=NOW() WHERE id=?`,
+        [order.id]
+      );
+      const [rows]=await db.query('SELECT * FROM payment_attempts WHERE id=?',[attemptInsert.insertId]);
+      return {
+        is_replay:false,
+        attempt:this._formatAttempt(rows[0],order)
+      };
+    }
+
+    // Step 2: Call Safepay legacy v1 API OUTSIDE transaction lock
     let trackerToken, rawResponse;
     try {
       const tracker = await safepayAdapter.createTracker({
