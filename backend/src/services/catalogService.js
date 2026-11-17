@@ -48,9 +48,10 @@ class CatalogService {
       try {
         return await productSpecRepo.create({ ...specData, spec_code }, connection);
       } catch (err) {
+        const keyMatch = /\bfor key\s+['"`]([^'"`]+)['"`]\s*$/i.exec(err && (err.sqlMessage || err.message || ''));
         const isSpecCodeCollision =
           (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) &&
-          /spec_code/i.test(err.sqlMessage || err.message || '');
+          keyMatch && keyMatch[1].split('.').pop() === 'spec_code';
         if (!isSpecCodeCollision || attempt === 3) {
           throw err;
         }

@@ -1710,3 +1710,7 @@ Fixed `specificationService.generateSpecCode` 3-digit collision defect (`crypto.
 
 Hardened `specificationService.generateSpecCode` to 12 hex chars (`crypto.randomBytes(6)`) and added `_createSpecWithUniqueCode` in `catalogService.js` (bounded 3-attempt retry strictly on `spec_code` `ER_DUP_ENTRY`, rethrowing `spec_hash` and all other SQL errors). Verified with `spec_code_collision_retry.test.js` (4/4 PASS) and two fresh sequential `smart_hub_paid_browser_journey.js` runs on populated `miljor_test_db` (exit 0, 16/16 checkpoints each, orders `222–227`, 12-hex `SPEC-G&R-BRO-*` codes). Protected DBs (`miljor_db`, `miljor_sandbox_db`) remain `orders=0/payments=0`. PR #53 remains DRAFT/UNMERGED pending the 3 owner/provider inputs above. CAN START NEXT PHASE: NO.
 
+# 2026-11-17 — Spec-code retry review follow-up
+
+Inspected Antigravity head 44e2f2d and observed 11/11 CI SUCCESS. Added a regression reproducing incorrect retries when an unrelated duplicate value contained spec_code; corrected classification to the terminal exact constraint name. DB-free unit tests 6/6 PASS, exit 0; new negative coverage includes an embedded fake key name and non-duplicate SQL errors. Added the regression file to notification CI with source/test path triggers. No database opened or modified; no migration, main merge or original frontend overwrite. Existing genuine provider/email/tax blockers remain BLOCKED. Exact-head CI pending push; full evidence in SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md. CAN START NEXT PHASE: NO.
+

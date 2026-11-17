@@ -155,3 +155,15 @@ This evidence commit also stores the opt-in genuine provider probe (syntax check
   3. **Production Tax / Commercial Policy Approval (`BLOCKED`):** Isolated tests use a zero-tax contract; no accountable production tax rate/exemption or approval exists in the repository.
 
 CAN START NEXT PHASE: NO
+# 2026-11-17 — Review follow-up: exact collision classification and CI coverage
+
+Source baseline `44e2f2d0eee0958ed6f9a166df6e9b74aceb6d25` was inspected; its eleven PR workflows were observed SUCCESS, including paid Chromium (44071825696), P0 (44071825862) and UCP (44071825575). Antigravity's two populated-test-DB browser runs and financial counts above remain its recorded evidence; they were not rerun or relabelled as new execution in this follow-up.
+
+Review found the new helper classified a collision by searching the entire SQL message for `spec_code`, and the four-test regression file was not explicitly invoked by CI. A new negative test reproduced the error (5 PASS / 1 FAIL: unrelated duplicate value `spec_code` caused three calls instead of one). The helper now reads only the terminal quoted constraint identifier, accepts the qualified name ending exactly in `.spec_code` (or unqualified `spec_code`), and propagates unrelated/unknown duplicate keys and other SQL errors immediately. The negative test also covers an embedded fake `for key 'spec_code'` inside the duplicate value. The 12-hex generator, three-attempt limit, original error object, both catalog callers and database constraints remain unchanged.
+
+The unit test injects a database-forbidden module double before importing catalog dependencies, preventing creation of the application's default pool. `node --test backend/tests/spec_code_collision_retry.test.js` final result: **6/6 PASS**, exit 0, duration 372.2866ms. No database connection, fixture write or migration was performed in this follow-up. Protected database counts recorded earlier are historical, not newly measured here. `git diff --check` PASS. The notification-contract workflow now explicitly runs the regression file and watches both catalog/specification services and the test path.
+
+Changed paths: `backend/src/services/catalogService.js`, `backend/tests/spec_code_collision_retry.test.js`, `.github/workflows/smart-hub-notifications.yml`, this report and `MILJOR_PHASE_LOG.md`. Safe fetch confirmed local/remote approved branch both at 44e2f2d before edits; main remained 9fb07cf. Applied receiving-code-review and test-driven-development to verify the reported change, reproduce the narrow defect and fix it; project consolidated verification policy preserved successful unaffected evidence. Remote exact-head verification follows the approved feature-branch push. This focused code correction is locally PASS; genuine sandbox capture/public webhook, inbox receipt and accountable tax policy remain BLOCKED. No main merge or original local UI overwrite. SMS excluded; UCP/B6 unchanged.
+
+CAN START NEXT PHASE: NO
+
