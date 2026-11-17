@@ -13,7 +13,10 @@ const sources={
   v3Client:read('src/services/safepayV3SandboxClient.js'),
   v3Contract:read('src/services/safepayV3ContractService.js'),
   provider:read('src/services/paymentProviderService.js'),
-  settlement:read('src/services/financialSettlementService.js')
+  settlement:read('src/services/financialSettlementService.js'),
+  subscriptionService:read('src/services/supplierSubscriptionCheckoutService.js'),
+  subscriptionJournal:read('database/migrations/106_supplier_subscription_signed_capture_journal.sql'),
+  checkout:read('src/services/safepayCheckoutService.js')
 };
 const example={
   SAFEPAY_ENV:'sandbox',ALLOW_EXTERNAL_MONEY_MOVEMENT:'false',
@@ -134,4 +137,15 @@ test('v3 supplier checkout blocks before DB and payment network until signed cap
       if(val===undefined)delete process.env[name];else process.env[name]=val;
     }
   }
+});
+
+test('real source has a signed supplier v3 journal, but no provider-origin evidence',()=>{
+ const outcome=inspect({...example,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor',
+   SAFEPAY_V3_SANDBOX_ENABLED:'true',
+   SAFEPAY_V3_SUBSCRIPTION_SIGNED_CAPTURE_ENABLED:'true'},sources);
+ assert.equal(outcome.checks.v3_supplier_signed_capture_journal_present,true);
+ assert.equal(outcome.v3_supplier_subscription_sandbox_attempt,
+   'READY_FOR_AUTHORIZED_SANDBOX_TEST_NOT_PROVIDER_CERTIFIED');
+ assert.equal(outcome.v3_supplier_subscription_provider_evidence,'NOT_OBTAINED');
+ assert.equal(outcome.real_funds_moved,false);
 });
