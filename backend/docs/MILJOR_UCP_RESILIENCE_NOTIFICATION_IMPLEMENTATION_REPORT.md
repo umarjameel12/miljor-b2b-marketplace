@@ -329,4 +329,43 @@ TASK: Implement and verify Completion Phase 2 on PR #54 (`plan/ucp-resilience-no
 - **CI Workflow:** `.github/workflows/ucp-canonical-acceptance.yml` updated to run `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, and `ucp_phase2_full_ui_browser_gate.js`.
 - **Protected DB (`miljor_db`, port 3306, read-only):** Before and after checksums identical (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
 
+---
+
+## Completion Phase 3 — Source/Migration Reconciliation & Final Readiness (2026-11-17)
+
+- **Audit Baseline (Read-Only):**
+  - **Approved branch (`plan/ucp-resilience-notification-coverage`):** `fb16b649111ce7ce0702f3daf50c3e5908e7cea3` (exact-source CI run [`44123502063`](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44123502063) — **SUCCESS**, all 3 jobs PASS).
+  - **`origin/main`:** `9c0a81979b852198c04c00de42ba763a1aa09c2f`.
+  - **`origin/feature/smart-procurement-hub-unified-entry`:** `b92a6889029cd721a13ae581fe14dd031f27aad6`.
+  - **Execution Mode:** Read-only `git merge-tree --write-tree` preview and code/migration audit only. Zero branch merges, zero force-pushes, zero live money movement, and zero protected-DB mutations performed.
+
+### 1. Source Reconciliation Matrix
+- **`HEAD` vs `origin/main` (`9c0a81979b852198c04c00de42ba763a1aa09c2f`):**
+  - 1 content conflict: `backend/src/services/emailService.js`.
+  - Zero `090`–`101` migrations on `origin/main`.
+- **`HEAD` vs `origin/feature/smart-procurement-hub-unified-entry` (`b92a6889029cd721a13ae581fe14dd031f27aad6`):**
+  - 9 content conflicts: `backend/docs/MILJOR_PHASE_LOG.md`, `backend/src/services/notificationService.js`, `backend/src/services/safepayCheckoutService.js`, `backend/src/services/schedulerService.js`, `backend/src/services/supplierDeliveryService.js`, `backend/tests/email_outbox_queue_gate.js`, `frontend/src/pages/AdminDashboardPage.jsx`, `frontend/src/pages/OrdersPage.jsx`, `frontend/vite.config.js`.
+  - See `OBS-83` in `backend/docs/MILJOR_OBSERVATIONS_REGISTER.md` for resolution strategy.
+
+### 2. Migration `090`–`101` Reconciliation
+- `origin/main` contains none of `090`–`101`.
+- Smart Hub (`b92a6889029cd721a13ae581fe14dd031f27aad6`) collides on numeric migration prefixes `096`–`100` and includes `095_collective_individual_commitments.sql`.
+- **Safe Integration Rule:** Before merging PR #54 and Smart Hub together, renumber colliding migration prefixes sequentially (`102+`) in the secondary integration branch; do not rename already-applied migrations on an already-migrated branch.
+
+### 3. Operational Recovery Visibility Check (Read-Only Code Audit)
+- Verified operational/admin recovery surfaces exist in:
+  - `backend/src/services/notificationOperationsService.js` (`getHealth`, `retryNotice`, `retryEmail`, `alertExhaustedEmails`, `alertExhaustedEvents`)
+  - `backend/src/services/ucpRegularRecoveryService.js` (`listExceptions`, `recover`)
+  - `backend/src/services/deliveryRunService.js` (`getAdminDeliveryExceptions`, `adminRecoverStop`)
+  - `backend/src/services/ucpRecoveryService.js`
+  - `backend/src/services/financialSettlementService.js`
+
+### 4. Final Readiness & Preserved External/Integration Blockers
+- **Overall Master-Plan Readiness:** `PARTIAL` / **NOT release-ready**.
+- **Preserved External & Integration Blockers:**
+  1. Live Safepay sandbox/hosted card payment, fee deduction, and external refund execution remain `BLOCKED` (disabled by policy / missing live interactive card checkout).
+  2. External SMTP real-inbox delivery verification remains `BLOCKED` (mock mode only in automated gates; requires real SMTP credentials and recipient inbox check).
+  3. `origin/main` (`emailService.js`) and `origin/feature/smart-procurement-hub-unified-entry` (9 files + `095`/`096`–`100` migration prefix collision) integration remains `BLOCKED` pending authorized merge/conflict resolution.
+  4. Protected `miljor_db` (`3306`) remains untouched (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`); historical `users` drift attribution remains unresolved.
+
 CAN START NEXT PHASE: NO
