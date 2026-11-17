@@ -4,6 +4,7 @@ import { ShieldCheck, Users, FolderCheck, RefreshCw, AlertTriangle, ArrowRight, 
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import adminApi from '../api/admin';
+import { AdminDeliveryRecoveryPanel } from '../components/admin/AdminDeliveryRecoveryPanel';
 
 const VERIFIERS = ['SUPER_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'];
 const ADMINS = [...VERIFIERS, 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
@@ -103,6 +104,7 @@ export function AdminDashboardPage() {
             <span className="text-xs font-bold inline-flex items-center gap-1">Open verification <ArrowRight className="w-3.5 h-3.5" /></span>
           </Link>}
         </div>
+        <AdminDeliveryRecoveryPanel />
         <p className="text-xs opacity-60">All approval operations are enforced by the backend. Suppliers cannot approve their own application.</p>
       </main>
     </AppShell>

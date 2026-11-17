@@ -181,6 +181,7 @@ app.use('/api/v1/specifications', specificationRoutes);
 app.use('/api/v1/listings', listingRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/fulfillment', fulfillmentRoutes);
+app.use('/api/v1/delivery-runs', require('./src/routes/v1/deliveryRunRoutes'));
 app.use('/api/v1/settlements', financialSettlementRoutes);
 app.use('/api/v1/geo', geographicRoutes);
 app.use('/api/v1/buyer/addresses', buyerAddressRoutes);

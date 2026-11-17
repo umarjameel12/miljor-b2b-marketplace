@@ -217,3 +217,39 @@ Final scope verdict: **PASS for the prospective-metadata and no-skip Flash remin
 This does not certify all catalog/caller metadata adoption, complete delayed-channel/frontend behavior or PhasesC–G. Historical drift attribution and the remaining delivery/re-contracting/provider/mail/full-browser/release-integration gates remain open; full master-plan status is still **PARTIAL / RELEASE BLOCKED**. This evidence-only commit changes no tested application, tests or workflow files from1e3bc6c and uses [skip ci] to avoid repeating successful CI just to record its outcome.
 
 CAN START NEXT PHASE: NO
+
+## 2026-11-17 — Phase C Delivery Reliability Implementation & Gate Evidence
+
+TASK: Implement remaining Phase C delivery reliability on PR #54 (`plan/ucp-resilience-notification-coverage`) from baseline `5ba4116` (preserving uncommitted `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md`). No main merge, protected-DB mutation, or external money movement.
+
+### Phase C Requirements-to-Code-to-Test Matrix
+
+| Requirement | Existing implementation | Actual gap | Changed paths | Acceptance evidence | Status |
+|---|---|---|---|---|---|
+| Eligibility, supported Standard/Express/Pickup modes & immutable snapshots | `deliveryEligibilityService.js`, `supplierDeliveryService.js`, `flashPoolService.js` (`055`), `orderService.js`, `procurementDeliveryBindingService.js` (`094`) | Shared run/stop assignment lacked mode/cluster/handling/capacity validation and `delivery_method = 'EXPRESS'` bridge for non-Flash orders | `backend/src/services/deliveryRunService.js`, `backend/database/migrations/099_ucp_phase_c_delivery_reliability.sql` | `ucp_phase_c_delivery_gate.js` (PASS), `part5_flash_pool_gate.js` (47/47 PASS) | **PASS** |
+| Compatible cluster grouping, SQL cutoff & concurrent stop uniqueness | `geographicService.js`, `047_procurement_delivery_runs.sql` (unused B6-only schema) | No shared UCP `delivery_runs` / `delivery_run_stops`, no post-lock SQL clock cutoff check, no active-stop unique constraint | `099_ucp_phase_c_delivery_reliability.sql`, `deliveryRunService.js`, `deliveryRunRoutes.js` | `ucp_phase_c_delivery_gate.js`: concurrent run creation (1x201, 1x409), real InnoDB lock-wait cross-cutoff (`CLUSTER_CUTOFF_PASSED`), incompatible mode/capacity rejections | **PASS** |
+| Owning-supplier manifest, buyer stop privacy & RBAC | `fulfillmentService.js`, `fulfillmentRoutes.js` | No supplier manifest/stop endpoints or buyer-isolated stop view | `deliveryRunService.js`, `deliveryRunRoutes.js`, `backend/server.js` | `ucp_phase_c_delivery_gate.js`: wrong-supplier 403, peer-buyer 403, zero peer buyer data in response | **PASS** |
+| Dispatch, meaningful ETA updates, pickup claim & separate buyer receipt | `fulfillmentService.js`, `encryptionService.js` | No run dispatch, ETA versioning (>=15m), encrypted/hashed pickup claim code, or stop-level receipt | `deliveryRunService.js`, `deliveryRunRoutes.js` | `ucp_phase_c_delivery_gate.js`: dispatch, ETA v2, pickup code non-leakage in `procurement_notifications`, wrong code 403, valid claim, premature settlement blocked | **PASS** |
+| Partial delivery (100/80/20), shortage & dispute preservation | `deliveryQuantityPolicy.js`, `disputeService.js`, `financialSettlementService.js` | No stop-level `accepted_qty`/`missing_qty`/`rejected_qty`/`disputed_qty` linked to `order_disputes` & `EXCEPTION` settlement hold | `099_ucp_phase_c_delivery_reliability.sql`, `deliveryRunService.js` | `ucp_phase_c_delivery_gate.js` (100 ordered / 80 accepted / 20 disputed, `orders.total_qty` preserved, settlement blocked), `demo_delivery_quantity_policy_gate.js` (14/14 PASS) | **PASS** |
+| Failed attempts, bounded reattempt, reroute & 2026-11-17 cost/consent policy | `ucpRegularRecoveryService.js` (pool-level consent pattern) | No `delivery_attempts` or append-only versioned `delivery_amendments` enforcing buyer-requested vs supplier/carrier/platform cost rules | `099_ucp_phase_c_delivery_reliability.sql`, `deliveryRunService.js`, `deliveryRunRoutes.js` | `ucp_phase_c_delivery_gate.js`: `SUPPLIER_CARRIER_FAILURE` extra fee rejected 422, `PLATFORM_PROVIDER_FAULT` non-zero rejected 422, wrong-owner/version/concurrent quote decision (200/409), admin recovery | **PASS** |
+| Transactional UCP notifications (v2 metadata, rollback, dedupe) | `ucpNotificationEventCatalog.js`, `ucpTransactionalNotifications.js`, `notificationService.js` | Phase C run/stop/attempt/amendment events not wired to `ucpTransactionalNotifications` | `deliveryRunService.js` | `ucp_phase_c_delivery_gate.js` (same-TX outbox, rollback emits 0 rows, pickup code absent), `npm run test:ucp:phaseab` (PASS) | **PASS** |
+| Existing UI integration & production build | `OrdersPage.jsx`, `SupplierFulfillmentPanel.jsx`, `AdminDashboardPage.jsx` | Missing buyer stop/partial-receipt/amendment UI, supplier manifest UI, admin delivery recovery UI | `frontend/src/api/deliveryRuns.js`, `BuyerDeliveryStopPanel.jsx`, `SupplierDeliveryManifestPanel.jsx`, `AdminDeliveryRecoveryPanel.jsx`, `OrdersPage.jsx`, `SupplierFulfillmentPanel.jsx`, `AdminDashboardPage.jsx` | `npm --prefix frontend run build` PASS (Vite v8.3.4, 2,237 modules, 0 errors, 3.70s). Local browser E2E `NOT_TESTED` (Playwright not installed locally) | **PARTIAL (Build PASS; Browser NOT_TESTED locally)** |
+
+### Consolidated Verification Evidence (2026-11-17)
+
+- **Isolated MySQL 8.0.45 (`127.0.0.1:33322`, `miljor_test_db`, datadir `backend/database/backups/ucp-phase-c-2026-11-17`):**
+  - `node database/migrationManifest.js`: PASS (63 migrations).
+  - `node database/bootstrapDisposableMigrationTest.js` + `node database/runMigrations.js` (1st run: applied 63; 2nd run: applied 0) + `node database/readOnlyMigrationAudit.js --test-only`: PASS.
+  - `099_ucp_phase_c_delivery_reliability_rollback.sql` + `node database/runMigrations.js` (applied 1) + `node database/readOnlyMigrationAudit.js --test-only`: PASS (exit 0).
+  - `node tests/ucp_phase_c_delivery_gate.js`: PASS (exit 0; natural teardown).
+  - `npm run test:ucp`: PASS (exit 0; includes `ucp_independent_audit_source_gate` 80 PASS, `b4_regular_dual_timer_source_gate` 16/16, `ucp_3_to_5_source_gate` 46 PASS, `ucp_notification_catalog_gate` 94 events).
+  - `npm run test:ucp:phaseab`: PASS (exit 0; 56 metadata + 10 SQL groups).
+  - `node tests/demo_delivery_quantity_policy_gate.js`: PASS (14/14, exit 0).
+  - `node tests/p0_payment_fulfillment_settlement_http_e2e.js`: PASS (exit 0).
+  - `node tests/part5_flash_pool_gate.js`: PASS (47/47, exit 0).
+  - `npm --prefix frontend run build`: PASS (exit 0, 2,237 modules, 3.70s).
+- **Protected DB (`miljor_db`, port 3306, read-only):** Before and after checksums identical: `{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`. (Historical `users` drift attribution from prior session remains unresolved.)
+- **Skills applied:** `systematic-debugging` (local-TZ vs UTC cutoff parsing & `exactDecimal` / `order_disputes` schema alignment), `verification-before-completion` (isolated 33322 MySQL, rollback/re-apply, consolidated affected gates, protected DB checks).
+- **Remaining boundaries:** Phase D (supplier replacement re-contracting execution), Phase E (actual completed Safepay sandbox payment/refund/fee proof), Phase F (actual SMTP inbox receipt & mobile/Urdu RTL + clustered browser E2E), Phase G (main merge & `090`/`095` migration reconciliation).
+
+CAN START NEXT PHASE: NO

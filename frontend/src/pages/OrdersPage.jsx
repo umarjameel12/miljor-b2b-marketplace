@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import { SupplierFulfillmentPanel } from '../components/supplier/SupplierFulfillmentPanel';
+import { BuyerDeliveryStopPanel } from '../components/buyer/BuyerDeliveryStopPanel';
 import {
   ClipboardList,
   Layers,
@@ -248,6 +249,9 @@ export const OrdersPage = () => {
                     </Link>
                   )}
                 </div>
+                {!isSupplier && (order.payment_status === 'PAID' || order.order_status === 'PAID') && (
+                  <BuyerDeliveryStopPanel orderId={order.id} orderedQty={order.total_qty} />
+                )}
               </article>
             ))}
           </section>

@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {useAuth} from '../../context/AuthContext';
 import {supplierFulfillmentApi,nextSupplierMilestone,supplierDeliveryMethods,createSupplierIntentStore} from '../../api/supplierFulfillment';
+import {SupplierDeliveryManifestPanel} from './SupplierDeliveryManifestPanel';
 const labels={PREPARING:'Start preparation',READY_FOR_DISPATCH:'Mark ready for dispatch',DISPATCHED:'Record dispatch / pickup handoff',SUPPLIER_DELIVERED:'Report delivered / collected'};
 export function SupplierFulfillmentPanel(){
   const {user}=useAuth();
@@ -80,5 +81,6 @@ export function SupplierFulfillmentPanel(){
       {invoice&&<div className="text-xs space-y-1" aria-label="Authoritative invoice"><p>{invoice.invoice_number}</p><p>Products: PKR {invoice.subtotal_amount} · Delivery: PKR {invoice.delivery_fee} · Buyer fee: PKR {invoice.buyer_platform_fee} · Tax: PKR {invoice.tax_amount}</p><p>Total: PKR {invoice.total_amount}</p></div>}
       <ol aria-label="Fulfillment timeline" className="text-xs space-y-1">{(selected.timeline||[]).map(event=><li key={event.id}>{event.to_status} · {event.actor_role} · {String(event.created_at)}{event.notes?` · ${event.notes}`:''}</li>)}</ol>
     </section>}
+    <SupplierDeliveryManifestPanel />
   </section>;
 }
