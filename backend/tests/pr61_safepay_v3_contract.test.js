@@ -32,12 +32,12 @@ test('build exact v3 merchant-authorized payload and immutable order reference',
   assert.throws(()=>buildPaymentV3({amountPkr:'1.00',merchantApiKey:'abc',orderCode:'ORD-1'}));
 });
 test('v3 tracker creation must match amount, sandbox, order, mode and expected STARTED',()=>{
-  const response={data:{tracker:{token:tracker,environment:'sandbox',
+  const response={data:{tracker:{token:tracker,client:key,environment:'sandbox',
     mode:'payment',state:'TRACKER_STARTED',
     purchase_totals:{quote_amount:{currency:'PKR',amount:114500}},
     metadata:{order_id:'ORD-123'}}}};
   assert.deepEqual(validateCreatedTracker({response,expectedAmountPkr:'1145.00',
-    expectedOrderCode:'ORD-123'}),{trackerToken:tracker,
+    expectedOrderCode:'ORD-123',expectedMerchantApiKey:key}),{trackerToken:tracker,
       providerContract:'payments-v3-minor',amountPkr:'1145.00',
       currency:'PKR',captured:false,providerOriginVerified:false});
   for(const patch of [
@@ -45,18 +45,19 @@ test('v3 tracker creation must match amount, sandbox, order, mode and expected S
     {purchase_totals:{quote_amount:{currency:'USD',amount:114500}}},
     {state:'TRACKER_ENDED'},{environment:'production'},
     {mode:'instrument'},{metadata:{order_id:'ORD-DIFFERENT'}},
+    {metadata:{}},{client:'sec_another_merchant'}, {client:undefined},
     {token:'track_../../other'}
   ]){
     const mutated={data:{tracker:{...response.data.tracker,...patch}}};
     assert.throws(()=>validateCreatedTracker({response:mutated,
-      expectedAmountPkr:'1145.00',expectedOrderCode:'ORD-123'}));
+      expectedAmountPkr:'1145.00',expectedOrderCode:'ORD-123',expectedMerchantApiKey:key}));
   }
 });
 test('signed v3 payment webhook requires capture, merchant, tracker and locked order identity',()=>{
   const data={state:'TRACKER_ENDED',amount:114500,currency:'PKR',
     tracker,metadata:{order_id:'ORD-123'}};
   const args={eventType:'payment.succeeded',data,merchantApiKey:key,
-    expectedMerchantApiKey:key,expectedTrackerToken:tracker,expectedOrderCode:'ORD-123',expectedAmountPkr:'1145.00'};
+    expectedMerchantApiKey:key,expectedTrackerToken:tracker,expectedOrderCode:'ORD-123',expectedMerchantApiKey:key,expectedAmountPkr:'1145.00'};
   assert.deepEqual(normalizeSucceededWebhook(args),{
     trackerToken:tracker,amountPkr:'1145.00',currency:'PKR',
     state:'TRACKER_ENDED',eventType:'payment.succeeded',
