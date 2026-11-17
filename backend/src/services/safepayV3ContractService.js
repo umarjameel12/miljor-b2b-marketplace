@@ -114,9 +114,12 @@ function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedMercha
     throw fail('INVALID_TRACKER_TOKEN','Webhook tracker token invalid');
   if(expectedTrackerToken&&tracker!==expectedTrackerToken)
     throw fail('V3_WEBHOOK_TRACKER_MISMATCH','Webhook tracker differs from durable payment attempt');
-  if(data.metadata?.order_id!==undefined&&
-      data.metadata.order_id!==expectedOrderCode)
-    throw fail('V3_WEBHOOK_ORDER_MISMATCH','Webhook order metadata does not match locked order');
+  // Never allow a signed v3 event without the order reference pinned during
+  // tracker creation. Exact tracker and amount alone are insufficient proof
+  // that the callback belongs to this locked payable order.
+  if(typeof expectedOrderCode!=='string'||!expectedOrderCode||
+      data.metadata?.order_id!==expectedOrderCode)
+    throw fail('V3_WEBHOOK_ORDER_MISMATCH','Webhook order metadata missing or mismatched');
   return Object.freeze({trackerToken:tracker,amountPkr:amount,currency:'PKR',
     state:'TRACKER_ENDED',eventType,providerContract:'payments-v3-minor'});
 }
