@@ -57,6 +57,18 @@ class SafepayV3SandboxClient{
   async createHostedCheckout({amountPkr,orderCode,redirectUrl,cancelUrl,intent='CYBERSOURCE'}){
     // Validate redirect origins BEFORE creating a provider tracker so invalid
     // client URLs cannot strand an orphan payment session.
+    const frontendBase=new URL(this.env.FRONTEND_URL||'http://localhost:3000');
+    const safeRedirect=(value,fallback)=>{
+      const target=new URL(value||fallback,frontendBase);
+      if(target.origin!==frontendBase.origin||
+         !['http:','https:'].includes(target.protocol))
+        throw fail('SAFEPAY_V3_REDIRECT_ORIGIN_INVALID','Checkout redirect must remain on configured frontend origin',400);
+      return target.toString();
+    };
+    const success=safeRedirect(redirectUrl,
+      '/payment/return?order_id='+encodeURIComponent(orderCode));
+    const cancel=safeRedirect(cancelUrl,
+      '/payment/cancelled?order_id='+encodeURIComponent(orderCode));
     const created=await this.createPaymentTracker({amountPkr,orderCode,intent});
     let passport;
     try{
@@ -77,18 +89,6 @@ class SafepayV3SandboxClient{
       throw fail('SAFEPAY_V3_TRACKER_CREATED_AUTH_TOKEN_FAILED',
         'Tracker exists but checkout authentication token was not issued; reconcile before retry',502);
     }
-    const frontendBase=new URL(this.env.FRONTEND_URL||'http://localhost:3000');
-    const safeRedirect=(value,fallback)=>{
-      const target=new URL(value||fallback,frontendBase);
-      if(target.origin!==frontendBase.origin||
-         !['http:','https:'].includes(target.protocol))
-        throw fail('SAFEPAY_V3_REDIRECT_ORIGIN_INVALID','Checkout redirect must remain on configured frontend origin',400);
-      return target.toString();
-    };
-    const success=safeRedirect(redirectUrl,
-      '/payment/return?order_id='+encodeURIComponent(orderCode));
-    const cancel=safeRedirect(cancelUrl,
-      '/payment/cancelled?order_id='+encodeURIComponent(orderCode));
     const checkout=new URL('https://sandbox.api.getsafepay.com/checkout/pay');
     checkout.searchParams.set('beacon',created.trackerToken);
     checkout.searchParams.set('tbt',passport);
