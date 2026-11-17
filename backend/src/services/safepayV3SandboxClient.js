@@ -55,6 +55,8 @@ class SafepayV3SandboxClient{
     }
   }
   async createHostedCheckout({amountPkr,orderCode,redirectUrl,cancelUrl,intent='CYBERSOURCE'}){
+    // Validate redirect origins BEFORE creating a provider tracker so invalid
+    // client URLs cannot strand an orphan payment session.
     const created=await this.createPaymentTracker({amountPkr,orderCode,intent});
     let passport;
     try{
