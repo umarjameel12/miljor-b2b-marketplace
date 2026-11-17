@@ -195,3 +195,10 @@ The user answered both concrete integration questions with authorization to choo
 - Fetch showed newer remote main9c0a819 and Smart Hub7f1baee, beyond the reviewed approved snapshots. These were inspected but not silently merged. Current-main readiness requires a separate review of that remaining delta. Do not claim this integration equals all current-main source.
 
 Current result: approved integration locally verified; exact-source commit/push/CI closeout pending. Provider/manual and any newer-ref/provenance work remain separate. CAN START NEXT PHASE: NO.
+
+
+### Authorized integration exact-source closeout — 2026-11-17
+
+Approved source snapshots are now actually integrated and pushed as `a6df2446f4c8ffe48bb688ff681cdc5f7135ec8b` (parents `d9394c730556d4e2dcb586efbc01de15cb991039` and `a0b6ea3fdd8f0ab76d581977cca5ec6c16f12183`). Exact-source canonical CI [44151658700](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44151658700) completed all3 jobs SUCCESS: source/production build, disposable MySQL acceptance, real Chromium journeys. Targeted independent rereview found no remaining P1/P2 issue in the two corrections; runtime evidence was collected by the implementer. Detailed evidence: `evidence/ucp-authorized-integration-2026-11-17.json`.
+
+Actual receipt of both authorized SMTP verification messages and correct Urdu text were user-confirmed. All task-owned MySQL servers33321/33324/33325 shut down cleanly; backups/datadirs and the private pending-checkout link remain preserved. PR54 remains draft/unmerged and no deployment occurred. Actual sandbox card/3DS payment, fee/refund capability, newer remote-source deltas and divergent Smart-Hub-applied migration-history bridge remain unverified/outside this pinned integration; historical attribution remains unresolved. RESULT: approved pinned integration and representative inbox proof PASS; full master-plan release PARTIAL/BLOCKED. This evidence-only closeout does not change application source. CAN START NEXT PHASE: NO.

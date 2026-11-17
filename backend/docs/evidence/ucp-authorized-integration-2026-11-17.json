@@ -281,7 +281,27 @@
     "priorReportedPreparedOrder": "absent from preserved pre-upgrade backup; not attributed",
     "newOwnedCheckout": "persisted privately, requires human test-card/3DS"
   },
-  "exactSourceCI": "PENDING_COMMIT_AND_PUSH",
+  "exactSourceCI": {
+    "runId": 44151658700,
+    "url": "https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44151658700",
+    "source": "a6df2446f4c8ffe48bb688ff681cdc5f7135ec8b",
+    "jobs": 3,
+    "status": "SUCCESS"
+  },
   "release": "PARTIAL_BLOCKED",
-  "newerRemoteChanges": "Not silently included beyond approved snapshot SHAs"
+  "newerRemoteChanges": "Not silently included beyond approved snapshot SHAs",
+  "sourceCommit": "a6df2446f4c8ffe48bb688ff681cdc5f7135ec8b",
+  "resources": {
+    "ownedTestServersStopped": [
+      33321,
+      33324,
+      33325
+    ],
+    "datadirsAndBackupsPreserved": true
+  },
+  "independentReview": {
+    "findingsFixed": 2,
+    "remainingP1P2InFixes": 0,
+    "scope": "Read-only targeted review; reviewer did not rerun runtime tests"
+  }
 }
