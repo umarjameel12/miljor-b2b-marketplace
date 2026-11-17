@@ -10,6 +10,7 @@ const adapter = require('./safepayAdapter');
 const exact = require('./exactDecimal');
 const notificationService = require('./notificationService');
 const { SafepayV3SandboxClient } = require('./safepayV3SandboxClient');
+const { normalizeSucceededWebhook } = require('./safepayV3ContractService');
 
 function error(code, status, message) {
   const e = new Error(message); e.code = code; e.statusCode = status; return e;
@@ -65,11 +66,14 @@ class SupplierSubscriptionCheckoutService {
     if(useV3){
       if(process.env.SAFEPAY_V3_SANDBOX_ENABLED!=='true')
         throw error('SAFEPAY_V3_SANDBOX_DISABLED',503,'Safepay v3 subscription checkout is not enabled');
-      // A v3 reporter-only TRACKER_ENDED state cannot activate the paid plan.
-      // Do not initiate even a Sandbox charge that this service cannot safely
-      // complete. Enable only after signed capture journaling is implemented.
-      throw error('V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED',409,
-        'Safepay v3 subscription charges are disabled until signed captured payment activation is implemented');
+      // Explicitly opt into the independent signed-capture journal. Existing
+      // Sandbox merchant contracts still require external provider certification.
+      if(process.env.SAFEPAY_V3_SUBSCRIPTION_SIGNED_CAPTURE_ENABLED!=='true')
+        throw error('V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED',409,
+          'Safepay v3 subscription checkout needs explicitly enabled signed-capture processing');
+      if(!['miljor_test_db','miljor_sandbox_db'].includes(process.env.DB_NAME))
+        throw error('V3_SUBSCRIPTION_ISOLATION_REQUIRED',503,
+          'V3 supplier subscription checkout requires an isolated Sandbox database');
     }else if(typeof this.safepay.assertTrackerContract==='function'){
       this.safepay.assertTrackerContract();
     }
@@ -161,6 +165,107 @@ class SupplierSubscriptionCheckoutService {
       throw e;
     }
   }
+
+  // INTERNAL ONLY: invoked from the shared Safepay raw-body HMAC-authenticated
+  // webhook handler, not from a buyer/supplier request or browser redirect.
+  // Journal and entitlement activation are one MySQL transaction. It handles
+  // one-time supplier PLAN invoices, NOT Safepay recurring subscriptions.
+  async acceptSignedV3Capture({payload,eventType,eventId}) {
+    if(process.env.SAFEPAY_ENV!=='sandbox'||
+       process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT!=='false'||
+       !['miljor_test_db','miljor_sandbox_db'].includes(process.env.DB_NAME))
+      throw error('V3_SUBSCRIPTION_ISOLATION_REQUIRED',503,
+        'Signed subscription capture requires the isolated Safepay Sandbox');
+    if(typeof eventId!=='string'||!/^evt_sha256_[a-f0-9]{64}$/.test(eventId))
+      throw error('INVALID_SIGNED_EVENT_ID',422,'Authenticated event identity missing');
+    const orderCode=payload?.data?.metadata?.order_id;
+    const match=typeof orderCode==='string'
+      ? /^MILJOR-SUB-([1-9][0-9]*)$/.exec(orderCode):null;
+    if(!match||!Number.isSafeInteger(Number(match[1])))
+      throw error('INVALID_SUBSCRIPTION_ORDER',422,'Signed subscription order identity missing');
+    const id=Number(match[1]);
+    const [owners]=await this.db.query(
+      'SELECT id,supplier_id FROM supplier_subscription_checkout_attempts WHERE id=?',[id]);
+    if(owners.length!==1)
+      throw error('SUBSCRIPTION_CAPTURE_RECONCILIATION_REQUIRED',409,
+        'Unmatched signed supplier payment requires independent reconciliation');
+    const supplierId=Number(owners[0].supplier_id);
+    const connection=await this.db.getConnection();
+    try{
+      await connection.beginTransaction();
+      // Keep locking order consistent with subscription start/cancellation.
+      const [profiles]=await connection.query(
+        'SELECT supplier_id,subscription_plan,verification_status FROM supplier_profiles WHERE supplier_id=? FOR UPDATE',
+        [supplierId]);
+      const [rows]=await connection.query(
+        'SELECT * FROM supplier_subscription_checkout_attempts WHERE id=? AND supplier_id=? FOR UPDATE',
+        [id,supplierId]);
+      if(rows.length!==1||profiles.length!==1)
+        throw error('SUBSCRIPTION_CAPTURE_OWNERSHIP_MISMATCH',409,'Subscription owner missing');
+      const attempt=rows[0],profile=profiles[0];
+      if(attempt.provider_contract!=='payments-v3-minor')
+        throw error('SUBSCRIPTION_CAPTURE_CONTRACT_MISMATCH',422,'Supplier attempt is not a v3 invoice');
+      if(attempt.status==='PAID'){
+        await connection.commit();
+        return {success:true,is_duplicate:true,plan_code:attempt.plan_code,
+          message:'Signed supplier payment already recorded'};
+      }
+      if(!['INITIATED','UNKNOWN'].includes(attempt.status))
+        throw error('SUBSCRIPTION_CAPTURE_STATE_MISMATCH',409,'Supplier checkout is not awaiting payment');
+      if(profile.verification_status!=='VERIFIED'||profile.subscription_plan!=='STARTER')
+        throw error('SUBSCRIPTION_CAPTURE_PROFILE_CONFLICT',409,
+          'Supplier verification or subscription changed; finance review required');
+      const normalized=normalizeSucceededWebhook({
+        eventType,data:payload.data,
+        merchantApiKey:payload.merchant_api_key,
+        expectedMerchantApiKey:process.env.SAFEPAY_PUBLIC_KEY,
+        expectedTrackerToken:attempt.tracker_token,
+        expectedOrderCode:orderCode,
+        expectedAmountPkr:attempt.amount_pkr
+      });
+      if(!exact.exactDecimalEquals(normalized.amountPkr,attempt.amount_pkr,2)||
+         attempt.currency!=='PKR')
+        throw error('SUBSCRIPTION_CAPTURE_AMOUNT_MISMATCH',422,'Captured amount/currency mismatch');
+      const [plans]=await connection.query(
+        'SELECT monthly_price_pkr,max_active_listings FROM subscription_plans WHERE plan_code=? FOR UPDATE',
+        [attempt.plan_code]);
+      if(plans.length!==1||
+         !exact.exactDecimalEquals(plans[0].monthly_price_pkr,attempt.amount_pkr,2))
+        throw error('SUBSCRIPTION_CAPTURE_PLAN_PRICE_CHANGED',409,
+          'Plan price changed; manual finance review required');
+      // Unique event ID and unique attempt ID prevent second capture
+      // evidence even if the provider varies its signed event token.
+      await connection.query(
+        'INSERT INTO supplier_subscription_capture_events (event_id,checkout_attempt_id,supplier_id,tracker_token,amount_pkr,currency,event_type) VALUES (?,?,?,?,?,?,?)',
+        [eventId,id,supplierId,attempt.tracker_token,attempt.amount_pkr,'PKR',eventType]);
+      const [subscription]=await connection.query(
+        "INSERT INTO supplier_subscriptions (supplier_id,plan_code,status,current_period_start,current_period_end,billing_cycle,auto_renew,price_pkr) VALUES (?,?,'ACTIVE',NOW(),DATE_ADD(NOW(),INTERVAL 1 MONTH),'MONTHLY',0,?)",
+        [supplierId,attempt.plan_code,attempt.amount_pkr]);
+      await connection.query(
+        "UPDATE supplier_profiles SET subscription_plan=?,subscription_status='ACTIVE',max_active_listings=?,updated_at=NOW() WHERE supplier_id=?",
+        [attempt.plan_code,plans[0].max_active_listings,supplierId]);
+      await connection.query(
+        "UPDATE supplier_subscription_checkout_attempts SET status='PAID',paid_subscription_id=? WHERE id=? AND supplier_id=?",
+        [subscription.insertId,id,supplierId]);
+      await connection.query(
+        "INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,new_value) VALUES (?,'SUPPLIER','SUBSCRIPTION_VERIFIED_PAYMENT','supplier_subscriptions',?,?)",
+        [supplierId,subscription.insertId,JSON.stringify({
+          plan:attempt.plan_code,attempt:id,
+          provider:'SAFEPAY_SANDBOX',evidence:'SIGNED_V3_CAPTURE',event_id:eventId
+        })]);
+      await notificationService.enqueueEvent(connection,{
+        userId:supplierId,role:'SUPPLIER',eventType:'SUBSCRIPTION_ACTIVATED',
+        eventKey:'supplier:subscription:'+subscription.insertId+':activated',
+        entityId:subscription.insertId
+      });
+      await connection.commit();
+      return {success:true,reconciled:true,payment_status:'PAID',
+        plan_code:attempt.plan_code,subscription_id:subscription.insertId,
+        message:'Signed Safepay supplier payment verified and plan activated'};
+    }catch(e){await connection.rollback();throw e;}
+    finally{connection.release();}
+  }
+
   async list({ actor }) {
     const supplierId = checkOwner(actor);
     const [rows] = await this.db.query(
