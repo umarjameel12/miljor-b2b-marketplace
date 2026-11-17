@@ -685,11 +685,16 @@ class FinancialSettlementService {
         }
       }
 
-      // Check existing approved/confirmed refunds to prevent over-refunding
+      // Count ALL unresolved refund obligations, including REQUESTED and
+      // UNDER_REVIEW. Otherwise two separate SKU shortages could each reserve
+      // the same captured funds while awaiting admin approval. Order FOR UPDATE
+      // serializes these checks against concurrent assessments for this order.
       const [existingRefunds] = await connection.query(
         `SELECT SUM(total_refund_amount) AS total_refunded
          FROM refund_obligations
-         WHERE order_id = ? AND status IN ('APPROVED', 'CONFIRMED', 'AWAITING_EXTERNAL_EXECUTION', 'EXTERNAL_PROCESSING')`,
+         WHERE order_id = ? AND status IN ('REQUESTED', 'UNDER_REVIEW',
+           'APPROVED', 'CONFIRMED', 'AWAITING_EXTERNAL_EXECUTION',
+           'EXTERNAL_PROCESSING')`,
         [orderId]
       );
 
