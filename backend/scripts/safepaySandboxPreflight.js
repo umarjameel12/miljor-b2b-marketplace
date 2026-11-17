@@ -45,7 +45,10 @@ function inspect(env, sources = {}) {
     credentials_present: missing.length === 0,
     selected_tracker_contract_explicitly_enabled: contractConfirmed,
     legacy_tracker_adapter_present: /sandbox\.api\.getsafepay\.com/.test(adapter) && /createTracker/.test(adapter),
-    v3_hosted_checkout_and_reporter_present: /order\/payments\/v3/.test(v3Client) &&
+    v3_hosted_checkout_and_reporter_present:
+      ((/order\/payments\/v3/.test(v3Client)) ||
+        (/buildPaymentV3/.test(v3Client) && /request\.path/.test(v3Client) &&
+          /order\/payments\/v3/.test(v3Contract))) &&
       /client\/passport\/v1\/token/.test(v3Client) && /reporter\/api\/v1\/payments/.test(v3Client),
     v3_amount_and_webhook_contract_present: /toMinorPkr/.test(v3Contract) &&
       /normalizeSucceededWebhook/.test(v3Contract) && /payments-v3-minor/.test(v3Contract),
