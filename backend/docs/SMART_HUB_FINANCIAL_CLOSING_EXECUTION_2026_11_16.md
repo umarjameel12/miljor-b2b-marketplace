@@ -133,11 +133,13 @@ This evidence commit also stores the opt-in genuine provider probe (syntax check
 
 - **Task A (Local Browser Fixture Repeatability) — IMPLEMENTED & VERIFIED (PASS):**
   - **Root cause:** `backend/src/services/specificationService.js` `generateSpecCode(category, variety, idHint)` generated a 3-digit random suffix (`Math.floor(100 + Math.random() * 900)`, 900 possible values) when `idHint` was omitted, causing `ER_DUP_ENTRY` (`SPEC-G&R-BRO-222`) on populated `miljor_test_db`.
-  - **Fix:** Updated `generateSpecCode` to use `crypto.randomBytes(4).toString('hex').toUpperCase()` (8 hex chars, `varchar(50)` safe) when `idHint` is omitted, preserving deterministic `idHint` callers, all unique constraints, and all retained `miljor_test_db` financial history.
-  - **Verification:** Executed `node tests/smart_hub_paid_browser_journey.js` **twice sequentially** against the same populated `miljor_test_db`:
-    - Run 1: exit `0`, 16/16 checkpoints PASS (requests `160–162`, orders `216–218`).
-    - Run 2: exit `0`, 16/16 checkpoints PASS (requests `163–165`, orders `219–221`).
-    - SQL financial uniqueness verified for orders `216–221`: 1 payment per full/partial order, 2 distinct payments (merchandise + supplemental delivery fee) per extra-fee order, 1 immutable invoice per order, 1 canonical payout reservation per reviewed order.
+  - **Fix & Hardening:** Updated `generateSpecCode` to use `crypto.randomBytes(6).toString('hex').toUpperCase()` (12 hex chars, `varchar(50)` safe) when `idHint` is omitted, and added bounded 3-attempt collision-only retry (`_createSpecWithUniqueCode` in `backend/src/services/catalogService.js` for `approveCatalogRequest` and `publishSupplierSku`) that retries strictly on `ER_DUP_ENTRY` matching `spec_code` and immediately rethrows all other SQL/unique conflicts (e.g. `spec_hash`) without swallowing errors or using `INSERT IGNORE`.
+  - **Verification:**
+    - `node --test tests/spec_code_collision_retry.test.js`: **4/4 PASS** (deterministic `idHint` preservation, 12-hex format, forced `spec_code` collision retry, non-retry on `spec_hash` collision, 3-attempt exhaustion).
+    - `node tests/smart_hub_paid_browser_journey.js` **twice sequentially** after hardening against the same populated `miljor_test_db`:
+      - Run 1: exit `0`, 16/16 checkpoints PASS (requests `166–168`, orders `222–224`).
+      - Run 2: exit `0`, 16/16 checkpoints PASS (requests `169–171`, orders `225–227`).
+      - SQL financial uniqueness verified for orders `222–227`: 1 payment per full/partial order, 2 distinct payments (merchandise + supplemental delivery fee) per extra-fee order, 1 immutable invoice per order, 1 canonical payout reservation per reviewed order.
 - **Additional Automated Gates Verified on `miljor_test_db`:**
   - `npm run test:canonical:preflight`: **PASS** (12/12 manifest + UCP source gates).
   - `node database/readOnlyMigrationAudit.js --test-only`: **PASS** (`VERIFIED_HISTORY`, `applied: 65`, `planned: 65`).

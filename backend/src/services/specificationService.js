@@ -167,7 +167,7 @@ class SpecificationService {
       .toUpperCase()
       .substring(0, 3);
 
-    const rand = idHint || require('crypto').randomBytes(4).toString('hex').toUpperCase();
+    const rand = idHint || require('crypto').randomBytes(6).toString('hex').toUpperCase();
     return `SPEC-${catPrefix}-${varPrefix}-${rand}`;
   }
 
