@@ -1,7 +1,7 @@
 'use strict';
 // Isolated sandbox-only payment TRACKER client. Does not confirm payment,
 // update orders, process refunds or move money. Not wired to buyer checkout.
-const {buildPaymentV3,validateCreatedTracker}=require('./safepayV3ContractService');
+const {buildPaymentV3,validateCreatedTracker,validateReportedTracker}=require('./safepayV3ContractService');
 const fail=(code,message,statusCode=503)=>Object.assign(new Error(message),{code,statusCode});
 function assertSafeEnvironment(env){
   if(env.SAFEPAY_ENV!=='sandbox'||env.ALLOW_EXTERNAL_MONEY_MOVEMENT!=='false'||
@@ -54,5 +54,36 @@ class SafepayV3SandboxClient{
       throw fail('SAFEPAY_V3_RESPONSE_UNVERIFIED','Provider tracker quote/identity could not be verified',502);
     }
   }
+  async inspectPaymentTracker({trackerToken,amountPkr,orderCode}){
+    assertSafeEnvironment(this.env);
+    if(typeof this.fetchImpl!=='function')
+      throw fail('SAFEPAY_V3_FETCH_UNAVAILABLE','HTTPS transport unavailable');
+    if(typeof trackerToken!=='string'||!/^track_[A-Za-z0-9_-]{3,180}$/.test(trackerToken))
+      throw fail('INVALID_TRACKER_TOKEN','Opaque Safepay tracker token required',400);
+    let response;
+    try{
+      response=await this.fetchImpl(
+        'https://sandbox.api.getsafepay.com/reporter/api/v1/payments/'+trackerToken,{
+          method:'GET',
+          headers:{'Accept':'application/json','X-SFPY-MERCHANT-SECRET':this.env.SAFEPAY_SECRET_KEY},
+          signal:AbortSignal.timeout(10000)
+        });
+    }catch(_){
+      throw fail('SAFEPAY_V3_REPORT_UNAVAILABLE','Provider reporter outcome uncertain');
+    }
+    if(!response||response.status!==200)
+      throw fail('SAFEPAY_V3_REPORT_REJECTED','Provider reporter did not accept lookup',502);
+    let data;
+    try{data=await response.json();}catch(_){
+      throw fail('SAFEPAY_V3_REPORT_INVALID','Provider reporter response invalid',502);
+    }
+    try{
+      return validateReportedTracker({response:data,expectedTrackerToken:trackerToken,
+        expectedAmountPkr:amountPkr,expectedOrderCode:orderCode});
+    }catch(_){
+      throw fail('SAFEPAY_V3_REPORT_UNVERIFIED','Provider reporter identity or quote unverifiable',502);
+    }
+  }
+
 }
 module.exports={SafepayV3SandboxClient,assertSafeEnvironment};
