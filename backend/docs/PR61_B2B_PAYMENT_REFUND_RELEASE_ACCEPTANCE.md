@@ -11,7 +11,7 @@
 5. Supplier accepts delivery. Grouped dispatch requires every affected buyer's payment and route/window consent. Clustered stops are supplier-owned and buyer addresses remain tenant-private.
 6. On delivery buyer confirms received SKU quantities. Example buyer ordered 100 kg, received 80 kg; only the actual buyer can register their **20 kg** shortage and itemized dispute. Other grouped buyers remain independent.
 7. Buyer/admin assesses exact partial refund obligation; admin approves internal amount and financial hold. **Assessment ≠ approval ≠ actual provider refund**.
-8. New admin-only endpoint `GET /api/v1/settlements/refunds/:id/provider-readiness` supplies **read-only** authorization, capture ownership, PKR exact ceiling, aggregate approved/confirmed refund limit, first-24-hour reversal review, documented 90-day card window and **minor-unit refund preview**. No provider HTTP call, no refund or payout is executed. Supplier's separate settlement instruction remains non-executable.
+8. New admin-only endpoint `GET /api/v1/settlements/refunds/:id/provider-readiness` and frontend `/admin/finance` display **read-only** capture ownership, PKR exact ceiling, all pending/approved obligations reserved against captured funds, first-24-hour reversal review, documented 90-day card window and **minor-unit refund preview**. No provider HTTP call, no refund or payout is executed. Supplier's separate settlement instruction remains non-executable.
 9. Any genuine external refund must use the supported merchant Sandbox API/SDK, reconcile its actual provider-origin status against refund obligation and payment. Refund initiation is still `REFUND_PENDING_GATEWAY`. Never claim supplier payout or buyer credit from a synthetic event.
 
 ## High-priority webhook hardening
@@ -35,7 +35,7 @@ The canonical event ID in `safepayCheckoutService.processWebhookEvent` now comes
 4. Test buyer and supplier Chromium journeys through grouped delivery, partial receipt and dispute. Confirm no supplier settlement before buyer acceptance.
 5. Test authorized real Sandbox refund using the *provider-supported* card refund/reversal method. Confirm provider-origin completion, amount, event id, retry handling, ledger and notification once.
 6. For bank disbursement, acquire a documented Sandbox payout contract and permitted environment. **Do not** assume payment/refund APIs enable bank payout.
-7. Deploy a vetted malware scan/CDR service for identity documents, independent security review, rollback and backup rehearsals before production release.
+7. Supplier verification documents now require a **fail-closed ClamAV INSTREAM scan in production** (blocked if `CLAMAV_HOST` is absent or scanner reports malware/failure). Deploy and independently verify a trusted internal ClamAV server; separately commission full CDR/content-sanitization review, security review, rollback and backup rehearsals before production release.
 
 ## Release labels
 
