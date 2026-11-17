@@ -23,6 +23,7 @@ const SupplierOnboardingPage = lazy(() => import('./pages/SupplierOnboardingPage
 const SupplierCatalogPage = lazy(() => import('./pages/SupplierCatalogPage').then((m) => ({ default: m.SupplierCatalogPage })));
 const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage').then((m) => ({ default: m.AdminVerificationPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminFinancePage = lazy(() => import('./pages/AdminFinancePage').then((m) => ({ default: m.AdminFinancePage })));
 const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then((m) => ({ default: m.AdminCatalogPage })));
 const SupplierDashboardPage = lazy(() => import('./pages/SupplierDashboardPage').then((m) => ({ default: m.SupplierDashboardPage })));
 const SupplierOpportunitiesPage = lazy(() => import('./pages/SupplierOpportunitiesPage').then((m) => ({ default: m.SupplierOpportunitiesPage })));
@@ -99,6 +100,7 @@ function AppContent() {
           <Route path="/supplier/procurement" element={<SupplierOpportunitiesPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/finance" element={<AdminFinancePage />} />
           <Route path="/admin/verifications" element={<AdminVerificationPage />} />
           <Route path="/admin/suppliers/verification" element={<AdminVerificationPage />} />
           <Route path="/admin/catalog" element={<AdminCatalogPage />} />
