@@ -163,21 +163,46 @@ async function run() {
     assert.equal(await page.getByText('Payment Confirmed & Secured in Escrow').count(), 0, 'Reloaded pending order must remain non-PAID');
     console.log('[PASS CHROMIUM] /payment/return pending outcome & reload recovery (no fabricated PAID)');
 
-    // Notification inbox & preferences (update locale to Urdu 'ur' via API/UI and verify persistence)
-    await page.goto(`${BASE_UI}/orders`, { waitUntil: 'networkidle' });
-    const bellBtn = page.locator('button[aria-label*="notification" i], button:has(svg.lucide-bell)').first();
-    if (await bellBtn.count() > 0) {
-      await bellBtn.click();
-      await page.waitForTimeout(500);
-      await page.keyboard.press('Escape');
-      console.log('[PASS CHROMIUM] Notification bell drawer open & Escape close');
-    }
+    // Notification inbox, Urdu ('ur') preference persistence via UI, Urdu rendering (dir="auto"), and Mark read
+    await notificationService.createNotification({
+      userId: buyerId,
+      role: 'BUYER',
+      eventType: 'ORDER_DISPATCHED',
+      eventKey: `ur-ui:${tag}`,
+      title: 'آرڈر روانہ ہو گیا',
+      message: 'آپ کا آرڈر لاہور ترسیل کے لیے روانہ کر دیا گیا ہے۔',
+      payload: { schemaVersion: 1, entityType: 'ORDER', entityId: pendingOrderId, deepLink: '/orders' }
+    });
 
-    // Verify Urdu RTL preference persistence in backend & DOM attribute check
-    await notificationService.setPreferences(buyerId, { locale: 'ur', optional_email: true, optional_sms: false });
+    await page.goto(`${BASE_UI}/orders`, { waitUntil: 'networkidle' });
+    const bellBtn = page.locator('[data-notification-trigger], button[aria-label*="notification" i]').first();
+    await bellBtn.waitFor({ timeout: 10000 });
+    await bellBtn.click();
+
+    // Verify Urdu notification renders in [dir="auto"] and Mark read works
+    const urduTitle = page.locator('[dir="auto"]', { hasText: 'آرڈر روانہ ہو گیا' }).first();
+    await urduTitle.waitFor({ timeout: 10000 });
+    const markReadBtn = page.getByRole('button', { name: /Mark read/i }).first();
+    await markReadBtn.click();
+    await page.waitForTimeout(400);
+
+    // Select Urdu ('ur') in Notification preferences UI, save, reload, and verify persistence
+    await page.locator('summary', { hasText: 'Notification preferences' }).first().click();
+    const localeSelect = page.locator('label:has-text("Notification language") select').first();
+    await localeSelect.selectOption('ur');
+    await page.getByRole('button', { name: /Save preferences/i }).first().click();
+    await page.waitForTimeout(500);
+    await page.keyboard.press('Escape');
+
+    await page.reload({ waitUntil: 'networkidle' });
+    await bellBtn.click();
+    await page.locator('summary', { hasText: 'Notification preferences' }).first().click();
+    const persistedLocale = await page.locator('label:has-text("Notification language") select').first().inputValue();
+    assert.equal(persistedLocale, 'ur', 'Urdu locale preference must persist across reload in UI');
     const prefs = await notificationService.getPreferences(buyerId);
     assert.equal(prefs.locale, 'ur');
-    console.log('[PASS CHROMIUM] Urdu locale preference persisted & mobile/UI checks passed');
+    await page.keyboard.press('Escape');
+    console.log('[PASS CHROMIUM] Mobile (390x844) Urdu locale UI save/reload, Urdu [dir="auto"] rendering, and Mark read verified');
 
     console.log('ALL PHASE 2 FULL UI BROWSER CHECKS PASSED');
   } finally {

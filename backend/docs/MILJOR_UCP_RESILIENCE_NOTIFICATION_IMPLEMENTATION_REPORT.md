@@ -360,12 +360,28 @@ TASK: Implement and verify Completion Phase 2 on PR #54 (`plan/ucp-resilience-no
   - `backend/src/services/ucpRecoveryService.js`
   - `backend/src/services/financialSettlementService.js`
 
-### 4. Final Readiness & Preserved External/Integration Blockers
+### 4. Single Remaining-Work Matrix (Completion Phases 1–3)
+
+| Requirement | Existing source | Remaining gap | Planned correction | Evidence | Status/blocker |
+|---|---|---|---|---|---|
+| Main source integration | `HEAD` (`4860045`) vs `origin/main` (`9fb07cf`) | Not yet merged into feature branch | Merge `origin/main` (`--no-ff`) after explicit merge authorization | `git merge-tree --write-tree HEAD origin/main` = `a565117` (**0 conflicts**) | **BLOCKED** (requires explicit merge authorization) |
+| Smart Hub source integration | `HEAD` (`4860045`) vs `origin/feature/smart-procurement-hub-unified-entry` (`a0b6ea3`) | 9 file conflicts unmerged | Merge Smart Hub using behavioral resolution package in `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md` | `git merge-tree` 9-conflict audit + diff inspection | **BLOCKED** (requires explicit cross-branch merge authorization) |
+| Migration collisions & upgrade paths | `090`–`101` (`HEAD`) vs `095`–`100` (Smart Hub); `miljor_db` at `054` | `096`–`100` prefix collision | Keep `096`–`101` immutable; renumber Smart Hub unapplied `096`–`100` to `102`–`106` (keep `095`) | `migrationManifest.js` + `miljor_db` `schema_migrations` (`054`) + fresh `33322` `001`–`101` run (65 applied) | **BLOCKED** (pending authorized Smart Hub integration) |
+| Delivery/replacement compatibility after integration | `supplierDeliveryService.js`, `ucp_phase1_delivery_browser_gate.js`, `ucp_phase1_replacement_gate.js` | Post-merge regression check not run yet | Re-run Phase 1 delivery/replacement gates + Smart Hub `INDIVIDUAL` delivery checks post-merge | Pre-merge `fb16b64` CI `44123502063` PASS | **BLOCKED** (pending integration) |
+| Notification coverage & recovery | `notificationService.js`, `notificationOperationsService.js`, `ucp_phase2_email_gate.js` | Post-merge `CYCLE_CUTOFF_UPCOMING` check | Preserve `recurringReminderPolicy` suppression + UCP v2 controls during merge | `ucp_phase2_email_gate.js` + operations audit PASS | **IMPLEMENTED / TESTED** (re-verify post-merge) |
+| Finance/provider verification | `safepayCheckoutService.js`, `ucp_phase2_finance_integrity_gate.js`, `ucp_provider_sandbox_probe.js` | Completed sandbox card/3DS payment + REST refund/fee proof | Human completes Safepay sandbox hosted checkout card/3DS step; verify tracker/webhook/fee/refund | Sandbox initiation + `TRACKER_STARTED` readback + synthetic webhook PASS | **BLOCKED** (requires human PCI/3DS card entry & sandbox refund capability check) |
+| Actual SMTP inbox receipt | `emailService.js`, `ucp_phase2_email_gate.js` | Real external mailbox receipt not proved | User provides one authorized test email address; send 1 critical + 1 preference-controlled test email | Capture transport + EN/UR + zero-secret PASS | **BLOCKED** (requires explicitly authorized test mailbox) |
+| Mobile/Urdu & affected browser acceptance | `ucp_phase2_full_ui_browser_gate.js`, `AppShell.jsx` | Post-integration browser rerun only | Verified pre-merge on `33322` (`35112`/`35113`); re-run after merge | Mobile `390x844` login/focus, `/payment/return` pending/reload, Urdu `'ur'` UI save/reload, `[dir="auto"]` Urdu render & Mark read **PASS** | **TESTED / VERIFIED** (pre-integration) |
+| Protected-data safety | `miljor_db` (`3306`) read-only checksums | None (`miljor_db` untouched) | Keep all tests strictly on isolated `miljor_test_db` | `{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}` | **VERIFIED** |
+| Final exact-source CI & release decision | `.github/workflows/ucp-canonical-acceptance.yml` | Final post-integration CI pending | Commit/push integrated branch and verify all CI jobs at final SHA | `fb16b64` CI `44123502063` PASS; latest browser gate update requires fresh CI | **PARTIAL / NOT RELEASE-READY** |
+| Historical `users`-drift attribution | Read-only `miljor_db.users` query | Root-cause process of `id=52` creation | Read-only metadata shows `BUYER` `id=52` created `2026-11-17T10:35:32Z`, updated `10:36:12Z`; `orders=0`, `payments=0`, `platform_ledger=0` | Non-blocking operational investigation (separate from UCP code) | **UNRESOLVED (NON-BLOCKER)** |
+
+### 5. Final Readiness & Preserved External/Integration Blockers
 - **Overall Master-Plan Readiness:** `PARTIAL` / **NOT release-ready**.
 - **Preserved External & Integration Blockers:**
-  1. Live Safepay sandbox/hosted card payment, fee deduction, and external refund execution remain `BLOCKED` (disabled by policy / missing live interactive card checkout).
-  2. External SMTP real-inbox delivery verification remains `BLOCKED` (mock mode only in automated gates; requires real SMTP credentials and recipient inbox check).
-  3. `origin/main` (`emailService.js`) and `origin/feature/smart-procurement-hub-unified-entry` (9 files + `095`/`096`–`100` migration prefix collision) integration remains `BLOCKED` pending authorized merge/conflict resolution.
-  4. Protected `miljor_db` (`3306`) remains untouched (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`); historical `users` drift attribution remains unresolved.
+  1. **Safepay Sandbox Completed Payment & Fee/Refund Proof (`BLOCKED`):** Requires human PCI/3DS test-card entry on a prepared sandbox checkout session and verification of resulting fee/refund capability.
+  2. **Actual SMTP Inbox Receipt (`BLOCKED`):** Requires one explicitly authorized non-business test mailbox from the user.
+  3. **`origin/main` (`9fb07cf`, 0 conflicts) & Smart Hub (`a0b6ea3`, 9 conflicts + `095`/`096`–`100` migrations) Merge (`BLOCKED`):** Integration proposal package prepared; requires explicit user merge authorization.
+  4. **Historical `miljor_db.users` Drift (`NON-BLOCKING UNRESOLVED`):** Read-only inspection identified `BUYER` row `id=52` (`2026-11-17T10:35:32Z`); protected financial/commercial tables remain empty (`0`) and checksums unchanged.
 
 CAN START NEXT PHASE: NO

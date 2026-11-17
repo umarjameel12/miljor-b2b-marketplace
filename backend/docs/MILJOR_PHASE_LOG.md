@@ -1798,3 +1798,16 @@ User delegated selection of the most feasible rule. Recorded the conservative fr
 - `node --test tests/phase1_browser_server_guard.test.js`: PASS3/3,0 skipped, exit0,2379.7066ms, including actual Vite collision. Syntax check exit0. Real browser run on verified isolated33322 with dedicated35100/35101 servers passed dispatch/ETA, own-stop/reload, full and100/80/20 partial receipt, then exited1 at incorrect replacement-message assertion.
 - Concurrent Antigravity edits/rerun detected; its assertion/locator corrections and later results are separate evidence. Existing implementation work remains uncommitted; no broad commit/push performed by this correction. Detailed command/configuration and limitations appended to the existing implementation report.
 - No protected DB queries/mutations or new checksum claim. RESULT: focused runner checks PASS; Completion Phase1 PARTIAL, final browser/phase/CI acceptance pending. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — Integration Approval Package, Migration Provenance & Mobile/Urdu Browser Gate (PR #54)
+
+- **Refreshed SHAs (read-only `git fetch` & `git merge-tree --write-tree`, zero branch merge executed):**
+  - `origin/main`: `9fb07cf9274509c1686b68b5bf8bdd91bd26718f` (merge-base `0f108fe`; **0 conflicts** with `HEAD`).
+  - `origin/feature/smart-procurement-hub-unified-entry`: `a0b6ea3fdd8f0ab76d581977cca5ec6c16f12183` (merge-base `08a9d87`; 9 behavioral conflicts + `096`–`100` migration prefix overlap; `090`–`094` identical; `095` Smart Hub-only).
+- **Protected `miljor_db` Provenance & Drift Check (read-only):**
+  - `schema_migrations` stops at `054_order_supplier_commission_snapshot.sql` (53 rows); zero `090`–`101` applied.
+  - Checksums unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`); read-only `users` timestamp inspection identified `BUYER` `id=52` (`2026-11-17T10:35:32Z`–`10:36:12Z`) as a separate non-blocking operational investigation.
+- **Browser Gate Enhanced & Verified (`miljor_test_db` on `127.0.0.1:33322`, owned `35112`/`35113`, 65 migrations `001`–`101`):**
+  - `node tests/ucp_phase2_full_ui_browser_gate.js`: **PASS** (Mobile `390x844` login/focus, `/payment/return` pending/reload recovery, Urdu `'ur'` locale UI save/reload persistence, `[dir="auto"]` Urdu rendering, and Mark read).
+- **Approval Package & Remaining-Work Matrix:** Recorded 8-point Concrete Integration Approval Package in `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md` and 11-row Remaining-Work Matrix in `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md`.
+- **RESULT:** **PARTIAL / NOT RELEASE-READY** (awaiting explicit merge authorization for `origin/main` & Smart Hub, human Safepay sandbox card/3DS checkout + fee/refund proof, and authorized SMTP test-mailbox receipt). **CAN START NEXT PHASE: NO.**
