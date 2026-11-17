@@ -1,7 +1,7 @@
 # MilJor B2B Marketplace — Pakistan Tax & Commercial Classification Draft (Effective 2026-11-17)
 
 > [!IMPORTANT]
-> **Status:** `DRAFT / AWAITING QUALIFIED TAX REVIEW & OWNER BUSINESS FACTS`
+> **Status:** `DRAFT / DEMONSTRATION ONLY / COMMERCIAL-LAUNCH REVIEW DEFERRED`
 > This document is a source-linked legal/commercial classification draft prepared from official Federal Board of Revenue (FBR) and Punjab Revenue Authority (PRA) publications. It is **NOT** legal tax sign-off and does **NOT** authorize enabling live tax collection (`B6_TAX_POLICY_APPROVED` remains `false`).
 
 ---
@@ -77,8 +77,45 @@ Source: direct owner statement in the project conversation. This records busines
 | Commercial model | **Commission-based marketplace intermediary**. Owner explicitly says MilJor will not purchase goods itself. The prior agency-versus-principal business-intent question is answered; actual contracts and statutory classification still require review. |
 | Excluded products | Owner excludes **vegetables, fruit, meat and dairy** from the stated launch scope. Do not include these as confirmed launch categories in the review package. |
 | Tentative product examples | Owner recalls **rice, atta (flour), pulses and wheat**, but explicitly does not remember the complete list. These are tentative examples, not a complete approved SKU/category list. Processing, packaging, branding and supplier status remain unconfirmed. |
-| Geography | This statement does not confirm geographic limits. Lahore-first remains repository context; Punjab-only versus inter-provincial operation remains unresolved. |
+| Geography | Owner subsequently confirmed initial delivery is **Lahore only**. This is the planned initial service boundary; no inter-provincial launch is authorized. |
 
 This clarification supersedes the unresolved operating-model wording and generic broad-food launch assumptions above. The eight matrix rows are **charge/review categories**, not eight approved food categories. Supplier identity, delivery-service provider, product-level treatment and legal obligations remain for qualified review. The tax draft and all financial safety gates remain unchanged.
 
-Remaining factual follow-up should be limited to the exact launch catalog (recover existing approved product decisions where available), delivery jurisdictions and any separately known registration evidence. Do not ask the owner again whether MilJor buys and resells goods, or ask them to select a tax rate. Qualified Pakistan tax review is still pending.
+Owner subsequently directed the agent to use the existing website catalog rather than asking the owner to reconstruct products from memory. Source inventory is recorded below. Do not ask the owner again whether MilJor buys and resells goods, whether initial delivery is Lahore-only, or to select a tax rate. Qualified Pakistan tax review is deferred until commercial-launch preparation resumes.
+
+## 6. Saved Demonstration Brief and Deferred Launch Handoff
+
+**Owner decision:** prepare and save the review material now; **do not implement it now**. The current purpose is showing the platform, not a commercial market launch. This supersedes any instruction to proceed immediately with tax implementation, main merge or original-checkout integration.
+
+### Demonstration introduction
+
+MilJor is a Lahore-first B2B procurement marketplace connecting business buyers with suppliers for staple goods. Its intended revenue model is commission-based intermediation: MilJor does not purchase and resell stock itself. The platform demonstrates unified RFQ, collective and recurring procurement, supplier quotations and negotiation, consent-based ordering, delivery coordination, receipts, notifications, and transparent financial records. Demonstration payment evidence uses Safepay sandbox; internal payable accrual is not an external supplier payout. The business is not registered, and this presentation does not claim tax approval, production checkout readiness or commercial launch readiness.
+
+### Existing website/catalog source inventory
+
+The frontend obtains categories and families through `frontend/src/api/catalog.js` (`/catalog/categories`, `/catalog/families`). The following 25 seeded canonical families were recovered from existing source migrations `033_canonical_catalog_and_moderation.sql` and `051_expand_canonical_product_families.sql`; **neither migration was executed**. This is a repository catalog inventory, not a fresh live-database/API listing or proof of current supplier availability. Existing supplier SKUs can define brands, grades and pack sizes; those must not be invented from category names.
+
+| Catalog grouping | Existing seeded product families |
+|---|---|
+| Grain | Rice; Wheat Grain |
+| Flour and milling | Chakki Atta; Maida; Besan |
+| Pulses and legumes | Daal Chana; Daal Masoor; Daal Moong; Daal Mash; Kabuli Chana |
+| Oils and vegetable ghee | Cooking Oil; Banaspati Ghee (vegetable ghee, not dairy ghee) |
+| Sweeteners | Sugar; Gur / Jaggery |
+| Tea | Tea |
+| Salt and spices | Salt; Red Chilli; Turmeric; Coriander; Cumin; Black Pepper |
+| Bakery ingredients | Corn Starch; Baking Powder; Yeast |
+| Existing catalog conflict with stated scope | Milk Powder exists as `FAM-MILK-POWDER`; the owner excluded dairy. Preserve the existing record and flag it for a future scope decision; do not present it as approved non-dairy scope. |
+
+The frontend's existing fallback/preview spotlights in `frontend/src/pages/AuthenticatedHomePage.jsx` show Super Kernel Basmati Rice (50kg), Refined Vegetable Cooking Oil (16L), and Premium Whole Wheat Fine Atta (50kg). Their displayed example prices/discounts are preview content, not verified live offers. Vegetables, fruit, meat and dairy remain excluded from the owner's stated product scope; no catalog deletion or UI filtering is authorized in this documentation task.
+
+### Demonstration boundaries and future restart checklist
+
+- Intended initial delivery area: **Lahore only**. No new route enforcement is implemented by this document.
+- Keep sandbox/test-only financial behavior, existing B6/UCP restrictions and external-money disabling unchanged. This document does not authorize starting new demo sessions, provider events or database fixtures.
+- Save the tax review package as **DRAFT / DEFERRED FOR COMMERCIAL LAUNCH**; no guessed tax rate, exemption or registration claim.
+- Do not change application code, environment flags, schema, website catalog, historical invoices or financial snapshots.
+- Do not merge PR #53, deploy commercially or reconcile the original dirty frontend checkout as part of this task.
+- When the owner explicitly resumes launch preparation: verify actual supplier listings/SKU characteristics, resolve the milk-powder scope conflict, establish registration facts and obtain qualified tax review; implement only the resulting necessary policy changes, run affected gates and exact-head CI, then reassess the existing conditional merge/local-integration requirements.
+
+**Current outcome:** demonstration/review brief saved; production tax implementation, qualified review, main merge and original-local integration are deferred. Existing historical test evidence is retained without rerunning it. This document is not legal approval or a public-launch instruction.
