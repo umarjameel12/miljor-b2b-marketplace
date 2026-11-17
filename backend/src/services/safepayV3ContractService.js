@@ -60,10 +60,38 @@ function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode}){
     amountPkr:exact.toCanonicalString(expectedAmountPkr,2),currency:'PKR',
     captured:false,providerOriginVerified:false});
 }
+function validateReportedTracker({response,expectedTrackerToken,expectedAmountPkr,expectedOrderCode}){
+  if(!tokenPattern.test(String(expectedTrackerToken||'')))
+    throw fail('INVALID_TRACKER_TOKEN','Invalid Safepay tracker token');
+  const tracker=response?.data?.tracker;
+  if(!tracker||tracker.token!==expectedTrackerToken)
+    throw fail('V3_TRACKER_IDENTITY_MISMATCH','Provider reporter did not return expected tracker');
+  if(tracker.environment!=='sandbox'||tracker.mode!=='payment')
+    throw fail('V3_TRACKER_STATE_MISMATCH','Tracker is not Sandbox payment mode');
+  const quoted=tracker.purchase_totals?.quote_amount;
+  if(!quoted||quoted.currency!=='PKR'||
+      fromMinorPkr(quoted.amount)!==exact.toCanonicalString(expectedAmountPkr,2))
+    throw fail('V3_TRACKER_AMOUNT_MISMATCH','Provider reporter amount/currency mismatch');
+  if(tracker.metadata?.order_id!==undefined&&
+      tracker.metadata.order_id!==expectedOrderCode)
+    throw fail('V3_TRACKER_ORDER_MISMATCH','Reporter metadata differs from original order');
+  // A reported state alone is never sufficient to mark an order PAID in
+  // MilJor. Provider-origin signed webhook plus exact locked order reconciliation
+  // and transactional ledger acceptance are separate requirements.
+  return Object.freeze({
+    trackerToken:expectedTrackerToken,
+    state:String(tracker.state||'UNKNOWN'),
+    amountPkr:exact.toCanonicalString(expectedAmountPkr,2),
+    currency:'PKR',
+    readOnly:true,
+    canMarkOrderPaid:false,
+    providerSignedWebhookVerified:false
+  });
+}
 function refundPreview({amountPkr,trackerToken,currency='PKR'}){
   if(!tokenPattern.test(String(trackerToken||'')))throw fail('INVALID_TRACKER_TOKEN','Invalid provider tracker');
   if(currency!=='PKR')throw fail('UNSUPPORTED_CURRENCY','Only PKR supported');
   return Object.freeze({tracker:trackerToken,payload:{currency:'PKR',amount:Number(toMinorPkr(amountPkr))},
     executable:false,providerConfirmation:'NOT_VERIFIED'});
 }
-module.exports={toMinorPkr,fromMinorPkr,buildPaymentV3,validateCreatedTracker,refundPreview};
+module.exports={toMinorPkr,fromMinorPkr,buildPaymentV3,validateCreatedTracker,validateReportedTracker,refundPreview};
