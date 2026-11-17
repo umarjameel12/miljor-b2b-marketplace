@@ -9,7 +9,7 @@ const env={SAFEPAY_ENV:'sandbox',ALLOW_EXTERNAL_MONEY_MOVEMENT:'false',
   SAFEPAY_SECRET_KEY:'secret_test_only_123456789'};
 const tracker='track_safe_sandbox_v3';
 const reply={data:{tracker:{
-  token:tracker,environment:'sandbox',mode:'payment',state:'TRACKER_STARTED',
+  token:tracker,client:env.SAFEPAY_PUBLIC_KEY,environment:'sandbox',mode:'payment',state:'TRACKER_STARTED',
   metadata:{order_id:'MILJOR-100'},
   purchase_totals:{quote_amount:{currency:'PKR',amount:114500}}}}};
 test('strict environment guard rejects production/protected DB/external movement/disabled',async()=>{
