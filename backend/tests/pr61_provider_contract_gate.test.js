@@ -104,3 +104,34 @@ test('real adapter checkout blocks before outgoing HTTPS if merchant contract un
     else process.env.SAFEPAY_LEGACY_CONTRACT_VERIFIED=old.attested;
   }
 });
+
+test('v3 supplier checkout blocks before DB and payment network until signed capture activation exists',async()=>{
+  const {SupplierSubscriptionCheckoutService}=require('../src/services/supplierSubscriptionCheckoutService');
+  let dbCalls=0,providerCalls=0;
+  const forbidden=async()=>{dbCalls++;throw Error('V3_SUBSCRIPTION_MUST_NOT_TOUCH_DB');};
+  const db={query:forbidden,getConnection:forbidden};
+  const adapter={createTracker:async()=>{providerCalls++;throw Error('UNEXPECTED_PROVIDER_CHARGE');}};
+  const svc=new SupplierSubscriptionCheckoutService(db,adapter);
+  const prior={env:process.env.SAFEPAY_ENV,
+    flag:process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT,
+    contract:process.env.SAFEPAY_TRACKER_CONTRACT,
+    enabled:process.env.SAFEPAY_V3_SANDBOX_ENABLED};
+  try{
+    process.env.SAFEPAY_ENV='sandbox';
+    process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT='false';
+    process.env.SAFEPAY_TRACKER_CONTRACT='payments-v3-minor';
+    process.env.SAFEPAY_V3_SANDBOX_ENABLED='true';
+    await assert.rejects(()=>svc.start({
+      actor:{id:9,role:'SUPPLIER'},planCode:'GROWTH',
+      idempotencyKey:'subscription-v3-locked-123'
+    }),e=>e.code==='V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED'&&e.statusCode===409);
+    assert.equal(dbCalls,0,'Cannot create a stranded v3 checkout attempt');
+    assert.equal(providerCalls,0,'Cannot initiate an unfulfillable Sandbox charge');
+  }finally{
+    for(const [key,val] of Object.entries(prior)){
+      const name={env:'SAFEPAY_ENV',flag:'ALLOW_EXTERNAL_MONEY_MOVEMENT',
+        contract:'SAFEPAY_TRACKER_CONTRACT',enabled:'SAFEPAY_V3_SANDBOX_ENABLED'}[key];
+      if(val===undefined)delete process.env[name];else process.env[name]=val;
+    }
+  }
+});
