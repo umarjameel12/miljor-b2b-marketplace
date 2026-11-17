@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {toMinorPkr,fromMinorPkr,buildPaymentV3,validateCreatedTracker,refundPreview}
+const {toMinorPkr,fromMinorPkr,buildPaymentV3,validateCreatedTracker,normalizeSucceededWebhook,refundPreview}
   =require('../src/services/safepayV3ContractService');
 const key='sec_sandboxmerchantpublickey_2026';
 const tracker='track_8ad42dcd-test';
@@ -51,6 +51,25 @@ test('v3 tracker creation must match amount, sandbox, order, mode and expected S
     assert.throws(()=>validateCreatedTracker({response:mutated,
       expectedAmountPkr:'1145.00',expectedOrderCode:'ORD-123'}));
   }
+});
+test('signed v3 payment webhook requires capture, merchant, tracker and locked order identity',()=>{
+  const data={success:true,state:'TRACKER_ENDED',amount:114500,currency:'PKR',
+    tracker,metadata:{order_id:'ORD-123'}};
+  const args={eventType:'payment.succeeded',data,merchantApiKey:key,
+    expectedMerchantApiKey:key,expectedOrderCode:'ORD-123'};
+  assert.deepEqual(normalizeSucceededWebhook(args),{
+    trackerToken:tracker,amountPkr:'1145.00',currency:'PKR',
+    state:'TRACKER_ENDED',eventType:'payment.succeeded',
+    providerContract:'payments-v3-minor'
+  });
+  for(const patch of [
+    {success:false},{state:'TRACKER_AUTHORIZED'},{amount:1145},
+    {currency:'USD'},{metadata:{order_id:'OTHER'}},{tracker:'track_wrong'}
+  ]){
+    assert.throws(()=>normalizeSucceededWebhook({...args,data:{...data,...patch}}));
+  }
+  assert.throws(()=>normalizeSucceededWebhook({...args,merchantApiKey:'sec_other'}));
+  assert.throws(()=>normalizeSucceededWebhook({...args,eventType:'payment.failed'}));
 });
 test('refund v3 preview remains nonexecutable for exact buyer item shortage',()=>{
   const r=refundPreview({trackerToken:tracker,amountPkr:'5000.00'});
