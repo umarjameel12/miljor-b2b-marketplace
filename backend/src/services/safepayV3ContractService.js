@@ -60,7 +60,7 @@ function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode}){
     amountPkr:exact.toCanonicalString(expectedAmountPkr,2),currency:'PKR',
     captured:false,providerOriginVerified:false});
 }
-function validateReportedTracker({response,expectedTrackerToken,expectedAmountPkr,expectedOrderCode}){
+function validateReportedTracker({response,expectedTrackerToken,expectedAmountPkr,expectedOrderCode,expectedMerchantApiKey}){
   if(!tokenPattern.test(String(expectedTrackerToken||'')))
     throw fail('INVALID_TRACKER_TOKEN','Invalid Safepay tracker token');
   const tracker=response?.data?.tracker;
@@ -68,6 +68,9 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
     throw fail('V3_TRACKER_IDENTITY_MISMATCH','Provider reporter did not return expected tracker');
   if(tracker.environment!=='sandbox'||tracker.mode!=='payment')
     throw fail('V3_TRACKER_STATE_MISMATCH','Tracker is not Sandbox payment mode');
+  if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
+      tracker.client!==expectedMerchantApiKey)
+    throw fail('V3_TRACKER_MERCHANT_MISMATCH','Provider reporter merchant identity mismatch');
   const quoted=tracker.purchase_totals?.quote_amount;
   if(!quoted||quoted.currency!=='PKR'||
       fromMinorPkr(quoted.amount)!==exact.toCanonicalString(expectedAmountPkr,2))
