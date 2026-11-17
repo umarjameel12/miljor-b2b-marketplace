@@ -76,7 +76,7 @@
 | **D** | Collective Procurement | **PASS / EXPECTED GATE** | Collective RFQ `185` → Group `#45` created → Buyer 1 & Buyer 2 (`demo-buyer2@miljor.test`) joined with `creates_payment=false`; pre-cutoff bid open returned expected `409`. |
 | **E** | Recurring Procurement | **PASS** | Recurring RFQ `186` → Contract `15` (`WEEKLY`, `EXPLICIT_PER_CYCLE`) activated, 6 cycles scheduled, cycle `2026-12-28` edited (`5 → 7`), skipped, paused/resumed; premature due-draft returned expected `409`. |
 | **F–G** | Delivery, Receipt, Invoice & Settlement | **PASS / EXPECTED GATE** | Retained Orders `231` & `234` verified via `/orders`, `/payment/return?order_id=231|234`, and `/admin` (`PAID`, `DELIVERED`, `BUYER_CONFIRMED`, `PKR 355.00`, `DISBURSEMENT DISABLED`); admin buyer-receipt action blocked with `403`. |
-| **H** | Notifications | **PASS (with note)** | Bell & preferences rendered cleanly per role with zero cross-buyer leak. `procurement_notifications` queued `10+` events (`PENDING`); in-app unread count stays `0` because `NODE_ENV=test` demo backend does not run the background dispatcher. |
+| **H** | Notifications (initial rehearsal; superseded by Section 7 verification) | **PARTIAL AT INITIAL HANDOFF** | Bell & preferences rendered cleanly per role with zero cross-buyer leak. `procurement_notifications` queued `10+` events (`PENDING`); in-app unread count stays `0` because `NODE_ENV=test` demo backend does not run the background dispatcher. |
 
 ---
 
@@ -88,4 +88,31 @@
 - **Recovery for Common Demo Issues:**
   - *503 on Checkout:* Expected B6 gate (`B6_TAX_POLICY_APPROVED=false`); explain safety control and show retained Orders `231`/`234` at `/payment/return?order_id=234`.
   - *Recurring Button Covered by Mobile/Bottom Nav:* Scroll slightly before clicking `Create Recurring Schedule`.
-  - *0 Unread Notifications:* Expected in `NODE_ENV=test` (notifications queued in `procurement_notifications` without background email/worker dispatch).
+  - *0 Unread Notifications:* Check read state and the scoped demo helper. NODE_ENV=test does not automatically run the dispatcher; Section 7 records actual delivery verification and a local helper for the current checkout.
+
+
+## 7. Completed Notification Rehearsal and Local Projection Helper
+
+**Verified on source baseline `7f1baee1089297c23971f2dc96af5e67ba8d6d12`:** existing `notificationService.processPending` projected 27 original demo-account events into their intended inboxes. Buyer724:22 inbox/21 unread after one mark-read; Buyer725:2 inbox/2 unread; Supplier726:3 inbox/3 unread. Twelve email records remain QUEUED; no email sender worker was started, no external email/SMS sent and no actual inbox-delivery claim is made for this rehearsal.
+
+Seven focused checks PASS (`node artifacts/pr53-demo-notifications.cjs`, final exit0): scoped canonical dispatcher; repeat-dispatch deduplication; exactly one correct-recipient projection per event; cross-buyer mark-read rejection; actual Chromium inbox/badge plus authenticated API list isolation for both buyers and supplier; buyer read-count decrement and deep-link navigation; unchanged protected database order/payment counts (both databases0/0 before/after).
+
+The browser used canonical temporary test sessions created by sessionService, restored through the real refresh endpoint and revoked afterward. Existing passwords were not changed. Login/password behavior was not retested. No browser API responses were mocked. One unauthenticated harness API request initially returned expected401; the harness was corrected to use the actual frontend authenticated client.
+
+The first manual projection lacked a trusted APP_FRONTEND_URL, causing12 email-queue failures while all27 in-app projections committed. The isolated helper origin was corrected to `http://127.0.0.1:3100`; existing five-minute retry backoff was honored without changing timestamps. Retry recovered all12 and retained27 unique inbox rows. Final rerun correctly processed0 already-sent events. No application defect, source patch or safety-gate change was necessary.
+
+### Current-machine demonstration helper
+
+A machine-local, ignored operational helper is available at `backend/artifacts/demo-notification-worker.cjs`. It delegates to the existing service; it is not a second notification system or a versioned fresh-clone startup script. It forces test database/mock mode and scopes selection to the four exact demo accounts. It projects in-app events and queues emails but never invokes email delivery, recurring generation or payment execution. It polls every5seconds and stops automatically after60minutes.
+
+Run from the backend directory if it has stopped:
+
+```powershell
+node artifacts/demo-notification-worker.cjs
+```
+
+Use `--once` for one eligible batch. The helper loads the existing original-checkout .env privately and applies process-only overrides, including the trusted local frontend URL. Never copy secrets into a report or repurpose this helper for production. At this verification it was left running as PID16588 (agent process session9443); it expires after60minutes, and PID alone must be rechecked before any later process action. Stop its own terminal with Ctrl+C; do not stop unrelated services. Frontend3100/backend5517 remain available and port3000/PR54 were not touched.
+
+Evidence: local ignored `backend/artifacts/demo-notifications-result.json` and screenshots `demo-notifications-buyer-724.png`, `demo-notifications-buyer-725.png`, `demo-notifications-supplier-726.png`. These machine-local artifacts are not tracked or guaranteed present in a fresh clone.
+
+CI: the GitHub connector returned11 PR-triggered workflow runs for exact baseline7f1baee, all completed/success. Its filtered result is not independent verification of the previously reported14 total workflows/16 check-runs. No application source changed in this closure. Production checkout remains intentionally gated, milk-powder discrepancy retained, tax implementation/commercial launch/main merge/original frontend integration deferred. **DEMO STATUS: READY WITH LIMITATIONS.**
