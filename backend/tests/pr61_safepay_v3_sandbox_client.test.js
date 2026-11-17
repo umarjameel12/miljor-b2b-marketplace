@@ -51,6 +51,44 @@ test('documented v3 Sandbox POST is exact, validates response, does not mark pai
   assert.equal(result.trackerToken,tracker);
   assert.ok(!JSON.stringify(result).includes(env.SAFEPAY_SECRET_KEY));
 });
+test('v3 Sandbox reporter is read-only and cannot credit a buyer from state alone',async()=>{
+  let n=0;
+  const client=new SafepayV3SandboxClient({env,fetchImpl:async(url,options)=>{
+    n++;
+    assert.equal(url,'https://sandbox.api.getsafepay.com/reporter/api/v1/payments/'+tracker);
+    assert.equal(options.method,'GET');
+    assert.equal(options.headers['X-SFPY-MERCHANT-SECRET'],env.SAFEPAY_SECRET_KEY);
+    return {status:200,json:async()=>({data:{tracker:{...reply.data.tracker,
+      state:'TRACKER_ENDED'}}})};
+  }});
+  const report=await client.inspectPaymentTracker({trackerToken:tracker,
+    amountPkr:'1145.00',orderCode:'MILJOR-100'});
+  assert.equal(n,1);
+  assert.equal(report.state,'TRACKER_ENDED');
+  assert.equal(report.canMarkOrderPaid,false);
+  assert.equal(report.providerSignedWebhookVerified,false);
+  assert.equal(report.readOnly,true);
+});
+test('v3 reporter rejects wrong order, amount, tracker and malformed path before network',async()=>{
+  for(const mutated of [
+    {...reply.data.tracker,token:'track_other_999',state:'TRACKER_ENDED'},
+    {...reply.data.tracker,metadata:{order_id:'OTHER-ORDER'},state:'TRACKER_ENDED'},
+    {...reply.data.tracker,purchase_totals:{quote_amount:{currency:'PKR',amount:1145}},state:'TRACKER_ENDED'},
+    {...reply.data.tracker,environment:'production',state:'TRACKER_ENDED'}
+  ]){
+    const client=new SafepayV3SandboxClient({env,fetchImpl:async()=>({
+      status:200,json:async()=>({data:{tracker:mutated}})
+    })});
+    await assert.rejects(()=>client.inspectPaymentTracker({trackerToken:tracker,
+      amountPkr:'1145.00',orderCode:'MILJOR-100'}));
+  }
+  let n=0;
+  const client=new SafepayV3SandboxClient({env,fetchImpl:async()=>{n++;throw Error('Unexpected')}});
+  await assert.rejects(()=>client.inspectPaymentTracker({trackerToken:'track_../../etc',
+    amountPkr:'1145.00',orderCode:'MILJOR-100'}),
+    error=>error.code==='INVALID_TRACKER_TOKEN');
+  assert.equal(n,0);
+});
 test('provider wrong amount, wrong order and unknown network cannot confirm',async()=>{
   for(const provider of [
     {status:201,json:async()=>({data:{tracker:{...reply.data.tracker,
