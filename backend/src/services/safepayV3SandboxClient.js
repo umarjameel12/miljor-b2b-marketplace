@@ -48,7 +48,8 @@ class SafepayV3SandboxClient{
     }
     try{
       return validateCreatedTracker({
-        response:data,expectedAmountPkr:amountPkr,expectedOrderCode:orderCode
+        response:data,expectedAmountPkr:amountPkr,expectedOrderCode:orderCode,
+        expectedMerchantApiKey:this.env.SAFEPAY_PUBLIC_KEY
       });
     }catch(_){
       throw fail('SAFEPAY_V3_RESPONSE_UNVERIFIED','Provider tracker quote/identity could not be verified',502);
