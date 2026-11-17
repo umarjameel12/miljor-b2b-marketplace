@@ -30,7 +30,7 @@ test('supplier subscription checkout and reconciliation also support pinned v3 c
   assert.match(subscription,/provider_contract/);
   assert.match(subscription,/acceptSignedV3Capture/);
   assert.match(subscription,/AWAITING_SIGNED_CAPTURE/);
-  assert.match(subscription,/MILJOR-SUB-\$\{attempt\.id\}/);
+  assert.match(subscription,/MILJOR-SUB-\$\{attemptId\}/);
   assert.match(migration,/legacy-v1-major/);
   assert.match(migration,/payments-v3-minor/);
   assert.match(subscription,/SAFEPAY_V3_SUBSCRIPTION_SIGNED_CAPTURE_ENABLED/);
