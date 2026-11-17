@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'backend/src/services/safepayAdapter.js'
+      - 'backend/src/services/safepayV3ContractService.js'
+      - 'backend/tests/pr61_safepay_v3_contract.test.js'
       - 'backend/scripts/safepaySandboxPreflight.js'
       - 'backend/tests/pr61_provider_contract_gate.test.js'
       - 'backend/tests/safepay_sandbox_readiness_gate.test.js'
@@ -46,6 +48,10 @@ jobs:
           node --check backend/tests/pr61_part1_document_mysql_gate.js
       - name: Phase 4 negative security, file upload and Safepay tracker controls
         run: node --test backend/tests/pr61_part4_release_gate.test.js
+      - name: Safepay v3 exact PKR minor units and immutable tracker quote
+        run: |
+          node --check backend/src/services/safepayV3ContractService.js
+          node --test backend/tests/pr61_safepay_v3_contract.test.js
       - name: Provider API-version, amount unit and credential-disclosure gate
         run: |
           node --check backend/tests/pr61_provider_contract_gate.test.js
