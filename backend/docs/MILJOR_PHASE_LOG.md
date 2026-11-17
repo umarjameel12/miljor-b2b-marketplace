@@ -1766,7 +1766,20 @@ User delegated selection of the most feasible rule. Recorded the conservative fr
 - **IMPLEMENTED:** Separated CI browser gate ports (`35100`/`35101`) & Linux/Windows Chromium discovery; migration `101_ucp_replacement_supplier_offer_and_qty_binding.sql` (+ rollback); mandatory `replacement_listing_id` + SKU/spec check; 100/80/20 partial-obligation quantity cap (`20` max, preventing duplicate 100-unit orders/allocations); authorized replacement supplier acceptance (`POST /replacements/:quoteId/supplier-accept`, `SUPPLIER_ACCEPTED` + `supplier_offer_hash`) revalidated on buyer consent & execution.
 - **TESTED (`miljor_test_db` on `127.0.0.1:33322`):** `101` rollback/re-apply + `readOnlyMigrationAudit` (`65/65`) PASS; `ucp_phase1_replacement_gate.js` PASS; `ucp_phase_c_delivery_gate.js` PASS; `phase1_browser_server_guard.test.js` 3/3 PASS; `ucp_phase1_delivery_browser_gate.js` (`35100`/`35101`) PASS; `npm run test:ucp` PASS (81/81); `npm --prefix frontend run build` PASS (2,237 modules, 2.75s).
 - **DATABASE:** Protected `miljor_db` unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
-- **RESULT:** **Completion Phase 1 hardened locally PASS (pending new exact-source CI); overall master-plan PARTIAL / RELEASE BLOCKED.** **CAN START NEXT PHASE: NO.**.
+- **CI CLOSEOUT:** Exact-source SHA `9fad8089b9ffaed5e5d297b6a92feadb9c90b583` passed CI run [44113045308](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44113045308) (**3/3 jobs PASS**). Completion Phase 1 is **PASS / CLOSED**.
+- **RESULT:** **Completion Phase 1 PASS; overall master-plan PARTIAL / RELEASE BLOCKED** (Completion Phases 2 & 3 remain). **CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Completion Phase 2: Provider, Finance, Email & Full UI Proof (PR #54)
+
+- **Branch:** `plan/ucp-resilience-notification-coverage`.
+- **IMPLEMENTED:** Added `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, and `ucp_phase2_full_ui_browser_gate.js`, and wired them into `.github/workflows/ucp-canonical-acceptance.yml`.
+- **TESTED (`miljor_test_db` on `127.0.0.1:33322`):**
+  - `ucp_phase2_finance_integrity_gate.js`: **PASS** (live Safepay sandbox initiation + `fetchTracker` `TRACKER_STARTED` readback, synthetic signed webhook/replay/`PAID` non-downgrade, exact-decimal math, premature `SUPPLIER_DELIVERED` disbursement block, partial refund obligation).
+  - `ucp_phase2_email_gate.js`: **PASS** (capture-transport, critical override, routine mute, EN/UR projections, zero-secret payload).
+  - `ucp_phase2_full_ui_browser_gate.js` (Real Chromium `35104`/`35105`): **PASS** (mobile `390x844`, keyboard focus, `/payment/return` pending/reload recovery, notification bell/Escape, Urdu locale preference).
+- **BLOCKED / NOT_TESTED:** Completed Safepay sandbox card payment (**BLOCKED**: PCI iframe requires human card entry); programmatic REST refund (**BLOCKED / UNSUPPORTED** on Safepay sandbox); external payouts (**DISABLED**); actual external SMTP inbox receipt (**NOT_TESTED / BLOCKED**: no authorized test mailbox).
+- **DATABASE:** Protected `miljor_db` unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`); `33322` shut down cleanly.
+- **RESULT:** **Completion Phase 2 PARTIAL (local finance/capture-email/browser PASS; external card payment, REST refund & real inbox BLOCKED); Completion Phase 3 not started. CAN START NEXT PHASE: NO.**.
 
 ### 2026-11-17 — Completion Phase 1 browser-runner bounded correction
 

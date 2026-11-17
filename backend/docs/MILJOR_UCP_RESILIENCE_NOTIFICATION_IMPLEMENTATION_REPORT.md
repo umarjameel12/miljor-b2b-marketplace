@@ -309,5 +309,24 @@ TASK: Complete independent review of Phase C (`bf4155b`), real Chromium delivery
   - `npm run test:ucp`: **PASS** (exit 0, 81/81).
   - `npm --prefix frontend run build`: **PASS** (2,237 modules, 2.75s, exit 0).
 - **Protected DB (`miljor_db`, port 3306, read-only):** Identical (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
+- **Exact-Source CI Closeout (`9fad8089b9ffaed5e5d297b6a92feadb9c90b583`):** Canonical Actions run [44113045308](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44113045308) completed **SUCCESS (3/3 jobs PASS)**: `Source gates and production frontend build`, `Disposable MySQL 8.0 migration installation` (including `ucp_phase_c_delivery_gate.js` & `ucp_phase1_replacement_gate.js`), and `Real Chromium buyer/supplier auth, retry and offline journey` (including `ucp_phase1_delivery_browser_gate.js` on isolated `35100`/`35101`). Completion Phase 1 is **CLOSED / PASS**.
+
+## 2026-11-17 — Completion Phase 2: Provider, Finance, Email & Full UI Proof
+
+TASK: Implement and verify Completion Phase 2 on PR #54 (`plan/ucp-resilience-notification-coverage`) against isolated `miljor_test_db` (`127.0.0.1:33322`), keeping `ALLOW_EXTERNAL_MONEY_MOVEMENT=false` and reporting external blockers honestly.
+
+### Phase 2 Verification Evidence (2026-11-17)
+
+- **Safepay Sandbox (`ucp_phase2_finance_integrity_gate.js`):**
+  - Live Safepay sandbox checkout initiation & independent `fetchTracker` readback (`TRACKER_STARTED`) + authoritative reconciliation (`reconciled: false`, `PAYMENT_INITIATED` retained): **PASS**.
+  - Synthetic signed HMAC-SHA512 webhook, invalid signature rejection, webhook replay idempotency, `PAID` non-downgrade on `payment.failed`, exact-decimal minor-unit math, premature `SUPPLIER_DELIVERED` disbursement block (`ORDER_NOT_BUYER_CONFIRMED`), and partial refund obligation assessment: **PASS**.
+  - **Explicit Provider Blockers:** Completed Safepay sandbox card payment is **BLOCKED** (PCI-sandboxed checkout iframe requires human card entry); programmatic REST refund is **BLOCKED / UNSUPPORTED** (Safepay standard sandbox lacks self-serve REST refund endpoint); external payouts remain **DISABLED** (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).
+- **Transactional Email (`ucp_phase2_email_gate.js`):**
+  - Capture-transport (`TRANSACTIONAL_EMAIL_MODE=mock`), critical override (`FULFILLMENT.PARTIAL_DELIVERY` over `muted_info: true` / `optional_email: false`), routine mute, English/Urdu projections, and zero-secret payload check: **PASS**.
+  - **Explicit Email Blocker:** Actual external SMTP inbox receipt is **NOT_TESTED / BLOCKED** (no explicitly authorized test mailbox configured; never sends to existing business users).
+- **Full UI Browser (`ucp_phase2_full_ui_browser_gate.js` on isolated `35104`/`35105`):**
+  - Mobile viewport (`390x844`), keyboard `Tab` focus, `/payment/return` pending outcome & reload recovery (never fabricates `PAID`), notification bell open & `Escape` close, Urdu locale preference persistence: **PASS** (exit 0).
+- **CI Workflow:** `.github/workflows/ucp-canonical-acceptance.yml` updated to run `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, and `ucp_phase2_full_ui_browser_gate.js`.
+- **Protected DB (`miljor_db`, port 3306, read-only):** Before and after checksums identical (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
 
 CAN START NEXT PHASE: NO
