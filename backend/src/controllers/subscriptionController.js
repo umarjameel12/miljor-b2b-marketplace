@@ -100,6 +100,19 @@ class SubscriptionController {
     }
   }
 
+  async schedulePlanChange(req,res) {
+    try {
+      const result=await subscriptionEntitlementService.schedulePaidPlanChangeAtPeriodEnd(
+        req.user.id,String(req.body?.plan_code||'').toUpperCase(),req.user);
+      return res.status(200).json({success:true,data:result});
+    }catch(error){
+      return res.status(error.statusCode||500).json({success:false,error:{
+        code:error.code||'SUBSCRIPTION_CHANGE_FAILED',
+        message:error.statusCode?error.message:'Unable to schedule paid plan change'
+      }});
+    }
+  }
+
   async initiateCheckout(req,res) {
     try {
       const result = await require('../services/supplierSubscriptionCheckoutService').start({
