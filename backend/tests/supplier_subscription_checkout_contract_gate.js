@@ -26,9 +26,9 @@ async function main() {
       attempts.push(a);return [{insertId:a.id}];
     }
     if (sql.includes('UPDATE supplier_subscription_checkout_attempts SET status=\'INITIATED\'')) {
-      const a=attempts.find(x=>x.id===params[2]);
+      const a=attempts.find(x=>x.id===params[3]);
       if (a.status!=='INITIATING')return [{affectedRows:0}];
-      Object.assign(a,{status:'INITIATED',tracker_token:params[0],checkout_url:params[1]});
+      Object.assign(a,{status:'INITIATED',tracker_token:params[0],checkout_url:params[1],provider_contract:params[2]});
       return [{affectedRows:1}];
     }
     if (sql.includes("status='UNKNOWN'")) {attempts.find(a=>a.id===params[0]).status='UNKNOWN';return [{affectedRows:1}];}
