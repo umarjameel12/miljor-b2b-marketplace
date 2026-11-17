@@ -547,7 +547,7 @@ class SafepayCheckoutService {
 
       // Exact Amount check (fail-closed - Repair P0-C & B0.2 Fix 4)
       if (normalizedProviderAmount === null || normalizedProviderAmount === undefined ||
-          !/^\\d+(?:\\.\\d{1,2})?$/.test(String(normalizedProviderAmount)) ||
+          !/^\d+(?:\.\d{1,2})?$/.test(String(normalizedProviderAmount)) ||
           Number(normalizedProviderAmount) <= 0) {
         const err = new Error('Safepay webhook payment event must contain a valid positive amount');
         err.code = 'INVALID_PAYLOAD';
