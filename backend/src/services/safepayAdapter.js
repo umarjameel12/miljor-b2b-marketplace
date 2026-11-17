@@ -57,12 +57,8 @@ class SafepayAdapter {
       err.statusCode = 500;
       throw err;
     }
-    return {
-      env: this.env,
-      publicKey: this.publicKey,
-      secretKey: this.secretKey,
-      webhookSecret: this.webhookSecret
-    };
+    // Never return secrets to callers, logs, responses or diagnostics.
+    return { env: this.env, configured: true };
   }
 
   /**
@@ -88,6 +84,17 @@ class SafepayAdapter {
 
     if (mockClient && typeof mockClient.init === 'function') {
       return mockClient.init({ amount, currency, orderCode });
+    }
+
+    // Published Safepay Payments v3 uses a different endpoint and minor units.
+    // Do not send an unverified v3/minor-unit merchant account through the
+    // historical v1/major-unit adapter. This is an explicit operator gate,
+    // NOT proof that a real Sandbox payment has been completed.
+    if(process.env.SAFEPAY_TRACKER_CONTRACT!=='legacy-v1-major' ||
+       process.env.SAFEPAY_LEGACY_CONTRACT_VERIFIED!=='true'){
+      const err=new Error('Safepay merchant tracker version and amount units need verification');
+      err.code='SAFEPAY_TRACKER_CONTRACT_UNVERIFIED';err.statusCode=503;
+      throw err;
     }
 
     const payload = JSON.stringify({
