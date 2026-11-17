@@ -128,3 +128,28 @@ Exact application/test-runner head **0cdf6465ab10aad8a4bc3874c56868bd8aeed7d3: 1
 This evidence commit also stores the opt-in genuine provider probe (syntax checked and actually executed with real read-only provider lookup/form bootstrap). It requires isolated test identity, sandbox credentials, explicit opt-in, and owns its local listener. It does not submit card/contact data, invent callbacks, use SMS or claim genuine capture. Its artifact confirms HTTP 200, capture-context bootstrap success, hosted card controls, no visible network error, unpaid order and no capture. Phone requiredness remains unknown. It is excluded from ordinary CI because CI has only synthetic provider credentials.
 
 **Closing implementation/local and remote automated gates: PASS. Whole-release certification: BLOCKED/PARTIAL.** Missing genuine payment/webhook completion, inbox receipt and production tax approval are not converted to success by the eleven green workflows. SMS is EXCLUDED, not failed. Protected databases, UCP and B6 remain preserved. PR #53 remains draft; main is unchanged.
+
+## Antigravity Continuation — Local Browser Repeatability & Blocker Verification (2026-11-17)
+
+- **Task A (Local Browser Fixture Repeatability) — IMPLEMENTED & VERIFIED (PASS):**
+  - **Root cause:** `backend/src/services/specificationService.js` `generateSpecCode(category, variety, idHint)` generated a 3-digit random suffix (`Math.floor(100 + Math.random() * 900)`, 900 possible values) when `idHint` was omitted, causing `ER_DUP_ENTRY` (`SPEC-G&R-BRO-222`) on populated `miljor_test_db`.
+  - **Fix:** Updated `generateSpecCode` to use `crypto.randomBytes(4).toString('hex').toUpperCase()` (8 hex chars, `varchar(50)` safe) when `idHint` is omitted, preserving deterministic `idHint` callers, all unique constraints, and all retained `miljor_test_db` financial history.
+  - **Verification:** Executed `node tests/smart_hub_paid_browser_journey.js` **twice sequentially** against the same populated `miljor_test_db`:
+    - Run 1: exit `0`, 16/16 checkpoints PASS (requests `160–162`, orders `216–218`).
+    - Run 2: exit `0`, 16/16 checkpoints PASS (requests `163–165`, orders `219–221`).
+    - SQL financial uniqueness verified for orders `216–221`: 1 payment per full/partial order, 2 distinct payments (merchandise + supplemental delivery fee) per extra-fee order, 1 immutable invoice per order, 1 canonical payout reservation per reviewed order.
+- **Additional Automated Gates Verified on `miljor_test_db`:**
+  - `npm run test:canonical:preflight`: **PASS** (12/12 manifest + UCP source gates).
+  - `node database/readOnlyMigrationAudit.js --test-only`: **PASS** (`VERIFIED_HISTORY`, `applied: 65`, `planned: 65`).
+  - Focused backend suite (16 test files): **161/161 PASS**, exit `0`.
+  - `node tests/collective_commitment_mysql_gate.js`: **20/20 PASS**, exit `0`.
+  - `node tests/notification_transaction_gate.js`, `notification_route_ownership_gate.js`, `notification_mysql_action_gate.js`: **PASS**, exit `0`.
+  - `node tests/email_outbox_queue_gate.js`: **20/20 PASS**, exit `0` (retry/backoff, 3-attempt terminal exhaustion, crash lease recovery, ambiguous provider acceptance containment, Urdu RTL).
+  - `npm --prefix ../frontend run build`: **PASS**, 2,237 modules, `2.07s`, exit `0`.
+  - Protected DB read-only checks before/after (`miljor_db`, `miljor_sandbox_db`): `orders = 0`, `payments = 0`.
+- **Remaining Critical Blockers (PR #53 retained DRAFT / UNMERGED; original local `MilJor Project` preserved untouched at `feature/frontend-redesign-20261112` / `83565c4`):**
+  1. **Genuine Safepay Sandbox Capture & Public Webhook Delivery (`BLOCKED`):** No public HTTPS callback URL / active tunnel registered in the Safepay sandbox merchant configuration, and Cybersource PCI card-iframe submission + controlled test contact require owner input.
+  2. **Genuine Email Inbox Receipt (`BLOCKED`):** Outbound SMTP auth/submission is proven, but no authorized mailbox confirmation or IMAP/sandbox-capture verification exists to confirm actual inbox delivery.
+  3. **Production Tax / Commercial Policy Approval (`BLOCKED`):** Isolated tests use a zero-tax contract; no accountable production tax rate/exemption or approval exists in the repository.
+
+CAN START NEXT PHASE: NO
