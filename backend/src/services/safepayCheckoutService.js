@@ -312,7 +312,18 @@ class SafepayCheckoutService {
       const err=new Error('Webhook event type does not match signed payload');
       err.code='WEBHOOK_EVENT_TYPE_MISMATCH';err.statusCode=422;throw err;
     }
-    const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
+    // HTTP event-id headers are not part of Safepay's signed JSON contract.
+    // Never let an unsigned header override signed event identity; doing so
+    // permits a different header on each retry to bypass event deduplication.
+    // When the provider omits an ID, hash the authenticated raw bytes instead
+    // of fabricating an unstable timestamp-based event ID.
+    const signedId=parsedPayload.token||parsedPayload.id;
+    const bodyHash=crypto.createHash('sha256').update(
+      Buffer.isBuffer(rawBody)?rawBody:Buffer.from(rawBody,'utf8')
+    ).digest('hex');
+    const effectiveEventId=(typeof signedId==='string'&&
+      /^[A-Za-z0-9:_-]{4,120}$/.test(signedId))
+      ? signedId : 'evt_sha256_'+bodyHash;
     const effectiveEventType = signedEventType;
 
     // 2. Check for duplicate webhook receipt (Idempotency)
