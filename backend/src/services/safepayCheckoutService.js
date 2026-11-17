@@ -402,11 +402,13 @@ class SafepayCheckoutService {
       trackerToken = parsedPayload.token;
     }
 
+    // Preserve the provider's original decimal/integer representation. Do not
+    // coerce v3 minor-unit integers through JS Number before exact conversion.
     const providerAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
-      ? Number(data.tracker.amount)
+      ? data.tracker.amount
       : (data.amount !== undefined
-          ? Number(data.amount)
-          : (data.net !== undefined && data.net !== null ? Number(data.net) : null));
+          ? data.amount
+          : (data.net !== undefined && data.net !== null ? data.net : null));
     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
       || data.currency
       || parsedPayload.currency
@@ -515,6 +517,26 @@ class SafepayCheckoutService {
 
       const order = orders[0];
 
+      let normalizedProviderAmount=providerAmount;
+      const providerContract=attempt.provider_contract||'legacy-v1-major';
+      if(providerContract==='payments-v3-minor'){
+        const normalized=require('./safepayV3ContractService').normalizeSucceededWebhook({
+          eventType:effectiveEventType,
+          data,
+          merchantApiKey:parsedPayload.merchant_api_key,
+          expectedMerchantApiKey:process.env.SAFEPAY_PUBLIC_KEY,
+          expectedOrderCode:order.order_code
+        });
+        if(normalized.trackerToken!==trackerToken){
+          const err=new Error('Signed Safepay v3 tracker identity mismatch');
+          err.code='V3_WEBHOOK_TRACKER_MISMATCH';err.statusCode=422;throw err;
+        }
+        normalizedProviderAmount=normalized.amountPkr;
+      }else if(providerContract!=='legacy-v1-major'){
+        const err=new Error('Unknown Safepay payment amount contract');
+        err.code='UNKNOWN_PAYMENT_PROVIDER_CONTRACT';err.statusCode=503;throw err;
+      }
+
       // Currency check
       if (providerCurrency !== (order.currency || 'PKR')) {
         const err = new Error(`Currency mismatch: Expected ${order.currency}, received ${providerCurrency}`);
@@ -524,17 +546,20 @@ class SafepayCheckoutService {
       }
 
       // Exact Amount check (fail-closed - Repair P0-C & B0.2 Fix 4)
-      if (providerAmount === null || providerAmount === undefined || isNaN(providerAmount) || providerAmount <= 0) {
+      if (normalizedProviderAmount === null || normalizedProviderAmount === undefined ||
+          !/^\\d+(?:\\.\\d{1,2})?$/.test(String(normalizedProviderAmount)) ||
+          Number(normalizedProviderAmount) <= 0) {
         const err = new Error('Safepay webhook payment event must contain a valid positive amount');
         err.code = 'INVALID_PAYLOAD';
         err.statusCode = 422;
         throw err;
       }
 
-      // Safepay official contract: tracker amount is in major units (PKR decimal e.g. 192450.00).
-      // Speculative 100x subunit normalizations are strictly eliminated (B0.2 Fix 4).
+      // Contract is pinned on the durable payment attempt. Legacy v1 uses
+      // major units; Payments v3 is converted from minor units by the strict
+      // v3 webhook validator above. No heuristic 100x normalization is allowed.
       const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
-      const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
+      const receivedAmountStr = exactDecimal.toCanonicalString(normalizedProviderAmount, 2);
 
       if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
         const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
