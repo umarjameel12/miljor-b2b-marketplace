@@ -926,6 +926,17 @@ class SafepayCheckoutService {
     }
 
     const attempt = attempts[0];
+    // Payments v3 uses integer-minor amounts and signed payment.succeeded
+    // capture. The legacy direct reporter below interprets major-unit v1
+    // shapes and MUST NOT be permitted to settle a v3 attempt.
+    if(attempt.provider_contract==='payments-v3-minor'){
+      const err=new Error('Safepay v3 capture requires the signed webhook verification flow');
+      err.code='V3_SIGNED_WEBHOOK_REQUIRED';err.statusCode=409;throw err;
+    }
+    if(attempt.provider_contract&&attempt.provider_contract!=='legacy-v1-major'){
+      const err=new Error('Unknown persisted Safepay payment contract');
+      err.code='UNKNOWN_PAYMENT_PROVIDER_CONTRACT';err.statusCode=503;throw err;
+    }
     const trackerToken = attempt.provider_tracker_token;
 
     // Step 2: Fetch authoritative tracker status from Safepay OUTSIDE transaction lock
