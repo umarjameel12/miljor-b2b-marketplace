@@ -63,6 +63,14 @@ test('reconciled payment transaction token cannot replace the original provider 
   })};
   assert.equal(capturedTracker(row),'track_capture_123');
   assert.equal(capturedTracker({...row,provider_response:'not-json'}),null);
+  assert.equal(capturedTracker({transaction_ref:'track_legacy_234',
+    provider_response:JSON.stringify({tracker_token:'track_other_999'})}),null,
+    'Two conflicting original tracker identities must block refund readiness');
+  assert.equal(capturedTracker({transaction_ref:'track_legacy_234',
+    provider_response:JSON.stringify({tracker_token:'track_../../escape'})}),null,
+    'Malformed explicit tracker must not fall back to a different one');
+  assert.equal(capturedTracker({transaction_ref:'track_legacy_234',
+    provider_response:JSON.stringify({tracker_token:'track_legacy_234'})}),'track_legacy_234');
   assert.equal(capturedTracker({transaction_ref:'track_legacy_234',provider_response:null}),'track_legacy_234');
   assert.equal(capturedTracker({transaction_ref:'txn_only_345',provider_response:null}),null);
   assert.equal(capturedTracker({transaction_ref:'track_../attack',provider_response:null}),null);
