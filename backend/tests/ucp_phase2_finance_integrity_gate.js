@@ -8,6 +8,10 @@ assert.equal(process.env.DB_NAME, 'miljor_test_db', 'DB_NAME must be miljor_test
 assert.equal(process.env.TEST_DB_NAME, 'miljor_test_db', 'TEST_DB_NAME must be miljor_test_db');
 assert.equal(process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT, 'false', 'External money movement must be false');
 
+if (!process.env.SAFEPAY_WEBHOOK_SECRET) {
+  process.env.SAFEPAY_WEBHOOK_SECRET = 'phase2_synthetic_webhook_secret_2026';
+}
+
 const db = require('../src/config/db');
 const exactDecimal = require('../src/services/exactDecimal');
 const safepayCheckoutService = require('../src/services/safepayCheckoutService');
@@ -107,8 +111,7 @@ async function run() {
     console.log(`[PASS] Safepay sandbox initiation/readback status=${sandboxProbeStatus} (completed payment BLOCKED: PCI iframe requires human card entry)`);
 
     // 4. Synthetic signed webhook + invalid signature + replay + PAID non-downgrade
-    const webhookSecret = process.env.SAFEPAY_WEBHOOK_SECRET || 'phase2_synthetic_webhook_secret_2026';
-    process.env.SAFEPAY_WEBHOOK_SECRET = webhookSecret;
+    const webhookSecret = process.env.SAFEPAY_WEBHOOK_SECRET;
 
     const tracker = `track_ph2_${tag}`;
     const [attRes] = await db.query(
