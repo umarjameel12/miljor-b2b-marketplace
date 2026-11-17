@@ -42,6 +42,9 @@ function inspect(env, sources = {}) {
   const v3Contract = sources.v3Contract || '';
   const provider = sources.provider || '';
   const settlement = sources.settlement || '';
+  const subscriptionService = sources.subscriptionService || '';
+  const subscriptionJournal = sources.subscriptionJournal || '';
+  const buyerCheckout = sources.checkout || '';
   const checks = {
     sandbox_environment_isolated: faults.length === 0,
     credentials_present: missing.length === 0,
@@ -56,7 +59,13 @@ function inspect(env, sources = {}) {
       /normalizeSucceededWebhook/.test(v3Contract) && /payments-v3-minor/.test(v3Contract),
     signed_webhook_verification_present: /verifyWebhookSignature/.test(adapter) && /timingSafeEqual/.test(adapter),
     refund_gateway_implemented: !/REFUND_PENDING_GATEWAY/.test(provider) && /initiateRefund/.test(provider),
-    external_payout_disabled: /External refund and payout execution are strictly DISABLED/.test(settlement)
+    external_payout_disabled: /External refund and payout execution are strictly DISABLED/.test(settlement),
+    v3_supplier_signed_capture_journal_present:
+      /acceptSignedV3Capture/.test(subscriptionService) &&
+      /normalizeSucceededWebhook/.test(subscriptionService) &&
+      /supplier_subscription_capture_events/.test(subscriptionService) &&
+      /UNIQUE KEY uq_supplier_capture_attempt/.test(subscriptionJournal) &&
+      /acceptSignedV3Capture/.test(buyerCheckout)
   };
   const contractImplementationPresent = v3ContractSelected
     ? checks.v3_hosted_checkout_and_reporter_present && checks.v3_amount_and_webhook_contract_present
@@ -76,7 +85,16 @@ function inspect(env, sources = {}) {
     provider_refund: checks.refund_gateway_implemented
       ? 'REQUIRES_REAL_SANDBOX_REFUND_AND_WEBHOOK_EVIDENCE' : 'BLOCKED_GATEWAY_ADAPTER_NOT_IMPLEMENTED',
     provider_bank_payout: 'BLOCKED_NO_VERIFIED_SANDBOX_DISBURSEMENT_CONTRACT',
-    v3_supplier_subscription_activation: 'BLOCKED_SIGNED_CAPTURE_JOURNAL_NOT_IMPLEMENTED',
+    v3_supplier_subscription_activation: checks.v3_supplier_signed_capture_journal_present
+      ? 'INTERNAL_SIGNED_CAPTURE_JOURNALED_NOT_PROVIDER_CERTIFIED'
+      : 'BLOCKED_SIGNED_CAPTURE_JOURNAL_NOT_IMPLEMENTED',
+    v3_supplier_subscription_sandbox_attempt:
+      safeToAttempt && v3ContractSelected &&
+      checks.v3_supplier_signed_capture_journal_present &&
+      env.SAFEPAY_V3_SUBSCRIPTION_SIGNED_CAPTURE_ENABLED==='true'
+        ? 'READY_FOR_AUTHORIZED_SANDBOX_TEST_NOT_PROVIDER_CERTIFIED'
+        : 'BLOCKED_OR_NOT_ENABLED',
+    v3_supplier_subscription_provider_evidence: 'NOT_OBTAINED',
     production_security_approval: 'BLOCKED_INDEPENDENT_SECURITY_REVIEW_REQUIRED',
     release_approval: 'BLOCKED_EXTERNAL_PROVIDER_AND_SECURITY_EVIDENCE_REQUIRED',
     real_funds_moved: false
@@ -91,6 +109,9 @@ if (require.main === module) {
     v3Client: get('src/services/safepayV3SandboxClient.js'),
     v3Contract: get('src/services/safepayV3ContractService.js'),
     provider: get('src/services/paymentProviderService.js'),
+    subscriptionService: get('src/services/supplierSubscriptionCheckoutService.js'),
+    subscriptionJournal: get('database/migrations/106_supplier_subscription_signed_capture_journal.sql'),
+    checkout: get('src/services/safepayCheckoutService.js'),
     settlement: get('src/services/financialSettlementService.js')
   });
   // Never output values of environment variables, keys or bank details.
