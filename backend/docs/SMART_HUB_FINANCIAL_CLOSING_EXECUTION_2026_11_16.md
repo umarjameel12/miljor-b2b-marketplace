@@ -166,3 +166,49 @@ The unit test injects a database-forbidden module double before importing catalo
 Changed paths: `backend/src/services/catalogService.js`, `backend/tests/spec_code_collision_retry.test.js`, `.github/workflows/smart-hub-notifications.yml`, this report and `MILJOR_PHASE_LOG.md`. Safe fetch confirmed local/remote approved branch both at 44e2f2d before edits; main remained 9fb07cf. Applied receiving-code-review and test-driven-development to verify the reported change, reproduce the narrow defect and fix it; project consolidated verification policy preserved successful unaffected evidence. Remote exact-head verification follows the approved feature-branch push. This focused code correction is locally PASS; genuine sandbox capture/public webhook, inbox receipt and accountable tax policy remain BLOCKED. No main merge or original local UI overwrite. SMS excluded; UCP/B6 unchanged.
 
 CAN START NEXT PHASE: NO
+# 2026-11-17 — Owner-assisted infrastructure, email and Pakistan tax research
+
+The owner clarified that they do not know hosting/tax configuration, can access the Safepay sandbox dashboard, and want existing environment email settings used. Do not continue asking the owner to supply a prewritten tax policy or configure hosting unaided. Technical preparation belongs to the implementer; ask only for genuinely missing business facts or narrowly specified dashboard/inbox actions.
+
+## Actual tunnel preflight — PASS, not payment/webhook evidence
+
+Installed `cloudflared` 2026.10.7 was verified. An HTTPS request to the quick-tunnel API returned 405 (reachable API, unsupported HEAD method), not a connectivity timeout. Started a temporary health-only Node listener on 127.0.0.1:5341 with no application/database dependencies. Executed:
+
+```text
+cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:5341 --loglevel info
+```
+
+Cloudflare created a temporary HTTPS hostname and registered an HTTP/2 connection. External HTTPS `/health` returned the expected JSON with `application_connected:false` and `database_connected:false`; `/api/v1/admin` returned 404. Both task-owned processes were then stopped. The temporary hostname is no longer a usable callback. No MilJor app or protected database was exposed.
+
+This supersedes the blanket claim that no test-hosting path is available. It proves working temporary public HTTPS connectivity at this time, not uptime guarantees, genuine Safepay capture, merchant registration or callback receipt. Next implementer should reproduce this method with a deliberately scoped callback endpoint bound to a verified isolated test backend, verify invalid signatures are rejected, keep it alive through the actual payment and owner dashboard step, then clean up only its own processes. Do not use interactive email authentication on the provider webhook path because the provider is a non-interactive client. Do not expose general admin/debug routes. Do not buy hosting or demand a domain from the owner before trying the proven test method.
+
+Official tunnel documentation: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/ (temporary accountless/domainless development tunnel; changing hostname and no uptime guarantee).
+
+## Controlled fresh email — PROVIDER_ACCEPTED, inbox confirmation pending
+
+Used existing original `.env` SMTP settings privately, a process-only `NODE_ENV=test` / `DB_NAME=TEST_DB_NAME=miljor_test_db` override, real SMTP opt-in and actual SQL identity check before the existing outbox service. Sent exactly one identifiable notification to the configured own `MAIL_FROM_EMAIL`; no address/password/token was printed. Idempotency key prevents repeating this controlled send. Existing `emailService.queueAndSendEmail` returned:
+
+- Outbox **28**, status **PROVIDER_ACCEPTED**, provider message ID present.
+- Subject: **MilJor | Inbox verification 17 Nov 2026**.
+- Reference: **MILJOR-INBOX-1711**.
+- Recorded time: **2026-11-17T12:22:39.105Z**.
+- Actual inbox receipt: **NOT VERIFIED**; owner only needs to check inbox/spam and confirm receipt. No IMAP credentials are necessary for this manual evidence.
+
+Only the test outbox was written. No application source, migration, protected DB or financial ledger was changed. No SMS was sent. Do not call this provider acceptance inbox delivery.
+
+## Pakistan tax work — researched draft, not legal sign-off
+
+Primary sources inspected:
+
+1. FBR consolidated Sales Tax Act, amended through 30 June 2026: https://download1.fbr.gov.pk/Docs/20267171373418951SalesTaxAct1990updatedupto30.06.2026.pdf . The Act distinguishes taxable goods, digitally ordered supplies, responsible intermediaries and withholding/schedule treatment; exemptions and supplier status must be classified rather than assuming one rate across food products.
+2. FBR SRO 1429(I)/2025: https://download1.fbr.gov.pk/SROs/2025858833282SRO1429DATED04-08-2025.pdf . Describes online marketplace/intermediary/courier withholding and reporting mechanics; check subsequent amendments before operational use.
+3. FBR Income Tax Ordinance collection: https://www.fbr.gov.pk/categ/income-tax-ordinance/326 and official e-commerce explanatory circular https://download1.fbr.gov.pk/Docs/2025841183918948CircularNo01of2025-26IncomeTax.pdf . Withholding is distinct from buyer-facing sales tax; the 2025 circular alone is not proof of unchanged November 2026 rates.
+4. PRA official service-classification schedule: https://reg.pra.punjab.gov.pk/NewsDirectory/Downloads/SalesTaxAct2012/First%20schedule%20%28Classification%20of%20Services%29.pdf . Commission agents are a classified service. This classification list alone does not prove the applicable current rate or that MilJor belongs in that category. Current Punjab Act/Second Schedule and subsequent notifications must be verified; attempted main PRA/Punjab-law page fetches timed out.
+
+Do not blindly apply a blanket 18%, 16%, 2% or zero to every order. The implementer should draft an effective-dated, source-linked decision matrix for goods, platform services/commission, separately supplied delivery, processing and seller/payment withholding. Confirm who supplies each component and which actor actually withholds; prevent charging/deducting the same tax twice if the provider already withholds it. Preserve gross customer charges separately from seller deductions and historical immutable invoices/refund rules.
+
+Only factual unknowns should be requested from the owner when absent from authorized records: legal business identity/registration status (NTN/STRN/PRA, if any), agency versus principal/reseller model and relevant supplier/product classifications. Unknown registration is not proof of exemption. Prepare a practical classification summary for qualified Pakistan tax review before live tax collection/release; do not invent an accountable approval or ask the nontechnical owner to choose a legal rate. Existing isolated test contracts can continue under their explicit test-only scope; no production B6 approval is created by this research.
+
+## Current status
+
+Temporary HTTPS preflight PASS; fresh SMTP provider acceptance PASS. Genuine Safepay capture/public webhook, inbox confirmation and resolved production tax applicability remain incomplete. Main merge and original local integration were not performed. Existing protected/UCP/B6 invariants remain; no new blanket release approval. The owner should next receive a prepared exact dashboard callback instruction, an identifiable inbox confirmation request, and simple business-fact questions only if genuinely required. CAN START NEXT PHASE: NO.
