@@ -48,7 +48,12 @@ function fixture(cfg={}) {
         return [cfg.unrelated?[]:[{id:17,order_id:31,buyer_id:4,disputed_quantity:'20.00',status:'OPEN'}]];
       if(query.includes('FROM refund_obligations')&&query.includes("status IN ('REQUESTED'"))
         return [cfg.duplicate?[{id:81}]:[]];
-      if(query.includes('SELECT SUM(total_refund_amount)'))return [[{total_refunded:'0.00'}]];
+      if(query.includes('SELECT SUM(total_refund_amount)')){
+        // Pending obligations consume reserved refund capacity, not just PAID.
+        assert.ok(query.includes("'REQUESTED'")&&query.includes("'UNDER_REVIEW'"),
+          'Pending assessment states must count toward captured refund ceiling');
+        return [[{total_refunded:cfg.pendingReservedAmount||'0.00'}]];
+      }
       if(query.includes('COUNT(*) AS line_count') && query.includes('procurement_collective_order_lines'))
         return [[{line_count:cfg.groupLines?2:0}]];
       if(query.includes('COUNT(*) AS line_count'))
@@ -103,6 +108,8 @@ async function run() {
     ['refund blocks unrelated dispute',{},'REFUND_DISPUTE_MISMATCH',{unrelated:true}],
     ['refund quantity cannot exceed dispute',{disputedQuantity:'30'},'REFUND_QUANTITY_EXCEEDS_DISPUTE',{}],
     ['refund rejects second obligation on same dispute',{},'REFUND_ALREADY_ASSESSED_FOR_DISPUTE',{duplicate:true}],
+    ['pending 23k already reserved prevents a further 5k shortage obligation',{},
+      'REFUND_EXCEEDS_CAPTURED_AMOUNT',{pendingReservedAmount:'23000.00'}],
     ['B6 partial refund cannot use aggregate SKU price',{},'LINE_ITEM_REFUND_ALLOCATION_REQUIRED',{multiLine:true}]
   ])await check(name,async()=>{
     const f=fixture(flags),s=service('financialSettlementService.js',f.sql);
