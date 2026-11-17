@@ -106,6 +106,7 @@ router.get('/verification/documents/:docId/file',authorizeStrict('SUPPLIER'),asy
 router.get('/subscription', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.getMySubscription(req, res));
 router.post('/subscription/upgrade', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.changePlan(req, res));
 router.post('/subscription/cancel-renewal', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.cancelRenewal(req, res));
+router.post('/subscription/change-at-period-end', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.schedulePlanChange(req,res));
 router.get('/subscription/plans', (req, res) => subscriptionController.getPlans(req, res));
 router.post('/subscription/checkout', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.initiateCheckout(req,res));
 router.get('/subscription/checkout-attempts', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.listCheckoutAttempts(req,res));
