@@ -190,8 +190,12 @@ class SupplierSubscriptionCheckoutService {
       });
       if(report.state!=='TRACKER_ENDED')
         return {reconciled:false,provider_state:report.state||'UNKNOWN'};
-      paidAmount=parseAmount(report.amountPkr);
-      providerTransactionId=attempt.tracker_token;
+      // A TRACKER_ENDED reporter status and quote are NOT proof of a
+      // successful captured subscription charge. No verified v3 subscription
+      // callback/transaction capture journal is available on this path.
+      // Fail closed rather than granting paid plan entitlements.
+      throw error('V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED',409,
+        'Signed captured payment evidence is required before activating a v3 subscription');
     }else if((attempt.provider_contract||'legacy-v1-major')==='legacy-v1-major'){
       // Authoritative provider lookup, NEVER trust a browser redirect or client-supplied amount.
       const response = await this.safepay.fetchTracker(attempt.tracker_token);
