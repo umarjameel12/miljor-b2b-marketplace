@@ -106,6 +106,8 @@ test('v3 reporter rejects wrong order, amount, tracker and malformed path before
   for(const mutated of [
     {...reply.data.tracker,token:'track_other_999',state:'TRACKER_ENDED'},
     {...reply.data.tracker,metadata:{order_id:'OTHER-ORDER'},state:'TRACKER_ENDED'},
+    {...reply.data.tracker,metadata:{},state:'TRACKER_ENDED'},
+    {...reply.data.tracker,metadata:undefined,state:'TRACKER_ENDED'},
     {...reply.data.tracker,purchase_totals:{quote_amount:{currency:'PKR',amount:1145}},state:'TRACKER_ENDED'},
     {...reply.data.tracker,environment:'production',state:'TRACKER_ENDED'}
   ]){
