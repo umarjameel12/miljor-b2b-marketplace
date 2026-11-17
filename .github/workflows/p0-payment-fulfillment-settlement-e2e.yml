@@ -41,6 +41,7 @@ jobs:
       MILJOR_TEST_ONLY_MIGRATIONS: '1'
       SAFEPAY_ENV: sandbox
       SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+      SAFEPAY_PUBLIC_KEY: sec_sand_synthetic_test_key_2026
       ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
       JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
       OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
