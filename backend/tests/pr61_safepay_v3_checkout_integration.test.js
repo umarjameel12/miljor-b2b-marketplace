@@ -38,6 +38,11 @@ test('webhook processing uses the persisted attempt contract, never heuristic am
   const v3=read('src/services/safepayV3ContractService.js');
   assert.match(checkout,/attempt\.provider_contract\|\|'legacy-v1-major'/);
   assert.match(checkout,/normalizeSucceededWebhook/);
+  // The legacy reporter has major-unit parsing. It must never directly
+  // certify a v3 minor-unit attempt or bypass v3 signed webhook capture.
+  assert.match(checkout,/attempt\.provider_contract==='payments-v3-minor'/);
+  assert.match(checkout,/V3_SIGNED_WEBHOOK_REQUIRED/);
+  assert.match(checkout,/UNKNOWN_PAYMENT_PROVIDER_CONTRACT/);
   assert.match(checkout,/normalizedProviderAmount/);
   assert.match(v3,/eventType!=='payment.succeeded'/);
   assert.match(v3,/data\?\.state!=='TRACKER_ENDED'/);
