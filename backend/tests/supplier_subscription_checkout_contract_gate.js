@@ -122,7 +122,49 @@ async function main() {
     assert.equal(list.length,1);
     assert.equal(list[0].status,'PAID');
     assert.equal(list[0].tracker_token,undefined);
-    console.log('SUPPLIER_SUBSCRIPTION_CHECKOUT_CONTRACT_PASS: ownership, idempotency, provider amount, pending state, paid activation, replay');
+
+    // v3 reporter may return TRACKER_ENDED without verified captured funds.
+    // Simulate an isolated v3 attempt and ensure no entitlement/DB writes.
+    const v3Attempt={id:52,supplier_id:7,plan_code:'GROWTH',
+      provider_contract:'payments-v3-minor',tracker_token:'track_v3_only_123',
+      amount_pkr:'3500.00',currency:'PKR',status:'INITIATED'};
+    let v3Reads=0,v3Writes=0,v3ProviderReads=0;
+    const v3db={
+      query:async (sql,params)=>{
+        assert.ok(sql.startsWith('SELECT '),'Read-only v3 reconciliation must never modify DB');
+        v3Reads++;
+        assert.deepEqual(params,[52,7]);
+        return [[{...v3Attempt}]];
+      },
+      getConnection:async()=>{v3Writes++;throw Error('V3_UNVERIFIED_CAPTURE_MUST_NOT_OPEN_TRANSACTION');}
+    };
+    const v3Module={exports:{}};
+    new Function('require','module','exports',source)(
+      name=>name==='../config/db'?v3db:
+        name==='./safepayAdapter'?adapter:
+        name==='./safepayV3SandboxClient'?{SafepayV3SandboxClient:class {
+          async inspectPaymentTracker({trackerToken,amountPkr,orderCode}){
+            v3ProviderReads++;
+            assert.equal(trackerToken,v3Attempt.tracker_token);
+            assert.equal(amountPkr,v3Attempt.amount_pkr);
+            assert.equal(orderCode,'MILJOR-SUB-52');
+            return {state:'TRACKER_ENDED',amountPkr:'3500.00',
+              readOnly:true,canMarkOrderPaid:false,
+              providerSignedWebhookVerified:false};
+          }
+        }}:name==='./exactDecimal'?exact:
+        name==='./notificationService'?{enqueueEvent:async()=>{throw Error('UNEXPECTED_NOTIFICATION');}}:
+        require(name),v3Module,v3Module.exports);
+    const v3svc=new v3Module.exports.SupplierSubscriptionCheckoutService(v3db,adapter);
+    const priorPlan=profile.subscription_plan;
+    await assert.rejects(()=>v3svc.reconcile({actor,attemptId:52}),
+      e=>e.code==='V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED'&&e.statusCode===409);
+    assert.equal(v3Reads,1);
+    assert.equal(v3Writes,0);
+    assert.equal(v3ProviderReads,1);
+    assert.equal(profile.subscription_plan,priorPlan);
+    assert.equal(issued,1,'Unverified v3 reporter may not grant another paid subscription');
+    console.log('SUPPLIER_SUBSCRIPTION_CHECKOUT_CONTRACT_PASS: ownership, idempotency, provider amount, pending state, legacy paid activation, v3 capture-proof fail-closed, replay');
   } finally {
     for(const [key,value] of Object.entries(oldEnv)) {
       if(value===undefined)delete process.env[key];else process.env[key]=value;
