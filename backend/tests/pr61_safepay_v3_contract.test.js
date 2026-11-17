@@ -53,7 +53,7 @@ test('v3 tracker creation must match amount, sandbox, order, mode and expected S
   }
 });
 test('signed v3 payment webhook requires capture, merchant, tracker and locked order identity',()=>{
-  const data={success:true,state:'TRACKER_ENDED',amount:114500,currency:'PKR',
+  const data={state:'TRACKER_ENDED',amount:114500,currency:'PKR',
     tracker,metadata:{order_id:'ORD-123'}};
   const args={eventType:'payment.succeeded',data,merchantApiKey:key,
     expectedMerchantApiKey:key,expectedTrackerToken:tracker,expectedOrderCode:'ORD-123'};
@@ -63,7 +63,7 @@ test('signed v3 payment webhook requires capture, merchant, tracker and locked o
     providerContract:'payments-v3-minor'
   });
   for(const patch of [
-    {success:false},{state:'TRACKER_AUTHORIZED'},{amount:1145},
+    {state:'TRACKER_STARTED'},{state:'TRACKER_AUTHORIZED'},{amount:1145},
     {currency:'USD'},{metadata:{order_id:'OTHER'}},{tracker:'track_wrong'}
   ]){
     assert.throws(()=>normalizeSucceededWebhook({...args,data:{...data,...patch}}));
