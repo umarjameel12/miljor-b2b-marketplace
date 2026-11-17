@@ -9,6 +9,7 @@ const db = require('../config/db');
 const adapter = require('./safepayAdapter');
 const exact = require('./exactDecimal');
 const notificationService = require('./notificationService');
+const { SafepayV3SandboxClient } = require('./safepayV3SandboxClient');
 
 function error(code, status, message) {
   const e = new Error(message); e.code = code; e.statusCode = status; return e;
@@ -60,8 +61,13 @@ class SupplierSubscriptionCheckoutService {
     }
     // A deterministic API-contract mismatch cannot create UNKNOWN billing
     // attempts that would block future supplier checkouts. Run before MySQL.
-    if(typeof this.safepay.assertTrackerContract==='function')
+    const useV3=process.env.SAFEPAY_TRACKER_CONTRACT==='payments-v3-minor';
+    if(useV3){
+      if(process.env.SAFEPAY_V3_SANDBOX_ENABLED!=='true')
+        throw error('SAFEPAY_V3_SANDBOX_DISABLED',503,'Safepay v3 subscription checkout is not enabled');
+    }else if(typeof this.safepay.assertTrackerContract==='function'){
       this.safepay.assertTrackerContract();
+    }
     const frontend = baseUrl();
     let attemptId;
     let price;
@@ -112,19 +118,33 @@ class SupplierSubscriptionCheckoutService {
     // Provider network call OUTSIDE MySQL locks. Uncertain failures remain UNKNOWN;
     // never silently allow another charge if the provider might have created a tracker.
     let tracker;
+    let checkoutUrl;
+    const providerContract=useV3?'payments-v3-minor':'legacy-v1-major';
     try {
-      tracker = await this.safepay.createTracker({
-        amount: Number(price), currency: 'PKR', orderCode: `MILJOR-SUB-${attemptId}`
-      });
-      if (!tracker?.trackerToken) throw error('INVALID_PROVIDER_RESPONSE', 502, 'Safepay tracker missing');
-      const checkoutUrl = this.safepay.constructCheckoutUrl({
-        trackerToken: tracker.trackerToken, orderCode: `MILJOR-SUB-${attemptId}`,
-        redirectUrl: `${frontend}/supplier/subscription?checkout_id=${attemptId}`,
-        cancelUrl: `${frontend}/supplier/subscription?checkout_cancelled=1`
-      });
+      const orderCode=`MILJOR-SUB-${attemptId}`;
+      if(useV3){
+        const v3=new SafepayV3SandboxClient({env:{...process.env,FRONTEND_URL:frontend}});
+        const checkout=await v3.createHostedCheckout({
+          amountPkr:price,orderCode,
+          redirectUrl:`${frontend}/supplier/subscription?checkout_id=${attemptId}`,
+          cancelUrl:`${frontend}/supplier/subscription?checkout_cancelled=1`
+        });
+        tracker={trackerToken:checkout.trackerToken};
+        checkoutUrl=checkout.checkoutUrl;
+      }else{
+        tracker = await this.safepay.createTracker({
+          amount: Number(price), currency: 'PKR', orderCode
+        });
+        if (!tracker?.trackerToken) throw error('INVALID_PROVIDER_RESPONSE', 502, 'Safepay tracker missing');
+        checkoutUrl = this.safepay.constructCheckoutUrl({
+          trackerToken: tracker.trackerToken, orderCode,
+          redirectUrl: `${frontend}/supplier/subscription?checkout_id=${attemptId}`,
+          cancelUrl: `${frontend}/supplier/subscription?checkout_cancelled=1`
+        });
+      }
       const [result] = await this.db.query(
-        "UPDATE supplier_subscription_checkout_attempts SET status='INITIATED',tracker_token=?,checkout_url=? WHERE id=? AND supplier_id=? AND status='INITIATING'",
-        [tracker.trackerToken, checkoutUrl, attemptId, supplierId]);
+        "UPDATE supplier_subscription_checkout_attempts SET status='INITIATED',tracker_token=?,checkout_url=?,provider_contract=? WHERE id=? AND supplier_id=? AND status='INITIATING'",
+        [tracker.trackerToken, checkoutUrl, providerContract, attemptId, supplierId]);
       if (!result.affectedRows) throw error('CHECKOUT_STATE_CONFLICT', 409, 'Checkout state changed unexpectedly');
       return { replay: false, attempt: { id: attemptId, plan_code: planCode,
         amount_pkr: price, currency: 'PKR', status: 'INITIATED', checkout_url: checkoutUrl }};
@@ -159,34 +179,46 @@ class SupplierSubscriptionCheckoutService {
       throw error('SANDBOX_ONLY', 503, 'Only Safepay Sandbox reconciliation is enabled');
     }
     // Authoritative provider lookup, NEVER trust a browser redirect or client-supplied amount.
-    const response = await this.safepay.fetchTracker(attempt.tracker_token);
-    const tracker = response?.data;
-    if (!tracker || tracker.token !== attempt.tracker_token) {
-      throw error('TRACKER_MISMATCH', 502, 'Provider tracker identity mismatch');
+    let paidAmount;
+    let providerTransactionId;
+    if((attempt.provider_contract||'legacy-v1-major')==='payments-v3-minor'){
+      const v3=new SafepayV3SandboxClient({env:{...process.env,FRONTEND_URL:baseUrl()}});
+      const report=await v3.inspectPaymentTracker({
+        trackerToken:attempt.tracker_token,
+        amountPkr:attempt.amount_pkr,
+        orderCode:`MILJOR-SUB-${attempt.id}`
+      });
+      if(report.state!=='TRACKER_ENDED')
+        return {reconciled:false,provider_state:report.state||'UNKNOWN'};
+      paidAmount=parseAmount(report.amountPkr);
+      providerTransactionId=attempt.tracker_token;
+    }else if((attempt.provider_contract||'legacy-v1-major')==='legacy-v1-major'){
+      // Authoritative provider lookup, NEVER trust a browser redirect or client-supplied amount.
+      const response = await this.safepay.fetchTracker(attempt.tracker_token);
+      const tracker = response?.data;
+      if (!tracker || tracker.token !== attempt.tracker_token) {
+        throw error('TRACKER_MISMATCH', 502, 'Provider tracker identity mismatch');
+      }
+      const captured = ['TRACKER_ENDED','COMPLETED','PAID'].includes(tracker.state) &&
+        tracker.transaction && typeof tracker.transaction === 'object';
+      if (!captured) return { reconciled: false, provider_state: tracker.state || 'UNKNOWN' };
+      const transactionState = String(tracker.transaction.status || tracker.transaction.state || '').toUpperCase();
+      if (!['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'].includes(transactionState)) {
+        return {reconciled: false, provider_state: transactionState || 'UNVERIFIED_TRANSACTION'};
+      }
+      providerTransactionId=tracker.transaction.token||
+        tracker.transaction.id||tracker.transaction.reference;
+      if(typeof providerTransactionId!=='string'||
+         !/^[A-Za-z0-9:_-]{4,150}$/.test(providerTransactionId)){
+        throw error('PROVIDER_TRANSACTION_ID_MISSING',502,
+          'Provider transaction identity is required before subscription activation');
+      }
+      const currency = tracker.currency || tracker.transaction.currency;
+      if (currency !== 'PKR') throw error('CURRENCY_MISMATCH', 422, 'Provider currency mismatch');
+      paidAmount = parseAmount(tracker.amount ?? tracker.transaction.amount);
+    }else{
+      throw error('UNKNOWN_PAYMENT_PROVIDER_CONTRACT',503,'Unknown supplier subscription payment contract');
     }
-    const captured = ['TRACKER_ENDED','COMPLETED','PAID'].includes(tracker.state) &&
-      tracker.transaction && typeof tracker.transaction === 'object';
-    if (!captured) return { reconciled: false, provider_state: tracker.state || 'UNKNOWN' };
-    const transactionState = String(tracker.transaction.status || tracker.transaction.state || '').toUpperCase();
-    // Sandbox tracker completion is not proof of a captured subscription charge
-    // unless the nested transaction itself positively confirms success.
-    if (!['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'].includes(transactionState)) {
-      return {reconciled: false, provider_state: transactionState || 'UNVERIFIED_TRANSACTION'};
-    }
-    // Safepay responses can identify transactions as token, id or reference.
-    // All are provider-owned; never accept an identity from the client.
-    const providerTransactionId=tracker.transaction.token||
-      tracker.transaction.id||tracker.transaction.reference;
-    if(typeof providerTransactionId!=='string'||
-       !/^[A-Za-z0-9:_-]{4,150}$/.test(providerTransactionId)){
-      throw error('PROVIDER_TRANSACTION_ID_MISSING',502,
-        'Provider transaction identity is required before subscription activation');
-    }
-
-    const currency = tracker.currency || tracker.transaction.currency;
-    if (currency !== 'PKR') throw error('CURRENCY_MISMATCH', 422, 'Provider currency mismatch');
-    const amountValue = tracker.amount ?? tracker.transaction.amount;
-    const paidAmount = parseAmount(amountValue);
     if (!exact.exactDecimalEquals(String(attempt.amount_pkr), paidAmount, 2)) {
       throw error('AMOUNT_MISMATCH', 422, 'Provider amount differs from original subscription invoice');
     }
