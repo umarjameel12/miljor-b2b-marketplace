@@ -65,7 +65,8 @@ test('signed v3 payment webhook requires capture, merchant, tracker and locked o
   });
   for(const patch of [
     {state:'TRACKER_STARTED'},{state:'TRACKER_AUTHORIZED'},{amount:1145},
-    {currency:'USD'},{metadata:{order_id:'OTHER'}},{tracker:'track_wrong'}
+    {currency:'USD'},{metadata:{order_id:'OTHER'}},{metadata:{}},
+    {metadata:undefined},{tracker:'track_wrong'}
   ]){
     assert.throws(()=>normalizeSucceededWebhook({...args,data:{...data,...patch}}));
   }
