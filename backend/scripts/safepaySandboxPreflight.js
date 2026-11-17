@@ -53,15 +53,20 @@ function inspect(env, sources = {}) {
     refund_gateway_implemented: !/REFUND_PENDING_GATEWAY/.test(provider) && /initiateRefund/.test(provider),
     external_payout_disabled: /External refund and payout execution are strictly DISABLED/.test(settlement)
   };
+  const contractImplementationPresent = v3ContractSelected
+    ? checks.v3_hosted_checkout_and_reporter_present && checks.v3_amount_and_webhook_contract_present
+    : checks.legacy_tracker_adapter_present;
+  const safeToAttempt = checks.sandbox_environment_isolated &&
+    checks.credentials_present && contractConfirmed && contractImplementationPresent;
   return {
     environment: 'sandbox',
-    safe_to_attempt_provider_test: checks.sandbox_environment_isolated && checks.credentials_present && contractConfirmed,
+    safe_to_attempt_provider_test: safeToAttempt,
     faults, missing_configuration: missing, checks,
     tracker_contract: contract || 'UNDECLARED',
     tracker_contract_review: contractConfirmed
       ? (v3ContractSelected ? 'PAYMENTS_V3_MINOR_IMPLEMENTED_SANDBOX_ONLY_NOT_PROVIDER_CERTIFIED' : 'LEGACY_V1_MAJOR_OPERATOR_ATTESTED_NOT_PROVIDER_CERTIFIED')
       : 'BLOCKED_NO_EXPLICIT_TRACKER_CONTRACT_SELECTION',
-    provider_checkout: checks.sandbox_environment_isolated && checks.credentials_present && contractConfirmed
+    provider_checkout: safeToAttempt
       ? 'READY_FOR_AUTHORIZED_SANDBOX_ATTEMPT_NOT_YET_EXECUTED' : 'BLOCKED_NOT_EXECUTED',
     provider_refund: checks.refund_gateway_implemented
       ? 'REQUIRES_REAL_SANDBOX_REFUND_AND_WEBHOOK_EVIDENCE' : 'BLOCKED_GATEWAY_ADAPTER_NOT_IMPLEMENTED',
