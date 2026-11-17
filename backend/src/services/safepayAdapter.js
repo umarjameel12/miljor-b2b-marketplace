@@ -61,6 +61,17 @@ class SafepayAdapter {
     return { env: this.env, configured: true };
   }
 
+  // Read-only contract check, safe to call BEFORE creating payment attempts.
+  assertTrackerContract(){
+    if(process.env.SAFEPAY_TRACKER_CONTRACT!=='legacy-v1-major' ||
+       process.env.SAFEPAY_LEGACY_CONTRACT_VERIFIED!=='true'){
+      const err=new Error('Safepay merchant tracker version and amount units need verification');
+      err.code='SAFEPAY_TRACKER_CONTRACT_UNVERIFIED';err.statusCode=503;
+      throw err;
+    }
+    return true;
+  }
+
   /**
    * Initialize a payment tracker session with Safepay.
    * Calls POST /order/v1/init outside any database transaction.
@@ -86,16 +97,8 @@ class SafepayAdapter {
       return mockClient.init({ amount, currency, orderCode });
     }
 
-    // Published Safepay Payments v3 uses a different endpoint and minor units.
-    // Do not send an unverified v3/minor-unit merchant account through the
-    // historical v1/major-unit adapter. This is an explicit operator gate,
-    // NOT proof that a real Sandbox payment has been completed.
-    if(process.env.SAFEPAY_TRACKER_CONTRACT!=='legacy-v1-major' ||
-       process.env.SAFEPAY_LEGACY_CONTRACT_VERIFIED!=='true'){
-      const err=new Error('Safepay merchant tracker version and amount units need verification');
-      err.code='SAFEPAY_TRACKER_CONTRACT_UNVERIFIED';err.statusCode=503;
-      throw err;
-    }
+    // Fail closed before making an outgoing merchant-authenticated request.
+    this.assertTrackerContract();
 
     const payload = JSON.stringify({
       client: this.publicKey,
