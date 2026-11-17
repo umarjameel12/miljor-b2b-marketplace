@@ -10,6 +10,7 @@ on:
       - 'backend/src/services/safepayCheckoutService.js'
       - 'backend/database/migrations/104_safepay_v3_payment_contract.sql'
       - 'backend/database/migrations/105_safepay_v3_supplier_subscription_contract.sql'
+      - 'backend/database/migrations/106_supplier_subscription_signed_capture_journal.sql'
       - 'backend/tests/p0_safepay_signed_http_acceptance.js'
       - 'backend/docs/PR61_B2B_PAYMENT_REFUND_RELEASE_ACCEPTANCE.md'
       - 'backend/src/services/supplierSubscriptionCheckoutService.js'
