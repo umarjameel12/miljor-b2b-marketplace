@@ -1,0 +1,12 @@
+'use strict';
+const router=require('express').Router(),{protect,authorizeStrict}=require('../../middlewares/authGuard'),idem=require('../../middlewares/idempotencyGuard'),review=require('../../services/procurementSettlementReviewService');
+const authorizeFinance=authorizeStrict('ADMIN','SUPER_ADMIN','FINANCE_ADMIN');
+const respond=action=>async(req,res)=>{res.set('Cache-Control','private, no-store');try{res.json({success:true,data:await action(req)});}catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.statusCode?error.code:'FINANCIAL_REVIEW_FAILED',message:error.statusCode?error.message:'Financial review could not be confirmed'}});}};
+const deliveryPayments=require('../../services/procurementDeliveryPaymentService');
+router.get('/procurement/admin/settlement-reviews',protect,authorizeFinance,respond(req=>review.pending(req.user)));
+router.get('/procurement/admin/orders/:orderId/settlement-review',protect,authorizeFinance,respond(req=>review.preview(req.user,req.params.orderId)));
+router.post('/procurement/admin/orders/:orderId/settlement-review',protect,authorizeFinance,idem.required,respond(req=>review.approve(req.user,req.params.orderId,req.body,req.get('X-Idempotency-Key'))));
+router.get('/procurement/admin/delivery-payment-reviews',protect,authorizeFinance,respond(req=>deliveryPayments.pendingReview(req.user)));
+router.get('/procurement/admin/delivery-payment-reviews/:contractId',protect,authorizeFinance,respond(req=>deliveryPayments.reviewPreview(req.user,req.params.contractId)));
+router.post('/procurement/admin/delivery-payment-reviews/:contractId',protect,authorizeFinance,idem.required,respond(req=>deliveryPayments.reviewFee(req.user,req.params.contractId,req.body,req.get('X-Idempotency-Key'))));
+module.exports=router;

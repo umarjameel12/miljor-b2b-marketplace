@@ -1,5 +1,9 @@
 'use strict';
 const definitions={
+  REFUND_APPROVED_PENDING:['Refund approved; external execution pending','رقم کی واپسی منظور؛ بیرونی ادائیگی باقی ہے','order'],
+  DELIVERY_WINDOW_REQUESTED:['Delivery window requested; supplier confirmation pending','ترسیل کا وقت درخواست کیا گیا؛ سپلائر کی تصدیق باقی ہے','order'],
+  DELIVERY_REATTEMPT_PROPOSED:['Review proposed delivery reattempt and fee','ترسیل کی نئی کوشش کے وقت اور فیس کا جائزہ لیں','order'],
+  DELIVERY_ROUTE_CANCELLED:['Predispatch route cancelled; delivery requires reassignment','روانگی سے پہلے راستہ منسوخ؛ ترسیل دوبارہ مقرر کرنا ضروری ہے','order'],
   DELIVERY_CHOICE_RECORDED:['Delivery choice requires supplier confirmation','ترسیل کے انتخاب پر سپلائر کی منظوری درکار ہے','request'],
   REQUEST_CREATED:['Request created','درخواست بن گئی','request',false],
   REQUEST_PUBLISHED:['Request published','درخواست شائع ہو گئی','request'],
@@ -13,6 +17,8 @@ const definitions={
   QUOTE_EXPIRED:['Quote expired','قیمت کی پیشکش کی مدت ختم ہو گئی','request'],
   TERMS_LOCKED:['Price and specifications locked','قیمت اور تفصیلات محفوظ ہو گئیں','request'],
   GROUP_INVITED:['Group invitation','گروپ میں شمولیت کی دعوت','group'],
+  GROUP_CAPACITY_RESERVED:['Group capacity reserved for individual approval','انفرادی منظوری کے لیے گروپ کی گنجائش محفوظ ہے','group'],
+  GROUP_CAPACITY_RELEASED:['Your group capacity released','گروپ میں آپ کی محفوظ گنجائش ختم ہو گئی','group'],
   GROUP_JOINED:['Buyer joined group','خریدار گروپ میں شامل ہو گیا','group',false],
   GROUP_LEFT:['Buyer left group','خریدار گروپ سے نکل گیا','group',false],
   GROUP_MINIMUM_REACHED:['Group minimum reached','گروپ کی کم از کم مقدار پوری ہو گئی','group'],
@@ -22,6 +28,8 @@ const definitions={
   CYCLE_GENERATED:['Recurring cycle generated','اگلا دور بن گیا','recurring',false],
   CYCLE_CUTOFF_UPCOMING:['Recurring cutoff approaching','اگلے دور کی آخری مہلت قریب ہے','recurring'],
   CYCLE_QUANTITY_MODIFIED:['Cycle quantity updated','دور کی مقدار تبدیل ہو گئی','recurring'],
+  CYCLE_DELIVERY_PREFERENCE_UPDATED:['Cycle delivery preference updated','دور کی ترسیل کی ترجیح تبدیل ہو گئی','recurring'],
+  CYCLE_DRAFT_READY:['Cycle draft ready for review','دور کی درخواست جائزے کے لیے تیار ہے','recurring'],
   CYCLE_SKIPPED:['Cycle skipped','یہ دور چھوڑ دیا گیا','recurring'],
   RECURRING_PAUSED:['Recurring schedule paused','مسلسل خریداری روک دی گئی','recurring'],
   RECURRING_RESUMED:['Recurring schedule resumed','مسلسل خریداری بحال ہو گئی','recurring'],

@@ -238,7 +238,7 @@ async function run() {
 
     // 4. Buyer 1 submits 100/80/20 partial delivery & shortage dispute in real UI
     await b1Page.getByText('Report partial delivery / shortage').click();
-    await b1Page.getByLabel('Accepted').fill('80');
+    await b1Page.getByLabel('Accepted', { exact: true }).fill('80');
     await b1Page.getByLabel('Missing').fill('20');
     await b1Page.getByLabel('Rejected').fill('0');
     await b1Page.getByPlaceholder('Describe shortage or damage...').fill('80 delivered, 20 missing in browser E2E');

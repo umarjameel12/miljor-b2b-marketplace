@@ -6,7 +6,7 @@ const dbPath=require.resolve('../src/config/db');
 require.cache[dbPath]={id:dbPath,filename:dbPath,loaded:true,exports:{}};
 const {NotificationService}=require('../src/services/notificationService');
 const {eventProjection,eventTypes}=require('../src/services/notificationEventPolicy');
-function fixture({type='PAYMENT_VERIFIED',optionalEmail=0,email='buyer@example.invalid',failEmail=false}={}){
+function fixture({type='PAYMENT_VERIFIED',optionalEmail=0,email='buyer@example.invalid',failEmail=false,reminderCurrent=true}={}){
   const pending=[{id:1,recipient_id:7,recipient_role:'BUYER',event_key:'event:one',event_type:type,
     payload:{schemaVersion:1,entityId:12},status:'PENDING',attempt_count:0}];
   const inbox=[],emails=[];
@@ -16,6 +16,8 @@ function fixture({type='PAYMENT_VERIFIED',optionalEmail=0,email='buyer@example.i
     async commit(){},async rollback(){inbox.length=inboxSnapshot;emails.length=emailSnapshot;Object.assign(pending[0],statusSnapshot);},release(){},
     async query(sql,args=[]){
       if(sql.includes('SELECT * FROM procurement_notifications'))return [pending.filter(row=>row.status==='PENDING')];
+      if(sql.includes('SELECT cy.id FROM procurement_recurring_contracts'))return [reminderCurrent?[{id:31}]:[]];
+      if(sql.includes("last_error_code='STALE_REMINDER_SUPPRESSED'")){pending[0].status='FAILED';pending[0].attempt_count=5;pending[0].last_error_code='STALE_REMINDER_SUPPRESSED';return [{affectedRows:1}];}
       if(sql.includes('FROM users'))return [[{id:7,role:'BUYER',email}]];
       if(sql.includes('FROM notification_preferences'))return [[{locale:'ur',optional_email:optionalEmail}]];
       if(sql.includes('INSERT INTO platform_notifications')){inbox.push(args);return [{insertId:inbox.length}];}
@@ -67,4 +69,15 @@ test('email queue failure preserves independent inbox and records bounded retry'
   const result=await state.service.processPending({limit:1,emailService:state.emailService});
   assert.equal(result.failed,1);assert.equal(state.inbox.length,1);assert.equal(state.emails.length,0);
   assert.equal(state.pending[0].status,'FAILED');assert.equal(state.pending[0].attempt_count,1);
+});
+test('stale recurring reminder is terminally suppressed without inbox/email success',async()=>{
+ const state=fixture({type:'CYCLE_CUTOFF_UPCOMING',optionalEmail:1,reminderCurrent:false});state.pending[0].event_key='cycle:31:upcoming24h';
+ const result=await state.service.processPending({limit:1,emailService:state.emailService});
+ assert.equal(result.projected,0);assert.equal(state.inbox.length,0);assert.equal(state.emails.length,0);
+ assert.equal(state.pending[0].attempt_count,5);assert.equal(state.pending[0].last_error_code,'STALE_REMINDER_SUPPRESSED');
+});
+test('current reminder email carries state context for dispatch-time revalidation',async()=>{
+ const state=fixture({type:'CYCLE_CUTOFF_UPCOMING',optionalEmail:1});state.pending[0].event_key='cycle:31:upcoming24h';
+ await state.service.processPending({limit:1,emailService:state.emailService});
+ assert.equal(state.inbox.length,1);assert.deepEqual(state.emails[0].payload.reminderContext,{contractId:12,cycleId:31});
 });

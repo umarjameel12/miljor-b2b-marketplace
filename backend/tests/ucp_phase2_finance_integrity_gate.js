@@ -108,7 +108,7 @@ async function run() {
       assert.equal(replayInit.tracker_token || replayInit.checkout_url, initRes.tracker_token || initRes.checkout_url);
       sandboxProbeStatus = 'SANDBOX_INITIATION_AND_READBACK_PASS';
     }
-    console.log(`[PASS] Safepay sandbox initiation/readback status=${sandboxProbeStatus} (completed payment BLOCKED: PCI iframe requires human card entry)`);
+    console.log(`[${sandboxProbeStatus === 'BLOCKED_MISSING_CREDENTIALS' ? 'BLOCKED' : 'PASS'}] Safepay sandbox initiation/readback status=${sandboxProbeStatus} (completed payment BLOCKED: PCI iframe requires human card entry)`);
 
     // 4. Synthetic signed webhook + invalid signature + replay + PAID non-downgrade
     const webhookSecret = process.env.SAFEPAY_WEBHOOK_SECRET;
@@ -126,7 +126,7 @@ async function run() {
       data: {
         tracker,
         token: tracker,
-        state: 'TRACKER_ENDED',
+        state: 'PAID',
         amount: 1150,
         currency: 'PKR',
         reference: ordCode
@@ -140,9 +140,16 @@ async function run() {
     );
 
     const goodSig = crypto.createHmac('sha512', webhookSecret).update(rawBody).digest('hex');
-    await safepayCheckoutService.processWebhookEvent({ rawBody, signature: goodSig });
+    for (const state of ['PENDING', 'TRACKER_ENDED']) {
+      const pendingRaw = Buffer.from(JSON.stringify({...payloadObj, data: {...payloadObj.data, state}}));
+      const pendingSig = crypto.createHmac('sha512', webhookSecret).update(pendingRaw).digest('hex');
+      await safepayCheckoutService.processWebhookEvent({rawBody: pendingRaw, signature: pendingSig, eventId: `${tag}-${state}`});
+      const [[unpaid]] = await db.query('SELECT payment_status FROM orders WHERE id = ?', [orderId]);
+      assert.notEqual(unpaid.payment_status, 'PAID', 'Non-paid state without authoritative capture evidence must not capture');
+    }
+    await safepayCheckoutService.processWebhookEvent({ rawBody, signature: goodSig, eventId: `${tag}-paid` });
     // Replay same webhook -> idempotent, zero duplicate payments
-    await safepayCheckoutService.processWebhookEvent({ rawBody, signature: goodSig });
+    await Promise.all(Array.from({length: 5}, () => safepayCheckoutService.processWebhookEvent({ rawBody, signature: goodSig, eventId: `${tag}-paid` })));
 
     const [[paidOrd]] = await db.query('SELECT payment_status FROM orders WHERE id = ?', [orderId]);
     assert.equal(paidOrd.payment_status, 'PAID', 'Synthetic signed webhook must mark PAID');
@@ -196,7 +203,7 @@ async function run() {
       idempotencyKey: `${tag}-ref-assess`
     });
     created.refunds.push(refundAssess.id || refundAssess.refund_id);
-    console.log('[PASS] Premature settlement blocked; refund obligation recorded without live external execution (REST refund BLOCKED/UNSUPPORTED on Safepay sandbox)');
+    console.log('[PASS] Premature settlement blocked; internal refund obligation recorded (external execution DISABLED; provider refund capability unverified)');
 
     console.log('ALL PHASE 2 FINANCE INTEGRITY CHECKS PASSED');
   } finally {

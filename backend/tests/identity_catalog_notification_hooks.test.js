@@ -123,7 +123,7 @@ function deliveryHarness(options={}) {
     async createPickupPoint(value,tx){assert.equal(tx,h.conn);h.calls.push({sql:'SAVE POINT'});points.push({...value,id:3,is_active:1});return 3;},
     async updatePickupPoint(id,supplier,value,tx){assert.equal(tx,h.conn);const p=points.find(p=>p.id===id&&p.supplier_id===supplier);if(!p)return false;h.calls.push({sql:'UPDATE POINT'});Object.assign(p,value);return true;}
   };
-  h.service=load('services/supplierDeliveryService.js',{'../config/db':h.db,
+  h.service=load('services/supplierDeliveryService.js',{'../config/db':h.db,'./exactDecimal':require('../src/services/exactDecimal'),
     '../repositories/supplierDeliveryRepository':repo,'../repositories/geographicRepository':{getClusterById:async()=>({is_active:1})},
     './supplierProfileService':{recordIdentityEvent:async(...args)=>{
       // Use the real resolver with this transaction and writer.

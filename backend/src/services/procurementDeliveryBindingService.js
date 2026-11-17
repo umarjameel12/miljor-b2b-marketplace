@@ -32,7 +32,7 @@ class ProcurementDeliveryBindingService{
       if(!quotes.length)throw fail('QUOTE_NOT_FOUND','Active quotation not found',404);
       const result=await this.delivery.createAuthoritativeQuote(buyer,{supplier_id:quotes[0].supplier_id,
         cluster_id:id(input.cluster_id),address_id:input.address_id==null?null:id(input.address_id),
-        mode:input.mode,pickup_point_id:input.pickup_point_id==null?null:id(input.pickup_point_id)},connection);
+        mode:input.mode,pickup_point_id:input.pickup_point_id==null?null:id(input.pickup_point_id)},connection,{procurement:true});
       await connection.query('UPDATE delivery_quotes SET procurement_request_id=?,procurement_quote_id=?,procurement_choice_key=?,procurement_choice_hash=? WHERE quote_code=?',[request,quote,key,hash,result.quote_code]);
       if(input.mode==='PICKUP'){
         const [points]=await connection.query('SELECT * FROM supplier_pickup_points WHERE id=? AND supplier_id=? AND is_active=1 FOR UPDATE',[result.pickup_point_id,quotes[0].supplier_id]);
@@ -70,8 +70,9 @@ class ProcurementDeliveryBindingService{
       const address=addresses[0];
       if(!address||address.geographic_match_status!=='VERIFIED'||Number(address.cluster_id)!==terms.cluster_id||Number(address.revision)!==terms.address_revision)throw fail('DELIVERY_REAPPROVAL_REQUIRED','Destination changed or is no longer verified');
     }
-    const options=await this.delivery.getDeliveryOptions(buyerId,{supplier_id:supplierId,cluster_id:terms.cluster_id,address_id:terms.address_id},connection);
+    const options=await this.delivery.getDeliveryOptions(buyerId,{supplier_id:supplierId,cluster_id:terms.cluster_id,address_id:terms.address_id},connection,{procurement:true});
     const mode=options.eligible_modes.find(option=>option.mode===terms.mode);
+    if(terms.mode==='INDIVIDUAL'&&Number(mode?.supplier_rate_version)!==terms.supplier_rate_version)throw fail('DELIVERY_REAPPROVAL_REQUIRED','Individual rate revision changed; request fresh terms');
     const currentFee=terms.mode==='PICKUP'?mode?.pickup_points?.find(point=>Number(point.id)===terms.pickup_point_id)?.handling_fee_pkr:mode?.fee_pkr;
     if(Number(options.supplier_config_version)!==terms.supplier_config_version||currentFee==null||!exact.exactDecimalEquals(String(currentFee),terms.fee,2))throw fail('DELIVERY_REAPPROVAL_REQUIRED','Delivery eligibility or rates changed; request fresh terms');
     return terms;

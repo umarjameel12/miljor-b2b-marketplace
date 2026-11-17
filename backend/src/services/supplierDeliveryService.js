@@ -5,6 +5,8 @@
 const defaultDb = require('../config/db');
 const identityNotifications = require('./supplierProfileService');
 const supDelivRepo = require('../repositories/supplierDeliveryRepository');
+const db = require('../config/db');
+const exact = require('./exactDecimal');
 const geoRepo = require('../repositories/geographicRepository');
 
 class SupplierDeliveryService {
@@ -31,8 +33,8 @@ class SupplierDeliveryService {
   /**
    * Fetch supplier's complete delivery configuration, rates and pickup points
    */
-  async getSupplierSettings(supplierId, connection) {
-    let config = await supDelivRepo.getSupplierConfiguration(supplierId, connection);
+  async getSupplierSettings(supplierId, connection, lockPricing = false) {
+    let config = await supDelivRepo.getSupplierConfiguration(supplierId, connection, lockPricing);
 
     // If never configured, provide clean default template
     if (!config) {
@@ -41,6 +43,7 @@ class SupplierDeliveryService {
         standard_delivery_enabled: true,
         pickup_enabled: false,
         express_enabled: false,
+        individual_delivery_enabled: false,
         express_cutoff_time: '14:00:00',
         express_fulfillment_hours: 4,
         version: 1
@@ -48,7 +51,7 @@ class SupplierDeliveryService {
     }
 
     const [clusterRates, pickupPoints] = await Promise.all([
-      supDelivRepo.getSupplierClusterRates(supplierId, connection),
+      supDelivRepo.getSupplierClusterRates(supplierId, connection, lockPricing),
       supDelivRepo.getSupplierPickupPoints(supplierId, connection)
     ]);
 
@@ -66,6 +69,10 @@ class SupplierDeliveryService {
     if (!connection) return this._transaction(tx => this.updateSupplierSettings(supplierId, payload, tx));
     const owner = await this._lockOwner(supplierId, connection);
     const previous = await this.getSupplierSettings(owner.id, connection);
+    await connection.query('SELECT id FROM supplier_delivery_configurations WHERE supplier_id = ? FOR UPDATE', [supplierId]);
+    const existing = await supDelivRepo.getSupplierConfiguration(supplierId, connection, true);
+    const individualEnabled = payload.individual_delivery_enabled === undefined ? Number(existing?.individual_delivery_enabled) === 1 : payload.individual_delivery_enabled;
+    if (typeof individualEnabled !== 'boolean') { throw Object.assign(new Error('Individual delivery opt-in must be boolean.'), {code:'INVALID_DELIVERY_CONFIGURATION',statusCode:400}); }
     const {
       standard_delivery_enabled = true,
       pickup_enabled = false,
@@ -78,8 +85,8 @@ class SupplierDeliveryService {
 
     // Invariant: At least one delivery mode must be enabled for active offers.
     // Incomplete drafts during onboarding may have zero modes.
-    if (!is_draft && !standard_delivery_enabled && !pickup_enabled && !express_enabled) {
-      const err = new Error('A supplier must enable at least one fulfillment mode (Standard, Pickup, or Express).');
+    if (!is_draft && !standard_delivery_enabled && !pickup_enabled && !express_enabled && !individualEnabled) {
+      const err = new Error('A supplier must enable at least one fulfillment mode (Standard, Pickup, Express, or Individual procurement).');
       err.code = 'AT_LEAST_ONE_MODE_REQUIRED';
       err.statusCode = 422;
       throw err;
@@ -94,7 +101,7 @@ class SupplierDeliveryService {
         const feePkr = Number(rate.fee_pkr);
         const isEligible = rate.is_eligible !== undefined ? Boolean(rate.is_eligible) : true;
 
-        if (isNaN(clusterId) || !['STANDARD_CLUSTERED', 'EXPRESS'].includes(mode)) {
+        if (isNaN(clusterId) || !['STANDARD_CLUSTERED', 'EXPRESS', 'INDIVIDUAL'].includes(mode)) {
           const err = new Error(`Invalid cluster rate specification for cluster_id: ${rate.cluster_id}`);
           err.code = 'INVALID_RATE_SPECIFICATION';
           err.statusCode = 400;
@@ -109,21 +116,36 @@ class SupplierDeliveryService {
           throw err;
         }
 
+        let individualFee;
+        if (mode === 'INDIVIDUAL') {
+          try {
+            if (!/^[1-9]\d*$/.test(String(rate.cluster_id)) || !Number.isSafeInteger(clusterId) || clusterId <= 0 || (typeof rate.is_eligible !== 'boolean' && rate.is_eligible !== undefined)) throw Error();
+            individualFee = exact.toCanonical(exact.toDecimalString(rate.fee_pkr, {maxPrecision:10,maxScale:2,allowNegative:false}),2);
+            if (!exact.exactDecimalGte('99999999.99',individualFee,2)) throw Error();
+          } catch {
+            throw Object.assign(new Error('Individual cluster fee must be an explicit non-negative decimal with at most two places.'), {code:'INVALID_DELIVERY_FEE',statusCode:400});
+          }
+          const cluster = await geoRepo.getClusterById(clusterId, connection);
+          if (!cluster || !cluster.is_active) throw Object.assign(new Error('Individual cluster must be active.'), {code:'INVALID_CLUSTER',statusCode:422});
+          if (validatedRates.some(r => r.cluster_id === clusterId && r.mode === mode)) throw Object.assign(new Error('Duplicate individual cluster rate.'), {code:'INVALID_RATE_SPECIFICATION',statusCode:400});
+        }
         validatedRates.push({
           supplier_id: supplierId,
           cluster_id: clusterId,
           mode,
           is_eligible: isEligible,
-          fee_pkr: Number(feePkr.toFixed(2))
+          fee_pkr: mode === 'INDIVIDUAL' ? individualFee : Number(feePkr.toFixed(2))
         });
       }
     }
 
+    if (!Array.isArray(cluster_rates)) throw Object.assign(new Error('Cluster rates must be an array.'), {code:'INVALID_RATE_SPECIFICATION',statusCode:400});
     // Save mode configuration only after all rate validations pass
     const savedConfig = await supDelivRepo.upsertSupplierConfiguration(supplierId, {
       standard_delivery_enabled: Boolean(standard_delivery_enabled),
       pickup_enabled: Boolean(pickup_enabled),
       express_enabled: Boolean(express_enabled),
+      individual_delivery_enabled: individualEnabled,
       express_cutoff_time,
       express_fulfillment_hours: Number(express_fulfillment_hours) || 4
     }, connection);

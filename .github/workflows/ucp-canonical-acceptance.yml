@@ -70,6 +70,7 @@ jobs:
           npm run test:ucp
           npm run test:ucp:completion
           node --test tests/ucp_notification_metadata.test.js
+          node --test tests/ucp_scheduler_integration.test.js tests/safepay_payment_created_webhook.test.js tests/procurement_line_receipt_api.test.js
           npm run test:ucp:reviewfixes
           npm run test:ucp:nativeactions
           node tests/ucp_thischat_reconciliation_gate.js

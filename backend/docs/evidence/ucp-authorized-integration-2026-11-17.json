@@ -1,0 +1,287 @@
+{
+  "date": "2026-11-17",
+  "scope": "Approved pinned main/Smart Hub integration on PR54 feature branch",
+  "baseline": "dffb37be464cb66c408275bfe9fc22f790b060b4",
+  "mainParent": "9fb07cf9274509c1686b68b5bf8bdd91bd26718f",
+  "smartHubParent": "a0b6ea3fdd8f0ab76d581977cca5ec6c16f12183",
+  "mainMerge": "d9394c7",
+  "migrationCount": 71,
+  "migrationProof": {
+    "status": "PASS",
+    "backupRestore": true,
+    "ucp101To106": true,
+    "historical054To106": true,
+    "freshTo106": true,
+    "replay": true,
+    "originalColumnDataPreserved": true
+  },
+  "affectedGate": {
+    "groups": 14,
+    "allPassed": true
+  },
+  "additionalGateResults": [
+    {
+      "name": "affected",
+      "args": [
+        "tests/ucp_final_affected_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 62847
+    },
+    {
+      "name": "restore-upgrade",
+      "args": [
+        "database/runMigrations.js"
+      ],
+      "port": 33325,
+      "exit": 0,
+      "ms": 4323
+    },
+    {
+      "name": "restore-replay",
+      "args": [
+        "database/runMigrations.js"
+      ],
+      "port": 33325,
+      "exit": 0,
+      "ms": 796
+    },
+    {
+      "name": "fresh-bootstrap",
+      "args": [
+        "database/bootstrapDisposableMigrationTest.js"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 2186
+    },
+    {
+      "name": "historical-through053",
+      "args": [
+        "database/runMigrations.js"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 17013
+    },
+    {
+      "name": "historical-through054",
+      "args": [
+        "database/runMigrations.js"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 1626
+    },
+    {
+      "name": "phase-c",
+      "args": [
+        "tests/ucp_phase_c_delivery_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 6177
+    },
+    {
+      "name": "replacement",
+      "args": [
+        "tests/ucp_phase1_replacement_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 3222
+    },
+    {
+      "name": "phase2-finance",
+      "args": [
+        "tests/ucp_phase2_finance_integrity_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 866
+    },
+    {
+      "name": "historical054-to106",
+      "args": [
+        "database/runMigrations.js"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 10061
+    },
+    {
+      "name": "fresh-replay",
+      "args": [
+        "database/runMigrations.js"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 509
+    },
+    {
+      "name": "historical-verify",
+      "args": [
+        "tests/p0_finance_historical_upgrade_gate.js",
+        "verify"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 408
+    },
+    {
+      "name": "fresh-audit",
+      "args": [
+        "database/readOnlyMigrationAudit.js",
+        "--test-only"
+      ],
+      "port": 33324,
+      "exit": 0,
+      "ms": 525
+    },
+    {
+      "name": "phase2-email",
+      "args": [
+        "tests/ucp_phase2_email_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 1634
+    },
+    {
+      "name": "smarthub-source",
+      "args": [
+        "--test",
+        "tests/procurement_line_receipt_api.test.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 1189
+    },
+    {
+      "name": "outbox",
+      "args": [
+        "--test",
+        "tests/email_outbox_queue_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 786
+    },
+    {
+      "name": "browser-guard",
+      "args": [
+        "--test",
+        "tests/phase1_browser_server_guard.test.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 2113
+    },
+    {
+      "name": "integration-review-regressions",
+      "args": [
+        "--test",
+        "tests/ucp_scheduler_integration.test.js",
+        "tests/safepay_payment_created_webhook.test.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 789
+    },
+    {
+      "name": "browser-delivery",
+      "args": [
+        "tests/ucp_phase1_delivery_browser_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 31359
+    },
+    {
+      "name": "browser-mobile-urdu",
+      "args": [
+        "tests/ucp_phase2_full_ui_browser_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 19562
+    },
+    {
+      "name": "smarthub-collective-operations-closing",
+      "args": [
+        "tests/collective_commitment_mysql_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 2291
+    },
+    {
+      "name": "smarthub-recurring-controls",
+      "args": [
+        "tests/recurring_cycle_controls_mysql_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 2178
+    },
+    {
+      "name": "smarthub-delivery-binding",
+      "args": [
+        "tests/procurement_delivery_binding_mysql_gate.js"
+      ],
+      "port": null,
+      "exit": 0,
+      "ms": 4193
+    }
+  ],
+  "historicalFailuresPreserved": true,
+  "reviewRegressions": {
+    "red": {
+      "tests": 17,
+      "failures": 2
+    },
+    "green": {
+      "tests": 17,
+      "failures": 0
+    },
+    "fixes": [
+      "Remove legacy bulk Flash expiry path",
+      "Separate webhook event identity from tracker identity"
+    ]
+  },
+  "policyTests": {
+    "initialPass": 52,
+    "initialFail": 1,
+    "failedFileRerunPass": 13,
+    "reason": "Loopback EACCES under restricted execution; rerun with required access"
+  },
+  "frontendBuild": {
+    "exit": 0,
+    "modules": 2243,
+    "reportedBuildSeconds": 8.68
+  },
+  "smtp": {
+    "authorizedMessages": 2,
+    "smtpAccepted": 2,
+    "actualInboxReceipt": "USER_CONFIRMED_BOTH",
+    "urduRendering": "USER_CONFIRMED_CORRECT",
+    "scope": "Explicit verification messages via production template/SMTP transport; no real order action"
+  },
+  "protectedDatabase": {
+    "mutationsPerformed": false,
+    "readOnlyComparison": "previous reported baseline, not contemporaneous before/after",
+    "changedTables": []
+  },
+  "provider": {
+    "sandboxInitiationAndReadback": "TRACKER_STARTED",
+    "actualPaid": false,
+    "refundCapability": "UNVERIFIED",
+    "externalExecution": "DISABLED",
+    "priorReportedPreparedOrder": "absent from preserved pre-upgrade backup; not attributed",
+    "newOwnedCheckout": "persisted privately, requires human test-card/3DS"
+  },
+  "exactSourceCI": "PENDING_COMMIT_AND_PUSH",
+  "release": "PARTIAL_BLOCKED",
+  "newerRemoteChanges": "Not silently included beyond approved snapshot SHAs"
+}

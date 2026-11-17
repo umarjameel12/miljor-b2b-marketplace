@@ -83,9 +83,10 @@ class ProcurementQuoteService{
       await conn.beginTransaction();
       // Parent request is always locked before quote rows to serialize close/withdraw/revisions.
       const [requests]=await conn.query(
-        `SELECT id, buyer_id, status, quote_deadline, delivery_area
+        `SELECT id, buyer_id, status, quote_deadline, delivery_area, collective_commitment_id
            FROM procurement_requests WHERE id=? FOR UPDATE`,[rid]);
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
+      if(requests[0].collective_commitment_id)throw failure('COLLECTIVE_DERIVED_QUOTE_IMMUTABLE','Frozen group-derived quotes cannot be independently revised; resolve the group commitment explicitly.',409);
       // Durable response replay precedes expiry and stock checks: retries must
       // return the exact historic quote even if it has since expired or sold out.
       const [existingQuotes]=await conn.query(
@@ -269,10 +270,11 @@ class ProcurementQuoteService{
       if(!lookup.length)throw failure('QUOTE_NOT_FOUND','Supplier quotation not found.',404);
       // Same parent-before-child row-lock order as submit to avoid deadlocks.
       const [requests]=await conn.query(
-        'SELECT id,status FROM procurement_requests WHERE id=? FOR UPDATE',
+        'SELECT id,status,collective_commitment_id FROM procurement_requests WHERE id=? FOR UPDATE',
         [lookup[0].request_id]
       );
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request no longer exists.',404);
+      if(requests[0].collective_commitment_id)throw failure('COLLECTIVE_DERIVED_QUOTE_IMMUTABLE','Frozen group-derived quotes cannot be independently withdrawn.',409);
       const [rows]=await conn.query(
         'SELECT id,status,withdrawal_key,current_version FROM procurement_quotes WHERE id=? AND supplier_id=? FOR UPDATE',
         [qid,supplier]

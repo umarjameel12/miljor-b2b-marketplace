@@ -28,6 +28,9 @@ function startScheduler() {
       await poolClosureService.processExpiredPools();
       await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
       await require('./ucpRegularRecoveryService').runRegularRecoveryBatch({limit:50});
+      // Flash expiry must remain inside leased transactional UCP recovery.
+      // A bulk status update would strand over-limit/failed recovery offers.
+      await require('./procurementCollectiveCommitmentService').releaseExpiredBatch({limit:20});
     } catch (err) {
       console.error('[Scheduler] Pool expiry job failed:', err.message);
     } finally { expiryRunning=false; }
@@ -68,6 +71,7 @@ function startScheduler() {
       if (recurringRunning) return;
       recurringRunning = true;
       try {
+        await require('./procurementRecurringService').runReminderBatch({limit:20});
         const result = await require('./procurementRecurringService')
           .runDueBatch({limit:20});
         if (result.checked || result.failed) {

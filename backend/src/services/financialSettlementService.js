@@ -38,6 +38,13 @@ function isFinancialAdminRole(role) {
 
 class FinancialSettlementService {
 
+  _assertLegacyAllocationMutationAllowed(row) {
+    if (row.receipt_policy_version || row.procurement_line_receipt_id || row.procurement_settlement_review_id || row.procurement_delivery_contract_id) {
+      throw Object.assign(new Error('Receipt-linked funds require line-aware financial review; legacy aggregate mutation is blocked.'),
+        {code:'LINE_FINANCIAL_ADMIN_REVIEW_REQUIRED',statusCode:409});
+    }
+  }
+
   /**
    * Generates a deterministic unique audit event code.
    * Format: FIN-EVT-<TYPE>-<TIMESTAMP>-<HEX>
@@ -90,7 +97,7 @@ class FinancialSettlementService {
         actorId,
         fromStatus,
         toStatus,
-        amountDelta ? Number(amountDelta).toFixed(2) : null,
+        amountDelta === null || amountDelta === undefined ? null : exactDecimal.toCanonical(amountDelta, 2),
         currency,
         notes,
         metadata ? JSON.stringify(metadata) : null
@@ -102,6 +109,136 @@ class FinancialSettlementService {
   // ===========================================================================
   // 1. SUPPLIER PAYABLE ACCRUAL
   // ===========================================================================
+
+  // R4 internal entry point. The caller owns the transaction; no nested commit.
+  // Only immutable final receipts may establish this allocation. Pending refund
+  // obligations RESERVE the same disputed holds, and are never added twice to
+  // captured-fund conservation. External execution and partial release stay off.
+  async assessProcurementReceiptsWithinTransaction(connection, {orderId, actor}) {
+    const policy = require('./procurementLineReceiptPolicy');
+    const blocked = reason => ({financial_status:'BLOCKED',financial_block_reason:reason,
+      refund_obligation_created:false,hold_applied:false,settlement_authorized:false,external_execution_status:'DISABLED'});
+    const oid = policy.id(orderId);
+    const [orders] = await connection.query('SELECT * FROM orders WHERE id=? FOR UPDATE',[oid]);
+    const order = orders[0];
+    if (!order || !actor || actor.role !== 'BUYER' || String(actor.id) !== String(order.buyer_id))
+      throw policy.fail('FORBIDDEN','Only the owning buyer may assess receipt money.',403);
+    const receiptService = require('./procurementLineReceiptService');
+    const payment = await receiptService._verifiedPayment(connection,order);
+    const [prior] = await connection.query('SELECT * FROM procurement_receipt_financial_assessments WHERE order_id=? FOR UPDATE',[oid]);
+    if (prior.length) return {...(typeof prior[0].allocation_snapshot==='string'?JSON.parse(prior[0].allocation_snapshot):prior[0].allocation_snapshot),is_replay:true};
+    const lines = await receiptService._lines(connection,oid);
+    const [receipts] = await connection.query('SELECT * FROM procurement_line_receipts WHERE order_id=? ORDER BY award_line_id FOR UPDATE',[oid]);
+    if (receipts.length !== lines.length) return blocked('ALL_FINAL_LINE_RECEIPTS_REQUIRED');
+    const [consents] = await connection.query('SELECT fee_policy_version,fee_policy_accepted FROM procurement_line_receipt_submissions WHERE order_id=?',[oid]);
+    if (!consents.length || consents.some(row=>row.fee_policy_version!==policy.FEE_POLICY_VERSION || Number(row.fee_policy_accepted)!==1))
+      return blocked('RECEIPT_FEE_POLICY_ACCEPTANCE_REQUIRED');
+    for (const line of lines) {
+      const receipt = receipts.find(row=>String(row.award_line_id)===String(line.id));
+      if (!receipt) return blocked('ALL_FINAL_LINE_RECEIPTS_REQUIRED');
+      const assessed = policy.assessLine(line,{award_line_id:line.id,received_quantity:receipt.received_quantity,
+        accepted_quantity:receipt.accepted_quantity,disputed_quantity:receipt.disputed_quantity,
+        reason:receipt.reason,evidence_notes:receipt.evidence_notes});
+      if (!exactDecimal.exactDecimalEquals(assessed.refund_assessment_amount,receipt.refund_assessment_amount,2) ||
+          !exactDecimal.exactDecimalEquals(line.subtotal,receipt.subtotal,2)) return blocked('LINE_RECEIPT_FINANCIAL_INTEGRITY_ERROR');
+    }
+    let allocation;
+    try { allocation = policy.assessFinancialAllocation(order,payment.amount,receipts); }
+    catch(error) { if(error.statusCode) return blocked(error.code); throw error; }
+    if (allocation.canonical_full_settlement_required) {
+      return {...allocation,financial_status:'CANONICAL_FULL_RECEIPT',financial_block_reason:null,
+        canonical_settlement_required:true,refund_obligation_created:false,hold_applied:false,
+        settlement_authorized:false};
+    }
+    const [captures] = await connection.query("SELECT id FROM payments WHERE order_id=? AND status IN ('PAID','PARTIALLY_REFUNDED','REFUNDED') AND procurement_delivery_contract_id IS NULL FOR UPDATE",[oid]);
+    const [payables] = await connection.query('SELECT * FROM supplier_payables WHERE order_id=? FOR UPDATE',[oid]);
+    const [allHolds] = await connection.query('SELECT * FROM financial_holds WHERE order_id=? FOR UPDATE',[oid]);
+    const supplements=allHolds.some(row=>row.receipt_policy_version==='R6_DELIVERY_FEE_V1')?(await connection.query('SELECT financial_hold_id,amount FROM procurement_delivery_payment_contracts WHERE order_id=? AND payment_id IS NOT NULL FOR UPDATE',[oid]))[0]:[];
+    const holds=allHolds.filter(row=>!(row.receipt_policy_version==='R6_DELIVERY_FEE_V1'&&supplements.some(contract=>Number(contract.financial_hold_id)===Number(row.id)&&exactDecimal.exactDecimalEquals(contract.amount,row.hold_amount,2))));
+    const [refunds] = await connection.query('SELECT id FROM refund_obligations WHERE order_id=? AND payment_id=? FOR UPDATE',[oid,payment.id]);
+    const [payouts] = await connection.query('SELECT id FROM supplier_disbursement_instructions WHERE order_id=? FOR UPDATE',[oid]);
+    if (captures.length!==1 || String(captures[0].id)!==String(payment.id) || payables.length>1 || holds.length || refunds.length || payouts.length)
+      return blocked('EXISTING_LEDGER_RECONCILIATION_REQUIRED');
+    const existing = payables[0];
+    const originalAllocation = policy.assessFinancialAllocation(order,payment.amount,
+      receipts.map(row=>({...row,refund_assessment_amount:'0.00',disputed_quantity:'0.0000'})));
+    if (existing && (existing.receipt_policy_version || String(existing.payment_id)!==String(payment.id) ||
+        String(existing.supplier_id)!==String(order.supplier_id) || existing.currency!=='PKR' ||
+        !['ACCRUED','ELIGIBLE_FOR_DISBURSEMENT'].includes(existing.status) ||
+        ['held_amount','refund_deduction_amount','disbursed_amount'].some(key=>!exactDecimal.exactDecimalEquals(existing[key],'0.00',2)) ||
+        !exactDecimal.exactDecimalEquals(existing.gross_amount,order.subtotal_amount,2) ||
+        !exactDecimal.exactDecimalEquals(existing.delivery_fee_amount,order.delivery_fee,2) ||
+        !exactDecimal.exactDecimalEquals(existing.commission_rate_percent,allocation.original_commission_percent,2) ||
+        !exactDecimal.exactDecimalEquals(existing.commission_amount,originalAllocation.accepted_commission_amount,2) ||
+        !exactDecimal.exactDecimalEquals(existing.net_payable_amount,originalAllocation.accepted_supplier_net,2) ||
+        !exactDecimal.exactDecimalEquals(existing.available_amount,existing.net_payable_amount,2)))
+      return blocked('EXISTING_PAYABLE_RECONCILIATION_REQUIRED');
+    const priorPayableSnapshot = existing ? JSON.stringify(existing) : null;
+    let payableId;
+    const fields = [allocation.accepted_merchandise_amount,allocation.original_commission_percent,
+      allocation.accepted_commission_amount,allocation.accepted_supplier_net,allocation.accepted_supplier_net,
+      policy.FEE_POLICY_VERSION];
+    if (existing) {
+      payableId = existing.id;
+      await connection.query(`UPDATE supplier_payables SET gross_amount=?,delivery_fee_amount=0.00,
+        commission_rate_percent=?,commission_amount=?,net_payable_amount=?,available_amount=?,
+        receipt_policy_version=?,policy_status='MANUAL_REVIEW_REQUIRED',policy_notes='R4 accepted merchandise only; fees held; release blocked',updated_at=NOW() WHERE id=?`,[...fields,payableId]);
+    } else {
+      const [created] = await connection.query(`INSERT INTO supplier_payables
+        (payable_code,order_id,supplier_id,payment_id,gross_amount,delivery_fee_amount,commission_rate_percent,
+         commission_amount,net_payable_amount,available_amount,held_amount,refund_deduction_amount,
+         disbursed_amount,receipt_policy_version,currency,status,policy_status,policy_notes)
+        VALUES (?,?,?,?,?,0.00,?,?,?,?,0.00,0.00,0.00,?,'PKR','ACCRUED','MANUAL_REVIEW_REQUIRED','R4 accepted merchandise only; fees held; release blocked')`,
+      ['R4P-'+oid,oid,order.supplier_id,payment.id,...fields]);
+      payableId = created.insertId;
+    }
+    const holdIds=[],refundIds=[],lineAllocations=[];
+    for (const receipt of receipts) {
+      if (!exactDecimal.exactDecimalGte(receipt.refund_assessment_amount,'0.01',2)) continue;
+      const [disputes] = await connection.query('SELECT id FROM order_disputes WHERE procurement_line_receipt_id=? FOR UPDATE',[receipt.id]);
+      if (disputes.length!==1) throw policy.fail('LINE_DISPUTE_REQUIRED','Receipt must have exactly one linked dispute.',409);
+      const [hold] = await connection.query(`INSERT INTO financial_holds
+        (hold_code,order_id,supplier_payable_id,dispute_id,hold_amount,currency,reason,status,
+         placed_by_role,placed_by_id,notes,procurement_line_receipt_id,receipt_policy_version)
+        VALUES (?,?,NULL,?,?,'PKR','ACTIVE_DISPUTE','ACTIVE','SYSTEM',?,?,?,?)`,
+      ['R4HG-'+receipt.id,oid,disputes[0].id,receipt.refund_assessment_amount,actor.id,
+       'Reserved captured merchandise; overlaps pending refund, not supplier entitlement',receipt.id,policy.FEE_POLICY_VERSION]);
+      holdIds.push(hold.insertId);
+      const [refund] = await connection.query(`INSERT INTO refund_obligations
+        (refund_code,order_id,payment_id,buyer_id,dispute_id,disputed_quantity,assessed_refund_amount,
+         fee_refund_amount,total_refund_amount,currency,refund_type,status,external_execution_status,
+         idempotency_key,audit_notes,procurement_line_receipt_id)
+        VALUES (?,?,?,?,?,?,?,0.00,?,'PKR','PARTIAL','REQUESTED','DISABLED',?,?,?)`,
+      ['R4RF-'+receipt.id,oid,payment.id,order.buyer_id,disputes[0].id,receipt.disputed_quantity,
+       receipt.refund_assessment_amount,receipt.refund_assessment_amount,'r4-refund:'+receipt.id,
+       policy.FEE_POLICY_VERSION+'; backed by hold '+hold.insertId+'; admin review required',receipt.id]);
+      refundIds.push(refund.insertId);
+      lineAllocations.push({award_line_id:receipt.award_line_id,receipt_id:receipt.id,
+        dispute_id:disputes[0].id,hold_id:hold.insertId,refund_obligation_id:refund.insertId});
+    }
+    for (const [component,amount] of [['DELIVERY',allocation.delivery_fee_hold],['PROCESSING',allocation.processing_fee_hold]]) {
+      if (amount==='0.00') continue;
+      const [hold] = await connection.query(`INSERT INTO financial_holds
+        (hold_code,order_id,supplier_payable_id,hold_amount,currency,reason,status,placed_by_role,
+         placed_by_id,notes,receipt_policy_version,receipt_hold_component)
+        VALUES (?,?,NULL,?,'PKR','ADMINISTRATIVE_INVESTIGATION','ACTIVE','SYSTEM',?,?,?,?)`,
+      ['R4H'+component[0]+'-'+oid,oid,amount,actor.id,'Original '+component+' fee held for admin review',policy.FEE_POLICY_VERSION,component]);
+      holdIds.push(hold.insertId);
+    }
+    const result = {...allocation,financial_status:'INTERNAL_RECORDED',financial_block_reason:'LINE_PARTIAL_RELEASE_VALIDATOR_REQUIRED',
+      refund_obligation_created:refundIds.length>0,hold_applied:holdIds.length>0,settlement_authorized:false,
+      supplier_payable_id:payableId,hold_ids:holdIds,refund_obligation_ids:refundIds};
+    result.line_allocations=lineAllocations;
+    const [assessment] = await connection.query(`INSERT INTO procurement_receipt_financial_assessments
+      (order_id,payment_id,supplier_payable_id,policy_version,allocation_snapshot,prior_payable_snapshot,buyer_consent_snapshot)
+      VALUES (?,?,?,?,?,?,?)`,[oid,payment.id,payableId,policy.FEE_POLICY_VERSION,JSON.stringify(result),
+      priorPayableSnapshot,JSON.stringify({version:policy.FEE_POLICY_VERSION,accepted:true,buyer_id:actor.id})]);
+    await this._logAuditEvent(connection,{orderId:oid,paymentId:payment.id,entityType:'RECEIPT_ASSESSMENT',
+      entityId:assessment.insertId,eventType:'R4_ACCEPTED_VALUE_ALLOCATED',actorRole:actor.role,actorId:actor.id,
+      toStatus:'INTERNAL_RECORDED',amountDelta:allocation.captured_amount,metadata:result,
+      notes:'Original order and invoice snapshots unchanged; external execution DISABLED; partial release blocked.'});
+    return result;
+  }
 
   /**
    * Accrues supplier payable for an order once it is genuinely PAID.
@@ -145,7 +282,7 @@ class FinancialSettlementService {
 
       // Check payment record
       const [payments] = await connection.query(
-        `SELECT * FROM payments WHERE order_id = ? AND status = 'PAID' ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+        `SELECT * FROM payments WHERE order_id = ? AND status = 'PAID' AND procurement_delivery_contract_id IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE`,
         [orderId]
       );
 
@@ -319,6 +456,7 @@ class FinancialSettlementService {
       }
 
       const payable = payables[0];
+      this._assertLegacyAllocationMutationAllowed(payable);
       const holdAmountStr = exactDecimal.toCanonical(amount, 2);
 
       // Validate hold amount does not exceed net payable
@@ -443,6 +581,7 @@ class FinancialSettlementService {
       }
 
       const hold = holds[0];
+      this._assertLegacyAllocationMutationAllowed(hold);
 
       if (hold.status !== 'ACTIVE') {
         const err = new Error(`Cannot release non-active financial hold. Current status: ${hold.status}`);
@@ -571,7 +710,7 @@ class FinancialSettlementService {
         `SELECT o.*, p.id AS payment_row_id, p.amount AS captured_amount, p.status AS payment_row_status
          FROM orders o
          JOIN payments p ON p.order_id = o.id
-         WHERE o.id = ? AND p.status = 'PAID'
+         WHERE o.id = ? AND p.status = 'PAID' AND p.procurement_delivery_contract_id IS NULL
          ORDER BY p.id DESC LIMIT 1 FOR UPDATE`,
         [orderId]
       );
@@ -598,6 +737,16 @@ class FinancialSettlementService {
         err.code = 'UNAUTHORIZED_ROLE';
         err.statusCode = 403;
         throw err;
+      }
+
+      // FULL and PARTIAL legacy paths must both stay outside the R4 allocation:
+      // otherwise a new aggregate refund could duplicate pending line refunds.
+      const [procurementLines] = await connection.query(
+        `SELECT COUNT(*) AS line_count FROM procurement_award_lines al
+         JOIN procurement_award_orders ao ON ao.id=al.award_order_id WHERE ao.order_id=?`,[orderId]);
+      if (Number(procurementLines[0]?.line_count||0)>0) {
+        throw Object.assign(new Error('Procurement refunds require receipt-linked line allocations.'),
+          {code:'LINE_ITEM_REFUND_ALLOCATION_REQUIRED',statusCode:409});
       }
 
       // Idempotency lookup comes before duplicate-dispute rejection, so an
@@ -913,6 +1062,7 @@ class FinancialSettlementService {
       }
 
       const refund = refunds[0];
+      this._assertLegacyAllocationMutationAllowed(refund);
 
       if (!['REQUESTED', 'UNDER_REVIEW'].includes(refund.status)) {
         const err = new Error(`Cannot approve refund in status '${refund.status}'. Expected REQUESTED or UNDER_REVIEW.`);
@@ -1074,6 +1224,8 @@ class FinancialSettlementService {
       // 1. Lock and fetch supplier payable with order & supplier profile
       const [payables] = await connection.query(
         `SELECT sp.*, o.order_code, o.fulfillment_status, o.order_status,
+                EXISTS(SELECT 1 FROM procurement_delivery_payment_contracts dc WHERE dc.order_id=o.id AND dc.status<>'REVIEWED') AS supplemental_review_pending,
+                u.role AS supplier_role,u.verification_status AS supplier_user_status,
                 u.is_verified AS supplier_user_verified,
                 prof.verification_status AS supplier_profile_status
          FROM supplier_payables sp
@@ -1093,8 +1245,19 @@ class FinancialSettlementService {
 
       const payable = payables[0];
 
+      if(Number(payable.supplemental_review_pending)===1)throw Object.assign(new Error('Separate reattempt payments require final fee review before supplier release.'),{code:'SUPPLEMENTAL_REVIEW_REQUIRED',statusCode:409});
+
+      let reviewedRelease=null;
+      if (payable.receipt_policy_version && !payable.procurement_settlement_review_id) {
+        throw Object.assign(new Error('Line-aware partial-release validation and fee/dispute review are required before preparing any payout.'),
+          {code:'LINE_PARTIAL_RELEASE_VALIDATOR_REQUIRED',statusCode:409});
+      }
+      if(payable.receipt_policy_version){
+        reviewedRelease=await require('./procurementSettlementReviewService').validateForDisbursement(connection,payable,{actor,idempotencyKey,beneficiaryTitle,beneficiaryIban:cleanIban,beneficiaryBankCode});
+        if(reviewedRelease.replay){await connection.commit();return {success:true,is_replay:true,data:{disbursement:reviewedRelease.replay}};}
+      }
       // Supplier Affirmative Verification Invariant
-      if (!payable.supplier_user_verified || payable.supplier_profile_status !== 'VERIFIED') {
+      if (!payable.supplier_user_verified || payable.supplier_profile_status !== 'VERIFIED' || (payable.supplier_role && payable.supplier_role!=='SUPPLIER') || (payable.supplier_user_status&&!['VERIFIED','EMAIL_VERIFIED'].includes(payable.supplier_user_status))) {
         const err = new Error('Supplier must be affirmatively verified before preparing disbursement');
         err.code = 'SUPPLIER_NOT_VERIFIED';
         err.statusCode = 403;
@@ -1102,7 +1265,7 @@ class FinancialSettlementService {
       }
 
       // Fulfillment must be BUYER_CONFIRMED or COMPLETED
-      if (!['BUYER_CONFIRMED', 'COMPLETED'].includes(payable.fulfillment_status)) {
+      if (!reviewedRelease && !['BUYER_CONFIRMED', 'COMPLETED'].includes(payable.fulfillment_status)) {
         const err = new Error(`Order fulfillment is '${payable.fulfillment_status}'. Disbursement requires BUYER_CONFIRMED or COMPLETED.`);
         err.code = 'ORDER_NOT_BUYER_CONFIRMED';
         err.statusCode = 422;
@@ -1127,12 +1290,19 @@ class FinancialSettlementService {
       }
 
       // Check idempotency if key provided
+      const [reservedInstructions]=await connection.query('SELECT * FROM supplier_disbursement_instructions WHERE supplier_payable_id=? FOR UPDATE',[payable.id]);
+      if(reservedInstructions.length){
+        const prior=reservedInstructions[0];
+        if(reservedInstructions.length!==1||!idempotencyKey||prior.idempotency_key!==idempotencyKey||prior.beneficiary_title!==beneficiaryTitle.trim()||prior.beneficiary_iban!==cleanIban||prior.beneficiary_bank_code!==(beneficiaryBankCode||null)||!exactDecimal.exactDecimalEquals(prior.amount,availableAmount,2)||prior.external_execution_status!=='DISABLED')throw Object.assign(new Error('This entitlement already has a different disbursement reservation.'),{code:'DISBURSEMENT_ALREADY_RESERVED',statusCode:409});
+        await connection.commit();return {success:true,is_replay:true,data:{disbursement:prior}};
+      }
       if (idempotencyKey) {
         const [existingIdem] = await connection.query(
           `SELECT * FROM supplier_disbursement_instructions WHERE idempotency_key = ?`,
           [idempotencyKey]
         );
         if (existingIdem.length > 0) {
+          if(Number(existingIdem[0].supplier_payable_id)!==Number(payable.id))throw Object.assign(new Error('Intent key belongs to a different payable.'),{code:'IDEMPOTENCY_CONFLICT',statusCode:409});
           await connection.commit();
           return {
             success: true,
@@ -1166,6 +1336,7 @@ class FinancialSettlementService {
       );
 
       const disbId = disbInsert.insertId;
+      if(reviewedRelease)await connection.query('UPDATE supplier_disbursement_instructions SET procurement_settlement_review_id=? WHERE id=?',[reviewedRelease.review_id,disbId]);
 
       // Update payable status to DISBURSEMENT_PREPARED
       await connection.query(
@@ -1234,7 +1405,7 @@ class FinancialSettlementService {
 
     try {
       const [disbursements] = await connection.query(
-        `SELECT d.*, sp.order_id, sp.payment_id
+        `SELECT d.*, sp.order_id, sp.payment_id, sp.receipt_policy_version
          FROM supplier_disbursement_instructions d
          JOIN supplier_payables sp ON d.supplier_payable_id = sp.id
          WHERE d.id = ? FOR UPDATE`,
@@ -1249,6 +1420,12 @@ class FinancialSettlementService {
       }
 
       const disb = disbursements[0];
+      if(disb.receipt_policy_version && disb.procurement_settlement_review_id){
+        await require('./procurementSettlementReviewService').validateForDisbursement(connection,{id:disb.supplier_payable_id,order_id:disb.order_id,procurement_settlement_review_id:disb.procurement_settlement_review_id},{actor,instructionId:disb.id});
+      }else this._assertLegacyAllocationMutationAllowed(disb);
+      const [siblings]=await connection.query('SELECT id FROM supplier_disbursement_instructions WHERE supplier_payable_id=? FOR UPDATE',[disb.supplier_payable_id]);
+      if(siblings.length!==1||Number(siblings[0].id)!==Number(disb.id))throw Object.assign(new Error('Conflicting disbursement reservations require reconciliation.'),{code:'DISBURSEMENT_RESERVATION_CONFLICT',statusCode:409});
+      if(disb.procurement_settlement_review_id&&disb.status==='APPROVED'){await connection.commit();return {success:true,is_replay:true,data:{disbursement:disb}};}
 
       if (disb.status !== 'PREPARED') {
         const err = new Error(`Cannot approve disbursement in status '${disb.status}'. Expected PREPARED.`);

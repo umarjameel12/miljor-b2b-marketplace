@@ -179,3 +179,19 @@ Status: Smart Hub integration explicitly approved by the user ("Approve integrat
 | Final readiness | All above | `miljor_db` pristine; PR #54 unmerged | Complete integration, sandbox payment, and SMTP inbox proof | User + Agent | **PARTIAL / NOT RELEASE-READY** |
 
 CAN START NEXT PHASE: NO
+
+
+## Authorized integration execution — 2026-11-17 (supersedes pending A/B and mailbox status above)
+
+The user answered both concrete integration questions with authorization to choose the best approach, and supplied an explicitly authorized mailbox for exactly two verification emails. Approval A/B were executed for the reviewed pinned snapshots, not for arbitrary subsequent remote changes. PR54 remains unmerged into main; no deployment or protected schema change is authorized.
+
+- Main9fb07cf integrated as merge d9394c7; frontend build PASS. Smart Hub a0b6ea3 integrated with all9 conflicts resolved and the reviewed095 +102–106 mapping. UCP096–101 files remain byte-for-byte unchanged. Exact-source post-merge CI is required before qualification.
+- Added independent-review fixes: eliminate competing bulk Flash expiry after the bounded UCP worker; separate provider event identity from tracker identity with stable raw-body fallback and strict signed-data boundaries. New regression tests reproduced both failures before fixes and now pass17/17.
+- Verified fresh-to106,054-to106 and restored UCP101-to106 paths with71 migrations, replay and original-column data preservation. The payments checksum changed because105 adds a nullable column; backup-restored original-column fingerprints match, so this is not evidence of a business-row change. Existing Smart Hub096–100-applied schemas remain fail-closed pending their own provenance bridge; journals were not rewritten.
+- Consolidated UCP14/14 groups, delivery/replacement/finance/capture-email, Smart Hub collective/operations/closing20/20, recurring20/20, delivery binding, source policies, both actual Chromium journeys and frontend build PASS. Detailed commands/timings/failures and sanitizer-safe summary are recorded in evidence/ucp-authorized-integration-2026-11-17.json and private logs.
+- Real SMTP: exactly2 authorized verification messages sent through the existing platform template/SMTP transport. SMTP accepted both; user explicitly confirmed both arrived and Urdu rendered correctly. This closes representative real-inbox transport proof, not every domain-event/channel acceptance by itself. No new business-user subscription/preferences were changed.
+- The earlier reported sandbox order was absent from the preserved pre-upgrade backup. No cause was inferred. A replacement owned PKR100 sandbox order/attempt and private local checkout link were prepared; authenticated provider readback is TRACKER_STARTED with no transaction. Human test-card/3DS completion, actual payment/fees/refund capability remain BLOCKED; external money movement remains DISABLED. Private checkout file: backend/logs/ucp-integration-2026-11-17/sandbox-checkout.html (never commit its bearer URL).
+- Protected miljor_db was accessed only for a read-only checksum comparison against the prior reported baseline;0 changed tables. This is not a contemporaneous pre/post snapshot. Historical drift attribution is unresolved and is not resolved by unrelated buyer metadata.
+- Fetch showed newer remote main9c0a819 and Smart Hub7f1baee, beyond the reviewed approved snapshots. These were inspected but not silently merged. Current-main readiness requires a separate review of that remaining delta. Do not claim this integration equals all current-main source.
+
+Current result: approved integration locally verified; exact-source commit/push/CI closeout pending. Provider/manual and any newer-ref/provenance work remain separate. CAN START NEXT PHASE: NO.

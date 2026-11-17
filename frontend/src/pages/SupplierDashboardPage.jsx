@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import { SupplierOperationsOverview } from '../components/supplier/SupplierOperationsOverview';
+import { ProcurementReliabilityReport } from '../components/procurement/ProcurementReliabilityReport';
+import { SupplierDeliveryRuns } from '../components/procurement/SupplierDeliveryRuns';
 import {
   TrendingUp,
   Package,
@@ -116,6 +118,8 @@ export const SupplierDashboardPage = () => {
         {error && <p role="alert" className="mb-4 text-sm">{error}</p>}
         {loading && <p role="status" className="mb-4 text-sm">Loading dashboard details…</p>}
         <SupplierOperationsOverview key={user?.id} />
+        <SupplierDeliveryRuns key={`delivery:${user?.id}`} />
+        <ProcurementReliabilityReport key={`report:${user?.id}`} />
         {/* Over limit warning */}
         {subscription?.is_over_limit && (
           <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-3">

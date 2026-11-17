@@ -8,6 +8,9 @@ import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import { SupplierFulfillmentPanel } from '../components/supplier/SupplierFulfillmentPanel';
 import { BuyerDeliveryStopPanel } from '../components/buyer/BuyerDeliveryStopPanel';
+import { ProcurementReliabilityReport } from '../components/procurement/ProcurementReliabilityReport';
+import { ProcurementOrderOperations } from '../components/procurement/ProcurementOrderOperations';
+import { SupplierDeliveryRuns } from '../components/procurement/SupplierDeliveryRuns';
 import {
   ClipboardList,
   Layers,
@@ -57,6 +60,8 @@ export const OrdersPage = () => {
   if (isSupplier) return <AppShell><div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
     <h1 className="font-display font-bold text-2xl">Supplier Orders &amp; Fulfillment Queue</h1>
     <SupplierFulfillmentPanel key={user.id} />
+    <SupplierDeliveryRuns key={`delivery:${user.id}`} />
+    <ProcurementReliabilityReport key={`report:${user.id}`} />
   </div></AppShell>;
 
   return (
@@ -101,6 +106,7 @@ export const OrdersPage = () => {
         </div>
 
         {/* Operational Overview Metric Cards */}
+        {isAuthenticated && user?.role==='BUYER' && <ProcurementReliabilityReport key={`report:${user.id}`} />}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div
             className="p-4 sm:p-5 rounded-2xl border"
@@ -252,6 +258,7 @@ export const OrdersPage = () => {
                 {!isSupplier && (order.payment_status === 'PAID' || order.order_status === 'PAID') && (
                   <BuyerDeliveryStopPanel orderId={order.id} orderedQty={order.total_qty} />
                 )}
+                {order.payment_status==='PAID'&&<ProcurementOrderOperations key={`${user?.id}:${order.id}`} orderId={order.id}/>}
               </article>
             ))}
           </section>

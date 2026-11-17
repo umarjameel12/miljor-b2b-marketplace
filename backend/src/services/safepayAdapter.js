@@ -116,6 +116,7 @@ class SafepayAdapter {
         res.on('end', () => {
           if (res.statusCode < 200 || res.statusCode >= 300) {
             const err = new Error(`Safepay tracker initialization failed with status ${res.statusCode}`);
+            err.providerStatusCode = res.statusCode;
             err.code = 'SAFEPAY_API_ERROR';
             err.statusCode = 502;
             try {
@@ -404,7 +405,7 @@ class SafepayAdapter {
    * Cryptographically verifies incoming Safepay webhook signature.
    *
    * Official Safepay Webhook specification:
-   * - Algorithm: HMAC-SHA512 strictly over raw untouched JSON request body bytes.
+   * - Algorithm: HMAC-SHA512 over raw bytes or the provider data-envelope profile.
    * - Signature Header: X-SFPY-SIGNATURE (hex string, with optional 'sha512=' prefix).
    * - Security: Constant-time comparison using crypto.timingSafeEqual.
    * - No legacy SHA256 / timestamp fallbacks (strictly fails closed).
@@ -415,13 +416,20 @@ class SafepayAdapter {
    * @returns {boolean} True if signature is cryptographically valid
    */
   verifyWebhookSignature({ rawBody, signature }) {
+    return this.verifyWebhookSignatureScope({ rawBody, signature }) !== null;
+  }
+
+  // Return 'raw_body', 'data', or null. The boolean API above stays compatible.
+  // Return the authenticated boundary so callers cannot trust unsigned envelope
+  // fields when the provider signature covers only JSON.stringify(data).
+  verifyWebhookSignatureScope({ rawBody, signature }) {
     if (!signature || !rawBody) {
-      return false;
+      return null;
     }
 
     const secret = this.webhookSecret;
     if (!secret) {
-      return false;
+      return null;
     }
 
     try {
@@ -435,7 +443,7 @@ class SafepayAdapter {
 
       const receivedBuffer = Buffer.from(normalizedReceived, 'utf8');
 
-      // Compute official Safepay HMAC-SHA512 strictly over untouched raw body bytes
+      // Compute official Safepay HMAC-SHA512 over untouched raw body bytes
       const computedSha512 = crypto
         .createHmac('sha512', secret)
         .update(rawBodyBuffer)
@@ -443,13 +451,31 @@ class SafepayAdapter {
 
       const expectedBuffer512 = Buffer.from(computedSha512.toLowerCase(), 'utf8');
 
-      if (receivedBuffer.length !== expectedBuffer512.length) {
-        return false;
+      if (receivedBuffer.length === expectedBuffer512.length && crypto.timingSafeEqual(receivedBuffer, expectedBuffer512)) {
+        return 'raw_body';
       }
 
-      return crypto.timingSafeEqual(receivedBuffer, expectedBuffer512);
+      // Official Safepay v1 webhooks (e.g. payment:created 1.0.0) sign JSON.stringify(payload.data)
+      // with HMAC-SHA512 using the endpoint/account webhook secret.
+      try {
+        const parsed = JSON.parse(rawBodyBuffer.toString('utf8'));
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+          const dataDigest = crypto
+            .createHmac('sha512', secret)
+            .update(Buffer.from(JSON.stringify(parsed.data), 'utf8'))
+            .digest('hex');
+          const expectedDataBuffer = Buffer.from(dataDigest.toLowerCase(), 'utf8');
+          if (receivedBuffer.length === expectedDataBuffer.length && crypto.timingSafeEqual(receivedBuffer, expectedDataBuffer)) {
+            return 'data';
+          }
+        }
+      } catch (_) {
+        // Non-JSON rawBody cannot match JSON data envelope signature
+      }
+
+      return null;
     } catch (e) {
-      return false;
+      return null;
     }
   }
 }

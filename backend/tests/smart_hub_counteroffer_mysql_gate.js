@@ -124,4 +124,10 @@ async function run(){
     await admin.end();
   }
 }
-run().catch(e=>{console.error('SMART_HUB_MYSQL_INTEGRATION_FAIL',e);process.exitCode=1;});
+// The service imports the application's singleton pool even when this gate
+// injects its disposable fixture pool. Close that owned process dependency too:
+// otherwise successful assertions leave an idle MySQL socket until CI timeout.
+run().finally(async()=>{
+  const loaded=require.cache[require.resolve('../src/config/db')];
+  if(loaded)await loaded.exports.end();
+}).catch(e=>{console.error('SMART_HUB_MYSQL_INTEGRATION_FAIL',e);process.exitCode=1;});

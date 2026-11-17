@@ -115,6 +115,15 @@ class NotificationService {
         totals.processed++;
         const payload=typeof notice.payload==='string'?JSON.parse(notice.payload):notice.payload;
         if(payload?.schemaVersion!==1&&payload?.schemaVersion!==2)throw Error('LEGACY_EVENT_REQUIRES_ADAPTER');
+        let reminderContext=null;
+        if(notice.event_type==='CYCLE_CUTOFF_UPCOMING'){
+          const match=/^cycle:([1-9]\d*):upcoming24h$/.exec(notice.event_key);
+          reminderContext={contractId:payload.entityId,cycleId:match?Number(match[1]):null};
+          if(!await require('./recurringReminderPolicy').isCurrent(connection,{buyerId:notice.recipient_id,...reminderContext})){
+            await connection.query("UPDATE procurement_notifications SET status='FAILED',attempt_count=5,next_attempt_at=NULL,last_error_code='STALE_REMINDER_SUPPRESSED' WHERE id=?",[notice.id]);
+            await connection.commit();totals.failed++;continue;
+          }
+        }
         const [users]=await connection.query('SELECT id,role,email FROM users WHERE id=?',[notice.recipient_id]);
         if(!users.length||users[0].role!==notice.recipient_role)throw Error('RECIPIENT_UNAVAILABLE');
         const preference=await this.getPreferences(notice.recipient_id,connection);
@@ -141,7 +150,7 @@ class NotificationService {
             await connection.query('SAVEPOINT notice_email');
             try{
               const queued=await email.enqueueEmail(connection,{recipientEmail:users[0].email,recipientUserId:notice.recipient_id,
-                templateName:'platform_notification',payload:projection,
+                templateName:'platform_notification',payload:{...projection,...(reminderContext?{reminderContext}:{})},
                 idempotencyKey:'notice:'+crypto.createHash('sha256').update(notice.recipient_id+':'+notice.event_key).digest('hex')});
               if(!projection.mandatory){
                 const notBefore=await this.reserveOptionalEmailSlot(connection,notice.recipient_id,plan.notBefore||clock(),preference);

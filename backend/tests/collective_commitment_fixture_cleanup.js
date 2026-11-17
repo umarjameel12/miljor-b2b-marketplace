@@ -1,0 +1,47 @@
+'use strict';
+const assert=require('node:assert/strict');
+// Deletes only this gate's uniquely created users and their test-owned graph.
+// Refuse financial evidence/provider attempts rather than erasing it on failure.
+module.exports=async function cleanup(db,ids){
+ assert.equal((await db.query('SELECT DATABASE() name'))[0][0].name,'miljor_test_db');
+ if(!ids.length)return;
+ assert.ok(ids.every(id=>Number.isSafeInteger(id)&&id>0));
+ const marks=ids.map(()=>'?').join(','),inside=' IN ('+marks+')';
+ const [users]=await db.query('SELECT id,full_name,email FROM users WHERE id'+inside,ids);
+ assert.ok(users.every(user=>user.full_name==='Collective commitment fixture'&&user.email.endsWith('@example.invalid')),'Not this gate\'s users');
+ const run=(sql)=>db.query(sql,ids);
+ const [[money]]=await run('SELECT COUNT(*) total FROM payments WHERE buyer_id'+inside);assert.equal(Number(money.total),0,'Preserve any captured payment evidence');
+ const [[attempts]]=await run('SELECT COUNT(*) total FROM payment_attempts WHERE buyer_id'+inside);assert.equal(Number(attempts.total),0,'Preserve provider attempt evidence');
+ await run('UPDATE procurement_requests SET collective_commitment_id=NULL WHERE buyer_id'+inside);
+ await run('UPDATE procurement_collective_commitments SET request_id=NULL,award_id=NULL WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_award_lines WHERE award_id IN (SELECT id FROM procurement_awards WHERE buyer_id'+inside+')');
+ await run('DELETE FROM procurement_award_orders WHERE award_id IN (SELECT id FROM procurement_awards WHERE buyer_id'+inside+')');
+ await run('DELETE FROM orders WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_awards WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_collective_capacity WHERE commitment_id IN (SELECT id FROM procurement_collective_commitments WHERE buyer_id'+inside+')');
+ await run('DELETE FROM procurement_collective_commitments WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_collective_buyer_approvals WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_collective_bid_lines WHERE bid_version_id IN (SELECT v.id FROM procurement_collective_bid_versions v JOIN procurement_collective_bids b ON b.id=v.bid_id WHERE b.supplier_id'+inside+')');
+ await run('DELETE FROM procurement_collective_bid_versions WHERE bid_id IN (SELECT id FROM procurement_collective_bids WHERE supplier_id'+inside+')');
+ await run('DELETE FROM procurement_collective_bids WHERE supplier_id'+inside);
+ await run('DELETE FROM procurement_collective_supplier_invitations WHERE supplier_id'+inside);
+ await run('DELETE FROM procurement_collective_participant_lines WHERE participant_id IN (SELECT id FROM procurement_collective_participants WHERE buyer_id'+inside+')');
+ await run('DELETE FROM procurement_collective_participants WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_collective_groups WHERE organizer_buyer_id'+inside);
+ await run('DELETE FROM procurement_quote_lines WHERE quote_version_id IN (SELECT v.id FROM procurement_quote_versions v JOIN procurement_quotes q ON q.id=v.quote_id WHERE q.supplier_id'+inside+')');
+ await run('DELETE FROM procurement_quote_versions WHERE quote_id IN (SELECT id FROM procurement_quotes WHERE supplier_id'+inside+')');
+ await run('DELETE FROM procurement_quotes WHERE supplier_id'+inside);
+ await run('DELETE FROM procurement_supplier_invitations WHERE supplier_id'+inside);
+ await run('DELETE FROM procurement_request_mutations WHERE buyer_id'+inside);
+ await run('DELETE FROM procurement_request_items WHERE request_id IN (SELECT id FROM procurement_requests WHERE buyer_id'+inside+')');
+ await run('DELETE FROM procurement_requests WHERE buyer_id'+inside);
+ await run('DELETE FROM supplier_inventory_allocations WHERE supplier_listing_id IN (SELECT id FROM supplier_listings WHERE supplier_id'+inside+')');
+ await run('DELETE FROM supplier_listings WHERE supplier_id'+inside);
+  await run('UPDATE supplier_skus SET linked_spec_id=NULL WHERE supplier_id'+inside);
+ await run('DELETE FROM product_specifications WHERE supplier_id'+inside);
+ await run('DELETE FROM supplier_skus WHERE supplier_id'+inside);
+ await run('DELETE FROM supplier_products WHERE supplier_id'+inside);
+ await run('DELETE FROM procurement_notifications WHERE recipient_id'+inside);
+ await run('DELETE FROM supplier_profiles WHERE supplier_id'+inside);
+ await run('DELETE FROM users WHERE id'+inside);
+};

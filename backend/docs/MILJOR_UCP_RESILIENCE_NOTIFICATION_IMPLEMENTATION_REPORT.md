@@ -390,3 +390,26 @@ TASK: Implement and verify Completion Phase 2 on PR #54 (`plan/ucp-resilience-no
   4. **Historical `miljor_db.users` Drift (`NON-BLOCKING UNRESOLVED`):** Read-only inspection identified `BUYER` row `id=52` (`2026-11-17T10:35:32Z`); protected financial/commercial tables remain empty (`0`) and checksums unchanged.
 
 CAN START NEXT PHASE: NO
+
+
+## 2026-11-17 — Authorized main/Smart Hub integration and actual SMTP receipt
+
+TASK: Execute the user's approved pinned main9fb07cf and Smart Huba0b6ea3 integrations into PR54's existing feature branch; preserve original data and verify the approved two-email mailbox.
+
+IMPLEMENTED: Main merge d9394c7 plus Smart Hub merge resolution using the reviewed patch;095 retained, incoming096–100 mapped to102–106 without changing UCP096–101 or applied journals. Reconciled8 source/test conflicts and preserved both phase histories. Independent review found and fixed a bulk Flash expiry bypass and tracker/event receipt-key collision. Fixed directly affected VM dependency allowlists, migration-path test reference, historical-upgrade DB_PORT handling, and an ambiguous browser quantity label; no production auth/payment guard was weakened.
+
+TESTS: Manifest71; backup restore + UCP101->106 + historical054->106 + fresh-to106 + replay PASS. Original-column fingerprints for6 commercial tables match; checksum-only equality is unsuitable when105 adds a column to payments. Consolidated UCP affected14/14 groups PASS (completion resumed after its isolated adapter correction); PhaseC/replacement/finance/capture-email PASS; webhook/scheduler regressions17/17 PASS after two expected-red failures; outbox31/31; browser guard3/3; notification hooks124/124. Incoming Smart Hub collective/operations/closing20/20, recurring20/20 and delivery-binding SQL PASS. Smart Hub policy selection initially52/53 passed; the sole loopback-EACCES file passed13/13 with required host access. Real Chromium delivery/replacement31.359s and mobile/Urdu19.562s exit0. Final frontend build exit0,2243 modules,8.68s. Commands/artifacts: evidence/ucp-authorized-integration-2026-11-17.json; private logs/ucp-integration-2026-11-17/commands.jsonl.
+
+EMAIL: Exactly2 authorized SMTP verification messages (English critical template, Urdu ordinary opt-in template) accepted. User confirmed both actual inbox receipts and correct Urdu text. Recipient and message IDs stay private. This is representative production-template/transport evidence, not a claim that real commercial actions occurred or that every notification hook was externally exercised.
+
+DATABASE: Only owned isolated miljor_test_db instances on33321,33324,33325 were mutated.33321 uses the preserved phase-C datadir;33324 is fresh/historical,33325 backup restore. Before-upgrade dump is preserved privately and restore proved. A historical test omitted DB_PORT and attempted a3306 connection, which was denied before SQL; the test now honors its explicit isolated port. Protected miljor_db read-only checksum comparison matches the previous reported baseline on all6 tables; no task mutation or contemporaneous-before/after claim. Historical attribution remains unresolved.
+
+PROVIDER: Prior reported prepared order absent from the preserved pre-upgrade dump; no attribution invented. New owned PKR100 checkout prepared with durable attempt; actual authenticated state TRACKER_STARTED, no transaction. Checkout URL/token retained only in ignored local files. Card/3DS completion and actual payment/fee/refund proof remain unverified; external execution DISABLED. Do not infer refund unsupported from synthetic tests.
+
+SOURCE SCOPE: Reviewed pinned snapshots were approved and integrated. Newer remote main9c0a819/Smart Hub7f1baee were not silently included. Existing Smart-Hub-applied096–100 schema provenance is not automatically rewritten; such an upgrade remains fail-closed pending a dedicated bridge. Current-main delta and full provider acceptance therefore remain release limitations.
+
+SKILLS: executing-plans for bounded approved integration; requesting-code-review for independent financial/timer review; systematic-debugging for root-cause fixes and expected-red reproduction; verification-before-completion for actual SQL/browser evidence. Existing project instructions superseded generic skill bookkeeping/full-suite repetition.
+
+EVIDENCE: Main parent9fb07cf, Smart Hub parenta0b6ea3, pre-integrationdffb37b; final integration SHA/remote CI will be recorded after commit. Local logs preserve initial failures and targeted corrections; no full PASS is inferred from old CI.
+
+RESULT: local approved-source integration PASS; final commit/push/CI pending at this entry. Overall PARTIAL / RELEASE BLOCKED on actual sandbox payment/fee/refund proof and remaining source/provenance limits. CAN START NEXT PHASE: NO.

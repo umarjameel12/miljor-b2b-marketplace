@@ -1,0 +1,8 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {fingerprint,reviewAllocation}=require('../src/services/procurementSettlementReviewPolicy');
+const allocation={policy_version:'R4_ACCEPTED_MERCHANDISE_V1',captured_amount:'230.00',accepted_merchandise_amount:'100.00',accepted_commission_amount:'2.50',accepted_supplier_net:'97.50',disputed_merchandise_hold:'100.00',delivery_fee_hold:'25.00',processing_fee_hold:'5.00',allocated_captured_amount:'230.00'};
+const input=()=>({assessment_hash:fingerprint(allocation),delivery_refund_amount:'10.00',processing_refund_amount:'2.00',approve_disputed_merchandise_refunds:true,notes:'Reviewed line evidence and fee responsibility'});
+test('admin fee allocation conserves captured money with original accepted commission',()=>{const value=reviewAllocation(allocation,input());assert.equal(value.supplier_entitlement,'112.50');assert.equal(value.platform_entitlement,'5.50');assert.equal(value.total_refund,'112.00');assert.equal(value.external_execution_status,'DISABLED');});
+test('exact bounds, stale assessment, absent consent and forged fields fail closed',()=>{for(const change of [{delivery_refund_amount:'25.01'},{processing_refund_amount:'-1'},{delivery_refund_amount:'0.001'},{assessment_hash:'a'.repeat(64)},{approve_disputed_merchandise_refunds:false},{supplier_entitlement:'9999'},{notes:'x'}])assert.throws(()=>reviewAllocation(allocation,{...input(),...change}));});
+test('fingerprint is canonical across database JSON key order; altered evidence changes it',()=>{assert.equal(fingerprint({b:2,a:{z:1,y:2}}),fingerprint({a:{y:2,z:1},b:2}));assert.notEqual(fingerprint(allocation),fingerprint({...allocation,accepted_commission_amount:'0'}));});

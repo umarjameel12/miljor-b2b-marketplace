@@ -14,6 +14,7 @@ function service(db, sendMail = async () => ({ messageId: 'mock-message' }), env
       if (id === 'nodemailer') return { createTransport() { throw Error('Real transport forbidden'); } };
       if (id === 'crypto') return require('node:crypto');
       if (id === './notificationDeliveryPolicy') return require('../src/services/notificationDeliveryPolicy');
+      if (id === './recurringReminderPolicy') return require('../src/services/recurringReminderPolicy');
       throw Error('Unexpected dependency: ' + id);
     }, mod, mod.exports, { env: { NODE_ENV: 'test', APP_FRONTEND_URL: 'https://app.miljor.test', ...env } }
   );
@@ -107,6 +108,11 @@ function memory() {
       }
       return [{ affectedRows }];
     }
+    if(q.includes("last_error='STALE_REMINDER_SUPPRESSED'")){
+      const row=rows.find(r=>r.id===args[0]&&r.claim_token===args[1]&&r.status==='SENDING');
+      if(!row)return [{affectedRows:0}];
+      Object.assign(row,{status:'FAILED',attempt_count:3,last_error:'STALE_REMINDER_SUPPRESSED',claim_token:null,claim_expires_at:null,next_attempt_at:null});return [{affectedRows:1}];
+    }
     const guarded = q.includes('claim_token = ?');
     if (guarded) {
       assert.match(q, /status = 'SENDING'/);
@@ -137,6 +143,16 @@ function memory() {
 const input = changes => ({ recipientEmail: 'buyer@example.test', recipientUserId: 5,
   templateName: 'platform_notification', payload: { title: 'Update', message: 'Ready', locale: 'en' },
   idempotencyKey: 'notification-17', ...changes });
+test('queued reminder is revalidated before transport and terminally suppressed when stale',async()=>{
+ const f=memory();let sends=0;
+ const db={query:async(sql,args)=>sql.includes('SELECT cy.id FROM procurement_recurring_contracts')?[[]]:f.db.query(sql,args)};
+ db.getConnection=async()=>({query:db.query,beginTransaction:async()=>{},rollback:async()=>{},release(){}});
+ const s=service(db,async()=>{sends++;return {messageId:'unexpected'};});
+ await s.enqueueEmail(db,input({payload:{title:'Upcoming cutoff',message:'Review cycle',reminderContext:{contractId:12,cycleId:31}}}));
+ const result=await s.processOutboxBatch();assert.equal(sends,0);assert.equal(result.failed,1);assert.equal(result.succeeded,0);
+ assert.equal(f.rows[0].last_error,'STALE_REMINDER_SUPPRESSED');assert.equal(f.rows[0].attempt_count,3);
+ assert.equal((await s.processOutboxBatch()).processed,0);
+});
 const forbiddenDb = { async query() { throw Error('Global DB access forbidden'); } };
 
 test('enqueue uses caller connection only, renders first, deduplicates without dispatch', async () => {

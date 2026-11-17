@@ -206,10 +206,14 @@ class ProcurementAwardService{
           AND verification_status='VERIFIED' AND buyer_trust_status<>'SUSPENDED'`,[buyer]);
       if(!buyers.length)throw fail('BUYER_NOT_ELIGIBLE','Verified active B2B buyer required.',403);
       const [parents]=await conn.query(
-        'SELECT id FROM procurement_requests WHERE id=? AND buyer_id=? FOR UPDATE',
+        'SELECT id,collective_commitment_id FROM procurement_requests WHERE id=? AND buyer_id=? FOR UPDATE',
         [rid,buyer]
       );
       if(!parents.length)throw fail('REQUEST_NOT_FOUND','Buyer request not found.',404);
+      const collectiveCommitment=parents[0].collective_commitment_id;
+      // Serialize a group before probing an absent award unique-index range.
+      // Otherwise a peer can hold that gap while waiting for this group lock.
+      if(collectiveCommitment)await require('./procurementCollectiveCommitmentService').lockGroup(conn,buyer,collectiveCommitment,rid);
       const [existing]=await conn.query(
         `SELECT id,request_id,idempotency_key,payload_hash,original_response_snapshot
            FROM procurement_awards WHERE request_id=? FOR UPDATE`,[rid]
@@ -223,6 +227,7 @@ class ProcurementAwardService{
         return {award:typeof snapshot==='string'?JSON.parse(snapshot):snapshot,
           is_replay:true};
       }
+      if(collectiveCommitment)await require('./procurementCollectiveCommitmentService').lockForAward(conn,buyer,collectiveCommitment,rid);
       const {request,preview}=await this._validatedPreview(
         conn,buyer,rid,payload.selections,false
       );
@@ -407,6 +412,7 @@ class ProcurementAwardService{
         'UPDATE procurement_awards SET original_response_snapshot=? WHERE id=?',
         [JSON.stringify(snapshot),awardResult.insertId]
       );
+      if(collectiveCommitment)await require('./procurementCollectiveCommitmentService').recordAward(conn,collectiveCommitment,awardResult.insertId);
       await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'TERMS_LOCKED',
         eventKey:'award:'+awardResult.insertId+':locked',entityId:rid});
       for(const order of orderSummary){
@@ -483,6 +489,13 @@ class ProcurementAwardService{
       order_count:orders.length,orders,
       total_payable:awards[0].accepted_total_payable,
       currency:'PKR'};
+  }
+  async findMineByRequest(buyerId,requestId){
+    const buyer=id(buyerId,'Buyer'),request=id(requestId,'Request');
+    const [rows]=await this.database.query('SELECT a.original_response_snapshot FROM procurement_awards a JOIN procurement_requests r ON r.id=a.request_id AND r.buyer_id=a.buyer_id WHERE a.buyer_id=? AND a.request_id=?',[buyer,request]);
+    if(!rows.length)throw fail('AWARD_NOT_FOUND','Your request has no committed award.',404);
+    const value=rows[0].original_response_snapshot;
+    return typeof value==='string'?JSON.parse(value):value;
   }
 }
 module.exports=new ProcurementAwardService();

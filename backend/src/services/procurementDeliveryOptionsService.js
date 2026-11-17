@@ -29,7 +29,7 @@ class ProcurementDeliveryOptionsService{
     if(new Date(owned.valid_until)<=new Date())
       throw fail('QUOTE_EXPIRED','Quotation has expired',409);
     const options=await this.eligibility.getDeliveryOptions(buyer,
-      {supplier_id:Number(owned.supplier_id),cluster_id:cluster});
+      {supplier_id:Number(owned.supplier_id),cluster_id:cluster},undefined,{procurement:true});
     return {
       request_id:request,quote_id:quote,quote_version:Number(owned.current_version),
       supplier_id:Number(owned.supplier_id),buyer_cluster:options.buyer_cluster,

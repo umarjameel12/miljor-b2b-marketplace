@@ -4,7 +4,7 @@ const exact=require('./exactDecimal');
 const fail=(code,message)=>Object.assign(new Error(message),{code,statusCode:409});
 const pickupSnapshot=point=>({id:Number(point.id),point_name:point.point_name,address_line:point.address_line,operating_hours:point.operating_hours,collection_instructions:point.collection_instructions});
 function snapshotDeliveryTerms(row){
-  if(!row||!['STANDARD_CLUSTERED','PICKUP','EXPRESS'].includes(row.mode))throw fail('INVALID_DELIVERY_TERMS','Unsupported delivery terms');
+  if(!row||!['STANDARD_CLUSTERED','PICKUP','EXPRESS','INDIVIDUAL'].includes(row.mode))throw fail('INVALID_DELIVERY_TERMS','Unsupported delivery terms');
   const number=value=>{
     if(!/^[1-9]\d*$/.test(String(value))||!Number.isSafeInteger(Number(value)))throw fail('INVALID_DELIVERY_TERMS','Invalid delivery identifier');
     return Number(value);
@@ -28,6 +28,11 @@ function snapshotDeliveryTerms(row){
     destination_fingerprint:row.mode==='PICKUP'?null:row.destination_fingerprint,
     address_revision:row.mode==='PICKUP'?null:number(address?.revision),
     supplier_config_version:number(row.supplier_config_version),expires_at:expires};
+  if(row.mode==='INDIVIDUAL'){
+    if(row.pool_id)throw fail('INVALID_DELIVERY_TERMS','Individual delivery is procurement-only');
+    number(row.procurement_request_id);number(row.procurement_quote_id);
+    terms.supplier_rate_version=number(row.supplier_rate_version);
+  }
   if(row.mode!=='PICKUP'&&(!/^[a-f0-9]{64}$/.test(String(terms.destination_fingerprint))))
     throw fail('VERIFIED_DELIVERY_DESTINATION_REQUIRED','Delivery requires an immutable destination fingerprint');
   return {...terms,hash:crypto.createHash('sha256').update(JSON.stringify(terms)).digest('hex')};
