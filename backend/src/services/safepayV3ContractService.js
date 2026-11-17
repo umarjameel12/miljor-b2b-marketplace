@@ -88,13 +88,15 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
     providerSignedWebhookVerified:false
   });
 }
-function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedMerchantApiKey,expectedTrackerToken,expectedOrderCode}){
+function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedMerchantApiKey,expectedTrackerToken,expectedOrderCode,expectedAmountPkr}){
   if(eventType!=='payment.succeeded'||data?.state!=='TRACKER_ENDED')
     throw fail('V3_WEBHOOK_NOT_CAPTURED','Only signed payment.succeeded TRACKER_ENDED events may confirm capture');
   if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
      typeof merchantApiKey!=='string'||merchantApiKey!==expectedMerchantApiKey)
     throw fail('V3_WEBHOOK_MERCHANT_MISMATCH','Webhook merchant identity does not match configured account');
   const amount=fromMinorPkr(data.amount);
+  if(expectedAmountPkr!==undefined&&!exact.exactDecimalEquals(amount,expectedAmountPkr,2))
+    throw fail('V3_WEBHOOK_AMOUNT_MISMATCH','Captured provider amount differs from locked order amount');
   if(data.currency!=='PKR')
     throw fail('V3_WEBHOOK_CURRENCY_MISMATCH','Webhook currency must be PKR');
   const tracker=typeof data.tracker==='string'?data.tracker:data.tracker?.token;
