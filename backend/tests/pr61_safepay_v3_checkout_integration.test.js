@@ -1,0 +1,34 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.join(__dirname,'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('canonical buyer checkout has explicit opt-in v3 path, persists pinned contract and does not silently fallback',()=>{
+  const checkout=read('src/services/safepayCheckoutService.js');
+  const client=read('src/services/safepayV3SandboxClient.js');
+  const migration=read('database/migrations/104_safepay_v3_payment_contract.sql');
+  assert.match(checkout,/SAFEPAY_TRACKER_CONTRACT==='payments-v3-minor'/);
+  assert.match(checkout,/SAFEPAY_V3_SANDBOX_ENABLED!=='true'/);
+  assert.match(checkout,/createHostedCheckout/);
+  assert.match(checkout,/provider_contract/);
+  assert.match(checkout,/'payments-v3-minor'/);
+  assert.match(checkout,/exactDecimal\.toCanonicalString\(order\.total_amount,2\)/);
+  assert.match(client,/\/order\/payments\/v3\//);
+  assert.match(client,/\/client\/passport\/v1\/token/);
+  assert.match(client,/source','hosted|set\('source','hosted'\)/);
+  assert.match(migration,/legacy-v1-major/);
+  assert.match(migration,/payments-v3-minor/);
+});
+test('webhook processing uses the persisted attempt contract, never heuristic amount guessing',()=>{
+  const checkout=read('src/services/safepayCheckoutService.js');
+  const v3=read('src/services/safepayV3ContractService.js');
+  assert.match(checkout,/attempt\.provider_contract\|\|'legacy-v1-major'/);
+  assert.match(checkout,/normalizeSucceededWebhook/);
+  assert.match(checkout,/normalizedProviderAmount/);
+  assert.match(v3,/data\?\.success!==true/);
+  assert.match(v3,/data\?\.state!=='TRACKER_ENDED'/);
+  assert.match(v3,/expectedMerchantApiKey/);
+  assert.match(v3,/fromMinorPkr\(data\.amount\)/);
+});
