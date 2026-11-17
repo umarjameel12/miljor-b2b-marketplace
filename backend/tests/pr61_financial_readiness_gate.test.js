@@ -4,13 +4,14 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const {evaluate,SafepayRefundReadinessService}=require('../src/services/safepayRefundReadinessService');
+const {evaluate,capturedTracker,SafepayRefundReadinessService}=require('../src/services/safepayRefundReadinessService');
 const now=Date.parse('2026-11-16T12:00:00Z');
 const base={
   refund:{id:41,order_id:101,buyer_id:5,payment_id:77,total_refund_amount:'5000.00',
     currency:'PKR',status:'APPROVED',order_payment_status:'PAID'},
   payment:{status:'PAID',amount:'25000.00',paid_at:new Date(now-48*3600000)},
-  attempt:{provider:'SAFEPAY',environment:'sandbox',order_id:101,buyer_id:5}
+  attempt:{provider:'SAFEPAY',environment:'sandbox',status:'COMPLETED',
+    amount:'25000.00',currency:'PKR',order_id:101,buyer_id:5}
 };
 test('20 kg shortage on one buyer order creates read-only exact 5000 PKR refund assessment',()=>{
   const output=evaluate({...base,now});
@@ -44,6 +45,9 @@ test('unapproved, unverified provider, other buyer or currency mismatch fails cl
     {refund:{...base.refund,status:'REQUESTED'}},
     {attempt:{...base.attempt,buyer_id:999}},
     {attempt:{...base.attempt,environment:'production'}},
+    {attempt:{...base.attempt,status:'INITIATED'}},
+    {attempt:{...base.attempt,amount:'24999.99'}},
+    {attempt:{...base.attempt,currency:'USD'}},
     {payment:{...base.payment,status:'PENDING'}},
     {refund:{...base.refund,currency:'USD'}}
   ]){
@@ -51,6 +55,17 @@ test('unapproved, unverified provider, other buyer or currency mismatch fails cl
     assert.equal(result.internal_financial_check,'BLOCKED');
     assert.equal(result.can_execute_external_refund,false);
   }
+});
+test('reconciled payment transaction token cannot replace the original provider tracker',()=>{
+  const row={transaction_ref:'txn_provider_987',provider_response:JSON.stringify({
+    reconciled_via:'DIRECT_PROVIDER_VERIFICATION',
+    tracker_token:'track_capture_123',transaction_token:'txn_provider_987'
+  })};
+  assert.equal(capturedTracker(row),'track_capture_123');
+  assert.equal(capturedTracker({...row,provider_response:'not-json'}),null);
+  assert.equal(capturedTracker({transaction_ref:'track_legacy_234',provider_response:null}),'track_legacy_234');
+  assert.equal(capturedTracker({transaction_ref:'txn_only_345',provider_response:null}),null);
+  assert.equal(capturedTracker({transaction_ref:'track_../attack',provider_response:null}),null);
 });
 test('admin finance UI route is role-scoped and has no external action',()=>{
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/src/pages/AdminFinancePage.jsx'),'utf8');
@@ -66,7 +81,8 @@ test('admin finance UI route is role-scoped and has no external action',()=>{
 test('read-only admin route queries ownership and cap but cannot write or execute refunds',async()=>{
   const data={
     ...base.refund,captured_amount:base.payment.amount,captured_status:'PAID',
-    paid_at:base.payment.paid_at,transaction_ref:'track_fixture_999'
+    paid_at:base.payment.paid_at,transaction_ref:'txn_reconciled_987',
+    provider_response:JSON.stringify({tracker_token:'track_fixture_999',transaction_token:'txn_reconciled_987'})
   };
   let count=0;
   const db={query:async(sql,args)=>{
