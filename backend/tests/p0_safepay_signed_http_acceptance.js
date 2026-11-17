@@ -65,7 +65,13 @@ async function main(){
     r=await post(payload(unknown));assert.equal(r.status,200);
     assert.equal(r.data.data.status,'RECONCILIATION_REQUIRED');
     console.log('PASS untracked signed provider token quarantined');
-    const event=payload(tracker),eventId='evt_final_'+id();
+    // Unsigned header collision must not suppress a different signed event.
+    const collidedHeader='evt_unsigned_collision_'+id();
+    const signedFailed={token:'evt_signed_failed_'+id(),type:'payment.failed',
+      data:{tracker:{token:tracker,amount:1145,currency:'PKR'}}};
+    r=await post(signedFailed,{eventId:collidedHeader,eventType:'payment.failed'});
+    assert.equal(r.status,200,'Authenticated failed event should be recorded without charging');
+    const event=payload(tracker),eventId=collidedHeader;
     r=await post(event,{eventId});assert.equal(r.status,200,JSON.stringify(r.data));
     assert.equal(r.data.data.payment_status,'PAID');
     const [orders]=await db.query('SELECT order_status,payment_status,fulfillment_status FROM orders WHERE id=?',[order]);
@@ -84,6 +90,12 @@ async function main(){
     assert.equal(r.status,200);assert.equal(r.data.data.is_duplicate,true);
     r=await post(event,{eventId:'evt_retry_'+id()});
     assert.equal(r.status,200);assert.equal(r.data.data.is_duplicate,true);
+    const [[signedEventCount]]=await db.query(
+      'SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id=?',[event.token]);
+    assert.equal(Number(signedEventCount.n),1,'Signed event identity must be stable under changed unsigned headers');
+    const [[ignoredHeaderCount]]=await db.query(
+      'SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id=?',[collidedHeader]);
+    assert.equal(Number(ignoredHeaderCount.n),0,'Unsigned event header must not become authoritative record identity');
     const [[counts]]=await db.query(
       'SELECT (SELECT COUNT(*) FROM payments WHERE order_id=?) AS payments,(SELECT COUNT(*) FROM payment_webhook_events WHERE order_id=? AND processed_status=?) AS processed',
       [order,order,'PROCESSED']);
