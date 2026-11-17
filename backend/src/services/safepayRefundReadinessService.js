@@ -19,6 +19,8 @@ function evaluate({refund,payment,attempt,otherApprovedMinor=0n,now=Date.now()})
   if(payment.status!=='PAID'||refund.order_payment_status!=='PAID')
     faults.push('CAPTURE_NOT_VERIFIED');
   if(!attempt||attempt.provider!=='SAFEPAY'||attempt.environment!=='sandbox'||
+     attempt.status!=='COMPLETED'||attempt.currency!==refund.currency||
+     !exact.exactDecimalEquals(attempt.amount,payment.amount,2)||
      Number(attempt.order_id)!==Number(refund.order_id)||
      Number(attempt.buyer_id)!==Number(refund.buyer_id))
     faults.push('PROVIDER_TRACKER_OWNERSHIP_UNVERIFIED');
@@ -51,6 +53,25 @@ function evaluate({refund,payment,attempt,otherApprovedMinor=0n,now=Date.now()})
     note:'This is a read-only assessment, not a refund request or confirmation.'
   };
 }
+function capturedTracker(row){
+  // Direct provider reconciliation can save transaction.token as transaction_ref.
+  // The original checkout tracker is preserved separately in provider_response.
+  // Never query payment_attempts using an arbitrary transaction id.
+  let payload;
+  try{
+    payload=typeof row.provider_response==='string'
+      ?JSON.parse(row.provider_response):row.provider_response;
+  }catch(_){return null;}
+  const token=payload&&typeof payload==='object'
+    ?payload.tracker_token:null;
+  if(typeof token==='string'&&/^track_[A-Za-z0-9_-]{3,180}$/.test(token))
+    return token;
+  // Legacy signed-webhook payments store the tracker as transaction_ref.
+  if(typeof row.transaction_ref==='string'&&
+     /^track_[A-Za-z0-9_-]{3,180}$/.test(row.transaction_ref))
+    return row.transaction_ref;
+  return null;
+}
 class SafepayRefundReadinessService{
   constructor(database=db){this.db=database;}
   async inspect({actor,refundId,now=Date.now()}){
@@ -62,16 +83,17 @@ class SafepayRefundReadinessService{
     const [rows]=await this.db.query(
       `SELECT r.id,r.order_id,r.buyer_id,r.payment_id,r.total_refund_amount,
        r.currency,r.status,o.payment_status AS order_payment_status,
-       p.amount AS captured_amount,p.status AS captured_status,p.paid_at,p.transaction_ref
+       p.amount AS captured_amount,p.status AS captured_status,p.paid_at,p.transaction_ref,p.provider_response
        FROM refund_obligations r
        JOIN orders o ON o.id=r.order_id
        JOIN payments p ON p.id=r.payment_id AND p.order_id=r.order_id AND p.buyer_id=r.buyer_id
        WHERE r.id=?`,[id]);
     if(rows.length!==1)throw error('REFUND_NOT_FOUND',404,'Refund obligation not found');
     const refund=rows[0];
-    const [attempts]=await this.db.query(
-      'SELECT provider,environment,order_id,buyer_id FROM payment_attempts WHERE provider_tracker_token=? LIMIT 2',
-      [refund.transaction_ref]);
+    const tracker=capturedTracker(refund);
+    const [attempts]=tracker?await this.db.query(
+      'SELECT provider,environment,status,amount,currency,order_id,buyer_id FROM payment_attempts WHERE provider_tracker_token=? LIMIT 2',
+      [tracker]):[[]];
     const [others]=await this.db.query(
       `SELECT total_refund_amount FROM refund_obligations
        WHERE payment_id=? AND id<>? AND status IN
@@ -87,3 +109,4 @@ class SafepayRefundReadinessService{
 module.exports=new SafepayRefundReadinessService();
 module.exports.SafepayRefundReadinessService=SafepayRefundReadinessService;
 module.exports.evaluate=evaluate;
+module.exports.capturedTracker=capturedTracker;
