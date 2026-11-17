@@ -67,11 +67,18 @@ async function main(){
     console.log('PASS untracked signed provider token quarantined');
     // Unsigned header collision must not suppress a different signed event.
     const collidedHeader='evt_unsigned_collision_'+id();
-    const signedFailed={token:'evt_signed_failed_'+id(),type:'payment.failed',
+    // A provider may reuse the same authenticated token for distinct statuses.
+    // A failed event must never suppress the later succeeded transition.
+    const sharedSignedToken='evt_shared_'+id();
+    const signedFailed={token:sharedSignedToken,type:'payment.failed',
       data:{tracker:{token:tracker,amount:1145,currency:'PKR'}}};
     r=await post(signedFailed,{eventId:collidedHeader,eventType:'payment.failed'});
     assert.equal(r.status,200,'Authenticated failed event should be recorded without charging');
-    const event=payload(tracker),eventId=collidedHeader;
+    const event={...payload(tracker),token:sharedSignedToken},eventId=collidedHeader;
+    const signedPayloadId=p=>'evt_sha256_'+crypto.createHash('sha256')
+      .update(Buffer.from(JSON.stringify(p))).digest('hex');
+    assert.notEqual(signedPayloadId(event),signedPayloadId(signedFailed),
+      'Different authenticated transitions must have distinct dedupe identities');
     r=await post(event,{eventId});assert.equal(r.status,200,JSON.stringify(r.data));
     assert.equal(r.data.data.payment_status,'PAID');
     const [orders]=await db.query('SELECT order_status,payment_status,fulfillment_status FROM orders WHERE id=?',[order]);
@@ -91,8 +98,11 @@ async function main(){
     r=await post(event,{eventId:'evt_retry_'+id()});
     assert.equal(r.status,200);assert.equal(r.data.data.is_duplicate,true);
     const [[signedEventCount]]=await db.query(
-      'SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id=?',[event.token]);
-    assert.equal(Number(signedEventCount.n),1,'Signed event identity must be stable under changed unsigned headers');
+      'SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id=?',[signedPayloadId(event)]);
+    assert.equal(Number(signedEventCount.n),1,'Exact authenticated payload identity must be stable under changed unsigned headers');
+    const [[failedEventCount]]=await db.query(
+      'SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id=?',[signedPayloadId(signedFailed)]);
+    assert.equal(Number(failedEventCount.n),1,'Failed and successful signed statuses sharing a token must not collide');
     const [[ignoredHeaderCount]]=await db.query(
       'SELECT COUNT(*) AS n FROM payment_webhook_events WHERE event_id=?',[collidedHeader]);
     assert.equal(Number(ignoredHeaderCount.n),0,'Unsigned event header must not become authoritative record identity');
