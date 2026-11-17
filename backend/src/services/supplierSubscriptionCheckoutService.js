@@ -58,6 +58,10 @@ class SupplierSubscriptionCheckoutService {
     if (process.env.SAFEPAY_ENV !== 'sandbox' || process.env.ALLOW_EXTERNAL_MONEY_MOVEMENT === 'true') {
       throw error('SANDBOX_ONLY', 503, 'Subscription checkout requires Safepay Sandbox with external money movement disabled');
     }
+    // A deterministic API-contract mismatch cannot create UNKNOWN billing
+    // attempts that would block future supplier checkouts. Run before MySQL.
+    if(typeof this.safepay.assertTrackerContract==='function')
+      this.safepay.assertTrackerContract();
     const frontend = baseUrl();
     let attemptId;
     let price;
