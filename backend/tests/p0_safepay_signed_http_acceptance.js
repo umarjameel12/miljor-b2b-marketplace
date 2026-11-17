@@ -148,6 +148,65 @@ async function main(){
     assert.equal(v3Attempt.status,'COMPLETED');
     assert.equal(v3Attempt.provider_contract,'payments-v3-minor');
     console.log('PASS Safepay v3 signed webhook converts exact 114500 minor units to PKR 1145.00 and HELD escrow');
+    // Supplier one-time plan invoices are isolated from buyer escrow/payment.
+    // An HMAC-authenticated v3 callback must journal exact capture evidence
+    // and activate the supplier's paid entitlement exactly once.
+    const [[plan]]=await db.query(
+      'SELECT monthly_price_pkr,max_active_listings FROM subscription_plans WHERE plan_code=?',
+      ['GROWTH']);
+    assert.ok(plan,'GROWTH plan must be seeded in disposable MySQL');
+    await db.query(
+      "UPDATE supplier_profiles SET verification_status='VERIFIED',subscription_plan='STARTER' WHERE supplier_id=2");
+    const [[beforeSubs]]=await db.query(
+      'SELECT COUNT(*) AS count FROM supplier_subscriptions WHERE supplier_id=2');
+    const subTracker='track_sub_'+id();
+    const [newAttempt]=await db.query(
+      "INSERT INTO supplier_subscription_checkout_attempts (supplier_id,plan_code,amount_pkr,idempotency_key,status,provider_contract,tracker_token) VALUES (2,'GROWTH',?,?,'INITIATED','payments-v3-minor',?)",
+      [plan.monthly_price_pkr,'P0SUB-'+id(),subTracker]);
+    const subId=newAttempt.insertId,subCode='MILJOR-SUB-'+subId;
+    const minor=Number(require('../src/services/safepayV3ContractService').toMinorPkr(plan.monthly_price_pkr));
+    const subEvent={token:'evt_subscription_'+id(),type:'payment.succeeded',
+      merchant_api_key:process.env.SAFEPAY_PUBLIC_KEY,
+      data:{tracker:subTracker,state:'TRACKER_ENDED',amount:minor,
+        currency:'PKR',metadata:{order_id:subCode}}};
+    r=await post({...subEvent,merchant_api_key:'sec_wrong_merchant'});
+    assert.equal(r.status,422,'Other merchant cannot credit supplier subscription');
+    r=await post({...subEvent,data:{...subEvent.data,amount:minor-1}});
+    assert.equal(r.status,422,'Wrong minor-unit amount cannot activate supplier subscription');
+    r=await post({...subEvent,data:{...subEvent.data,metadata:{order_id:'MILJOR-SUB-999999'}}});
+    assert.notEqual(r.status,200,'Wrong supplier invoice cannot activate a plan');
+    r=await post({...subEvent,data:{...subEvent.data,state:'TRACKER_AUTHORIZED'}});
+    assert.equal(r.status,422,'Authorized but uncaptured supplier charge cannot activate plan');
+    const [[beforeAttempt]]=await db.query(
+      'SELECT status FROM supplier_subscription_checkout_attempts WHERE id=?',[subId]);
+    assert.equal(beforeAttempt.status,'INITIATED');
+    r=await post(subEvent);
+    assert.equal(r.status,200,JSON.stringify(r.data));
+    assert.equal(r.data.data.payment_status,'PAID');
+    const [[activated]]=await db.query(
+      'SELECT subscription_plan FROM supplier_profiles WHERE supplier_id=2');
+    assert.equal(activated.subscription_plan,'GROWTH');
+    const [[paidAttempt]]=await db.query(
+      'SELECT status,paid_subscription_id FROM supplier_subscription_checkout_attempts WHERE id=?',[subId]);
+    assert.equal(paidAttempt.status,'PAID');
+    assert.ok(paidAttempt.paid_subscription_id);
+    const [[captureCount]]=await db.query(
+      'SELECT COUNT(*) AS count FROM supplier_subscription_capture_events WHERE checkout_attempt_id=?',[subId]);
+    assert.equal(Number(captureCount.count),1,'Signed supplier capture must be journaled once');
+    r=await post(subEvent);
+    assert.equal(r.status,200);
+    assert.equal(r.data.data.is_duplicate,true);
+    r=await post({...subEvent,token:'evt_independent_retry_'+id()});
+    assert.equal(r.status,200);
+    assert.equal(r.data.data.is_duplicate,true);
+    const [[afterSubs]]=await db.query(
+      'SELECT COUNT(*) AS count FROM supplier_subscriptions WHERE supplier_id=2');
+    assert.equal(Number(afterSubs.count),Number(beforeSubs.count)+1,
+      'Provider callback retries may activate only ONE supplier paid subscription');
+    const [[postCaptureCount]]=await db.query(
+      'SELECT COUNT(*) AS count FROM supplier_subscription_capture_events WHERE checkout_attempt_id=?',[subId]);
+    assert.equal(Number(postCaptureCount.count),1);
+    console.log('PASS v3 supplier HMAC callback -> exact one-time paid plan/journal; merchant/amount/state tampering blocked; replay safe');
     console.log('PASS P0 SYNTHETIC SIGNED HTTP ACCEPTANCE; REAL PROVIDER CALLBACK NOT ATTESTED');
   }finally{await new Promise(resolve=>server.close(resolve))}
 }
