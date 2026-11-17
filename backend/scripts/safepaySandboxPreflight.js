@@ -25,12 +25,20 @@ function inspect(env, sources = {}) {
   }
   const keys = ['SAFEPAY_PUBLIC_KEY','SAFEPAY_SECRET_KEY','SAFEPAY_WEBHOOK_SECRET'];
   const missing = keys.filter(key => !configured(env[key]));
+  // The currently deployed adapter calls legacy /order/v1/init with major PKR
+  // units. Published Payments v3 docs use /order/payments/v3/ and minor units.
+  // A production-shape financial test cannot proceed from credentials alone:
+  // the operator must explicitly attest the currently enabled merchant contract.
+  const contract = env.SAFEPAY_TRACKER_CONTRACT || '';
+  const contractConfirmed = contract === 'legacy-v1-major' &&
+    env.SAFEPAY_LEGACY_CONTRACT_VERIFIED === 'true';
   const adapter = sources.adapter || '';
   const provider = sources.provider || '';
   const settlement = sources.settlement || '';
   const checks = {
     sandbox_environment_isolated: faults.length === 0,
     credentials_present: missing.length === 0,
+    legacy_tracker_contract_attested: contractConfirmed,
     sandbox_tracker_adapter_present: /sandbox\.api\.getsafepay\.com/.test(adapter) && /createTracker/.test(adapter),
     signed_webhook_verification_present: /verifyWebhookSignature/.test(adapter) && /timingSafeEqual/.test(adapter),
     refund_gateway_implemented: !/REFUND_PENDING_GATEWAY/.test(provider) && /initiateRefund/.test(provider),
@@ -38,9 +46,13 @@ function inspect(env, sources = {}) {
   };
   return {
     environment: 'sandbox',
-    safe_to_attempt_provider_test: checks.sandbox_environment_isolated && checks.credentials_present,
+    safe_to_attempt_provider_test: checks.sandbox_environment_isolated && checks.credentials_present && contractConfirmed,
     faults, missing_configuration: missing, checks,
-    provider_checkout: checks.sandbox_environment_isolated && checks.credentials_present
+    tracker_contract: contract || 'UNDECLARED',
+    tracker_contract_review: contractConfirmed
+      ? 'LEGACY_V1_MAJOR_OPERATOR_ATTESTED_NOT_PROVIDER_CERTIFIED'
+      : 'BLOCKED_LEGACY_V1_MAJOR_VS_V3_MINOR_CONTRACT_UNVERIFIED',
+    provider_checkout: checks.sandbox_environment_isolated && checks.credentials_present && contractConfirmed
       ? 'READY_FOR_AUTHORIZED_SANDBOX_ATTEMPT_NOT_YET_EXECUTED' : 'BLOCKED_NOT_EXECUTED',
     provider_refund: checks.refund_gateway_implemented
       ? 'REQUIRES_REAL_SANDBOX_REFUND_AND_WEBHOOK_EVIDENCE' : 'BLOCKED_GATEWAY_ADAPTER_NOT_IMPLEMENTED',
