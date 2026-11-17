@@ -10,6 +10,8 @@ on:
       - 'backend/src/services/safepayCheckoutService.js'
       - 'backend/database/migrations/104_safepay_v3_payment_contract.sql'
       - 'backend/database/migrations/105_safepay_v3_supplier_subscription_contract.sql'
+      - 'backend/tests/p0_safepay_signed_http_acceptance.js'
+      - 'backend/docs/PR61_B2B_PAYMENT_REFUND_RELEASE_ACCEPTANCE.md'
       - 'backend/src/services/supplierSubscriptionCheckoutService.js'
       - 'backend/tests/pr61_safepay_v3_sandbox_client.test.js'
       - 'backend/tests/pr61_safepay_v3_checkout_integration.test.js'
@@ -64,6 +66,7 @@ jobs:
           node --check backend/src/services/safepayCheckoutService.js
           node --test backend/tests/pr61_safepay_v3_checkout_integration.test.js
           node --check backend/src/services/supplierSubscriptionCheckoutService.js
+          node --check backend/tests/p0_safepay_signed_http_acceptance.js
       - name: Provider API-version, amount unit and credential-disclosure gate
         run: |
           node --check backend/tests/pr61_provider_contract_gate.test.js
