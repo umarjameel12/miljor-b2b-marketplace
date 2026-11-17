@@ -5,7 +5,9 @@ const path = require('node:path');
 
 function configured(value) {
   return typeof value === 'string' && value.trim().length > 8 &&
-    !/placeholder|your_|example|change_me|dummy|fake|test_only|^sec_sand_placeholder/i.test(value.trim());
+    // Prevent known CI fixtures and mocks from being mistaken for merchant credentials.
+    // This is a heuristic *preflight*, never proof that a provider key is valid.
+    !/placeholder|your_|example|change_me|dummy|fake|test_only|synthetic|fixture|unit.only|ci_only|ci-only|^sec_sand_placeholder/i.test(value.trim());
 }
 
 function inspect(env, sources = {}) {
@@ -74,6 +76,9 @@ function inspect(env, sources = {}) {
     provider_refund: checks.refund_gateway_implemented
       ? 'REQUIRES_REAL_SANDBOX_REFUND_AND_WEBHOOK_EVIDENCE' : 'BLOCKED_GATEWAY_ADAPTER_NOT_IMPLEMENTED',
     provider_bank_payout: 'BLOCKED_NO_VERIFIED_SANDBOX_DISBURSEMENT_CONTRACT',
+    v3_supplier_subscription_activation: 'BLOCKED_SIGNED_CAPTURE_JOURNAL_NOT_IMPLEMENTED',
+    production_security_approval: 'BLOCKED_INDEPENDENT_SECURITY_REVIEW_REQUIRED',
+    release_approval: 'BLOCKED_EXTERNAL_PROVIDER_AND_SECURITY_EVIDENCE_REQUIRED',
     real_funds_moved: false
   };
 }
