@@ -169,6 +169,10 @@ async function main(){
       merchant_api_key:process.env.SAFEPAY_PUBLIC_KEY,
       data:{tracker:subTracker,state:'TRACKER_ENDED',amount:minor,
         currency:'PKR',metadata:{order_id:subCode}}};
+    r=await post(subEvent,{signature:'invalid'});
+    assert.equal(r.status,401,'Supplier capture requires authentic raw webhook signature');
+    r=await post(subEvent,{eventType:'payment.failed'});
+    assert.equal(r.status,422,'Unsigned event-type header must not override signed supplier capture');
     r=await post({...subEvent,merchant_api_key:'sec_wrong_merchant'});
     assert.equal(r.status,422,'Other merchant cannot credit supplier subscription');
     r=await post({...subEvent,data:{...subEvent.data,amount:minor-1}});
@@ -180,7 +184,12 @@ async function main(){
     const [[beforeAttempt]]=await db.query(
       'SELECT status FROM supplier_subscription_checkout_attempts WHERE id=?',[subId]);
     assert.equal(beforeAttempt.status,'INITIATED');
-    r=await post(subEvent);
+    const concurrentSigned=await Promise.all(Array.from({length:12},()=>post(subEvent)));
+    assert.equal(concurrentSigned.filter(x=>x.status!==200).length,0,
+      'Concurrent authenticated subscription retries must all acknowledge successfully');
+    assert.ok(concurrentSigned.some(x=>x.data?.data?.payment_status==='PAID'),
+      'One signed callback must commit the subscription capture');
+    r=concurrentSigned.find(x=>x.data?.data?.payment_status==='PAID');
     assert.equal(r.status,200,JSON.stringify(r.data));
     assert.equal(r.data.data.payment_status,'PAID');
     const [[activated]]=await db.query(
