@@ -3,7 +3,8 @@
 ## PR #53 Financial Closing Update (Genuine Safepay Sandbox Capture & Live `payment:created` Webhook) — 2026-11-17
 
 - **Branch:** `feature/smart-procurement-hub-unified-entry` (PR #53 retained as **DRAFT** — not merged to `main`)
-- **Authoritative Reports:** `backend/docs/SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md`, `backend/docs/MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`
+- **Authoritative Reports:** `backend/docs/SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md`, `backend/docs/MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`, `backend/docs/MILJOR_LOCAL_DEMO_GUIDE_2026_11_17.md`
+- **Local Demo Rehearsal & Readiness (2026-11-17):** Rehearsed full browser journey (A–H) on isolated `http://127.0.0.1:3100/` → `http://127.0.0.1:5517/` (`miljor_test_db`, `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `B6_TAX_POLICY_APPROVED=false`). Recorded owner business scope (unregistered, intermediary/commission, Lahore-only, produce/meat/dairy excluded, `Milk Powder` `id: 58` discrepancy preserved) in `MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md` and saved owner demo guide + rehearsal evidence in `MILJOR_LOCAL_DEMO_GUIDE_2026_11_17.md`. PR #53 remains **DRAFT**.
 - **Tax Draft & Readiness Inspection (2026-11-17):** Expanded `MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md` with all 8 charge categories × 10 required fields, verified application tax-readiness (`B6_TAX_POLICY_APPROVED` fail-closed gate, `tax_calculated: false`, `invoiceService`, `procurementLineReceiptService` — zero code changes required), and packaged qualified Pakistan tax review questions + 3 factual owner questions. PR #53 remains **DRAFT** pending tax sign-off.
 - **8f78c56 Security Follow-Up & Full Journey Closure:**
   - Verified `8f78c56f681673815bf867251aa764d07568a324` CI: **16/16 check-runs `completed / success`**.
