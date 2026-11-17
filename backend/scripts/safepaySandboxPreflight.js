@@ -7,7 +7,7 @@ function configured(value) {
   return typeof value === 'string' && value.trim().length > 8 &&
     // Prevent known CI fixtures and mocks from being mistaken for merchant credentials.
     // This is a heuristic *preflight*, never proof that a provider key is valid.
-    !/placeholder|your_|example|change_me|dummy|fake|test_only|synthetic|fixture|unit.only|ci_only|ci-only|^sec_sand_placeholder/i.test(value.trim());
+    !/placeholder|your_|example|change_me|dummy|fake|mock|test_only|synthetic|fixture|unit.only|ci_only|ci-only|^sec_sand_placeholder/i.test(value.trim());
 }
 
 function inspect(env, sources = {}) {
