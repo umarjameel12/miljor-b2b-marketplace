@@ -54,6 +54,51 @@ class SafepayV3SandboxClient{
       throw fail('SAFEPAY_V3_RESPONSE_UNVERIFIED','Provider tracker quote/identity could not be verified',502);
     }
   }
+  async createHostedCheckout({amountPkr,orderCode,redirectUrl,cancelUrl,intent='CYBERSOURCE'}){
+    const created=await this.createPaymentTracker({amountPkr,orderCode,intent});
+    let passport;
+    try{
+      const response=await this.fetchImpl('https://sandbox.api.getsafepay.com/client/passport/v1/token',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',
+          'X-SFPY-MERCHANT-SECRET':this.env.SAFEPAY_SECRET_KEY},
+        body:'{}',signal:AbortSignal.timeout(10000)
+      });
+      if(!response||response.status<200||response.status>=300)
+        throw new Error('passport request rejected');
+      const parsed=await response.json();
+      passport=parsed?.data;
+      if(typeof passport!=='string'||passport.length<16||passport.length>2048)
+        throw new Error('passport response invalid');
+    }catch(_){
+      // Tracker may already exist; never silently retry and create a duplicate.
+      throw fail('SAFEPAY_V3_TRACKER_CREATED_AUTH_TOKEN_FAILED',
+        'Tracker exists but checkout authentication token was not issued; reconcile before retry',502);
+    }
+    const frontendBase=new URL(this.env.FRONTEND_URL||'http://localhost:3000');
+    const safeRedirect=(value,fallback)=>{
+      const target=new URL(value||fallback,frontendBase);
+      if(target.origin!==frontendBase.origin||
+         !['http:','https:'].includes(target.protocol))
+        throw fail('SAFEPAY_V3_REDIRECT_ORIGIN_INVALID','Checkout redirect must remain on configured frontend origin',400);
+      return target.toString();
+    };
+    const success=safeRedirect(redirectUrl,
+      '/payment/return?order_id='+encodeURIComponent(orderCode));
+    const cancel=safeRedirect(cancelUrl,
+      '/payment/cancelled?order_id='+encodeURIComponent(orderCode));
+    const checkout=new URL('https://sandbox.api.getsafepay.com/checkout/pay');
+    checkout.searchParams.set('beacon',created.trackerToken);
+    checkout.searchParams.set('tbt',passport);
+    checkout.searchParams.set('env','sandbox');
+    checkout.searchParams.set('source','hosted');
+    checkout.searchParams.set('order_id',orderCode);
+    checkout.searchParams.set('redirect_url',success);
+    checkout.searchParams.set('cancel_url',cancel);
+    checkout.searchParams.set('webhooks','true');
+    return Object.freeze({...created,checkoutUrl:checkout.toString(),
+      authenticationTokenExpiresInSeconds:3600});
+  }
   async inspectPaymentTracker({trackerToken,amountPkr,orderCode}){
     assertSafeEnvironment(this.env);
     if(typeof this.fetchImpl!=='function')
