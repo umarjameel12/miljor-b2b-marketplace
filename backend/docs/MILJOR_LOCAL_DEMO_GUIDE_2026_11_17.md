@@ -9,7 +9,8 @@
 
 | Service | Address | Database / Mode | Status at Handoff |
 |---|---|---|---|
-| **Frontend (Isolated Vite)** | `http://127.0.0.1:3100/` | Proxies `/api` → `127.0.0.1:5517` (`NODE_ENV=test`, `DB_NAME=miljor_test_db`) | **RUNNING** (leaves existing port `3000` untouched) |
+| **Frontend (Original Reconciled)** | `http://127.0.0.1:3000/` | Proxies `/api` → `127.0.0.1:5517` (`NODE_ENV=test`, `DB_NAME=miljor_test_db`) | **RUNNING** (`MilJor Project`, single `Smart Procurement Hub` entry) |
+| **Frontend (PR #53 Reference)** | `http://127.0.0.1:3100/` | Proxies `/api` → `127.0.0.1:5517` (`NODE_ENV=test`, `DB_NAME=miljor_test_db`) | **RUNNING** (`ChatGPT\MilJor`) |
 | **Backend API (Isolated)** | `http://127.0.0.1:5517/` | `miljor_test_db`, `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `B6_*=false`, `TRANSACTIONAL_EMAIL_MODE=mock` | **RUNNING** |
 | **Protected Databases** | MySQL `3306` | `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`) | **UNTOUCHED / PRISTINE** |
 
