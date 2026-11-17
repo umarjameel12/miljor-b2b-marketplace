@@ -25,6 +25,12 @@ The canonical event ID in `safepayCheckoutService.processWebhookEvent` now comes
 - [Webhook types](https://safepay.alihamas.pk/docs/developers/webhooks/webhook-types): `payment.succeeded`, `payment.failed`, `payment.refunded`, `authorization.reversed`.
 - [Webhook overview](https://safepay.alihamas.pk/docs/developers/webhooks/overview): HTTPS, authenticity, deduplication and retries.
 
+### Payments v3 sandbox contract and isolated client (implemented; NOT active buyer checkout)
+- `backend/src/services/safepayV3ContractService.js` prepares exact PKR integer minor-unit payment tracker requests for `POST /order/payments/v3/`, checks documented `data.tracker` shape, sandbox identity, locked order metadata and immutable quoted amount, and produces a **non-executable** v3 refund preview.
+- `backend/src/services/safepayV3SandboxClient.js` sends that request only from an isolated **disposable MySQL configuration** when `SAFEPAY_V3_SANDBOX_ENABLED=true` and all sandbox secrets are privately configured. It does not write to a DB, mark any order paid, confirm a refund or execute payouts. Its HTTP contract is verified through injected no-network fixtures in CI.
+- Existing real buyer/supplier checkout and settlement still use their legacy compatibility boundary; **there is no v3 webhook/reporter-to-ledger integration yet**. Do not enable v3 buyer payment until actual provider-origin signed callbacks and reconciliation have been mapped and externally tested.
+- Provider version, amount denomination, merchant permission and webhooks must be validated in actual Safepay Sandbox; credentials must never appear in git or PR comments.
+
 **Important mismatch:** MilJor's current operational adapter uses legacy `/order/v1/init` and major PKR amounts, not published Payments v3. The existing adapter intentionally **fails closed** until `SAFEPAY_TRACKER_CONTRACT=legacy-v1-major` and `SAFEPAY_LEGACY_CONTRACT_VERIFIED=true` have been confirmed with the merchant; for a v3 merchant, a separate versioned adapter and end-to-end provider verification are still required. Do not blindly convert amounts 100x in existing code.
 
 ## Genuine external Sandbox acceptance — still requires merchant-side access
