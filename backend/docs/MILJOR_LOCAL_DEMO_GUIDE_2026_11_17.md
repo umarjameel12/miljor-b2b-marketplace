@@ -116,3 +116,71 @@ Use `--once` for one eligible batch. The helper loads the existing original-chec
 Evidence: local ignored `backend/artifacts/demo-notifications-result.json` and screenshots `demo-notifications-buyer-724.png`, `demo-notifications-buyer-725.png`, `demo-notifications-supplier-726.png`. These machine-local artifacts are not tracked or guaranteed present in a fresh clone.
 
 CI: the GitHub connector returned11 PR-triggered workflow runs for exact baseline7f1baee, all completed/success. Its filtered result is not independent verification of the previously reported14 total workflows/16 check-runs. No application source changed in this closure. Production checkout remains intentionally gated, milk-powder discrepancy retained, tax implementation/commercial launch/main merge/original frontend integration deferred. **DEMO STATUS: READY WITH LIMITATIONS.**
+
+---
+
+## 8. Owner 10–15 Minute Live Walkthrough (Read-Only Preferred)
+
+Use separate browser profiles/incognito windows for Buyer, Supplier, and Admin so role switching never interrupts the flow.
+
+| Step | Time | Role / Account | Exact Page | Record & Action | What Audience Observes | Presenter Line (Say This) | Data Impact | Expected Gate / Fallback |
+|---|---|---|---|---|---|---|---|---|
+| **A. Intro & Catalog** | 2m | `demo-buyer1@miljor.test` | `/` → `/pools` | Open `/`, log in, view `Live Wholesale Pools` & `Product Families (62)` | Clean separation between live pools vs. 62 MilJor-governed families (Rice, Atta, Pulses, Oil, Sugar). Vegetables/fruit/meat/dairy excluded; `Milk Powder` (`FAM-MILK-POWDER`) is a recorded discrepancy. | *"MilJor is a Lahore-first B2B food-staples marketplace connecting buyers and suppliers on commission without owning inventory."* | Read-only | If an image fails to load from Unsplash, ignore; catalog data is local. |
+| **B. RFQ & Negotiation** | 3m | `demo-buyer1@miljor.test` → `demo-supplier1@miljor.test` | `/procurement` | Open Request `184` (`OPEN`), click `View quotes` / `Compare offers` for Quote `102` (v2, Rs. 21,250), open `Review Seller-Specific Order Breakdown` | Price/spec lock to `SKU-RICE-25KG-5972`, counteroffer `ACCEPT` history (`v1 → v2`), and exact breakdown (`Rs. 21,407.50` incl. `Rs. 157.50` buyer fee; supplier net `Rs. 20,475.00`). Click `Confirm reviewed terms` to show `503 B6_FINANCIAL_GATE_BLOCKED`. | *"Buyers and suppliers negotiate transparently with locked specs, and checkout stays safely gated until commercial tax approval is enabled."* | Read-only (unless creating a new RFQ) | Expected `503 B6_FINANCIAL_GATE_BLOCKED` on checkout. Use Step E for paid order screens. |
+| **C. Collective Buying** | 2m | `demo-buyer1@miljor.test` | `/procurement` | Open Collective Request `185` / Group `45` (`FORMING`) | Buyer 1 (`5`) and Buyer 2 (`10`) joined independently; explicit notice *"no payment taken"*; cutoff visibility. | *"Businesses pool demand together without losing individual consent—joining never silently charges anyone."* | Read-only | Pre-cutoff `Open supplier bids` returns expected `409`. |
+| **D. Recurring Procurement** | 2m | `demo-buyer1@miljor.test` | `/procurement` | Open Recurring Contract `15` (`ACTIVE`) | Weekly schedule, 6 upcoming cycles, edit/skip/pause/resume controls, `requires_explicit_buyer_payment: true`. | *"Recurring buyers set a schedule once, adjust or skip cycles anytime, and still approve every payment explicitly."* | Read-only | Premature `Prepare Due Shopping Draft` returns expected `409`. |
+| **E. Paid Sandbox, Receipt & Settlement** | 3m | `demo-admin@miljor.test` | `/payment/return?order_id=234` → `/orders` → `/admin` | Open `/payment/return?order_id=234` & `231`, then `/orders`, then `/admin` (`Procurement settlement reviews`) | Controlled test orders `231` & `234`: `Captured (Safepay Sandbox)` (`PKR 355.00`), `DELIVERED / BUYER_CONFIRMED`, internal payables `39` & `38` (`ACCRUED`, net `PKR 317.50` each, `disbursed=0.00`). | *"These are controlled sandbox payment and test fulfillment records showing full fee transparency; external bank payouts remain disabled."* | Read-only (do NOT reset) | Admin cannot impersonate buyer receipt (`403` RBAC). Never describe as physical delivery. |
+| **F. Notifications & Close** | 1–2m | `demo-buyer1@miljor.test` | `/pools` or `/procurement` | Click Notifications bell (`Notifications`) | Real event-driven inbox (historically 22 notifications / 21 unread for Buyer 1), deep links, strict recipient isolation. | *"Every quote, counteroffer, and group invite triggers an isolated notification, while commercial launch and tax rollout remain intentionally deferred."* | Read-only (mark-read mutates `is_read`) | If unread is `0`, show existing notification history. |
+
+---
+
+## 9. Presenter Notes & Q&A (Simple English / Roman Urdu)
+
+- **MilJor kya problem solve karta hai?** Lahore ke B2B buyers (restaurants, kiryana, bakeries) aur wholesalers ko ek structured platform par lata hai jahan specs, quantities, delivery, aur price negotiation clear aur traceable hoti hai.
+- **MilJor revenue kaise kamata hai?** Commission-based intermediary model: MilJor khud maal khareed kar nahi bechta; verified suppliers aur buyers ko connect karta hai aur agreed commission / buyer platform fee leta hai.
+- **Kya MilJor apni inventory rakhta hai?** Nahi. Stock suppliers ke paas rehta hai; MilJor sirf verified supplier listings aur allocations track karta hai.
+- **Group buying mein har buyer kaise protected rehta hai?** Har buyer apni quantity aur consent khud confirm karta hai (`creates_payment=false`). Kisi doosre buyer ke join karne se aap par auto-charge nahi hota.
+- **Recurring orders mein payment kaise hoti hai?** Har cycle par explicit buyer approval zaroori hai (`EXPLICIT_PER_CYCLE`); koi silent auto-debit nahi hota.
+- **Delivery charges aur fees kaise dikhte hain?** Item subtotal, delivery fee, buyer platform fee, aur supplier commission alag-alag exact decimal mein order breakdown aur immutable invoice par dikhte hain.
+- **Agar delivery kam aaye ya dispute ho to?** Buyer line-by-line accepted/disputed quantity record karta hai (`100/80/20` rule); accepted maal ka hisab alag hota hai aur disputed delivery/processing fees admin review ke liye hold par rehti hain.
+- **Kya yeh payments real hain ya sandbox?** Safepay **Sandbox** test payments hain (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`). Koi live bank charge ya payout nahi ho raha.
+- **Kya supplier ko paisay transfer ho chuke hain?** Nahi. Internal payable (`39`, `38`, PKR `317.50` net) `ACCRUED` state mein hai; `disbursed=0.00` aur external payout disabled hai.
+- **Kya platform commercially launch ho gaya hai?** Nahi. Business abhi unregistered hai aur yeh sirf local demonstration hai.
+- **Launch se pehle kya baqi hai?** Business registration, qualified Pakistan FBR/PRA tax review aur policy approval (`B6_TAX_POLICY_APPROVED`), PR #53 merge to `main`, aur production deployment.
+
+---
+
+## 10. 2-Minute Pre-Demo Checklist & Recovery Card
+
+### Pre-Demo Checklist (2 Minutes)
+1. [ ] Open `http://127.0.0.1:3100/` — landing page loads cleanly.
+2. [ ] Check `http://127.0.0.1:3100/api/v1/catalog/categories` returns `{"success":true,...}` (confirms backend `5517` + `miljor_test_db`).
+3. [ ] Confirm `miljor_db` and `miljor_sandbox_db` remain untouched (`orders=0, payments=0`) and `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`.
+4. [ ] Verify 3 separate browser windows/profiles logged in (`demo-buyer1@miljor.test`, `demo-supplier1@miljor.test`, `demo-admin@miljor.test`).
+5. [ ] Verify retained records open: Request `184` / Quote `102`, Group `45`, Contract `15`, Orders `231` & `234`.
+6. [ ] Check `demo-notification-worker.cjs` is running if live unread increment is desired (note 60-minute auto-stop).
+7. [ ] Confirm `B6_TAX_POLICY_APPROVED=false` (checkout button shows expected `503` block).
+8. [ ] Open the offline backup screenshot pack (`demo_backup_pack/index.html`) in a background tab as instant fallback.
+
+### Recovery Card (Non-Destructive)
+- **Frontend/Backend stopped:** Restart backend on `5517` (`miljor_test_db`) and Vite on `3100` (`MILJOR_TEST_API_PORT=5517`) per Section 2.
+- **Session expired:** Re-login at `/login` in that role's browser profile (never reset passwords or touch `miljor_db`).
+- **Notification helper expired (after 60 min):** Run `node artifacts/demo-notification-worker.cjs` from `backend/`.
+- **Unread count is `0`:** Show existing notification history inside the bell drawer; do not fabricate events.
+- **Expected `503` checkout block:** Explain it as the live safety gate (`B6_TAX_POLICY_APPROVED=false`) and switch to `/payment/return?order_id=234`.
+- **Unexpected page/network failure:** Switch immediately to the offline backup screenshot pack (`demo_backup_pack/index.html`).
+
+---
+
+## 11. Offline Backup Screenshot Pack Index (Artifact Directory — Untracked)
+
+Stored locally at `C:\Users\Umar Jameel\.gemini\antigravity\brain\6e2fd569-4ede-458a-9368-d34bc2a20f55\demo_backup_pack\index.html`:
+1. `01_buyer_catalog_pools.png` — Buyer `/pools` (Live pools vs. 62 Product Families)
+2. `02_rfq_184_quote_102_v2.png` — Buyer `/procurement` (RFQ 184 & Quote 102 v2)
+3. `03_rfq_184_fee_breakdown.png` — Buyer `/procurement` (Reviewed Breakdown & B6 Gate)
+4. `04_collective_group_45.png` — Buyer `/procurement` (Collective Group 45 & Consent)
+5. `05_recurring_contract_15.png` — Buyer `/procurement` (Recurring Contract 15 & Cycles)
+6. `06_retained_order_234_sandbox.png` — Admin `/payment/return?order_id=234` (Safepay Sandbox Capture)
+7. `07_retained_orders_admin_231_234.png` — Admin `/orders` (Orders 231 & 234 `DELIVERED / BUYER_CONFIRMED`)
+8. `08_buyer_notifications_inbox.png` — Buyer `/pools` (Notification Inbox & Unread Count)
+
