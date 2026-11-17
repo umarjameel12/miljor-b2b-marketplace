@@ -74,7 +74,9 @@ class SafepayRefundReadinessService{
       [refund.transaction_ref]);
     const [others]=await this.db.query(
       `SELECT total_refund_amount FROM refund_obligations
-       WHERE payment_id=? AND id<>? AND status IN ('APPROVED','CONFIRMED')`,
+       WHERE payment_id=? AND id<>? AND status IN
+         ('REQUESTED','UNDER_REVIEW','APPROVED','AWAITING_EXTERNAL_EXECUTION',
+          'EXTERNAL_PROCESSING','CONFIRMED')`,
       [refund.payment_id,id]);
     const aggregate=others.reduce((s,x)=>s+cents(x.total_refund_amount),0n);
     return evaluate({refund,
