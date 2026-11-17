@@ -46,7 +46,7 @@ function fixture(cfg={}) {
         return [cfg.replay?[{id:81,order_id:31,buyer_id:4,dispute_id:17,refund_type:'PARTIAL',disputed_quantity:'20.00'}]:[]];
       if(query.includes('FROM order_disputes WHERE id=? AND order_id=?'))
         return [cfg.unrelated?[]:[{id:17,order_id:31,buyer_id:4,disputed_quantity:'20.00',status:'OPEN'}]];
-      if(query.includes('FROM refund_obligations')&&query.includes("status IN ('REQUESTED'"))
+      if(query.includes('SELECT id FROM refund_obligations')&&query.includes("status IN ('REQUESTED'"))
         return [cfg.duplicate?[{id:81}]:[]];
       if(query.includes('SELECT SUM(total_refund_amount)')){
         // Pending obligations consume reserved refund capacity, not just PAID.
