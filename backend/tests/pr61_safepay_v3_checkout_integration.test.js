@@ -21,6 +21,18 @@ test('canonical buyer checkout has explicit opt-in v3 path, persists pinned cont
   assert.match(migration,/legacy-v1-major/);
   assert.match(migration,/payments-v3-minor/);
 });
+test('supplier subscription checkout and reconciliation also support pinned v3 contract',()=>{
+  const subscription=read('src/services/supplierSubscriptionCheckoutService.js');
+  const migration=read('database/migrations/105_safepay_v3_supplier_subscription_contract.sql');
+  assert.match(subscription,/SAFEPAY_TRACKER_CONTRACT==='payments-v3-minor'/);
+  assert.match(subscription,/createHostedCheckout/);
+  assert.match(subscription,/provider_contract/);
+  assert.match(subscription,/inspectPaymentTracker/);
+  assert.match(subscription,/report\.state!=='TRACKER_ENDED'/);
+  assert.match(subscription,/MILJOR-SUB-\$\{attempt\.id\}/);
+  assert.match(migration,/legacy-v1-major/);
+  assert.match(migration,/payments-v3-minor/);
+});
 test('webhook processing uses the persisted attempt contract, never heuristic amount guessing',()=>{
   const checkout=read('src/services/safepayCheckoutService.js');
   const v3=read('src/services/safepayV3ContractService.js');
