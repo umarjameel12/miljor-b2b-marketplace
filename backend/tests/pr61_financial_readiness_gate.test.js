@@ -15,6 +15,8 @@ const base={
 test('20 kg shortage on one buyer order creates read-only exact 5000 PKR refund assessment',()=>{
   const output=evaluate({...base,now});
   assert.equal(output.requested_amount_pkr,'5000.00');
+  assert.equal(output.v3_refund_amount_minor_preview,'500000');
+  assert.equal(output.v3_preview_only,true);
   assert.equal(output.internal_financial_check,'PASS');
   assert.equal(output.recommended_provider_action,'PROVIDER_REFUND_REVIEW');
   assert.equal(output.can_execute_external_refund,false);
