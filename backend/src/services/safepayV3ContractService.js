@@ -44,17 +44,22 @@ function buildPaymentV3({amountPkr,currency='PKR',merchantApiKey,orderCode,inten
     })
   });
 }
-function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode}){
+function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode,expectedMerchantApiKey}){
   const tracker=response?.data?.tracker;
   if(!tracker||!tokenPattern.test(String(tracker.token||'')))
     throw fail('V3_TRACKER_MISSING','V3 response must return a valid tracker token');
   if(tracker.environment!=='sandbox'||tracker.mode!=='payment'||tracker.state!=='TRACKER_STARTED')
     throw fail('V3_TRACKER_STATE_MISMATCH','Expected new Sandbox payment tracker');
+  // A provider-created tracker must belong to the same configured merchant.
+  // Reject absent identity rather than relying on later reporter/webhook checks.
+  if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
+      tracker.client!==expectedMerchantApiKey)
+    throw fail('V3_TRACKER_MERCHANT_MISMATCH','Created tracker merchant identity differs from configured account');
   const quoted=tracker.purchase_totals?.quote_amount;
   if(!quoted||quoted.currency!=='PKR'||fromMinorPkr(quoted.amount)!==exact.toCanonicalString(expectedAmountPkr,2))
     throw fail('V3_TRACKER_AMOUNT_MISMATCH','Provider quote differs from exact locked order');
-  if(tracker.metadata?.order_id!==undefined&&
-     tracker.metadata.order_id!==expectedOrderCode)
+  if(typeof expectedOrderCode!=='string'||!expectedOrderCode||
+     tracker.metadata?.order_id!==expectedOrderCode)
     throw fail('V3_TRACKER_ORDER_MISMATCH','Provider tracker metadata differs from order');
   return Object.freeze({trackerToken:tracker.token,providerContract:'payments-v3-minor',
     amountPkr:exact.toCanonicalString(expectedAmountPkr,2),currency:'PKR',
