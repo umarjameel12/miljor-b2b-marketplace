@@ -155,8 +155,8 @@ Use separate browser profiles/incognito windows for Buyer, Supplier, and Admin s
 ## 10. 2-Minute Pre-Demo Checklist & Recovery Card
 
 ### Pre-Demo Checklist (2 Minutes)
-1. [ ] Open `http://127.0.0.1:3100/` — landing page loads cleanly.
-2. [ ] Check `http://127.0.0.1:3100/api/v1/catalog/categories` returns `{"success":true,...}` (confirms backend `5517` + `miljor_test_db`).
+1. [ ] Open **`http://127.0.0.1:3000/`** (Primary Original Reconciled Portal; `http://127.0.0.1:3100/` is the PR #53 fallback/reference) — landing page loads cleanly.
+2. [ ] Check `http://127.0.0.1:3000/api/v1/catalog/categories` returns `{"success":true,...}` (confirms backend `5517` + `miljor_test_db`).
 3. [ ] Confirm `miljor_db` and `miljor_sandbox_db` remain untouched (`orders=0, payments=0`) and `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`.
 4. [ ] Verify 3 separate browser windows/profiles logged in (`demo-buyer1@miljor.test`, `demo-supplier1@miljor.test`, `demo-admin@miljor.test`).
 5. [ ] Verify retained records open: Request `184` / Quote `102`, Group `45`, Contract `15`, Orders `231` & `234`.
@@ -177,12 +177,6 @@ Use separate browser profiles/incognito windows for Buyer, Supplier, and Admin s
 ## 11. Offline Backup Screenshot Pack Index (Artifact Directory — Untracked)
 
 Stored locally at `C:\Users\Umar Jameel\.gemini\antigravity\brain\6e2fd569-4ede-458a-9368-d34bc2a20f55\demo_backup_pack\index.html`:
-1. `01_buyer_catalog_pools.png` — Buyer `/pools` (Live pools vs. 62 Product Families)
-2. `02_rfq_184_quote_102_v2.png` — Buyer `/procurement` (RFQ 184 & Quote 102 v2)
-3. `03_rfq_184_fee_breakdown.png` — Buyer `/procurement` (Reviewed Breakdown & B6 Gate)
-4. `04_collective_group_45.png` — Buyer `/procurement` (Collective Group 45 & Consent)
-5. `05_recurring_contract_15.png` — Buyer `/procurement` (Recurring Contract 15 & Cycles)
-6. `06_retained_order_234_sandbox.png` — Admin `/payment/return?order_id=234` (Safepay Sandbox Capture)
-7. `07_retained_orders_admin_231_234.png` — Admin `/orders` (Orders 231 & 234 `DELIVERED / BUYER_CONFIRMED`)
-8. `08_buyer_notifications_inbox.png` — Buyer `/pools` (Notification Inbox & Unread Count)
+1–8 (`http://127.0.0.1:3100/` reference captures): `01_buyer_catalog_pools.png` (`/pools`), `02_rfq_184_quote_102_v2.png` (`/procurement` RFQ 184 & Quote 102 v2), `03_rfq_184_fee_breakdown.png` (Reviewed Breakdown & B6 Gate), `04_collective_group_45.png` (Collective Group 45), `05_recurring_contract_15.png` (Recurring Contract 15), `06_retained_order_234_sandbox.png` (`/payment/return?order_id=234`), `07_retained_orders_admin_231_234.png` (Admin `/orders` 231 & 234), `08_buyer_notifications_inbox.png` (Notification Inbox).
+9–10 (`http://127.0.0.1:3000/` fresh original-portal captures): `11_original_desktop_buyer_sidebar_3000.png` (`1366x900` desktop sidebar), `12_original_mobile_buyer_drawer_3000.png` (`390x844` mobile drawer).
 
