@@ -69,6 +69,7 @@ async function main() {
   const moduleStub={exports:{}};
   new Function('require','module','exports',source)(
     name=>name==='../config/db'?db:name==='./safepayAdapter'?adapter:
+      name==='./safepayV3SandboxClient'?{SafepayV3SandboxClient:class {}}:
       name==='./exactDecimal'?exact:name==='./notificationService'?{enqueueEvent:async(conn,event)=>{
         assert.equal(event.role,'SUPPLIER');
         assert.equal(event.eventType,'SUBSCRIPTION_ACTIVATED');
