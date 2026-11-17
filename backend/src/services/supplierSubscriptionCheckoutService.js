@@ -294,20 +294,10 @@ class SupplierSubscriptionCheckoutService {
     let paidAmount;
     let providerTransactionId;
     if((attempt.provider_contract||'legacy-v1-major')==='payments-v3-minor'){
-      const v3=new SafepayV3SandboxClient({env:{...process.env,FRONTEND_URL:baseUrl()}});
-      const report=await v3.inspectPaymentTracker({
-        trackerToken:attempt.tracker_token,
-        amountPkr:attempt.amount_pkr,
-        orderCode:`MILJOR-SUB-${attempt.id}`
-      });
-      if(report.state!=='TRACKER_ENDED')
-        return {reconciled:false,provider_state:report.state||'UNKNOWN'};
-      // A TRACKER_ENDED reporter status and quote are NOT proof of a
-      // successful captured subscription charge. No verified v3 subscription
-      // callback/transaction capture journal is available on this path.
-      // Fail closed rather than granting paid plan entitlements.
-      throw error('V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED',409,
-        'Signed captured payment evidence is required before activating a v3 subscription');
+      // Browser polling cannot be evidence of funds capture. Only the
+      // HMAC-authenticated webhook activates a v3 paid subscription.
+      return {reconciled:false,provider_state:'AWAITING_SIGNED_CAPTURE',
+        message:'Awaiting provider-signed payment confirmation'};
     }else if((attempt.provider_contract||'legacy-v1-major')==='legacy-v1-major'){
       // Authoritative provider lookup, NEVER trust a browser redirect or client-supplied amount.
       const response = await this.safepay.fetchTracker(attempt.tracker_token);
