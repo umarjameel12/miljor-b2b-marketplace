@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'backend/tests/package_e3_entitlements_and_supplier_portal_gate.js'
+      - 'backend/tests/supplier_subscription_checkout_mysql_gate.js'
+      - 'backend/src/services/supplierSubscriptionCheckoutService.js'
+      - 'backend/database/migrations/062_supplier_safepay_subscription_checkout.sql'
       - '.github/workflows/e3-disposable-entitlement-acceptance.yml'
   workflow_dispatch:
 
@@ -60,3 +63,6 @@ jobs:
       - name: Run E3 entitlement and supplier SKU acceptance against disposable MySQL
         timeout-minutes: 10
         run: cd backend && node tests/package_e3_entitlements_and_supplier_portal_gate.js
+      - name: Real MySQL subscription checkout and synthetic provider tracker gate
+        timeout-minutes: 5
+        run: cd backend && node tests/supplier_subscription_checkout_mysql_gate.js

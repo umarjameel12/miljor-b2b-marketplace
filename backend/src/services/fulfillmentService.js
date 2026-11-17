@@ -487,6 +487,10 @@ class FulfillmentService {
       );
       }
 
+      const notificationType={PREPARING:'FULFILLMENT.PACKING',READY_FOR_DISPATCH:'FULFILLMENT.READY_FOR_DISPATCH',
+        DISPATCHED:'FULFILLMENT.DISPATCHED',SUPPLIER_DELIVERED:'FULFILLMENT.SUPPLIER_MARKED_DELIVERED'}[toStatus];
+      if(notificationType)await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:notificationType,transitionId:trimmedKey});
       await connection.commit();
 
       return {
@@ -1030,6 +1034,8 @@ class FulfillmentService {
       );
       }
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:'FULFILLMENT.BUYER_ACCEPTED',transitionId:trimmedKey});
       await connection.commit();
 
       return {
@@ -1270,6 +1276,8 @@ class FulfillmentService {
       );
       }
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:order.id,type:shortageEvidence?'FULFILLMENT.PARTIAL_DELIVERY':'FULFILLMENT.DELIVERY_FAILED',transitionId:trimmedKey});
       await connection.commit();
 
       return {

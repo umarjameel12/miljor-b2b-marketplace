@@ -41,6 +41,31 @@ async function main(){
     supplier=await browser.newContext({baseURL:base});
     const b=await signin(buyer,'p0_buyer@miljor.test',password,'BUYER');
     const s=await signin(supplier,'p0_supplier@miljor.test',password,'SUPPLIER');
+    // Real supplier subscription UI reads owned MySQL entitlements and plan prices.
+    await s.page.goto(base+'/supplier/subscription',{waitUntil:'domcontentloaded'});
+    await s.page.getByRole('heading',{name:'Your subscription'}).waitFor({timeout:15000});
+    await s.page.getByRole('heading',{name:'Plans'}).waitFor({timeout:15000});
+    assert.ok((await s.page.getByText('Starter',{exact:true}).count())>0,
+      'Supplier starter plan must render real entitlement state');
+    assert.ok((await s.page.getByText('Checkout not available yet').count())===0,
+      'Premium UI must not advertise the obsolete dead-end checkout');
+    pass('Supplier subscription loads premium plan UI and authoritative active entitlement');
+
+    // Verify the supplier operations pages via actual authenticated Chromium UI.
+    for(const [route,title] of [
+      ['/supplier/deliveries','Delivery Modes & Cluster Pricing'],
+      ['/supplier/settlements','Payments, Earnings & Settlements'],
+      ['/supplier/disputes','Disputes & Discrepancies'],
+      ['/supplier/analytics','Supplier Analytics & Business Reports'],
+      ['/notifications','Notifications & Alerts']
+    ]){
+      await s.page.goto(base+route,{waitUntil:'domcontentloaded'});
+      await s.page.getByRole('heading',{name:title,exact:true}).waitFor({timeout:15000});
+      assert.equal(await s.page.getByText(/supplier access required/i).count(),0,
+        'Verified supplier lost access on '+route);
+    }
+    pass('Supplier delivery, earnings, disputes, analytics and notification pages render in real Chromium');
+
     await s.page.goto(base+'/supplier/pools',{waitUntil:'domcontentloaded'});
     await s.page.getByRole('heading',{name:'Pool Management'}).waitFor({timeout:15000});
     await s.page.reload({waitUntil:'domcontentloaded'});

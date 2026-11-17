@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/services/fulfillmentService.js'),'utf8');
 function instantiate(options={}){
-  const events=[],updates=[],businessEvents=[];
+  const events=[],updates=[],businessEvents=[],notifications=[];
   const order={
     id:70, order_code:'TEST-ORDER-70', buyer_id:11, supplier_id:12,
     payment_status:'PAID', fulfillment_status:'SUPPLIER_DELIVERED',
@@ -40,10 +40,11 @@ function instantiate(options={}){
       if(name==='./reservationEventService')return {generateEventId:()=> 'TEST-EVENT-70'};
       if(name==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
       if(name==='./deliveryQuantityPolicy')return policy;
+      if(name==='./ucpTransactionalNotifications')return {recordOrderOnConnection:async (conn,event)=>{assert.equal(conn,connection);notifications.push(event)}};
       throw Error('Unexpected dependency: '+name);
     }
   },{filename:'fulfillmentService.js'});
-  return {service:moduleRef.exports,events,updates,businessEvents,tx};
+  return {service:moduleRef.exports,events,updates,businessEvents,notifications,tx};
 }
 async function execute(){
   let passed=0;
@@ -65,6 +66,7 @@ async function execute(){
     assert.equal(x.tx.rollback,0);
     assert.equal(x.events.length,1);
     assert.equal(x.businessEvents.length,1);
+    assert.equal(x.notifications.length,1,'Accepted partial receipt must emit one transactional notification');
     const evidence=JSON.parse(x.events[0].find(v=>typeof v==='string'&&v.includes('"short_quantity"')));
     assert.equal(evidence.reported_quantity,'80.00');
     assert.equal(evidence.expected_quantity,'100.00');
@@ -79,6 +81,7 @@ async function execute(){
       e=>e.code==='RECEIVED_QUANTITY_EXCEEDS_ORDER');
     assert.equal(x.tx.rollback,1);
     assert.equal(x.events.length,0);
+    assert.equal(x.notifications.length,0);
     assert.equal(x.updates.length,0);
   });
   await check('B6 awarded order requires line-specific evidence',async()=>{

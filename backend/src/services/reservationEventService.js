@@ -271,6 +271,7 @@ class ReservationEventService {
       // Propagate immediately so caller's transaction rolls back!
       throw err;
     }
+    await require('./ucpTransactionalNotifications').recordReservationEventOnConnection(conn,eventData);
   }
 
   /**

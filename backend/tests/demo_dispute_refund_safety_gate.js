@@ -21,6 +21,7 @@ function service(name, sql) {
     if (id==='./feeService')return {};
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
+    if (id==='./ucpTransactionalNotifications')return {recordOrderOnConnection:async(connection,event)=>{assert.equal(connection,sql);sql.notificationEvents.push(event)}};
     return require(id);
   };
   const fn = new Function('require','module','exports','__filename','__dirname',source(name));
@@ -37,6 +38,7 @@ function fixture(cfg={}) {
     delivery_fee:'0.00',buyer_platform_fee:'0.00',currency:'PKR'
   };
   const sql={
+    notificationEvents:[],
     async query(query,args) {
       if(query.startsWith('SET TRANSACTION'))return [[]];
       if(query.includes('SELECT * FROM orders WHERE id = ? FOR UPDATE'))return [[order]];
@@ -79,6 +81,7 @@ async function run() {
     assert.equal(f.trace.commits,1);
     assert.equal(f.trace.rollbacks,0);
     assert.ok(f.trace.writes.some(x=>x.query.includes('INSERT INTO order_disputes')));
+    assert.equal(f.sql.notificationEvents.length,1,'Committed dispute must emit exactly one notification');
   });
   for(const [name,changes,code,flags] of [
     ['wrong disputed quantity',{disputedQuantity:'30'},'DISPUTED_QUANTITY_MISMATCH',{}],
@@ -90,6 +93,7 @@ async function run() {
     await assert.rejects(s.createBuyerDispute({...disputeParams,...changes}),e=>e.code===code);
     assert.equal(f.trace.rollbacks,1);
     assert.equal(f.trace.writes.length,0);
+    assert.equal(f.sql.notificationEvents.length,0,'Rejected action must not produce notifications');
   });
   const refundParams={orderId:31,actor:{id:4,role:'BUYER'},refundType:'PARTIAL',
     disputeId:17,disputedQuantity:'20',reason:'Twenty kilograms short',

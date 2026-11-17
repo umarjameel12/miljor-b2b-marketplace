@@ -42,6 +42,41 @@ function startScheduler() {
   });
   activeTasks.push(cleanupTask);
 
+  // Paid subscriptions explicitly cancelled by suppliers return to STARTER at
+  // the end of the verified paid period. No automatic charge or renewal occurs.
+  let subscriptionTickRunning = false;
+  const subscriptionTask = cron.schedule('*/5 * * * *', async () => {
+    if (subscriptionTickRunning) return;
+    subscriptionTickRunning = true;
+    try {
+      await require('./subscriptionEntitlementService').processScheduledStarterChanges(50);
+    } catch (error) {
+      console.error('[Scheduler] Subscription period-end transition failed:', error.code || error.message);
+    } finally {
+      subscriptionTickRunning = false;
+    }
+  });
+  activeTasks.push(subscriptionTask);
+
+  // Run bounded Flash expiry recovery only after migration 095 and rollout approval.
+  // MySQL advisory lock serializes multiple app instances. No automatic payments.
+  if (process.env.UCP_FLASH_RECOVERY_WORKER_ENABLED === 'true' &&
+      process.env.UCP_FLASH_RECOVERY_RUNTIME_APPROVED === 'true') {
+    let recoveryRunning=false;
+    const recoveryTask=cron.schedule('*/5 * * * *',async()=>{
+      if(recoveryRunning)return;
+      recoveryRunning=true;
+      try{
+        const result=await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
+        if(result.failed)console.error('[UCP recovery] Flash items require review',{failed:result.failed});
+      }catch(error){
+        console.error('[UCP recovery] Worker failed',{code:error.code||'RECOVERY_ERROR'});
+      }finally{recoveryRunning=false;}
+    });
+    activeTasks.push(recoveryTask);
+    console.log('[Scheduler] UCP Flash recovery enabled (no provider payments)');
+  }
+
   // B6-M recurring procurement draft worker, opt-in only.
   // Does NOT create orders, trigger Safepay or authorize standing charges.
   // Locking and retry backoff are maintained in procurementRecurringService.
@@ -70,6 +105,24 @@ function startScheduler() {
     console.log('[Scheduler] B6 recurring draft worker enabled (no automatic payments)');
   }
 
+  // Transactionally project inbox events, then optionally send leased emails.
+  // Off by default until migration 092/093, test DB and transport rollout are approved.
+  if(process.env.NOTIFICATION_WORKER_ENABLED==='true' &&
+     process.env.NOTIFICATION_RUNTIME_APPROVED==='true'){
+    let notificationRunning=false;
+    const notificationTask=cron.schedule('* * * * *',async()=>{
+      if(notificationRunning)return;
+      notificationRunning=true;
+      try{
+        await require('./notificationService').processPending({limit:20});
+        if(process.env.NOTIFICATION_EMAIL_DELIVERY_ENABLED==='true')
+          await require('./emailService').processOutboxBatch({limit:20});
+      }catch(error){
+        console.error('[Scheduler] Notification worker requires review',{code:error.code||'NOTIFICATION_WORKER_FAILED'});
+      }finally{notificationRunning=false;}
+    });
+    activeTasks.push(notificationTask);
+  }
   console.log('✅ Scheduler active: Pool expiry every 10 min | Cleanup every hour');
 }
 

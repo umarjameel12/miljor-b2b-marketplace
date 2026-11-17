@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Receipt,
 } from 'lucide-react';
+import { toast } from 'react-toastify';
 import FLAGS from '../config/featureFlags';
 
 export const OrdersPage = () => {
@@ -26,7 +27,32 @@ export const OrdersPage = () => {
   const [flashHolds,setFlashHolds]=useState([]);
   const [ordersLoading,setOrdersLoading]=useState(false);
   const [ordersError,setOrdersError]=useState('');
+  const [transitioningId, setTransitioningId] = useState(null);
   const isSupplier = user?.role === 'SUPPLIER';
+
+  const handleTransition = async (orderId, toStatus, extra = {}) => {
+    try {
+      setTransitioningId(orderId);
+      const key = `supp_trans_${orderId}_${toStatus}_${Date.now()}`;
+      const res = await apiClient.post(`/fulfillment/supplier/orders/${orderId}/transition`, {
+        to_status: toStatus,
+        delivery_method: extra.delivery_method || 'STANDARD_DELIVERY',
+        ...extra
+      }, {
+        headers: { 'X-Idempotency-Key': key }
+      });
+      if (res.data?.success) {
+        toast.success(`Order advanced to ${toStatus.replace(/_/g, ' ')}`);
+        const ordersRes = await apiClient.get('/orders', { params: { limit: 100 } });
+        setRealOrders(ordersRes?.data?.data?.orders || ordersRes?.data?.orders || []);
+      }
+    } catch (err) {
+      console.error('Transition error:', err);
+      toast.error(err.response?.data?.error?.message || 'Failed to update order fulfillment');
+    } finally {
+      setTransitioningId(null);
+    }
+  };
   const regularOrders=isSupplier ? [] : realOrders.filter(order=>order.pool_id&&order.reservation_id);
   // Flash/B6 procurement orders can be legitimate without a legacy pool/reservation.
   // For suppliers, all assigned customer orders are displayed in their fulfillment queue.
@@ -232,13 +258,59 @@ export const OrdersPage = () => {
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   ) : (
-                    <Link
-                      to={`/payment/return?order_id=${order.id}`}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20 transition flex items-center gap-1.5"
-                    >
-                      <Receipt className="w-3.5 h-3.5" />
-                      <span>View Receipt & Escrow</span>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/payment/return?order_id=${order.id}`}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20 transition flex items-center gap-1.5"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                        <span>View Receipt & Escrow</span>
+                      </Link>
+                      {isSupplier && (
+                        <>
+                          {order.fulfillment_status === 'AWAITING_SUPPLIER_ACKNOWLEDGEMENT' && (
+                            <button
+                              type="button"
+                              onClick={() => handleTransition(order.id, 'PREPARING')}
+                              disabled={transitioningId === order.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--brand-accent)] text-stone-900 hover:opacity-90 transition shadow-2xs cursor-pointer"
+                            >
+                              {transitioningId === order.id ? 'Updating…' : 'Acknowledge & Prepare'}
+                            </button>
+                          )}
+                          {order.fulfillment_status === 'PREPARING' && (
+                            <button
+                              type="button"
+                              onClick={() => handleTransition(order.id, 'READY_FOR_DISPATCH')}
+                              disabled={transitioningId === order.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-stone-900 hover:opacity-90 transition shadow-2xs cursor-pointer"
+                            >
+                              {transitioningId === order.id ? 'Updating…' : 'Ready for Dispatch'}
+                            </button>
+                          )}
+                          {order.fulfillment_status === 'READY_FOR_DISPATCH' && (
+                            <button
+                              type="button"
+                              onClick={() => handleTransition(order.id, 'DISPATCHED', { delivery_method: 'STANDARD_DELIVERY' })}
+                              disabled={transitioningId === order.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white hover:opacity-90 transition shadow-2xs cursor-pointer"
+                            >
+                              {transitioningId === order.id ? 'Updating…' : 'Dispatch Order'}
+                            </button>
+                          )}
+                          {order.fulfillment_status === 'DISPATCHED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleTransition(order.id, 'SUPPLIER_DELIVERED')}
+                              disabled={transitioningId === order.id}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:opacity-90 transition shadow-2xs cursor-pointer"
+                            >
+                              {transitioningId === order.id ? 'Updating…' : 'Confirm Delivered'}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               </article>

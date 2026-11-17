@@ -75,7 +75,10 @@ async function main(){
   check(true,'Tampered checksum fails closed');
   const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'miljor-finance-preflight-'));
   try{
-    for(const name of Object.values(CANONICAL))
+    // Preserve every pinned canonical version in the disposable adversarial fixture;
+    // otherwise an early mismatch masks the competing finance collision we test.
+    for(const name of [...new Set([...Object.values(CANONICAL),
+      ...manifest.map(item=>item.filename)])].filter(name => name !== '049_in_app_notifications.sql'))
       fs.copyFileSync(path.join(root,'database/migrations',name),path.join(tmp,name));
     fs.writeFileSync(path.join(tmp,FINANCE_ALTERNATE['049']),'-- collision only\nSELECT 1;\n');
     assert.throws(()=>checkFinanceCompatibility(tmp),/FINANCE_MIGRATION_VERSION_COLLISION/);

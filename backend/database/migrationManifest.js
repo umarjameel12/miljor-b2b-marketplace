@@ -11,7 +11,14 @@ const EXPECTED_INTEGRATION = Object.freeze({
   '048':'048_procurement_notification_outbox.sql',
   '051':'051_expand_canonical_product_families.sql',
   '052':'052_demand_requester_role.sql',
-  '053':'053_regular_pool_payment_hold_deadlines.sql'
+  '053':'053_regular_pool_payment_hold_deadlines.sql',
+  // Canonical reconciliation of PR #53 / PR #54 colliding 092/093 revisions.
+  '090':'090_smart_procurement_product_counteroffers.sql',
+  '091':'091_procurement_biweekly_cadence.sql',
+  '092':'092_notification_event_delivery.sql',
+  '093':'093_email_outbox_claims.sql',
+  '094':'094_procurement_delivery_binding.sql',
+  '095':'095_ucp_recovery_cursor.sql'
 });
 const OLD_UCP_RENUMBERED = Object.freeze({
   '046':'046_expand_canonical_product_families.sql',
