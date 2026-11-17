@@ -88,11 +88,11 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
     providerSignedWebhookVerified:false
   });
 }
-function normalizeSucceededWebhook({eventType,data,expectedOrderCode,expectedMerchantApiKey}){
+function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedOrderCode,expectedMerchantApiKey}){
   if(eventType!=='payment.succeeded'||data?.success!==true||data?.state!=='TRACKER_ENDED')
     throw fail('V3_WEBHOOK_NOT_CAPTURED','Only signed payment.succeeded TRACKER_ENDED events may confirm capture');
   if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
-     data.merchant_api_key&&data.merchant_api_key!==expectedMerchantApiKey)
+     merchantApiKey!==expectedMerchantApiKey)
     throw fail('V3_WEBHOOK_MERCHANT_MISMATCH','Webhook merchant identity does not match configured account');
   const amount=fromMinorPkr(data.amount);
   if(data.currency!=='PKR')
