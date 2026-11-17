@@ -159,11 +159,12 @@ async function main() {
         require(name),v3Module,v3Module.exports);
     const v3svc=new v3Module.exports.SupplierSubscriptionCheckoutService(v3db,adapter);
     const priorPlan=profile.subscription_plan;
-    await assert.rejects(()=>v3svc.reconcile({actor,attemptId:52}),
-      e=>e.code==='V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED'&&e.statusCode===409);
+    const pendingCapture=await v3svc.reconcile({actor,attemptId:52});
+    assert.equal(pendingCapture.reconciled,false);
+    assert.equal(pendingCapture.provider_state,'AWAITING_SIGNED_CAPTURE');
     assert.equal(v3Reads,1);
     assert.equal(v3Writes,0);
-    assert.equal(v3ProviderReads,1);
+    assert.equal(v3ProviderReads,0);
     assert.equal(profile.subscription_plan,priorPlan);
     assert.equal(issued,1,'Unverified v3 reporter may not grant another paid subscription');
     console.log('SUPPLIER_SUBSCRIPTION_CHECKOUT_CONTRACT_PASS: ownership, idempotency, provider amount, pending state, legacy paid activation, v3 capture-proof fail-closed, replay');
