@@ -39,6 +39,10 @@ function evaluate({refund,payment,attempt,otherApprovedMinor=0n,now=Date.now()})
   return {
     refund_id:Number(refund.id),order_id:Number(refund.order_id),
     currency:'PKR',requested_amount_pkr:exact.toCanonicalString(refund.total_refund_amount,2),
+    // Safepay Payments v3/refund documentation uses PKR minor units. Display
+    // a non-executable precision-safe preview, never feed to legacy v1 API.
+    v3_refund_amount_minor_preview:requested.toString(),
+    v3_preview_only:true,
     provider:'SAFEPAY',recommended_provider_action:method,
     internal_financial_check:faults.length===0?'PASS':'BLOCKED',
     blocking_reasons:faults,external_execution_status:'DISABLED',
