@@ -105,3 +105,10 @@ test('actual buyer reconciliation rejects v3 before legacy provider lookup or DB
   assert.equal(providerCalls,1,'Legacy contract still uses its existing provider adapter');
   assert.equal(writeConnections,0);
 });
+
+test('supplier checkout failure remains visible after refreshing attempts',()=>{
+  const page=fs.readFileSync(path.resolve(root,'../frontend/src/pages/SupplierSubscriptionPage.jsx'),'utf8');
+  const start=page.slice(page.indexOf('const startCheckout = async'),page.indexOf('const verifyPayment = async'));
+  assert.match(start,/setSubmitting\(false\);\s*await refresh\(\);\s*setError\(e\.message \|\| 'Subscription checkout unavailable\.'\)/);
+  assert.match(start,/body\.error\?\.message/,'Server-reported capture-proof rejection must surface to supplier');
+});
