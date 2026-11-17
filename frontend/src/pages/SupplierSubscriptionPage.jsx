@@ -91,9 +91,11 @@ export const SupplierSubscriptionPage = () => {
       }
       window.location.assign(link.href);
     } catch(e) {
-      setError(e.message || 'Subscription checkout unavailable.');
+      // refresh() clears the page error at its start. Refresh the attempt
+      // list first, then keep the actionable checkout failure visible.
       setSubmitting(false);
       await refresh();
+      setError(e.message || 'Subscription checkout unavailable.');
     }
   };
 
