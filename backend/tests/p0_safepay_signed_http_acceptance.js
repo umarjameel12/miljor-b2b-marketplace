@@ -196,6 +196,11 @@ async function main(){
     r=await post(subEvent);
     assert.equal(r.status,200);
     assert.equal(r.data.data.is_duplicate,true);
+    // Even after activation, changed merchant/amount is not a valid replay.
+    r=await post({...subEvent,merchant_api_key:'sec_wrong_merchant'});
+    assert.equal(r.status,422,'Paid supplier must still reject a different merchant');
+    r=await post({...subEvent,data:{...subEvent.data,amount:minor+1}});
+    assert.equal(r.status,422,'Paid supplier must still reject a different captured amount');
     r=await post({...subEvent,token:'evt_independent_retry_'+id()});
     assert.equal(r.status,200);
     assert.equal(r.data.data.is_duplicate,true);
