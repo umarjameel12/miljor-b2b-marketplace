@@ -49,3 +49,59 @@ test('webhook processing uses the persisted attempt contract, never heuristic am
   assert.match(v3,/expectedMerchantApiKey/);
   assert.match(v3,/fromMinorPkr\(data\.amount\)/);
 });
+
+test('actual buyer reconciliation rejects v3 before legacy provider lookup or DB writes',async()=>{
+  const checkout=read('src/services/safepayCheckoutService.js');
+  let providerCalls=0,writeConnections=0,reads=0;
+  let contract='payments-v3-minor';
+  const db={
+    query:async(sql,args)=>{
+      assert.match(sql,/^SELECT /,'Reconciliation proof check cannot issue writes');
+      assert.deepEqual(args,[17]);
+      reads++;
+      if(sql.includes('FROM orders o'))return [[{
+        id:17,buyer_id:5,order_status:'AWAITING_PAYMENT',
+        payment_status:'PAYMENT_INITIATED',total_amount:'1145.00',
+        currency:'PKR'
+      }]];
+      if(sql.includes('FROM payment_attempts'))return [[{
+        id:45,order_id:17,provider_contract:contract,
+        status:'INITIATED',provider_tracker_token:'track_signed_only_123'
+      }]];
+      throw Error('Unexpected read '+sql);
+    },
+    getConnection:async()=>{writeConnections++;throw Error('DB_WRITE_NOT_PERMITTED');}
+  };
+  const adapter={fetchTracker:async()=>{
+    providerCalls++;
+    throw Object.assign(Error('Legacy provider reached'),{code:'LEGACY_REPORTER_CALLED'});
+  }};
+  const mockModule={exports:{}};
+  new Function('require','module','exports',checkout)(
+    name=>name==='../config/db'?db:
+      name==='./safepayAdapter'?adapter:
+      name==='./exactDecimal'?require('../src/services/exactDecimal'):
+      name==='crypto'?require('node:crypto'):
+      // Other dependencies are not exercised on the fail-closed path.
+      name.startsWith('./')?{}:require(name),
+    mockModule,mockModule.exports
+  );
+  const svc=mockModule.exports;
+  await assert.rejects(()=>svc.reconcilePaymentWithProvider({
+    orderId:17,actor:{id:5,role:'BUYER'}
+  }),e=>e.code==='V3_SIGNED_WEBHOOK_REQUIRED'&&e.statusCode===409);
+  assert.equal(reads,2);
+  assert.equal(providerCalls,0);
+  assert.equal(writeConnections,0);
+  contract='not-a-contract';
+  await assert.rejects(()=>svc.reconcilePaymentWithProvider({
+    orderId:17,actor:{id:5,role:'BUYER'}
+  }),e=>e.code==='UNKNOWN_PAYMENT_PROVIDER_CONTRACT');
+  assert.equal(providerCalls,0);
+  contract='legacy-v1-major';
+  await assert.rejects(()=>svc.reconcilePaymentWithProvider({
+    orderId:17,actor:{id:5,role:'BUYER'}
+  }),e=>e.code==='LEGACY_REPORTER_CALLED');
+  assert.equal(providerCalls,1,'Legacy contract still uses its existing provider adapter');
+  assert.equal(writeConnections,0);
+});
