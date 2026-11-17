@@ -364,13 +364,15 @@ class SafepayCheckoutService {
     // permits a different header on each retry to bypass event deduplication.
     // When the provider omits an ID, hash the authenticated raw bytes instead
     // of fabricating an unstable timestamp-based event ID.
-    const signedId=parsedPayload.token||parsedPayload.id;
+    // A signed token/id may identify a tracker rather than a unique event.
+    // Two DISTINCT authenticated payloads can share that identifier (e.g.
+    // payment.failed followed by payment.succeeded). Deduplicate exact raw
+    // payload retries, never distinct signed transitions with the same token.
+    // An unsigned HTTP event-id header is deliberately ignored.
     const bodyHash=crypto.createHash('sha256').update(
       Buffer.isBuffer(rawBody)?rawBody:Buffer.from(rawBody,'utf8')
     ).digest('hex');
-    const effectiveEventId=(typeof signedId==='string'&&
-      /^[A-Za-z0-9:_-]{4,120}$/.test(signedId))
-      ? signedId : 'evt_sha256_'+bodyHash;
+    const effectiveEventId='evt_sha256_'+bodyHash;
     const effectiveEventType = signedEventType;
 
     // 2. Check for duplicate webhook receipt (Idempotency)
