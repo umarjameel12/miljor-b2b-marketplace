@@ -144,8 +144,8 @@ function AppContent() {
                 Request a Quote
               </Link>
               <span>•</span>
-              <Link to="/demand-requests" className="hover:underline">
-                Demand Requests
+              <Link to="/procurement" className="hover:underline">
+                Smart Procurement Hub
               </Link>
             </div>
 

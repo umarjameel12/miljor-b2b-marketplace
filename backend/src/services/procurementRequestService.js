@@ -278,6 +278,154 @@ class ProcurementRequestService {
   async getMine(buyerId,requestId) {
     return this._load(positiveId(requestId),positiveId(buyerId));
   }
+
+  async listLegacyMine(buyerId) {
+    const buyer = positiveId(buyerId);
+    const [rows] = await this.database.query(
+      `SELECT dpr.id, dpr.request_code, dpr.buyer_id, dpr.requester_role, dpr.category_id,
+              c.name AS category_name, dpr.family_id, f.name AS family_name, dpr.commodity_name,
+              dpr.desired_specs, dpr.target_quantity, dpr.target_unit, dpr.target_price_per_unit,
+              dpr.cluster_id, lc.name AS cluster_name, dpr.needed_by_date, dpr.notes, dpr.status,
+              dpr.converted_pool_id, pr.id AS converted_request_id, pr.request_code AS converted_request_code,
+              pr.status AS converted_request_status, dpr.created_at, dpr.updated_at
+         FROM demand_pool_requests dpr
+         LEFT JOIN catalog_categories c ON c.id = dpr.category_id
+         LEFT JOIN catalog_product_families f ON f.id = dpr.family_id
+         LEFT JOIN geographic_clusters lc ON lc.id = dpr.cluster_id
+         LEFT JOIN procurement_requests pr
+           ON pr.buyer_id = dpr.buyer_id
+          AND pr.idempotency_key = CONCAT('legacy-dpr:', dpr.id, ':buyer:', dpr.buyer_id)
+        WHERE dpr.buyer_id = ?
+        ORDER BY dpr.created_at DESC, dpr.id DESC
+        LIMIT 100`,
+      [buyer]
+    );
+    return rows.map((row) => ({
+      ...row,
+      is_legacy: true,
+      source: 'LEGACY_DEMAND_REQUEST',
+      already_converted: Boolean(row.converted_request_id)
+    }));
+  }
+
+  async convertLegacyDemandRequest(buyerId, legacyId, payload = {}, key) {
+    const buyer = positiveId(buyerId);
+    const legacy = positiveId(legacyId);
+    idempotency(key);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw issue('INVALID_PAYLOAD', 'Conversion payload object is required.', 400);
+    }
+    if (payload.confirm_conversion !== true) {
+      throw issue('LEGACY_CONVERSION_CONFIRMATION_REQUIRED', 'Explicit buyer confirmation is required before converting a legacy request.', 422);
+    }
+
+    const canonicalKey = `legacy-dpr:${legacy}:buyer:${buyer}`;
+    const conn = await this.database.getConnection();
+    let dpr;
+    try {
+      await conn.beginTransaction();
+      await this._buyer(conn, buyer);
+      const [rows] = await conn.query('SELECT * FROM demand_pool_requests WHERE id = ? FOR UPDATE', [legacy]);
+      if (!rows.length) throw issue('LEGACY_REQUEST_NOT_FOUND', 'Legacy demand request not found.', 404);
+      dpr = rows[0];
+      if (Number(dpr.buyer_id) !== buyer) {
+        throw issue('FORBIDDEN', 'You may only convert your own legacy demand requests.', 403);
+      }
+
+      const [existing] = await conn.query(
+        'SELECT id FROM procurement_requests WHERE buyer_id = ? AND idempotency_key = ? FOR UPDATE',
+        [buyer, canonicalKey]
+      );
+      if (existing.length) {
+        const loaded = await this._load(existing[0].id, buyer, conn);
+        await conn.commit();
+        return { is_replay: true, legacy_request_id: legacy, request: loaded };
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+    const deliveryArea = typeof payload.delivery_area === 'string' && payload.delivery_area.trim()
+      ? payload.delivery_area.trim()
+      : null;
+    const ownership = payload.ownership || 'SINGLE_BUYER';
+    const frequency = payload.frequency || 'ONE_TIME';
+    const quoteDeadline = payload.quote_deadline || (dpr.needed_by_date ? new Date(dpr.needed_by_date).toISOString() : null);
+    const joinDeadline = payload.join_deadline || null;
+    const unit = (typeof payload.unit === 'string' && payload.unit.trim() ? payload.unit : (dpr.target_unit || '')).trim().toLowerCase();
+    const quantity = payload.quantity ?? dpr.target_quantity;
+    const familyId = payload.family_id ?? dpr.family_id;
+
+    const missing = [];
+    if (!familyId) missing.push('family_id');
+    if (!quantity || Number(quantity) <= 0) missing.push('quantity');
+    if (!unit) missing.push('unit');
+    if (!deliveryArea) missing.push('delivery_area');
+    if (!quoteDeadline) missing.push('quote_deadline');
+    if (ownership === 'COLLECTIVE' && !joinDeadline) missing.push('join_deadline');
+    if (missing.length) {
+      const err = issue(
+        'LEGACY_CONVERSION_VALIDATION_REQUIRED',
+        `Provide required fields to convert legacy request: ${missing.join(', ')}`,
+        422
+      );
+      err.missing_fields = missing;
+      throw err;
+    }
+
+    const requirements = typeof payload.requirements === 'string' && payload.requirements.trim()
+      ? payload.requirements.trim()
+      : (typeof dpr.desired_specs === 'string' && dpr.desired_specs.trim()
+          ? dpr.desired_specs.trim()
+          : (dpr.commodity_name || null));
+    const notesParts = [];
+    if (dpr.request_code) notesParts.push(`Converted from legacy request ${dpr.request_code}`);
+    if (typeof payload.notes === 'string' && payload.notes.trim()) notesParts.push(payload.notes.trim());
+    else if (typeof dpr.notes === 'string' && dpr.notes.trim()) notesParts.push(dpr.notes.trim());
+
+    const canonicalPayload = {
+      ownership,
+      frequency,
+      award_policy: payload.award_policy || 'FULL_BASKET',
+      priority: payload.priority || 'LOWEST_DELIVERED_COST',
+      delivery_area: deliveryArea,
+      notes: notesParts.join(' — ').slice(0, 2000) || null,
+      quote_deadline: quoteDeadline,
+      ...(joinDeadline ? { join_deadline: joinDeadline } : {}),
+      items: [{
+        family_id: Number(familyId),
+        quantity,
+        unit,
+        requirements,
+        allow_substitutions: Boolean(payload.allow_substitutions)
+      }]
+    };
+
+    try {
+      const created = await this.createDraft(buyer, canonicalPayload, canonicalKey);
+      return {
+        is_replay: Boolean(created.is_replay),
+        legacy_request_id: legacy,
+        request: created.request
+      };
+    } catch (err) {
+      if (err.code === 'IDEMPOTENCY_CONFLICT' || err.code === 'ER_DUP_ENTRY') {
+        const [existing] = await this.database.query(
+          'SELECT id FROM procurement_requests WHERE buyer_id = ? AND idempotency_key = ?',
+          [buyer, canonicalKey]
+        );
+        if (existing.length) {
+          const loaded = await this._load(existing[0].id, buyer);
+          return { is_replay: true, legacy_request_id: legacy, request: loaded };
+        }
+      }
+      throw err;
+    }
+  }
 }
 module.exports=new ProcurementRequestService();
 module.exports.ProcurementRequestService=ProcurementRequestService;

@@ -295,6 +295,22 @@ Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three s
 - **Code Inspection Result:** Existing services already enforce fail-closed tax gating (`503 B6_FINANCIAL_GATE_BLOCKED`), explicit `tax_calculated: false` visibility, exact decimal separation, and immutable snapshots; no speculative tax engine or code change was introduced.
 - **Protected Databases & Safety:** `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`), `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `SAFEPAY_ENV=sandbox`.
 - **Conditional Merge & Local Integration:** **BLOCKED (PR #53 retained as DRAFT)** — cannot merge to `main` or integrate into `MilJor Project` (`feature/frontend-redesign-20261112` @ `83565c4e`, 12 dirty frontend files preserved) until factual business confirmation and qualified Pakistan tax sign-off complete. `CAN START NEXT PHASE: NO`.
+
+---
+
+# 2026-11-17 — Unified Buyer Requested-Pool & Legacy Demand Request Consolidation
+
+- **Unified Navigation & Dead-Page Removal:** Removed unused `DemandRequestsPage.jsx`; updated `LandingPage.jsx`, `App.jsx` footer, and `SupplierSubscriptionPage.jsx` copy/links to point directly to `/procurement` (`Smart Procurement Hub`), while keeping `/demand-requests` and `/rfqs` `<Navigate to="/procurement" replace />` routes for bookmark/back-forward compatibility.
+- **Legacy Visibility, Privacy & Safe Idempotent Conversion:**
+  - `procurementRequestService.listLegacyMine(buyerId)` exposes buyer-owned `demand_pool_requests` inside `GET /api/v1/procurement/requests` (`legacy_requests`) and `GET /api/v1/procurement/legacy-requests`, deduplicated via `legacy-dpr:<id>:buyer:<buyerId>`.
+  - `procurementRequestService.convertLegacyDemandRequest` (`POST /api/v1/procurement/legacy-requests/:id/convert`) enforces buyer ownership (`403`), explicit confirmation (`confirm_conversion: true`), required canonical fields (`422 LEGACY_CONVERSION_VALIDATION_REQUIRED`, no fabricated defaults), and concurrent idempotency via `(buyer_id, idempotency_key)` without auto-publishing or charging.
+  - `GET /api/v1/demand-requests` preserves its anonymized public projection (no buyer identity/notes/desired_specs).
+  - `RfqPage.jsx` displays unconverted buyer-owned legacy requests with `Review & Convert to Draft`.
+- **Verification:**
+  - `node --test tests/smart_hub_unified_legacy_requests.test.js tests/safepay_payment_created_webhook.test.js tests/spec_code_collision_retry.test.js`: **22/22 PASS**.
+  - `frontend` `npm run build`: **PASS** (`2,237` modules, `0` errors, `1.23s`).
+  - Live Chromium verification (`http://127.0.0.1:3100/` → `5517`, `miljor_test_db`): **PASS** (desktop/mobile nav, `/demand-requests` & `/rfqs` redirects, back/forward, Buyer 1 legacy visibility & UI conversion to `DRAFT` + dedup, Buyer 2 isolation).
+  - Protected DBs: `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`).
 # 2026-11-17 — Review correction: authenticate the financial field boundary
 
 Reviewed Antigravity commit `34bca7909cd6a2e4640dc486135be9ecf07976d0`; independently observed all eleven PR workflows SUCCESS, including genuine-envelope-compatible synthetic Chromium (44111766523), P0 (44111766497) and UCP (44111766592). Genuine provider capture/callback evidence recorded for this commit remains historical evidence of the observed sandbox operation, not a new post-correction charge or delivery.

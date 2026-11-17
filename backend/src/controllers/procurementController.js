@@ -41,8 +41,30 @@ class ProcurementController {
 
   async listSmartRequests(req, res) {
     try {
-      const requests = await procurementRequestService.listMine(req.user.id);
-      res.json({ success: true, data: { requests } });
+      const [requests, legacyRequests] = await Promise.all([
+        procurementRequestService.listMine(req.user.id),
+        procurementRequestService.listLegacyMine(req.user.id)
+      ]);
+      res.json({ success: true, data: { requests, legacy_requests: legacyRequests } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async listLegacyRequests(req, res) {
+    try {
+      const legacyRequests = await procurementRequestService.listLegacyMine(req.user.id);
+      res.json({ success: true, data: { legacy_requests: legacyRequests } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async convertLegacyRequest(req, res) {
+    try {
+      const result = await procurementRequestService.convertLegacyDemandRequest(
+        req.user.id,
+        req.params.id,
+        req.body,
+        req.get('X-Idempotency-Key')
+      );
+      res.status(result.is_replay ? 200 : 201).json({ success: true, data: result });
     } catch (err) { this._smartError(res, err); }
   }
 

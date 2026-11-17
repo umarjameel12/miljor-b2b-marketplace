@@ -26,6 +26,8 @@ router.post('/flash-pools/:id/expire', protect, authorizeStrict('SUPPLIER'), (re
 // Registered before legacy RFQ routes, preserving B0-B4 compatibility.
 router.post('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.createSmartRequest(req,res));
 router.get('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.listSmartRequests(req,res));
+router.get('/procurement/legacy-requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.listLegacyRequests(req,res));
+router.post('/procurement/legacy-requests/:id/convert', protect, authorizeStrict('BUYER'), (req,res)=>controller.convertLegacyRequest(req,res));
 router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.getSmartRequest(req,res));
 router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
 router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));

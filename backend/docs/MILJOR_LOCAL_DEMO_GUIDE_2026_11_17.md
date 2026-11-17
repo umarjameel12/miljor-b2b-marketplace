@@ -83,6 +83,7 @@
 ## 6. Known Limitations, Honest Framing & Deferred Items
 
 - **Sandbox & Simulated Records:** Orders `231` and `234` reflect controlled test fulfillment records paired with genuine Safepay **sandbox** captures — **not** physical commercial deliveries or live money movement.
+- **Unified Procurement Hub Entry:** All active buyer CTAs (`LandingPage.jsx`, footer in `App.jsx`, `SupplierSubscriptionPage.jsx`) now point directly to `/procurement` (`Smart Procurement Hub`); `/demand-requests` and `/rfqs` safely redirect to `/procurement`. Any buyer-owned legacy `demand_pool_requests` appear inside `/procurement` under `Legacy Demand Requests (Unconverted)` with `Review & Convert to Draft` (deduplicated once converted).
 - **Unresolved / Deferred:** MilJor is currently unregistered; commercial Pakistan FBR/PRA tax classification (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`), qualified tax review, `B6_TAX_POLICY_APPROVED=true`, PR #53 merge to `main`, and market launch remain **deferred**.
 - **Catalog Discrepancy:** `Milk Powder` (`id: 58`, `FAM-MILK-POWDER` under `Bakery Ingredients`) remains in `catalog_product_families` and is flagged for governance review without silent deletion.
 - **Recovery for Common Demo Issues:**

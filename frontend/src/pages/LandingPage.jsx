@@ -121,7 +121,7 @@ export const LandingPage = () => {
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center gap-2"><Logo variant="monogram" size="md" /><span className="hidden sm:inline text-sm font-semibold tracking-tight">MilJor</span></Link>
           <nav className="hidden lg:flex items-center gap-7" aria-label="Public navigation">
             {navLinks.map((link) => <a key={link.title} href={link.to} className={navClass}>{link.title}</a>)}
-            <Link to="/rfqs" className={navClass}>Request Quote</Link>
+            <Link to="/procurement" className={navClass}>Smart Procurement Hub</Link>
           </nav>
           <div className="hidden sm:flex items-center gap-3">
             <ThemeSelector minimal />
@@ -139,7 +139,7 @@ export const LandingPage = () => {
         {mobileMenu && (
           <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
             {navLinks.map((link) => <a key={link.title} href={link.to} onClick={() => setMobileMenu(false)} className="rounded-lg px-3 py-2 text-sm">{link.title}</a>)}
-            <Link to="/rfqs" onClick={() => setMobileMenu(false)} className="rounded-lg px-3 py-2 text-sm">Request Quote</Link>
+            <Link to="/procurement" onClick={() => setMobileMenu(false)} className="rounded-lg px-3 py-2 text-sm">Smart Procurement Hub</Link>
             <Link to={isAuthenticated ? dashboardPath : '/login'} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>{isAuthenticated ? 'Open Marketplace' : 'Sign In'}</Link>
             {!isAuthenticated && <Link to="/register" className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Register</Link>}
           </nav>
@@ -158,7 +158,7 @@ export const LandingPage = () => {
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link to="/pools" className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5" style={buttonGold}>Explore Pools <ArrowUpRight size={16} /></Link>
-              <Link to="/rfqs" className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition-colors hover:opacity-75" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>Request a Quote <ArrowRight size={16} /></Link>
+              <Link to="/procurement" className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition-colors hover:opacity-75" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}>Request a Quote <ArrowRight size={16} /></Link>
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
               <span className="flex items-center gap-2"><Layers size={15} style={{ color: 'var(--brand-accent)' }} /> Pooled buying</span>
@@ -220,7 +220,7 @@ export const LandingPage = () => {
           </div>
           {loadingPools ? <div role="status" className="rounded-2xl border p-9 text-sm" style={panel}>Loading current pools…</div>
             : featuredPools.length ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}</div>
-            : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to="/rfqs" className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
+            : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to="/procurement" className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }}>
@@ -245,7 +245,7 @@ export const LandingPage = () => {
       <footer className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-xs sm:px-8 lg:px-10">
           <span style={{ color: 'var(--text-secondary)' }}>© {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.</span>
-          <div className="flex flex-wrap gap-5"><Link to="/pools">Pools</Link><Link to="/rfqs">Request Quote</Link><Link to="/demand-requests">Demand Requests</Link><Link to="/login">Sign In</Link></div>
+          <div className="flex flex-wrap gap-5"><Link to="/pools">Pools</Link><Link to="/procurement">Smart Procurement Hub</Link><Link to="/login">Sign In</Link></div>
         </div>
       </footer>
     </div>
