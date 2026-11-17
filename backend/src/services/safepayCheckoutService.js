@@ -526,7 +526,8 @@ class SafepayCheckoutService {
           merchantApiKey:parsedPayload.merchant_api_key,
           expectedMerchantApiKey:process.env.SAFEPAY_PUBLIC_KEY,
           expectedTrackerToken:trackerToken,
-          expectedOrderCode:order.order_code
+          expectedOrderCode:order.order_code,
+          expectedAmountPkr:order.total_amount
         });
         if(normalized.trackerToken!==trackerToken){
           const err=new Error('Signed Safepay v3 tracker identity mismatch');
