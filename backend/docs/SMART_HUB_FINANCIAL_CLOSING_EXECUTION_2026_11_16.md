@@ -166,4 +166,3 @@ The unit test injects a database-forbidden module double before importing catalo
 Changed paths: `backend/src/services/catalogService.js`, `backend/tests/spec_code_collision_retry.test.js`, `.github/workflows/smart-hub-notifications.yml`, this report and `MILJOR_PHASE_LOG.md`. Safe fetch confirmed local/remote approved branch both at 44e2f2d before edits; main remained 9fb07cf. Applied receiving-code-review and test-driven-development to verify the reported change, reproduce the narrow defect and fix it; project consolidated verification policy preserved successful unaffected evidence. Remote exact-head verification follows the approved feature-branch push. This focused code correction is locally PASS; genuine sandbox capture/public webhook, inbox receipt and accountable tax policy remain BLOCKED. No main merge or original local UI overwrite. SMS excluded; UCP/B6 unchanged.
 
 CAN START NEXT PHASE: NO
-
