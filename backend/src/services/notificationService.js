@@ -54,6 +54,32 @@ class NotificationService {
     }
   }
 
+  // PR #53 canonical supplier/buyer notification preferences.
+  // Server-only user scope; no caller-supplied user ID.
+  async getPreferences(userId) {
+    const [rows] = await db.query(
+      'SELECT locale,optional_email,optional_sms FROM notification_preferences WHERE user_id=?',
+      [userId]
+    );
+    return rows[0] || {locale:'en',optional_email:1,optional_sms:0};
+  }
+
+  async setPreferences(userId,input) {
+    if(!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.keys(input).some(field=>!['locale','optional_email','optional_sms'].includes(field)) ||
+      !['en','ur'].includes(input.locale) ||
+      typeof input.optional_email !== 'boolean' || typeof input.optional_sms !== 'boolean') {
+      const error = new Error('Invalid notification preferences');
+      error.statusCode=400;error.code='INVALID_NOTIFICATION_PREFERENCES';throw error;
+    }
+    await db.query(
+      `INSERT INTO notification_preferences(user_id,locale,optional_email,optional_sms) VALUES (?,?,?,?)
+       ON DUPLICATE KEY UPDATE locale=VALUES(locale),optional_email=VALUES(optional_email),optional_sms=VALUES(optional_sms)`,
+      [userId,input.locale,Number(input.optional_email),Number(input.optional_sms)]
+    );
+    return this.getPreferences(userId);
+  }
+
   /**
    * Retrieves paginated notifications strictly isolated to the specified user.
    */

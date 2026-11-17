@@ -167,6 +167,8 @@ jobs:
         if: ${{ always() }}
         timeout-minutes: 8
         run: cd backend && node tests/part5_flash_pool_gate.js
+      - name: PR54 bounded Flash recovery and lease release acceptance
+        run: cd backend && node tests/ucp_flash_recovery_gate.js
       - name: B4 Regular pool publication and tier acceptance
         if: ${{ always() }}
         timeout-minutes: 8

@@ -152,9 +152,10 @@ class FlashPoolService {
     const conn=await db.getConnection();
     try {
       await conn.beginTransaction();
-      await this._lockVerifiedSupplier(conn,supplierId);
+      if(!systemRecovery)await this._lockVerifiedSupplier(conn,supplierId);
       const [rows]=await conn.query(
-        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+        systemRecovery?'SELECT * FROM flash_pools WHERE id=? FOR UPDATE':
+          'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',systemRecovery?[id]:[id,supplierId]);
       const offer=rows[0];
       if(!offer)throw fail('FLASH_NOT_FOUND','Supplier Flash offer not found.',404);
       if(offer.status!=='DRAFT')throw fail('FLASH_TERMS_LOCKED','Published or cancelled Flash offers cannot be edited.',409);
@@ -538,7 +539,7 @@ class FlashPoolService {
       if(!money.exactDecimalGte(offer.max_quantity_per_buyer,cumulative,2))
         throw fail('BUYER_FLASH_MAX_EXCEEDED','This buyer has reached the supplier-defined total purchase limit.',409);
       const subtotal = money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
-      const buyerFeeModel = await feeService.calculateBuyerFee(subtotal);
+      const buyerFeeModel = await feeService.calculateBuyerFee(subtotal,conn);
       const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
       // Recompute inside the stock-lock transaction, never trust a client fee
       // or the supplier's offer-wide fee for a cluster-specific destination.
@@ -688,7 +689,7 @@ class FlashPoolService {
         const [paidPayments]=await conn.query("SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[hold.order_id]);
         if(paidPayments.length)continue;
         const [activeAttempts]=await conn.query(
-          "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) LIMIT 1",
+          "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' LIMIT 1",
           [hold.order_id]);
         if(activeAttempts.length)continue;
         await conn.query(
@@ -782,6 +783,15 @@ class FlashPoolService {
   }
 
   async closeExpiredOffer(supplierId,id) {
+    return this._closeExpiredOffer(supplierId,id,false);
+  }
+
+  // System-only recovery: expired pools close regardless of supplier verification changes.
+  async expireOfferForRecovery(id) {
+    return this._closeExpiredOffer(null,id,true);
+  }
+
+  async _closeExpiredOffer(supplierId,id,systemRecovery) {
     const conn=await db.getConnection();
     try {
       await conn.beginTransaction();
