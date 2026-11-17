@@ -41,6 +41,16 @@ async function main(){
     supplier=await browser.newContext({baseURL:base});
     const b=await signin(buyer,'p0_buyer@miljor.test',password,'BUYER');
     const s=await signin(supplier,'p0_supplier@miljor.test',password,'SUPPLIER');
+    // Real supplier subscription UI reads owned MySQL entitlements and plan prices.
+    await s.page.goto(base+'/supplier/subscription',{waitUntil:'domcontentloaded'});
+    await s.page.getByRole('heading',{name:'Your subscription'}).waitFor({timeout:15000});
+    await s.page.getByRole('heading',{name:'Plans'}).waitFor({timeout:15000});
+    assert.ok((await s.page.getByText('Starter',{exact:true}).count())>0,
+      'Supplier starter plan must render real entitlement state');
+    assert.ok((await s.page.getByText('Checkout not available yet').count())===0,
+      'Premium UI must not advertise the obsolete dead-end checkout');
+    pass('Supplier subscription loads premium plan UI and authoritative active entitlement');
+
     await s.page.goto(base+'/supplier/pools',{waitUntil:'domcontentloaded'});
     await s.page.getByRole('heading',{name:'Pool Management'}).waitFor({timeout:15000});
     await s.page.reload({waitUntil:'domcontentloaded'});

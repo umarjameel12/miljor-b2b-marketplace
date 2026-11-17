@@ -81,6 +81,7 @@ async function runE3Gate() {
   const testSupplierEmail = `e3_supplier_${ts}@miljor.com`;
   let supplierId;
   let supplierToken;
+  let testBuyerId;
   let adminId;
   let adminToken;
 
@@ -108,6 +109,14 @@ async function runE3Gate() {
     adminId = aRes.insertId;
     adminToken = generateToken(adminId, 'ADMIN', 'VERIFIED');
 
+    // Dedicated genuine BUYER identity for tenant/role-isolation acceptance.
+    const [buyerRes] = await db.query(
+      `INSERT INTO users (full_name, email, phone, password_hash, role, verification_status, buyer_trust_status)
+       VALUES (?, ?, ?, 'testhash', 'BUYER', 'VERIFIED', 'CONTACT_VERIFIED')`,
+      [`E3 Isolation Buyer ${ts}`, `e3_buyer_${ts}@miljor.com`, `+92302${String(ts).slice(-7)}`]
+    );
+    testBuyerId = buyerRes.insertId;
+
     // Create supplier profile with STARTER plan (4-family entitlement; legacy listing column retained).
     await db.query(
       `INSERT INTO supplier_profiles (supplier_id, business_type, verification_status, subscription_plan, subscription_status, max_active_listings)
@@ -128,6 +137,52 @@ async function runE3Gate() {
       assert.strictEqual(res.body.data.entitlements.can_publish_new_family, true);
       pass('1. Supplier retrieves own STARTER entitlements (0/4 families used, 4 remaining)');
     } catch (e) { fail('1. Initial Entitlements Check', e); }
+
+    // Supplier dashboard must be usable with an actual freshly onboarded supplier.
+    // Real MySQL queries are exercised, not a source-only or mocked check.
+    try {
+      const metrics = await api('/api/v1/supplier/dashboard-kpis', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(metrics.status, 200,
+        `Supplier KPI read must succeed: ${JSON.stringify(metrics.body)}`);
+      assert.ok(metrics.body.data?.kpis, 'Live KPIs missing');
+      assert.strictEqual(Number(metrics.body.data.kpis.active_unified_pools), 0);
+      const forbidden = await api('/api/v1/supplier/dashboard-kpis', {
+        headers: { Authorization: `Bearer ${generateToken(testBuyerId, 'BUYER')}` }
+      });
+      assert.strictEqual(forbidden.status, 403, 'Buyer must not access supplier KPI API');
+      pass('Supplier dashboard: live MySQL aggregation and buyer role isolation');
+    } catch (e) { fail('Supplier dashboard KPI real MySQL gate', e); }
+
+    // Notification ownership regression: supplier may only mark its own receipt read.
+    try {
+      const [own] = await db.query(
+        "INSERT INTO platform_notifications (user_id,role,event_type,event_key,title,message) VALUES (?,'SUPPLIER','ORDER_CREATED',?,'Supplier test event','Supplier-owned receipt')",
+        [supplierId, `E3_OWN_${ts}`]
+      );
+      const [other] = await db.query(
+        "INSERT INTO platform_notifications (user_id,role,event_type,event_key,title,message) VALUES (?,'BUYER','ORDER_CREATED',?,'Buyer test event','Buyer-owned receipt')",
+        [testBuyerId, `E3_BUYER_${ts}`]
+      );
+      const denied = await api(`/api/v1/notifications/${other.insertId}/read`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(denied.status, 200);
+      assert.strictEqual(denied.body.data.updated, false);
+      const ownRead = await api(`/api/v1/notifications/${own.insertId}/read`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(ownRead.status, 200);
+      assert.strictEqual(ownRead.body.data.updated, true);
+      const [statuses] = await db.query(
+        "SELECT id,is_read FROM platform_notifications WHERE id IN (?,?)", [own.insertId, other.insertId]
+      );
+      const readById = Object.fromEntries(statuses.map(x=>[x.id,Number(x.is_read)]));
+      assert.strictEqual(readById[own.insertId],1);
+      assert.strictEqual(readById[other.insertId],0);
+      pass('Notification recipient isolation: supplier own receipt updates; buyer receipt remains unread');
+    } catch(e) { fail('Notification recipient isolation',e); }
 
     // Helper to create and publish a product and SKU in a family
     async function createAndPublishSkuInFamily(familyId, variety, packSize, packUnit, isUnbranded = false, brand = 'TestBrand') {
@@ -402,12 +457,51 @@ async function runE3Gate() {
       pass('10. Upgraded supplier successfully publishes 5th family (5/13 used, 8 remaining)');
     } catch (e) { fail('10. Publish 5th family under GROWTH', e); }
 
-    // 11. Downgrade safety: Downgrading to STARTER marks over-limit but does NOT delete records
+    // 11. Paid-plan safety: immediate downgrade prohibited; cancellation is scheduled.
+    // Verify the actual HTTP contract, MySQL period-end transition, and historical data.
     try {
-      const downRes = await api('/api/v1/supplier/subscription/upgrade', {
+      await db.query(
+        `INSERT INTO supplier_subscriptions
+         (supplier_id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr)
+         VALUES (?, 'GROWTH', 'ACTIVE', NOW(), DATE_ADD(NOW(), INTERVAL 1 DAY), 'MONTHLY', 3500.00)`,
+        [supplierId]
+      );
+      const immediate = await api('/api/v1/supplier/subscription/upgrade', {
         method: 'POST',
         headers: { Authorization: `Bearer ${supplierToken}` },
         body: { plan_code: 'STARTER', billing_cycle: 'FREE' }
+      });
+      assert.strictEqual(immediate.status, 409);
+      assert.strictEqual(immediate.body.error.code, 'SUBSCRIPTION_SCHEDULE_REQUIRED');
+
+      const schedule = await api('/api/v1/supplier/subscription/cancel-renewal', {
+        method: 'POST', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(schedule.status, 200);
+      assert.strictEqual(schedule.body.data.pending_plan_code, 'STARTER');
+      const replay = await api('/api/v1/supplier/subscription/cancel-renewal', {
+        method: 'POST', headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(replay.status, 200);
+      assert.strictEqual(replay.body.data.already_scheduled, true);
+
+      const beforeExpiry = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
+      });
+      assert.strictEqual(beforeExpiry.body.data.entitlements.plan_code, 'GROWTH',
+        'Paid entitlements must remain until the period ends');
+      assert.strictEqual(beforeExpiry.body.data.billing_history[0].pending_plan_code, 'STARTER');
+
+      await db.query(
+        `UPDATE supplier_subscriptions SET current_period_end = DATE_SUB(NOW(), INTERVAL 1 SECOND)
+         WHERE supplier_id = ? AND pending_plan_code = 'STARTER'`, [supplierId]
+      );
+      const worker = require('../src/services/subscriptionEntitlementService');
+      assert.strictEqual((await worker.processScheduledStarterChanges(20)).processed, 1);
+      assert.strictEqual((await worker.processScheduledStarterChanges(20)).processed, 0,
+        'Repeated worker invocations must never insert another Starter period');
+      const downRes = await api('/api/v1/supplier/subscription', {
+        headers: { Authorization: `Bearer ${supplierToken}` }
       });
       assert.strictEqual(downRes.status, 200);
       assert.strictEqual(downRes.body.data.entitlements.plan_code, 'STARTER');
@@ -416,8 +510,8 @@ async function runE3Gate() {
       assert.strictEqual(downRes.body.data.entitlements.is_over_limit, true);
       assert.strictEqual(downRes.body.data.entitlements.remaining_family_slots, 0);
       assert.strictEqual(downRes.body.data.entitlements.can_publish_new_family, false);
-      pass('11. Downgrade preserves all 5 existing families, marks is_over_limit=true, and blocks new families');
-    } catch (e) { fail('11. Downgrade safety', e); }
+      pass('11. Paid access preserved until expiry; scheduled downgrade preserves all five families and blocks new ones');
+    } catch (e) { fail('11. Scheduled downgrade safety', e); }
 
     // 12. E2 Deadline Integrity check: Schedule where buyer deadline > promised delivery returns 422 with timeline
     let ownListingId;
@@ -624,10 +718,14 @@ async function runE3Gate() {
       await db.query(`DELETE FROM supplier_products WHERE id IN (${createdProductIds.join(',')})`);
     }
     if (supplierId) {
+      await db.query('DELETE FROM platform_notifications WHERE user_id IN (?,?)', [supplierId,testBuyerId || supplierId]);
       await db.query(`DELETE FROM supplier_listings WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_subscriptions WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM supplier_profiles WHERE supplier_id = ?`, [supplierId]);
       await db.query(`DELETE FROM users WHERE id = ?`, [supplierId]);
+    }
+    if (testBuyerId) {
+      await db.query(`DELETE FROM users WHERE id = ?`, [testBuyerId]);
     }
     if (adminId) {
       await db.query(`DELETE FROM users WHERE id = ?`, [adminId]);

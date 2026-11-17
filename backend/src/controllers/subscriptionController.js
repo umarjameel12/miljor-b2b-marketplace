@@ -15,7 +15,7 @@ class SubscriptionController {
       const entitlements = await subscriptionEntitlementService.getSupplierEntitlements(supplierId);
 
       const [history] = await db.query(
-        `SELECT id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr, created_at
+        `SELECT id, plan_code, status, current_period_start, current_period_end, billing_cycle, auto_renew, pending_plan_code, price_pkr, created_at
          FROM supplier_subscriptions
          WHERE supplier_id = ?
          ORDER BY id DESC LIMIT 20`,
@@ -81,6 +81,60 @@ class SubscriptionController {
         success: false,
         error: { code: error.code || 'SERVER_ERROR', message: error.message, details: error.details }
       });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/cancel-renewal
+  // Schedule a paid-to-Starter transition. Never reduce paid entitlements early.
+  async cancelRenewal(req, res) {
+    try {
+      const result = await subscriptionEntitlementService.scheduleStarterAtPeriodEnd(req.user.id, req.user);
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false, error: {
+          code: error.code || 'SUBSCRIPTION_CHANGE_FAILED',
+          message: error.statusCode ? error.message : 'Unable to schedule subscription cancellation'
+        }
+      });
+    }
+  }
+
+  async initiateCheckout(req,res) {
+    try {
+      const result = await require('../services/supplierSubscriptionCheckoutService').start({
+        actor: req.user, planCode: String(req.body?.plan_code||'').toUpperCase(),
+        idempotencyKey: req.get('X-Idempotency-Key')
+      });
+      return res.status(200).json({success:true,data:result});
+    } catch (e) {
+      return res.status(e.statusCode||500).json({success:false,error:{
+        code:e.code||'CHECKOUT_UNAVAILABLE',
+        message:e.statusCode ? e.message : 'Subscription checkout unavailable'
+      }});
+    }
+  }
+  async listCheckoutAttempts(req,res) {
+    try {
+      const attempts = await require('../services/supplierSubscriptionCheckoutService').list({actor:req.user});
+      return res.json({success:true,data:{attempts}});
+    } catch(e) {
+      return res.status(e.statusCode||500).json({success:false,error:{
+        code:e.code||'CHECKOUT_UNAVAILABLE',message:e.statusCode?e.message:'Checkout history unavailable'
+      }});
+    }
+  }
+  async reconcileCheckout(req,res) {
+    try {
+      const result = await require('../services/supplierSubscriptionCheckoutService').reconcile({
+        actor:req.user,attemptId:req.params.id
+      });
+      return res.json({success:true,data:result});
+    } catch(e) {
+      return res.status(e.statusCode||500).json({success:false,error:{
+        code:e.code||'CHECKOUT_RECONCILIATION_FAILED',
+        message:e.statusCode?e.message:'Unable to verify subscription payment'
+      }});
     }
   }
 

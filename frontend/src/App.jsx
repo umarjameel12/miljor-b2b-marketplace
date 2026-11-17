@@ -32,6 +32,11 @@ const DemandRequestsPage = lazy(() => import('./pages/DemandRequestsPage').then(
 const RfqPage = lazy(() => import('./pages/RfqPage').then((m) => ({ default: m.RfqPage })));
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
 const PaymentReturnPage = lazy(() => import('./pages/PaymentReturnPage').then((m) => ({ default: m.PaymentReturnPage })));
+const SupplierDeliveryPage = lazy(() => import('./pages/SupplierDeliveryPage').then((m) => ({ default: m.SupplierDeliveryPage })));
+const SupplierSettlementsPage = lazy(() => import('./pages/SupplierSettlementsPage').then((m) => ({ default: m.SupplierSettlementsPage })));
+const SupplierDisputesPage = lazy(() => import('./pages/SupplierDisputesPage').then((m) => ({ default: m.SupplierDisputesPage })));
+const SupplierAnalyticsPage = lazy(() => import('./pages/SupplierAnalyticsPage').then((m) => ({ default: m.SupplierAnalyticsPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 
 function RouteFallback() {
   return (
@@ -80,12 +85,18 @@ function AppContent() {
           <Route path="/flash-pools" element={<Navigate to="/pools?type=FLASH" replace />} />
           <Route path="/demand-requests" element={<DemandRequestsPage />} />
           <Route path="/rfqs" element={<RfqPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
           <Route path="/supplier/pools" element={<SupplierPoolsPage />} />
           <Route path="/supplier/subscription" element={<SupplierSubscriptionPage />} />
           <Route path="/supplier/profile" element={<SupplierProfilePage />} />
           <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />
           <Route path="/supplier/catalog" element={<SupplierCatalogPage />} />
+          <Route path="/supplier/deliveries" element={<SupplierDeliveryPage />} />
+          <Route path="/supplier/settlements" element={<SupplierSettlementsPage />} />
+          <Route path="/supplier/disputes" element={<SupplierDisputesPage />} />
+          <Route path="/supplier/analytics" element={<SupplierAnalyticsPage />} />
+          <Route path="/supplier/procurement" element={<Navigate to="/rfqs" replace />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/verifications" element={<AdminVerificationPage />} />

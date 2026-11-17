@@ -1,5 +1,53 @@
 # MilJor — Phase Execution Log
 
+## Supplier Subscription Sandbox Checkout and Release Hardening — 2026-11-16
+
+- Branch: `feature/supplier-provider-billing-hardening`; PR #58 (draft).
+- Qualified code/test SHA: `a15dc187921f7f8325d91e1a7d639274f504b585`.
+- Implemented: separate Safepay subscription attempt journal 062; supplier-only DB-priced checkout and provider readback; exactly-once paid activation; period-end downgrade without automatic billing; premium supplier subscription UI; notification read ownership fix.
+- Evidence: `backend/docs/MILJOR_SUPPLIER_CHECKOUT_RELEASE_HARDENING_2026_11_16.md`.
+- Tests: focused subscription contract, real disposable MySQL E3/billing, UCP canonical+Chromium, P0 finance, demo quantity and admin/frontend build — **six exact-head CI SUCCESS**.
+- Protected DB: not mutated in this session; no live money movement.
+- Remaining: real Safepay subscription provider acceptance, paid-to-paid billing policy, PR #53/#54 migrations/notifications, full clustered delivery browser E2E, historical credential rotation.
+- RESULT: **PARTIAL / RELEASE BLOCKED**. CAN START NEXT PHASE: NO
+
+
+## Supplier Dashboard Master Implementation & Operations Center Integration — 2026-11-15
+
+- **Active Branch:** `feature/supplier-dashboard-master-integration`
+- **Base Commit:** `ac685f391697a85e204fee59eb2282b47b445bb7` (aligned with `upstream/main` and `origin/main`)
+- **Authoritative Report:** `backend/docs/MILJOR_SUPPLIER_DASHBOARD_MASTER_INTEGRATION_REPORT.md`
+- **Audit Report:** `backend/docs/MILJOR_PHASE_0_AUDIT_REPORT.md`
+- **Integrated Capabilities Across 14 Phases:**
+  - **Phase 0 Repository Audit & PR Reconciliation:** Audited PR #53 and PR #54; designed non-colliding migration numbering (056-060); safely established dedicated feature branch.
+  - **Phase 1 Supplier Dashboard Operations Center:** Built live KPI backend service and mounted `GET /api/v1/supplier/dashboard-kpis` returning 10 authentic database metrics and dynamic Priority Action Center with deep workflow links.
+  - **Phase 2 Complete Supplier Navigation:** Integrated 13 dedicated supplier workspaces in `AppShell.jsx` (Overview, Products & Inventory, Unified Pools, Smart Procurement, Orders & Fulfillment, Logistics & Delivery, Payments & Earnings, Disputes & Returns, Analytics, Subscription, Business Profile, Notifications).
+  - **Phase 3 Products, SKUs & Inventory:** Preserved 25 canonical product families and strict stock allocation isolation via `supplier_inventory_allocations` with transaction-safe bounds.
+  - **Phase 4 Unified Pool Management:** Integrated Regular and Flash modes in single UCP architecture (`SupplierPoolsPage.jsx`) with live inventory allocation insights.
+  - **Phase 5 Smart Procurement Hub:** Integrated RFQ inbox, itemized quotation submission, and collective demand bidding (`RfqPage.jsx`).
+  - **Phase 6 Orders & Fulfillment:** Interactive fulfillment transitions (`Acknowledge & Prepare`, `Ready for Dispatch`, `Dispatch Order`, `Confirm Delivered`) in `OrdersPage.jsx`; verified mandatory 100/80/20 shortage dispute test on real MySQL.
+  - **Phase 7 Clustered Delivery Management:** Embedded `SupplierDeliverySettingsForm` in dedicated `SupplierDeliveryPage.jsx` (`/supplier/deliveries`).
+  - **Phase 8 Payments, Earnings & Escrow:** Built `SupplierSettlementsPage.jsx` with 3-part ledger (Held in Escrow, Settlement Eligible, Released Payouts) and detailed payables table.
+  - **Phase 9 Disputes & Returns:** Built `SupplierDisputesPage.jsx` with dispute inbox and remediation proposal submission.
+  - **Phase 10 Notifications & Action Center:** Built `NotificationsPage.jsx` (`/notifications`) with real mark-as-read and filter tabs.
+  - **Phase 11 Analytics & Reports:** Built `SupplierAnalyticsPage.jsx` (`/supplier/analytics`) with authentic sales and conversion trends.
+  - **Phase 12 Visual & UX Quality:** Quiet Luxury styling (Playfair Display, Inter, Champagne `#C8B276`); preserved clean centered single-card login layout matching user's uploaded screenshot (`LoginPage.jsx`).
+  - **Phase 13 Comprehensive Acceptance Verification:** 100% Green test evidence across frontend, backend, and MySQL gates.
+- **Verification Gates (100% Green):**
+  - Frontend production build: `npm --prefix frontend run build` (PASS in 2.45s, 0 errors).
+  - Frontend unit test suites: Design system tokens (10/10 PASS), Parse deadline (14/14 PASS), Auth V2 (7/7 PASS) — total 31/31 PASS.
+  - Backend UCP source audit: 71/71 PASS.
+  - Backend B4 dual timers: 16/16 PASS.
+  - Backend UCP 3-to-5 gate: 46/46 PASS.
+  - Backend B6 hardening: 32/32 PASS.
+  - Backend B6 master release suites: 23/23 suites PASS on `miljor_test_db`.
+  - Backend Safepay signed acceptance: 6/6 PASS.
+  - Real MySQL 100/80/20 partial delivery gate: 10/10 PASS.
+- **Database Safety:** `miljor_db` confirmed 100% PRISTINE (0 orders, 0 payment attempts, 0 disputes). All test fixtures ran strictly in `miljor_test_db`.
+- **State:** **VERIFIED, INTEGRATED & DOCUMENTED**.
+
+---
+
 ## Post Master-E2E Gap Closure & Final Demo Acceptance (Production Hardened) — 2026-11-12
 
 - **Active Branch:** `feature/frontend-redesign-20261112`

@@ -11,8 +11,8 @@ const STORAGE_KEY = 'miljor_auth_appearance';
 export const DEFAULT_AUTH_APPEARANCE = {
   showBackgroundImage: true,
   showBrandHeading: true,
-  showTagline: true,
-  showBrandPanel: true,
+  showTagline: false,
+  showBrandPanel: false,
   layoutStyle: 'enhanced', // 'enhanced' or 'original'
 };
 
