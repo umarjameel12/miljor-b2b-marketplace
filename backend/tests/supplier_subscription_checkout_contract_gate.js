@@ -69,6 +69,7 @@ async function main() {
   const moduleStub={exports:{}};
   new Function('require','module','exports',source)(
     name=>name==='../config/db'?db:name==='./safepayAdapter'?adapter:
+      name==='./safepayV3ContractService'?require('../src/services/safepayV3ContractService'):
       name==='./safepayV3SandboxClient'?{SafepayV3SandboxClient:class {}}:
       name==='./exactDecimal'?exact:name==='./notificationService'?{enqueueEvent:async(conn,event)=>{
         assert.equal(event.role,'SUPPLIER');
@@ -142,7 +143,8 @@ async function main() {
     new Function('require','module','exports',source)(
       name=>name==='../config/db'?v3db:
         name==='./safepayAdapter'?adapter:
-        name==='./safepayV3SandboxClient'?{SafepayV3SandboxClient:class {
+        name==='./safepayV3ContractService'?require('../src/services/safepayV3ContractService'):
+      name==='./safepayV3SandboxClient'?{SafepayV3SandboxClient:class {
           async inspectPaymentTracker({trackerToken,amountPkr,orderCode}){
             v3ProviderReads++;
             assert.equal(trackerToken,v3Attempt.tracker_token);
