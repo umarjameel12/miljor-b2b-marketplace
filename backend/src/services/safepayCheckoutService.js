@@ -525,6 +525,7 @@ class SafepayCheckoutService {
           data,
           merchantApiKey:parsedPayload.merchant_api_key,
           expectedMerchantApiKey:process.env.SAFEPAY_PUBLIC_KEY,
+          expectedTrackerToken:trackerToken,
           expectedOrderCode:order.order_code
         });
         if(normalized.trackerToken!==trackerToken){
