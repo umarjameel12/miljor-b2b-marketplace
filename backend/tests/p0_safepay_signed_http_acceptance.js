@@ -102,6 +102,40 @@ async function main(){
     assert.equal(Number(counts.payments),1);
     assert.equal(Number(counts.processed),1);
     console.log('PASS repeated signed callbacks produce exactly one PAID payment');
+
+    // V3 provider webhooks use integer minor units. This test pins the contract
+    // on the durable attempt and proves 100x values cannot be guessed/accepted.
+    const v3OrderCode='SFPV3-'+crypto.randomBytes(4).toString('hex');
+    const [v3OrderInsert]=await db.query(
+      'INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,subtotal_amount,delivery_fee,buyer_platform_fee,total_amount,supplier_commission_percent,currency,delivery_type,delivery_address,payment_status,order_status) VALUES(?,5,2,100.0000,10.00,1000.00,120.00,25.00,1145.00,2.50,?,?,?, ?,?)',
+      [v3OrderCode,'PKR','DOORSTEP','Synthetic V3 test address','AWAITING_PAYMENT','AWAITING_PAYMENT']
+    );
+    const v3OrderId=v3OrderInsert.insertId,v3Tracker='track_p0_v3_'+id();
+    await db.query(
+      "INSERT INTO payment_attempts(attempt_code,order_id,buyer_id,provider,environment,provider_contract,provider_tracker_token,amount,currency,status,idempotency_key) VALUES(?,?,5,'SAFEPAY','sandbox','payments-v3-minor',?,?,'PKR','INITIATED',?)",
+      ['P0V3-'+id(),v3OrderId,v3Tracker,'1145.00','P0V3-I-'+id()]
+    );
+    const v3Event=()=>({token:'evt_v3_'+id(),version:'2.0.0',
+      merchant_api_key:process.env.SAFEPAY_PUBLIC_KEY,type:'payment.succeeded',
+      data:{tracker:v3Tracker,state:'TRACKER_ENDED',amount:114500,currency:'PKR',
+        metadata:{order_id:v3OrderCode}}});
+    r=await post({...v3Event(),data:{...v3Event().data,amount:114499}});
+    assert.equal(r.status,422,'V3 minor-unit amount mismatch must fail');
+    r=await post({...v3Event(),data:{...v3Event().data,state:'TRACKER_AUTHORIZED'}});
+    assert.equal(r.status,422,'V3 authorization is not capture');
+    r=await post({...v3Event(),merchant_api_key:'sec_wrong_merchant'});
+    assert.equal(r.status,422,'V3 merchant mismatch must fail');
+    r=await post(v3Event());
+    assert.equal(r.status,200,JSON.stringify(r.data));
+    assert.equal(r.data.data.payment_status,'PAID');
+    const [[v3Payment]]=await db.query('SELECT amount,status,escrow_status FROM payments WHERE order_id=?',[v3OrderId]);
+    assert.equal(String(v3Payment.amount),'1145.00');
+    assert.equal(v3Payment.status,'PAID');
+    assert.equal(v3Payment.escrow_status,'HELD_IN_ESCROW');
+    const [[v3Attempt]]=await db.query('SELECT status,provider_contract FROM payment_attempts WHERE order_id=?',[v3OrderId]);
+    assert.equal(v3Attempt.status,'COMPLETED');
+    assert.equal(v3Attempt.provider_contract,'payments-v3-minor');
+    console.log('PASS Safepay v3 signed webhook converts exact 114500 minor units to PKR 1145.00 and HELD escrow');
     console.log('PASS P0 SYNTHETIC SIGNED HTTP ACCEPTANCE; REAL PROVIDER CALLBACK NOT ATTESTED');
   }finally{await new Promise(resolve=>server.close(resolve))}
 }
