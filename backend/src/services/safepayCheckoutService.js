@@ -1196,6 +1196,7 @@ class SafepayCheckoutService {
       currency: attempt.currency,
       provider: attempt.provider,
       environment: attempt.environment,
+      provider_contract: attempt.provider_contract || 'legacy-v1-major',
       status: attempt.status,
       provider_tracker_token: attempt.provider_tracker_token,
       checkout_url: attempt.checkout_url,
