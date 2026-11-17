@@ -10,6 +10,10 @@ on:
       - 'backend/src/services/supplierVerificationDocumentService.js'
       - 'backend/tests/pr61_part1_document_mysql_gate.js'
       - 'backend/tests/pr61_part4_release_gate.test.js'
+      - 'backend/src/services/safepayRefundReadinessService.js'
+      - 'backend/src/routes/v1/financialSettlementRoutes.js'
+      - 'backend/src/controllers/financialSettlementController.js'
+      - 'backend/tests/pr61_financial_readiness_gate.test.js'
       - 'backend/docs/PR61_PART4_RELEASE_DECISION.md'
       - '.github/workflows/pr61-part4-release-certification.yml'
   workflow_dispatch:
@@ -45,6 +49,12 @@ jobs:
           node --check backend/tests/pr61_provider_contract_gate.test.js
           node --test backend/tests/pr61_provider_contract_gate.test.js
           node --test backend/tests/safepay_sandbox_readiness_gate.test.js
+      - name: Exact B2B partial-refund and no-external-execution boundary
+        run: |
+          node --check backend/src/services/safepayRefundReadinessService.js
+          node --check backend/src/controllers/financialSettlementController.js
+          node --check backend/src/routes/v1/financialSettlementRoutes.js
+          node --test backend/tests/pr61_financial_readiness_gate.test.js
       - name: Read-only Safepay Sandbox readiness - not provider certification
         run: node backend/scripts/safepaySandboxPreflight.js
 
