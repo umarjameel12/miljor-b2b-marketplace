@@ -205,16 +205,8 @@ class SupplierSubscriptionCheckoutService {
       const attempt=rows[0],profile=profiles[0];
       if(attempt.provider_contract!=='payments-v3-minor')
         throw error('SUBSCRIPTION_CAPTURE_CONTRACT_MISMATCH',422,'Supplier attempt is not a v3 invoice');
-      if(attempt.status==='PAID'){
-        await connection.commit();
-        return {success:true,is_duplicate:true,plan_code:attempt.plan_code,
-          message:'Signed supplier payment already recorded'};
-      }
-      if(!['INITIATED','UNKNOWN'].includes(attempt.status))
-        throw error('SUBSCRIPTION_CAPTURE_STATE_MISMATCH',409,'Supplier checkout is not awaiting payment');
-      if(profile.verification_status!=='VERIFIED'||profile.subscription_plan!=='STARTER')
-        throw error('SUBSCRIPTION_CAPTURE_PROFILE_CONFLICT',409,
-          'Supplier verification or subscription changed; finance review required');
+      // Validate every signed capture even after a prior PAID transition:
+      // a mismatched merchant, tracker or amount is never a valid replay.
       const normalized=normalizeSucceededWebhook({
         eventType,data:payload.data,
         merchantApiKey:payload.merchant_api_key,
@@ -226,6 +218,16 @@ class SupplierSubscriptionCheckoutService {
       if(!exact.exactDecimalEquals(normalized.amountPkr,attempt.amount_pkr,2)||
          attempt.currency!=='PKR')
         throw error('SUBSCRIPTION_CAPTURE_AMOUNT_MISMATCH',422,'Captured amount/currency mismatch');
+      if(attempt.status==='PAID'){
+        await connection.commit();
+        return {success:true,is_duplicate:true,plan_code:attempt.plan_code,
+          message:'Signed supplier payment already recorded'};
+      }
+      if(!['INITIATED','UNKNOWN'].includes(attempt.status))
+        throw error('SUBSCRIPTION_CAPTURE_STATE_MISMATCH',409,'Supplier checkout is not awaiting payment');
+      if(profile.verification_status!=='VERIFIED'||profile.subscription_plan!=='STARTER')
+        throw error('SUBSCRIPTION_CAPTURE_PROFILE_CONFLICT',409,
+          'Supplier verification or subscription changed; finance review required');
       const [plans]=await connection.query(
         'SELECT monthly_price_pkr,max_active_listings FROM subscription_plans WHERE plan_code=? FOR UPDATE',
         [attempt.plan_code]);
