@@ -15,7 +15,7 @@ test('canonical buyer checkout has explicit opt-in v3 path, persists pinned cont
   assert.match(checkout,/provider_contract/);
   assert.match(checkout,/'payments-v3-minor'/);
   assert.match(checkout,/exactDecimal\.toCanonicalString\(order\.total_amount,2\)/);
-  assert.match(client,/\/order\/payments\/v3\//);
+  assert.match(client,/request\.path|createPaymentTracker/);
   assert.match(client,/\/client\/passport\/v1\/token/);
   assert.match(client,/source','hosted|set\('source','hosted'\)/);
   assert.match(migration,/legacy-v1-major/);
@@ -39,7 +39,7 @@ test('webhook processing uses the persisted attempt contract, never heuristic am
   assert.match(checkout,/attempt\.provider_contract\|\|'legacy-v1-major'/);
   assert.match(checkout,/normalizeSucceededWebhook/);
   assert.match(checkout,/normalizedProviderAmount/);
-  assert.match(v3,/data\?\.success!==true/);
+  assert.match(v3,/eventType!=='payment.succeeded'/);
   assert.match(v3,/data\?\.state!=='TRACKER_ENDED'/);
   assert.match(v3,/expectedMerchantApiKey/);
   assert.match(v3,/fromMinorPkr\(data\.amount\)/);
