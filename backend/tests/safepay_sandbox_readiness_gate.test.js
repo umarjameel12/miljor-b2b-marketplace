@@ -10,7 +10,8 @@ const valid = {
  SAFEPAY_ENV:'sandbox', ALLOW_EXTERNAL_MONEY_MOVEMENT:'false',
  DB_NAME:'miljor_test_db', SAFEPAY_PUBLIC_KEY:'sec_sand_randompublickey1234',
  SAFEPAY_SECRET_KEY:'sec_sand_randomsecretkey1234',
- SAFEPAY_WEBHOOK_SECRET:'safepay-sandbox-hmac-secret-unique1234'
+ SAFEPAY_WEBHOOK_SECRET:'safepay-sandbox-hmac-secret-unique1234', SAFEPAY_TRACKER_CONTRACT:'legacy-v1-major',
+ SAFEPAY_LEGACY_CONTRACT_VERIFIED:'true'
 };
 test('no placeholders qualify as real credentials', () => {
  assert.equal(configured('sec_sand_placeholder_public_key'),false);
@@ -24,6 +25,17 @@ test('safe sandbox configuration is ready for provider attempts but not certifie
  assert.match(result.provider_checkout,/NOT_YET_EXECUTED/);
  assert.match(result.provider_refund,/BLOCKED/);
  assert.match(result.provider_bank_payout,/BLOCKED/);
+});
+test('credentials without provider contract attestation cannot initiate testing',()=>{
+ const result=inspect({...valid,SAFEPAY_LEGACY_CONTRACT_VERIFIED:'false'},source);
+ assert.equal(result.safe_to_attempt_provider_test,false);
+ assert.match(result.tracker_contract_review,/BLOCKED/);
+ assert.equal(result.provider_checkout,'BLOCKED_NOT_EXECUTED');
+});
+test('v3 minor-unit contract cannot silently run through legacy major-unit adapter',()=>{
+ const result=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor'},source);
+ assert.equal(result.safe_to_attempt_provider_test,false);
+ assert.match(result.tracker_contract_review,/BLOCKED/);
 });
 test('production Safepay configuration fails closed', () => {
  const result=inspect({...valid,SAFEPAY_ENV:'production'},source);
