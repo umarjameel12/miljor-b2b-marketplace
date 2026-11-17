@@ -89,7 +89,7 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
   });
 }
 function normalizeSucceededWebhook({eventType,data,merchantApiKey,expectedMerchantApiKey,expectedTrackerToken,expectedOrderCode}){
-  if(eventType!=='payment.succeeded'||data?.success!==true||data?.state!=='TRACKER_ENDED')
+  if(eventType!=='payment.succeeded'||data?.state!=='TRACKER_ENDED')
     throw fail('V3_WEBHOOK_NOT_CAPTURED','Only signed payment.succeeded TRACKER_ENDED events may confirm capture');
   if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
      typeof merchantApiKey!=='string'||merchantApiKey!==expectedMerchantApiKey)
