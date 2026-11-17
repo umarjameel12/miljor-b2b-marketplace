@@ -65,6 +65,11 @@ class SupplierSubscriptionCheckoutService {
     if(useV3){
       if(process.env.SAFEPAY_V3_SANDBOX_ENABLED!=='true')
         throw error('SAFEPAY_V3_SANDBOX_DISABLED',503,'Safepay v3 subscription checkout is not enabled');
+      // A v3 reporter-only TRACKER_ENDED state cannot activate the paid plan.
+      // Do not initiate even a Sandbox charge that this service cannot safely
+      // complete. Enable only after signed capture journaling is implemented.
+      throw error('V3_SUBSCRIPTION_CAPTURE_PROOF_REQUIRED',409,
+        'Safepay v3 subscription charges are disabled until signed captured payment activation is implemented');
     }else if(typeof this.safepay.assertTrackerContract==='function'){
       this.safepay.assertTrackerContract();
     }
