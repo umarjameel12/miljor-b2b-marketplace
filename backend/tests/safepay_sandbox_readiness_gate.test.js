@@ -3,6 +3,8 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { inspect, configured } = require('../scripts/safepaySandboxPreflight');
 const source = {
  adapter: 'sandbox.api.getsafepay.com createTracker verifyWebhookSignature timingSafeEqual',
+ v3Client: 'https://sandbox.api.getsafepay.com/order/payments/v3/ /client/passport/v1/token /reporter/api/v1/payments',
+ v3Contract: 'toMinorPkr normalizeSucceededWebhook payments-v3-minor',
  provider: 'initiateRefund REFUND_PENDING_GATEWAY',
  settlement: 'External refund and payout execution are strictly DISABLED'
 };
@@ -32,10 +34,14 @@ test('credentials without provider contract attestation cannot initiate testing'
  assert.match(result.tracker_contract_review,/BLOCKED/);
  assert.equal(result.provider_checkout,'BLOCKED_NOT_EXECUTED');
 });
-test('v3 minor-unit contract cannot silently run through legacy major-unit adapter',()=>{
- const result=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor'},source);
- assert.equal(result.safe_to_attempt_provider_test,false);
- assert.match(result.tracker_contract_review,/BLOCKED/);
+test('v3 minor-unit contract requires explicit Sandbox enablement and uses v3 client',()=>{
+ const result=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor',
+   SAFEPAY_V3_SANDBOX_ENABLED:'true'},source);
+ assert.equal(result.safe_to_attempt_provider_test,true);
+ assert.equal(result.checks.v3_hosted_checkout_and_reporter_present,true);
+ assert.match(result.tracker_contract_review,/PAYMENTS_V3_MINOR_IMPLEMENTED/);
+ const disabled=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor'},source);
+ assert.equal(disabled.safe_to_attempt_provider_test,false);
 });
 test('production Safepay configuration fails closed', () => {
  const result=inspect({...valid,SAFEPAY_ENV:'production'},source);
