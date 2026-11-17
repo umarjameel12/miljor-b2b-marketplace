@@ -4,6 +4,7 @@
 
 - **Branch:** `feature/smart-procurement-hub-unified-entry` (PR #53 retained as **DRAFT** — not merged to `main`)
 - **Authoritative Reports:** `backend/docs/SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md`, `backend/docs/MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`
+- **Tax Draft & Readiness Inspection (2026-11-17):** Expanded `MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md` with all 8 charge categories × 10 required fields, verified application tax-readiness (`B6_TAX_POLICY_APPROVED` fail-closed gate, `tax_calculated: false`, `invoiceService`, `procurementLineReceiptService` — zero code changes required), and packaged qualified Pakistan tax review questions + 3 factual owner questions. PR #53 remains **DRAFT** pending tax sign-off.
 - **8f78c56 Security Follow-Up & Full Journey Closure:**
   - Verified `8f78c56f681673815bf867251aa764d07568a324` CI: **16/16 check-runs `completed / success`**.
   - Verified live provider-signed `payment:created` test event (`DBU78JTL2AHS7395PKF0`) against `8f78c56` via fresh tunnel -> `200 OK` (`completed` in 1 attempt; Safepay UI has no manual resend button for historical `DBU6S15L2AHS7395PKC0` / `DBU6EODL2AHS7395PJVG`).

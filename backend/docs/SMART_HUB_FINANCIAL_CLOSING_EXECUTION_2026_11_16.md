@@ -286,6 +286,15 @@ Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three s
    - `miljor_db` (`orders: 0, payments: 0`), `miljor_sandbox_db` (`orders: 0, payments: 0`).
    - Temporary tunnel/bridge daemons stopped cleanly.
    - **PR #53 remains DRAFT** (not merged to `main` or local `MilJor Project`) solely because Pakistan FBR/PRA tax applicability (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`) remains unapproved for production release. `CAN START NEXT PHASE: NO`.
+
+---
+
+# 2026-11-17 — Tax Classification Matrix & Readiness Closure Verification
+
+- **Tax Classification Draft (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`):** Expanded to cover all 8 charge categories (merchandise, marketplace commission, delivery/logistics, supplemental delivery/reattempt, processing/buyer platform fees, withholding obligations, refunds/credit notes/partial acceptance, and scope variations) with all 10 required fields per category, an application tax-readiness inspection (`B6_TAX_POLICY_APPROVED`, `tax_calculated: false`, `invoiceService`, `procurementLineReceiptService`), a concise review package for a qualified Pakistan tax professional, and 3 simple factual business questions for the owner. Status remains **`DRAFT / AWAITING QUALIFIED TAX REVIEW & OWNER BUSINESS FACTS`**.
+- **Code Inspection Result:** Existing services already enforce fail-closed tax gating (`503 B6_FINANCIAL_GATE_BLOCKED`), explicit `tax_calculated: false` visibility, exact decimal separation, and immutable snapshots; no speculative tax engine or code change was introduced.
+- **Protected Databases & Safety:** `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`), `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `SAFEPAY_ENV=sandbox`.
+- **Conditional Merge & Local Integration:** **BLOCKED (PR #53 retained as DRAFT)** — cannot merge to `main` or integrate into `MilJor Project` (`feature/frontend-redesign-20261112` @ `83565c4e`, 12 dirty frontend files preserved) until factual business confirmation and qualified Pakistan tax sign-off complete. `CAN START NEXT PHASE: NO`.
 # 2026-11-17 — Review correction: authenticate the financial field boundary
 
 Reviewed Antigravity commit `34bca7909cd6a2e4640dc486135be9ecf07976d0`; independently observed all eleven PR workflows SUCCESS, including genuine-envelope-compatible synthetic Chromium (44111766523), P0 (44111766497) and UCP (44111766592). Genuine provider capture/callback evidence recorded for this commit remains historical evidence of the observed sandbox operation, not a new post-correction charge or delivery.
