@@ -1811,3 +1811,15 @@ User delegated selection of the most feasible rule. Recorded the conservative fr
   - `node tests/ucp_phase2_full_ui_browser_gate.js`: **PASS** (Mobile `390x844` login/focus, `/payment/return` pending/reload recovery, Urdu `'ur'` locale UI save/reload persistence, `[dir="auto"]` Urdu rendering, and Mark read).
 - **Approval Package & Remaining-Work Matrix:** Recorded 8-point Concrete Integration Approval Package in `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md` and 11-row Remaining-Work Matrix in `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md`.
 - **RESULT:** **PARTIAL / NOT RELEASE-READY** (awaiting explicit merge authorization for `origin/main` & Smart Hub, human Safepay sandbox card/3DS checkout + fee/refund proof, and authorized SMTP test-mailbox receipt). **CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Integration Preview Patch, Frozen Migration Mapping & Sandbox/SMTP Prep (PR #54)
+
+- **Baseline:** `174e71b7e2e64bfb281fb13289a789a1caf39f63` (exact-source CI [`44143100844`](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44143100844) `SUCCESS`).
+- **Detached Integration Preview Verified (`origin/main` `9fb07cf` + Smart Hub `a0b6ea3`, zero branch mutation):**
+  - Exported resolved 9-file patch to `backend/docs/patches/ucp_main_smarthub_integration_preview.patch`.
+  - Frozen `090`–`106` migration mapping (`095` kept at `095`; `096`–`101` immutable; Smart Hub `096`–`100` -> `102`–`106`).
+  - `node database/migrationManifest.js`: **PASS** (`71` migrations); `node -c` on 5 resolved backend JS files: **PASS**; `node tests/email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped, including `STALE_REMINDER_SUPPRESSED`).
+- **Safepay & SMTP Prep:**
+  - Created isolated `miljor_test_db` (`33322`) checkout `UCP-SBX-346827a7b8ed` (`PKR 100.00`, `TRACKER_STARTED`) with hosted sandbox checkout URL ready for human PCI/3DS completion.
+  - Verified SMTP env capabilities (`smtp.gmail.com:587`, `EMAIL_MODE=smtp`); awaiting 1 authorized non-business test mailbox.
+- **RESULT:** **PARTIAL / NOT RELEASE-READY** (awaiting Approvals A & B, human Safepay sandbox card completion, and authorized SMTP test mailbox). **CAN START NEXT PHASE: NO.**

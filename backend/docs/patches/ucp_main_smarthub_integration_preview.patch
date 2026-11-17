@@ -1,0 +1,491 @@
+﻿diff --git a/backend/src/services/notificationService.js b/backend/src/services/notificationService.js
+index 5a93e2e..7eda00b 100644
+--- a/backend/src/services/notificationService.js
++++ b/backend/src/services/notificationService.js
+@@ -115,6 +115,15 @@ class NotificationService {
+         totals.processed++;
+         const payload=typeof notice.payload==='string'?JSON.parse(notice.payload):notice.payload;
+         if(payload?.schemaVersion!==1&&payload?.schemaVersion!==2)throw Error('LEGACY_EVENT_REQUIRES_ADAPTER');
++        let reminderContext=null;
++        if(notice.event_type==='CYCLE_CUTOFF_UPCOMING'){
++          const match=/^cycle:([1-9]\d*):upcoming24h$/.exec(notice.event_key);
++          reminderContext={contractId:payload.entityId,cycleId:match?Number(match[1]):null};
++          if(!await require('./recurringReminderPolicy').isCurrent(connection,{buyerId:notice.recipient_id,...reminderContext})){
++            await connection.query("UPDATE procurement_notifications SET status='FAILED',attempt_count=5,next_attempt_at=NULL,last_error_code='STALE_REMINDER_SUPPRESSED' WHERE id=?",[notice.id]);
++            await connection.commit();totals.failed++;continue;
++          }
++        }
+         const [users]=await connection.query('SELECT id,role,email FROM users WHERE id=?',[notice.recipient_id]);
+         if(!users.length||users[0].role!==notice.recipient_role)throw Error('RECIPIENT_UNAVAILABLE');
+         const preference=await this.getPreferences(notice.recipient_id,connection);
+@@ -141,7 +150,7 @@ class NotificationService {
+             await connection.query('SAVEPOINT notice_email');
+             try{
+               const queued=await email.enqueueEmail(connection,{recipientEmail:users[0].email,recipientUserId:notice.recipient_id,
+-                templateName:'platform_notification',payload:projection,
++                templateName:'platform_notification',payload:{...projection,...(reminderContext?{reminderContext}:{})},
+                 idempotencyKey:'notice:'+crypto.createHash('sha256').update(notice.recipient_id+':'+notice.event_key).digest('hex')});
+               if(!projection.mandatory){
+                 const notBefore=await this.reserveOptionalEmailSlot(connection,notice.recipient_id,plan.notBefore||clock(),preference);
+diff --git a/backend/src/services/safepayCheckoutService.js b/backend/src/services/safepayCheckoutService.js
+index 1c6a401..b8200f8 100644
+--- a/backend/src/services/safepayCheckoutService.js
++++ b/backend/src/services/safepayCheckoutService.js
+@@ -110,7 +110,7 @@ class SafepayCheckoutService {
+       order = orders[0];
+       this._validateCheckoutOrder(order, actor);
+       const [existing] = await reservation.query(
+-        `SELECT * FROM payment_attempts WHERE order_id = ? AND idempotency_key = ?
++        `SELECT * FROM payment_attempts WHERE order_id = ? AND idempotency_key = ? AND procurement_delivery_contract_id IS NULL
+          ORDER BY id DESC LIMIT 1 FOR UPDATE`, [order.id, trimmedKey]
+       );
+       if (existing.length) {
+@@ -275,12 +275,12 @@ class SafepayCheckoutService {
+     eventType
+   }) {
+     // 1. Signature Verification (Official Safepay HMAC-SHA512 over untouched raw body bytes)
+-    const isAuthentic = safepayAdapter.verifyWebhookSignature({
++    const signatureScope = safepayAdapter.verifyWebhookSignatureScope({
+       rawBody,
+       signature
+     });
+ 
+-    if (!isAuthentic) {
++    if (!signatureScope) {
+       const err = new Error('Cryptographic signature verification failed');
+       err.code = 'INVALID_WEBHOOK_SIGNATURE';
+       err.statusCode = 401;
+@@ -290,6 +290,8 @@ class SafepayCheckoutService {
+     let parsedPayload;
+     try {
+       parsedPayload = typeof rawBody === 'string' ? JSON.parse(rawBody) : JSON.parse(rawBody.toString('utf8'));
++      if (signatureScope === 'data') parsedPayload = parsedPayload.data;
++      if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) throw new Error('Object payload required');
+     } catch (e) {
+       const err = new Error('Malformed webhook JSON payload');
+       err.code = 'INVALID_PAYLOAD';
+@@ -297,8 +299,27 @@ class SafepayCheckoutService {
+       throw err;
+     }
+ 
+-    const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
+-    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.event || parsedPayload.webhook_event_type || 'unknown';
++    const envelopeData = (parsedPayload.data && typeof parsedPayload.data === 'object' && !Array.isArray(parsedPayload.data))
++      ? parsedPayload.data
++      : null;
++    const effectiveEventId = parsedPayload.token
++      || parsedPayload.id
++      || envelopeData?.token
++      || envelopeData?.id
++      || (signatureScope === 'raw_body' ? eventId : null)
++      || (signatureScope === 'raw_body' ? `evt_${Date.now()}` : null);
++    if (!effectiveEventId) {
++      const err = new Error('Authenticated webhook payload requires a stable event identity');
++      err.code = 'MISSING_WEBHOOK_EVENT_ID'; err.statusCode = 400; throw err;
++    }
++    const effectiveEventType = parsedPayload.type
++      || parsedPayload.event
++      || parsedPayload.webhook_event_type
++      || envelopeData?.type
++      || envelopeData?.event
++      || envelopeData?.webhook_event_type
++      || (signatureScope === 'raw_body' ? eventType : null)
++      || 'unknown';
+ 
+     // 2. Check for duplicate webhook receipt (Idempotency)
+     const [existingEvent] = await db.query(
+@@ -315,7 +336,13 @@ class SafepayCheckoutService {
+     }
+ 
+     // 3. Extract transaction details from webhook payload
+-    const data = parsedPayload.data || parsedPayload;
++    // Official Safepay v1/v2 webhooks (e.g. payment:created 1.0.0) nest fields inside `notification`
++    const notification = (parsedPayload.notification && typeof parsedPayload.notification === 'object' && !Array.isArray(parsedPayload.notification))
++      ? parsedPayload.notification
++      : ((parsedPayload.data?.notification && typeof parsedPayload.data.notification === 'object' && !Array.isArray(parsedPayload.data.notification))
++          ? parsedPayload.data.notification
++          : null);
++    const data = notification || parsedPayload.data || parsedPayload;
+     
+     // Official Safepay v2 schema: data.tracker can be a string ('track_...') or an object ({ token: 'track_...' })
+     let trackerToken = null;
+@@ -329,18 +356,24 @@ class SafepayCheckoutService {
+       trackerToken = parsedPayload.token;
+     }
+ 
+-    const providerAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
+-      ? Number(data.tracker.amount)
++    const isCreatedEvent = ['payment:created', 'payment.created'].includes(effectiveEventType);
++    const rawProviderAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
++      ? data.tracker.amount
+       : (data.amount !== undefined
+-          ? Number(data.amount)
+-          : (data.net !== undefined && data.net !== null ? Number(data.net) : null));
++          ? data.amount
++          : null);
++    const providerAmount = (rawProviderAmount !== null && rawProviderAmount !== '' && !Number.isNaN(Number(rawProviderAmount)))
++      ? Number(rawProviderAmount)
++      : null;
+     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
+       || data.currency
+       || parsedPayload.currency
+-      || 'PKR';
++      || null;
+ 
+-    // Support both official Safepay event 'payment.succeeded' and backwards-compatible 'payment.completed' / variants
+-    const isSuccessEvent = [
++    // Support both official Safepay event 'payment.succeeded', 'payment:created' (ONLY when state === 'PAID'),
++    // and backwards-compatible 'payment.completed' / variants
++    const normalizedProviderState = String(data.state || parsedPayload.state || '').trim().toUpperCase();
++    const isExplicitSuccessType = [
+       'payment.succeeded',
+       'payment:succeeded',
+       'payment.completed',
+@@ -348,8 +381,14 @@ class SafepayCheckoutService {
+       'payment.settled',
+       'payment:settled'
+     ].includes(effectiveEventType);
++    const isCreatedPaidEvent = isCreatedEvent && normalizedProviderState === 'PAID';
++    const explicitStateAllowsSuccess = !normalizedProviderState || ['PAID', 'COMPLETED', 'SUCCEEDED', 'SETTLED'].includes(normalizedProviderState);
++    const isSuccessEvent = (isExplicitSuccessType && explicitStateAllowsSuccess) || isCreatedPaidEvent;
+ 
+     if (!isSuccessEvent) {
++      const recordedEventType = (isCreatedEvent || (isExplicitSuccessType && normalizedProviderState))
++        ? `${effectiveEventType}:${normalizedProviderState || 'UNKNOWN'}`.slice(0, 100)
++        : effectiveEventType;
+       // Record event but take no financial mutation
+       await db.query(
+         `INSERT INTO payment_webhook_events (
+@@ -358,7 +397,7 @@ class SafepayCheckoutService {
+         ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
+         [
+           effectiveEventId,
+-          effectiveEventType,
++          recordedEventType,
+           trackerToken,
+           signature,
+           String(timestamp),
+@@ -368,6 +407,7 @@ class SafepayCheckoutService {
+       return {
+         success: true,
+         event_type: effectiveEventType,
++        provider_state: normalizedProviderState || null,
+         message: 'Webhook event recorded; no state transition required'
+       };
+     }
+@@ -416,6 +456,7 @@ class SafepayCheckoutService {
+ 
+       const attempt = attempts[0];
+ 
++
+       // The initial event lookup is deliberately fast but NOT sufficient under
+       // concurrent provider retries. Acquiring the payment attempt's FOR UPDATE
+       // lock serializes callbacks for the same tracker; recheck event identity
+@@ -430,6 +471,10 @@ class SafepayCheckoutService {
+           message:'Duplicate authenticated webhook acknowledged after serialized tracker lock'};
+       }
+ 
++      if(attempt.procurement_delivery_contract_id){
++        const result=await require('./procurementDeliveryPaymentService').captureWithinTransaction(connection,{attempt,providerAmount,providerCurrency,eventId:effectiveEventId,eventType:effectiveEventType,signature,timestamp,rawPayload:parsedPayload});
++        await connection.commit();return result;
++      }
+       // Lock parent order row FOR UPDATE
+       const [orders] = await connection.query(
+         `SELECT * FROM orders WHERE id = ? FOR UPDATE`,
+@@ -533,7 +578,11 @@ class SafepayCheckoutService {
+             event_id: effectiveEventId,
+             event_type: effectiveEventType,
+             provider: 'SAFEPAY',
+-            tracker_token: trackerToken
++            tracker_token: trackerToken,
++            provider_state: normalizedProviderState || null,
++            provider_reference: data.reference || null,
++            provider_fee: data.fee !== undefined ? String(data.fee) : null,
++            provider_net: data.net !== undefined ? String(data.net) : null
+           })
+         ]
+       );
+@@ -686,7 +735,7 @@ class SafepayCheckoutService {
+     // Fetch latest payment attempt
+     const [attempts] = await db.query(
+       `SELECT * FROM payment_attempts 
+-       WHERE order_id = ? 
++       WHERE order_id = ? AND procurement_delivery_contract_id IS NULL
+        ORDER BY id DESC LIMIT 1`,
+       [orderId]
+     );
+@@ -782,7 +831,7 @@ class SafepayCheckoutService {
+     // If order is already PAID, return idempotent confirmation
+     if (order.order_status === 'PAID' || order.payment_status === 'PAID') {
+       const [existingPayments] = await db.query(
+-        `SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1`,
++        `SELECT * FROM payments WHERE order_id = ? AND procurement_delivery_contract_id IS NULL ORDER BY id DESC LIMIT 1`,
+         [orderId]
+       );
+       return {
+@@ -808,7 +857,7 @@ class SafepayCheckoutService {
+     // without a checkout URL. It still has a real provider identity to recover.
+     const [attempts] = await db.query(
+       `SELECT * FROM payment_attempts 
+-       WHERE order_id = ? AND status IN ('INITIATED', 'RECONCILIATION_REQUIRED')
++       WHERE order_id = ? AND status IN ('INITIATED', 'RECONCILIATION_REQUIRED') AND procurement_delivery_contract_id IS NULL
+        ORDER BY id DESC LIMIT 1`,
+       [orderId]
+     );
+diff --git a/backend/src/services/schedulerService.js b/backend/src/services/schedulerService.js
+index 0c0add9..91335a8 100644
+--- a/backend/src/services/schedulerService.js
++++ b/backend/src/services/schedulerService.js
+@@ -28,6 +28,8 @@ function startScheduler() {
+       await poolClosureService.processExpiredPools();
+       await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
+       await require('./ucpRegularRecoveryService').runRegularRecoveryBatch({limit:50});
++      await poolClosureService.processExpiredFlashPools();
++      await require('./procurementCollectiveCommitmentService').releaseExpiredBatch({limit:20});
+     } catch (err) {
+       console.error('[Scheduler] Pool expiry job failed:', err.message);
+     } finally { expiryRunning=false; }
+@@ -68,6 +70,7 @@ function startScheduler() {
+       if (recurringRunning) return;
+       recurringRunning = true;
+       try {
++        await require('./procurementRecurringService').runReminderBatch({limit:20});
+         const result = await require('./procurementRecurringService')
+           .runDueBatch({limit:20});
+         if (result.checked || result.failed) {
+diff --git a/backend/src/services/supplierDeliveryService.js b/backend/src/services/supplierDeliveryService.js
+index e379fef..502d155 100644
+--- a/backend/src/services/supplierDeliveryService.js
++++ b/backend/src/services/supplierDeliveryService.js
+@@ -5,6 +5,8 @@
+ const defaultDb = require('../config/db');
+ const identityNotifications = require('./supplierProfileService');
+ const supDelivRepo = require('../repositories/supplierDeliveryRepository');
++const db = require('../config/db');
++const exact = require('./exactDecimal');
+ const geoRepo = require('../repositories/geographicRepository');
+ 
+ class SupplierDeliveryService {
+@@ -31,8 +33,8 @@ class SupplierDeliveryService {
+   /**
+    * Fetch supplier's complete delivery configuration, rates and pickup points
+    */
+-  async getSupplierSettings(supplierId, connection) {
+-    let config = await supDelivRepo.getSupplierConfiguration(supplierId, connection);
++  async getSupplierSettings(supplierId, connection, lockPricing = false) {
++    let config = await supDelivRepo.getSupplierConfiguration(supplierId, connection, lockPricing);
+ 
+     // If never configured, provide clean default template
+     if (!config) {
+@@ -41,6 +43,7 @@ class SupplierDeliveryService {
+         standard_delivery_enabled: true,
+         pickup_enabled: false,
+         express_enabled: false,
++        individual_delivery_enabled: false,
+         express_cutoff_time: '14:00:00',
+         express_fulfillment_hours: 4,
+         version: 1
+@@ -48,7 +51,7 @@ class SupplierDeliveryService {
+     }
+ 
+     const [clusterRates, pickupPoints] = await Promise.all([
+-      supDelivRepo.getSupplierClusterRates(supplierId, connection),
++      supDelivRepo.getSupplierClusterRates(supplierId, connection, lockPricing),
+       supDelivRepo.getSupplierPickupPoints(supplierId, connection)
+     ]);
+ 
+@@ -66,6 +69,10 @@ class SupplierDeliveryService {
+     if (!connection) return this._transaction(tx => this.updateSupplierSettings(supplierId, payload, tx));
+     const owner = await this._lockOwner(supplierId, connection);
+     const previous = await this.getSupplierSettings(owner.id, connection);
++    await connection.query('SELECT id FROM supplier_delivery_configurations WHERE supplier_id = ? FOR UPDATE', [supplierId]);
++    const existing = await supDelivRepo.getSupplierConfiguration(supplierId, connection, true);
++    const individualEnabled = payload.individual_delivery_enabled === undefined ? Number(existing?.individual_delivery_enabled) === 1 : payload.individual_delivery_enabled;
++    if (typeof individualEnabled !== 'boolean') { throw Object.assign(new Error('Individual delivery opt-in must be boolean.'), {code:'INVALID_DELIVERY_CONFIGURATION',statusCode:400}); }
+     const {
+       standard_delivery_enabled = true,
+       pickup_enabled = false,
+@@ -78,8 +85,8 @@ class SupplierDeliveryService {
+ 
+     // Invariant: At least one delivery mode must be enabled for active offers.
+     // Incomplete drafts during onboarding may have zero modes.
+-    if (!is_draft && !standard_delivery_enabled && !pickup_enabled && !express_enabled) {
+-      const err = new Error('A supplier must enable at least one fulfillment mode (Standard, Pickup, or Express).');
++    if (!is_draft && !standard_delivery_enabled && !pickup_enabled && !express_enabled && !individualEnabled) {
++      const err = new Error('A supplier must enable at least one fulfillment mode (Standard, Pickup, Express, or Individual procurement).');
+       err.code = 'AT_LEAST_ONE_MODE_REQUIRED';
+       err.statusCode = 422;
+       throw err;
+@@ -94,7 +101,7 @@ class SupplierDeliveryService {
+         const feePkr = Number(rate.fee_pkr);
+         const isEligible = rate.is_eligible !== undefined ? Boolean(rate.is_eligible) : true;
+ 
+-        if (isNaN(clusterId) || !['STANDARD_CLUSTERED', 'EXPRESS'].includes(mode)) {
++        if (isNaN(clusterId) || !['STANDARD_CLUSTERED', 'EXPRESS', 'INDIVIDUAL'].includes(mode)) {
+           const err = new Error(`Invalid cluster rate specification for cluster_id: ${rate.cluster_id}`);
+           err.code = 'INVALID_RATE_SPECIFICATION';
+           err.statusCode = 400;
+@@ -109,21 +116,36 @@ class SupplierDeliveryService {
+           throw err;
+         }
+ 
++        let individualFee;
++        if (mode === 'INDIVIDUAL') {
++          try {
++            if (!/^[1-9]\d*$/.test(String(rate.cluster_id)) || !Number.isSafeInteger(clusterId) || clusterId <= 0 || (typeof rate.is_eligible !== 'boolean' && rate.is_eligible !== undefined)) throw Error();
++            individualFee = exact.toCanonical(exact.toDecimalString(rate.fee_pkr, {maxPrecision:10,maxScale:2,allowNegative:false}),2);
++            if (!exact.exactDecimalGte('99999999.99',individualFee,2)) throw Error();
++          } catch {
++            throw Object.assign(new Error('Individual cluster fee must be an explicit non-negative decimal with at most two places.'), {code:'INVALID_DELIVERY_FEE',statusCode:400});
++          }
++          const cluster = await geoRepo.getClusterById(clusterId, connection);
++          if (!cluster || !cluster.is_active) throw Object.assign(new Error('Individual cluster must be active.'), {code:'INVALID_CLUSTER',statusCode:422});
++          if (validatedRates.some(r => r.cluster_id === clusterId && r.mode === mode)) throw Object.assign(new Error('Duplicate individual cluster rate.'), {code:'INVALID_RATE_SPECIFICATION',statusCode:400});
++        }
+         validatedRates.push({
+           supplier_id: supplierId,
+           cluster_id: clusterId,
+           mode,
+           is_eligible: isEligible,
+-          fee_pkr: Number(feePkr.toFixed(2))
++          fee_pkr: mode === 'INDIVIDUAL' ? individualFee : Number(feePkr.toFixed(2))
+         });
+       }
+     }
+ 
++    if (!Array.isArray(cluster_rates)) throw Object.assign(new Error('Cluster rates must be an array.'), {code:'INVALID_RATE_SPECIFICATION',statusCode:400});
+     // Save mode configuration only after all rate validations pass
+     const savedConfig = await supDelivRepo.upsertSupplierConfiguration(supplierId, {
+       standard_delivery_enabled: Boolean(standard_delivery_enabled),
+       pickup_enabled: Boolean(pickup_enabled),
+       express_enabled: Boolean(express_enabled),
++      individual_delivery_enabled: individualEnabled,
+       express_cutoff_time,
+       express_fulfillment_hours: Number(express_fulfillment_hours) || 4
+     }, connection);
+diff --git a/backend/tests/email_outbox_queue_gate.js b/backend/tests/email_outbox_queue_gate.js
+index bccd0df..a4be67b 100644
+--- a/backend/tests/email_outbox_queue_gate.js
++++ b/backend/tests/email_outbox_queue_gate.js
+@@ -14,6 +14,7 @@ function service(db, sendMail = async () => ({ messageId: 'mock-message' }), env
+       if (id === 'nodemailer') return { createTransport() { throw Error('Real transport forbidden'); } };
+       if (id === 'crypto') return require('node:crypto');
+       if (id === './notificationDeliveryPolicy') return require('../src/services/notificationDeliveryPolicy');
++      if (id === './recurringReminderPolicy') return require('../src/services/recurringReminderPolicy');
+       throw Error('Unexpected dependency: ' + id);
+     }, mod, mod.exports, { env: { NODE_ENV: 'test', APP_FRONTEND_URL: 'https://app.miljor.test', ...env } }
+   );
+@@ -107,6 +108,11 @@ function memory() {
+       }
+       return [{ affectedRows }];
+     }
++    if(q.includes("last_error='STALE_REMINDER_SUPPRESSED'")){
++      const row=rows.find(r=>r.id===args[0]&&r.claim_token===args[1]&&r.status==='SENDING');
++      if(!row)return [{affectedRows:0}];
++      Object.assign(row,{status:'FAILED',attempt_count:3,last_error:'STALE_REMINDER_SUPPRESSED',claim_token:null,claim_expires_at:null,next_attempt_at:null});return [{affectedRows:1}];
++    }
+     const guarded = q.includes('claim_token = ?');
+     if (guarded) {
+       assert.match(q, /status = 'SENDING'/);
+@@ -137,6 +143,16 @@ function memory() {
+ const input = changes => ({ recipientEmail: 'buyer@example.test', recipientUserId: 5,
+   templateName: 'platform_notification', payload: { title: 'Update', message: 'Ready', locale: 'en' },
+   idempotencyKey: 'notification-17', ...changes });
++test('queued reminder is revalidated before transport and terminally suppressed when stale',async()=>{
++ const f=memory();let sends=0;
++ const db={query:async(sql,args)=>sql.includes('SELECT cy.id FROM procurement_recurring_contracts')?[[]]:f.db.query(sql,args)};
++ db.getConnection=async()=>({query:db.query,beginTransaction:async()=>{},rollback:async()=>{},release(){}});
++ const s=service(db,async()=>{sends++;return {messageId:'unexpected'};});
++ await s.enqueueEmail(db,input({payload:{title:'Upcoming cutoff',message:'Review cycle',reminderContext:{contractId:12,cycleId:31}}}));
++ const result=await s.processOutboxBatch();assert.equal(sends,0);assert.equal(result.failed,1);assert.equal(result.succeeded,0);
++ assert.equal(f.rows[0].last_error,'STALE_REMINDER_SUPPRESSED');assert.equal(f.rows[0].attempt_count,3);
++ assert.equal((await s.processOutboxBatch()).processed,0);
++});
+ const forbiddenDb = { async query() { throw Error('Global DB access forbidden'); } };
+ 
+ test('enqueue uses caller connection only, renders first, deduplicates without dispatch', async () => {
+diff --git a/frontend/src/pages/AdminDashboardPage.jsx b/frontend/src/pages/AdminDashboardPage.jsx
+index 66cb82d..43e1a4c 100644
+--- a/frontend/src/pages/AdminDashboardPage.jsx
++++ b/frontend/src/pages/AdminDashboardPage.jsx
+@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
+ import { AppShell } from '../components/layout/AppShell';
+ import adminApi from '../api/admin';
+ import { AdminDeliveryRecoveryPanel } from '../components/admin/AdminDeliveryRecoveryPanel';
++import { AdminProcurementSettlementReview } from '../components/procurement/AdminProcurementSettlementReview';
+ 
+ const VERIFIERS = ['SUPER_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'];
+ const ADMINS = [...VERIFIERS, 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
+@@ -105,6 +106,7 @@ export function AdminDashboardPage() {
+           </Link>}
+         </div>
+         <AdminDeliveryRecoveryPanel />
++        {['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'].includes(role) && <AdminProcurementSettlementReview />}
+         <p className="text-xs opacity-60">All approval operations are enforced by the backend. Suppliers cannot approve their own application.</p>
+       </main>
+     </AppShell>
+diff --git a/frontend/src/pages/OrdersPage.jsx b/frontend/src/pages/OrdersPage.jsx
+index 9eee15e..e319088 100644
+--- a/frontend/src/pages/OrdersPage.jsx
++++ b/frontend/src/pages/OrdersPage.jsx
+@@ -8,6 +8,9 @@ import { useAuth } from '../context/AuthContext';
+ import { AppShell } from '../components/layout/AppShell';
+ import { SupplierFulfillmentPanel } from '../components/supplier/SupplierFulfillmentPanel';
+ import { BuyerDeliveryStopPanel } from '../components/buyer/BuyerDeliveryStopPanel';
++import { ProcurementReliabilityReport } from '../components/procurement/ProcurementReliabilityReport';
++import { ProcurementOrderOperations } from '../components/procurement/ProcurementOrderOperations';
++import { SupplierDeliveryRuns } from '../components/procurement/SupplierDeliveryRuns';
+ import {
+   ClipboardList,
+   Layers,
+@@ -57,6 +60,8 @@ export const OrdersPage = () => {
+   if (isSupplier) return <AppShell><div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+     <h1 className="font-display font-bold text-2xl">Supplier Orders &amp; Fulfillment Queue</h1>
+     <SupplierFulfillmentPanel key={user.id} />
++    <SupplierDeliveryRuns key={`delivery:${user.id}`} />
++    <ProcurementReliabilityReport key={`report:${user.id}`} />
+   </div></AppShell>;
+ 
+   return (
+@@ -101,6 +106,7 @@ export const OrdersPage = () => {
+         </div>
+ 
+         {/* Operational Overview Metric Cards */}
++        {isAuthenticated && user?.role==='BUYER' && <ProcurementReliabilityReport key={`report:${user.id}`} />}
+         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+           <div
+             className="p-4 sm:p-5 rounded-2xl border"
+@@ -252,6 +258,7 @@ export const OrdersPage = () => {
+                 {!isSupplier && (order.payment_status === 'PAID' || order.order_status === 'PAID') && (
+                   <BuyerDeliveryStopPanel orderId={order.id} orderedQty={order.total_qty} />
+                 )}
++                {order.payment_status==='PAID'&&<ProcurementOrderOperations key={`${user?.id}:${order.id}`} orderId={order.id}/>}
+               </article>
+             ))}
+           </section>
+diff --git a/frontend/vite.config.js b/frontend/vite.config.js
+index aea5f7a..1e70c35 100644
+--- a/frontend/vite.config.js
++++ b/frontend/vite.config.js
+@@ -2,6 +2,12 @@ import { defineConfig } from 'vite'
+ import react from '@vitejs/plugin-react'
+ import tailwindcss from '@tailwindcss/vite'
+ 
++// Isolated browser acceptance must never proxy to another local app instance.
++const isolatedPort = process.env.MILJOR_TEST_API_PORT;
++const isolatedApi = process.env.NODE_ENV === 'test' && process.env.DB_NAME === 'miljor_test_db' && isolatedPort;
++if (isolatedApi && (!/^[1-9]\d{3,4}$/.test(isolatedPort) || Number(isolatedPort) > 65535)) throw new Error('Invalid isolated API port');
++const apiTarget = isolatedApi ? `http://127.0.0.1:${isolatedPort}` : 'http://localhost:5000';
++
+ // https://vite.dev/config/
+ export default defineConfig({
+   plugins: [react(), tailwindcss()],
+@@ -10,7 +16,7 @@ export default defineConfig({
+     allowedHosts: true,
+     proxy: {
+       '/api': {
+-        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:5000',
++        target: process.env.VITE_API_PROXY_TARGET || (process.env.NODE_ENV === 'test' && process.env.DB_NAME === 'miljor_test_db' && process.env.MILJOR_TEST_API_PORT ? `http://127.0.0.1:${process.env.MILJOR_TEST_API_PORT}` : 'http://localhost:5000'),
+         changeOrigin: true,
+       },
+     },

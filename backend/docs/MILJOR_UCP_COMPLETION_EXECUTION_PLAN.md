@@ -137,14 +137,45 @@ Status: Smart Hub integration explicitly approved by the user ("Approve integrat
      - `frontend/src/pages/OrdersPage.jsx`: Keep UCP order/delivery/replacement UI AND preserve `SupplierDeliveryRuns`, `ProcurementReliabilityReport`, and `ProcurementOrderOperations` (`PAID` orders).
      - `frontend/vite.config.js`: Support both `PHASE2_BROWSER_API_PORT` / `PHASE1_BROWSER_API_PORT` and `MILJOR_TEST_API_PORT` when `NODE_ENV === 'test' && DB_NAME === 'miljor_test_db'`.
      - `backend/docs/MILJOR_PHASE_LOG.md`: Append chronologically; never erase historical entries.
-4. **Migration Provenance & Upgrade Matrix (`090`–`101`):**
-   - `090`–`094`: **Byte-for-byte identical** on `HEAD` and Smart Hub (`a0b6ea3`); absent on `origin/main` (`9fb07cf`) and protected `miljor_db` (which stops at `054`).
-   - `095_collective_individual_commitments.sql`: Present ONLY on Smart Hub (`a0b6ea3`); unapplied on `miljor_db`. Safe as `095` if `HEAD` has no `095`.
-   - `096`–`100`: **Prefix collision** between PR #54 (`096_ucp_recovery_cursor.sql` .. `100_ucp_supplier_replacement_recontracting.sql`, plus `101_ucp_replacement_supplier_offer_and_qty_binding.sql`) and Smart Hub (`096_delivery_operations_and_evidence.sql` .. `100_delivery_payment_initialization_recovery.sql`).
-   - **Fresh-Install & Upgrade Procedure:** Because protected `miljor_db` is at `054` (neither branch's `095`–`101` is applied there), keep PR #54's `096`–`101` immutable and renumber Smart Hub's unapplied `096`–`100` to `102`–`106` (keeping `095_collective_individual_commitments.sql` at `095`, or renumbering to `102`–`107`). Validate with `node database/migrationManifest.js`, then test fresh install, idempotent replay, and `054 -> latest` upgrade on isolated `miljor_test_db`.
+4. **Frozen Exact Migration Mapping (`090`–`106`, ambiguity resolved):**
+   - `095` is free on PR #54, so `095_collective_individual_commitments.sql` stays at `095`. PR #54's `096`–`101` stay immutable. Smart Hub's unapplied `096`–`100` renumber cleanly to `102`–`106`:
+
+| Original branch/path | Semantic purpose | Applied-history evidence | Final path/version | Upgrade handling |
+|---|---|---|---|---|
+| `HEAD` & Smart Hub `090_smart_procurement_product_counteroffers.sql` .. `094_procurement_delivery_binding.sql` | B6 counteroffers, cadence, notification delivery, email claims, delivery binding | Byte-for-byte identical on both branches; unapplied on `miljor_db` (`054`) | `090`–`094` (unchanged) | Fresh + `054->106` apply sequentially |
+| Smart Hub `095_collective_individual_commitments.sql` | Collective individual commitments | Unapplied on `miljor_db` (`054`) & absent on `HEAD` | `095_collective_individual_commitments.sql` | Fresh + `054->106` apply; PR #54 `101` upgrade bridge applies `095` if absent |
+| `HEAD` `096_ucp_recovery_cursor.sql` .. `101_ucp_replacement_supplier_offer_and_qty_binding.sql` | UCP recovery, notification controls/events, Phase C delivery, replacement recontracting | Applied in `miljor_test_db` (`33322`); unapplied on `miljor_db` (`054`) | `096`–`101` (immutable) | Never renumbered; preserved in place |
+| Smart Hub `096_delivery_operations_and_evidence.sql` | Delivery operations & evidence | Unapplied on `miljor_db` (`054`) | `102_delivery_operations_and_evidence.sql` | Renumbered pre-apply; Smart Hub-already-applied DBs require forward bridge, never journal rewrite |
+| Smart Hub `097_procurement_line_receipts.sql` | Procurement line receipts | Unapplied on `miljor_db` (`054`) | `103_procurement_line_receipts.sql` | Same as `102` |
+| Smart Hub `098_individual_procurement_delivery_pricing.sql` | Individual procurement delivery pricing | Unapplied on `miljor_db` (`054`) | `104_individual_procurement_delivery_pricing.sql` | Same as `102` |
+| Smart Hub `099_procurement_financial_reviews_and_delivery_payments.sql` | Procurement financial reviews & delivery payments | Unapplied on `miljor_db` (`054`) | `105_procurement_financial_reviews_and_delivery_payments.sql` | Same as `102` |
+| Smart Hub `100_delivery_payment_initialization_recovery.sql` | Delivery payment initialization recovery | Unapplied on `miljor_db` (`054`) | `106_delivery_payment_initialization_recovery.sql` | Same as `102` |
+
 5. **Expected Resulting Behavior:** Unified Regular/Flash UCP resilience, delivery runs, partial receipts, replacement re-contracting, B6 RFQ/collective/recurring/individual procurement, and durable notifications with zero `DUPLICATE_MIGRATION_VERSION` errors.
-6. **Verification Already Performed on Preview:** Read-only `git merge-tree --write-tree` against `9fb07cf` (0 conflicts) and `a0b6ea3` (9 conflicts + `096`–`100` prefix overlap); `miljor_db` schema provenance confirmed at `054` (`schema_migrations` count 53); `ucp_phase2_full_ui_browser_gate.js` passed on `33322` (`miljor_test_db`) including Mobile `390x844` Urdu `'ur'` UI save/reload, `[dir="auto"]` Urdu rendering, and Mark read.
-7. **Remaining Tests After Integration:** `migrationManifest.js` preflight, fresh + replay + `054`-upgrade migration test on `miljor_test_db`, `ucp_final_affected_gate.js`, `ucp_phase1_delivery_browser_gate.js`, `ucp_phase1_replacement_gate.js`, `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, `ucp_phase2_full_ui_browser_gate.js`, `email_outbox_queue_gate.js`, frontend production build (`npm --prefix frontend run build`), and exact-source CI.
+6. **Verification Already Performed on Preview:**
+   - Tested in detached temporary preview worktree merging `origin/main` (`9fb07cf`, 0 conflicts) + `origin/feature/smart-procurement-hub-unified-entry` (`a0b6ea3`, all 9 conflicts resolved + `102`–`106` renumbered):
+     - `node database/migrationManifest.js`: **PASS** (`71` migrations).
+     - `node -c` on all 5 resolved backend JS files: **PASS**.
+     - `node tests/email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped, including `STALE_REMINDER_SUPPRESSED`).
+   - Inspectable resolved patch saved at `backend/docs/patches/ucp_main_smarthub_integration_preview.patch`.
+7. **Remaining Tests After Integration:** Fresh + replay + `054`-upgrade migration test on `miljor_test_db`, `ucp_final_affected_gate.js`, `ucp_phase1_delivery_browser_gate.js`, `ucp_phase1_replacement_gate.js`, `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, `ucp_phase2_full_ui_browser_gate.js`, frontend production build (`npm --prefix frontend run build`), and exact-source CI.
 8. **Recovery Approach:** Pre-integration `git tag` / branch backup + `mysqldump` pre-flight backup before any schema upgrade; never `reset --hard` or rewrite `schema_migrations` journals.
+
+### Combined Master-Plan Execution Checklist (2026-11-17)
+
+| Item | Dependency | Existing evidence | Remaining action | Owner | Status |
+|---|---|---|---|---|---|
+| Main integration (`9fb07cf`) | User Approval A | `git merge-tree` `0` conflicts + detached preview clean merge | Execute `git merge --no-ff origin/main` after Approval A | User (approval) -> Agent | **PREVIEWED / BLOCKED ON APPROVAL A** |
+| Smart Hub integration (`a0b6ea3`) | User Approval B | `ucp_main_smarthub_integration_preview.patch` + `email_outbox_queue_gate.js` `31/31` PASS | Execute merge + apply resolved patch + `102`–`106` after Approval B | User (approval) -> Agent | **PREVIEWED / BLOCKED ON APPROVAL B** |
+| Exact migration mapping (`090`–`106`) | Smart Hub integration | `migrationManifest.js` PASS (`71` migrations) on preview; `miljor_db` at `054` | Apply after Approval B | Agent | **FROZEN / READY** |
+| Fresh / replay / upgrade proof | Integrated source | `001`–`101` fresh install PASS (`65` applied on `33322`) | Run fresh + replay + `054->106` upgrade on `miljor_test_db` post-merge | Agent | **BLOCKED ON INTEGRATION** |
+| Post-integration app/browser acceptance | Integrated source | `174e71b` Mobile/Urdu UI browser gate PASS; `fb16b64` CI `44123502063` PASS | Re-run consolidated gate + frontend build post-merge | Agent | **BLOCKED ON INTEGRATION** |
+| Completed Safepay sandbox payment | Human PCI/3DS entry | Order `UCP-SBX-346827a7b8ed` (`PKR 100.00`) `TRACKER_STARTED` + checkout URL ready | User completes hosted sandbox card/3DS; Agent verifies `fetchTracker` & webhook | User (card/3DS) -> Agent | **PREPARED / BLOCKED ON HUMAN STEP** |
+| Provider fee/refund capability | Completed sandbox payment | Synthetic refund/fee & `SUPPLIER_DELIVERED` guard PASS | Verify actual Safepay sandbox fee/refund API/dashboard capability post-payment | Agent (post-payment) | **BLOCKED ON SANDBOX PAYMENT** |
+| Actual SMTP inbox receipt | Authorized test mailbox | `smtp.gmail.com:587` configured (`EMAIL_MODE=smtp`); capture gate PASS | User supplies 1 non-business test mailbox; send critical + optional EN/UR & verify | User (mailbox) -> Agent | **PREPARED / BLOCKED ON MAILBOX** |
+| Notification/event coverage | None | `notificationService`, `notificationOperationsService`, `ucp_phase2_email_gate.js` PASS | Re-verify `CYCLE_CUTOFF_UPCOMING` post-Smart-Hub merge | Agent | **TESTED / PRE-MERGE PASS** |
+| Exact-source CI | Final code commit | `174e71b` CI `44143100844` PASS; `fb16b64` CI `44123502063` PASS | Run & verify CI on integrated commit SHA | Agent / GitHub Actions | **PASS AT `174e71b` / PENDING POST-MERGE** |
+| Historical `users`-drift attribution | Read-only forensics | `miljor_db.users` `id=52` (`2026-11-17T10:35:32Z`–`10:36:12Z`) observed; `orders/payments/ledger=0` | Non-blocking separate operational investigation | Operations | **UNRESOLVED (NON-BLOCKER)** |
+| Final readiness | All above | `miljor_db` pristine; PR #54 unmerged | Complete integration, sandbox payment, and SMTP inbox proof | User + Agent | **PARTIAL / NOT RELEASE-READY** |
 
 CAN START NEXT PHASE: NO

@@ -373,15 +373,20 @@ TASK: Implement and verify Completion Phase 2 on PR #54 (`plan/ucp-resilience-no
 | Actual SMTP inbox receipt | `emailService.js`, `ucp_phase2_email_gate.js` | Real external mailbox receipt not proved | User provides one authorized test email address; send 1 critical + 1 preference-controlled test email | Capture transport + EN/UR + zero-secret PASS | **BLOCKED** (requires explicitly authorized test mailbox) |
 | Mobile/Urdu & affected browser acceptance | `ucp_phase2_full_ui_browser_gate.js`, `AppShell.jsx` | Post-integration browser rerun only | Verified pre-merge on `33322` (`35112`/`35113`); re-run after merge | Mobile `390x844` login/focus, `/payment/return` pending/reload, Urdu `'ur'` UI save/reload, `[dir="auto"]` Urdu render & Mark read **PASS** | **TESTED / VERIFIED** (pre-integration) |
 | Protected-data safety | `miljor_db` (`3306`) read-only checksums | None (`miljor_db` untouched) | Keep all tests strictly on isolated `miljor_test_db` | `{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}` | **VERIFIED** |
-| Final exact-source CI & release decision | `.github/workflows/ucp-canonical-acceptance.yml` | Final post-integration CI pending | Commit/push integrated branch and verify all CI jobs at final SHA | `fb16b64` CI `44123502063` PASS; latest browser gate update requires fresh CI | **PARTIAL / NOT RELEASE-READY** |
+| Final exact-source CI & release decision | `.github/workflows/ucp-canonical-acceptance.yml` | Post-integration CI pending | Commit/push integrated branch and verify all CI jobs at final SHA | `174e71b` CI [`44143100844`](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44143100844) PASS; `fb16b64` CI [`44123502063`](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44123502063) PASS | **PARTIAL / NOT RELEASE-READY** |
 | Historical `users`-drift attribution | Read-only `miljor_db.users` query | Root-cause process of `id=52` creation | Read-only metadata shows `BUYER` `id=52` created `2026-11-17T10:35:32Z`, updated `10:36:12Z`; `orders=0`, `payments=0`, `platform_ledger=0` | Non-blocking operational investigation (separate from UCP code) | **UNRESOLVED (NON-BLOCKER)** |
 
 ### 5. Final Readiness & Preserved External/Integration Blockers
 - **Overall Master-Plan Readiness:** `PARTIAL` / **NOT release-ready**.
+- **Prepared Preview & Verification (2026-11-17):**
+  - Inspectable resolved patch generated from detached `origin/main` (`9fb07cf`, 0 conflicts) + `origin/feature/smart-procurement-hub-unified-entry` (`a0b6ea3`, 9 behavioral resolutions + `095` kept + `102`–`106` renumbered): `backend/docs/patches/ucp_main_smarthub_integration_preview.patch`.
+  - Preview verification: `node database/migrationManifest.js` **PASS** (`71` migrations), `node -c` on all 5 resolved backend JS files **PASS**, `node tests/email_outbox_queue_gate.js` **PASS** (`31/31`, `0` skipped, including `STALE_REMINDER_SUPPRESSED`).
+  - Safepay sandbox checkout prepared in isolated `miljor_test_db` (`33322`): `orderCode: UCP-SBX-346827a7b8ed`, `PKR 100.00`, `INITIATED` / `TRACKER_STARTED`; hosted sandbox checkout URL provided to user for human PCI/3DS completion.
+  - SMTP transport verified ready (`smtp.gmail.com:587`, `TRANSACTIONAL_EMAIL_MODE=smtp`); awaiting 1 explicitly authorized non-business test mailbox.
 - **Preserved External & Integration Blockers:**
-  1. **Safepay Sandbox Completed Payment & Fee/Refund Proof (`BLOCKED`):** Requires human PCI/3DS test-card entry on a prepared sandbox checkout session and verification of resulting fee/refund capability.
+  1. **Safepay Sandbox Completed Payment & Fee/Refund Proof (`BLOCKED`):** Requires human PCI/3DS test-card entry on prepared order `UCP-SBX-346827a7b8ed` and post-payment verification of tracker/webhook/fee/refund capability.
   2. **Actual SMTP Inbox Receipt (`BLOCKED`):** Requires one explicitly authorized non-business test mailbox from the user.
-  3. **`origin/main` (`9fb07cf`, 0 conflicts) & Smart Hub (`a0b6ea3`, 9 conflicts + `095`/`096`–`100` migrations) Merge (`BLOCKED`):** Integration proposal package prepared; requires explicit user merge authorization.
+  3. **`origin/main` (`9fb07cf`) & Smart Hub (`a0b6ea3`) Integration (`BLOCKED`):** Inspectable resolved patch and frozen `090`–`106` mapping ready; requires separate Approvals A (`main` into feature) and B (`Smart Hub` into feature).
   4. **Historical `miljor_db.users` Drift (`NON-BLOCKING UNRESOLVED`):** Read-only inspection identified `BUYER` row `id=52` (`2026-11-17T10:35:32Z`); protected financial/commercial tables remain empty (`0`) and checksums unchanged.
 
 CAN START NEXT PHASE: NO
