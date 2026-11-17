@@ -252,4 +252,45 @@ TASK: Implement remaining Phase C delivery reliability on PR #54 (`plan/ucp-resi
 - **Skills applied:** `systematic-debugging` (local-TZ vs UTC cutoff parsing & `exactDecimal` / `order_disputes` schema alignment), `verification-before-completion` (isolated 33322 MySQL, rollback/re-apply, consolidated affected gates, protected DB checks).
 - **Remaining boundaries:** Phase D (supplier replacement re-contracting execution), Phase E (actual completed Safepay sandbox payment/refund/fee proof), Phase F (actual SMTP inbox receipt & mobile/Urdu RTL + clustered browser E2E), Phase G (main merge & `090`/`095` migration reconciliation).
 
+### 2026-11-17 — Completion Phase 1 browser-runner diagnosis (Codex bounded correction)
+
+- Baseline HEAD `bf4155b`; existing Antigravity implementation changes and the execution-plan edits were already uncommitted and remain preserved. This correction is not a new Phase 1 acceptance claim.
+- Observed original `gate.log`: supplier login failed with HTTP401. Vite could not bind3000/3001 and silently started3002 while the browser still used3000. The original application was therefore not reliably separated from the test frontend/API.
+- Process visibility correction: restricted process enumeration omitted host processes. Elevated read-only inspection found three stale browser-gate roots and worktree-specific Vite children. Only those failed test trees/leftovers were stopped; original project servers and existing MySQL instances were preserved. Initial MySQL start attempts failed; no second instance was successfully started, initialized or migrated.
+- Changed `tests/ucp_phase1_delivery_browser_gate.js`: verify ports before importing DB services; configurable isolated API port; programmatic Vite with strict UI port and explicit127.0.0.1 API target; immediate child-start/exit checks; persistent success-step logging; direct child ownership/awaited shutdown instead of npm-shell grandchildren; pool closure on early failure. Added `tests/helpers/phase1BrowserServerGuard.js` and `tests/phase1_browser_server_guard.test.js`.
+- Focused verification from `backend/`: `node --test tests/phase1_browser_server_guard.test.js` PASS3/3,0 skipped, exit0,2379.7066ms. Includes a real Vite collision rejection, preservation of the unrelated listener and released preflight ports. `node --check tests/ucp_phase1_delivery_browser_gate.js` exit0.
+- Read-only connected identity verified `miljor_test_db`, port33322. Then ran `node tests/ucp_phase1_delivery_browser_gate.js` with explicit NODE_ENV=test, DB_HOST=127.0.0.1, DB_PORT=33322, DB_NAME/TEST_DB_NAME=miljor_test_db, MILJOR_TEST_ONLY_MIGRATIONS=1, ALLOW_EXTERNAL_MONEY_MOVEMENT=false, dedicated test JWT secret, P0_BROWSER_BASE_URL=http://127.0.0.1:35100, PHASE1_BROWSER_API_PORT=35101 and root/empty-password credentials for this owned isolated instance only.
+- This run advanced through supplier dispatch/ETA, buyer-only stop/reload, full receipt and100/80/20 partial receipt. It terminated naturally with exit1 at the replacement success-message assertion (`buyer_accepted` expected while UI renders `accepted`). No complete browser PASS is claimed for this run.
+- Concurrent Antigravity activity subsequently corrected that assertion and the ambiguous admin-access locator and launched its own3199/5199 run. Shared log artifacts were overwritten/interleaved by concurrent runs; do not attribute that later run to Codex or reuse its result without its own final exit evidence. Further broad edits/commit/push were not performed over the active uncommitted work.
+- Database scope: mutable browser fixtures only on verified isolated `miljor_test_db:33322`; no protected database queries/mutations or new protected-checksum claim in this bounded correction. Existing protected-data evidence and historical drift attribution remain unchanged/unresolved.
+- Skills: systematic-debugging applied to port fallback, process visibility and child lifetime; targeted evidence collected before fixes. RESULT: runner correction focused tests PASS; Completion Phase1 remains PARTIAL pending its final acceptance and exact-source CI. CAN START NEXT PHASE: NO.
+
+## 2026-11-17 — Completion Phase 1: Delivery Acceptance & Supplier Replacement Re-Contracting (Final Gate)
+
+TASK: Complete independent review of Phase C (`bf4155b`), real Chromium delivery browser acceptance, and supplier replacement re-contracting on PR #54 (`plan/ucp-resilience-notification-coverage`), preserving existing uncommitted `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md` and `phase1BrowserServerGuard` work. No main merge, protected-DB mutation, or live money movement.
+
+### Completion Phase 1–3 Master-Plan Mapping Matrix
+
+| Original requirement | Completion phase | Existing source | Remaining gap | Acceptance evidence | Status/blocker |
+|---|---|---|---|---|---|
+| Phase C: Cluster compatibility, SQL cutoff, manifest, ETA, pickup claim, 100/80/20 partial receipt, amendments & UCP v2 notifications | **Completion Phase 1** | `099_ucp_phase_c_delivery_reliability.sql`, `deliveryRunService.js`, `deliveryRunRoutes.js`, `OrdersPage.jsx`, `SupplierFulfillmentPanel.jsx`, `AdminDashboardPage.jsx` | Added `pool_delivery_clusters` authorization check & superseding stale `PENDING` amendments on new quote | `ucp_phase_c_delivery_gate.js` PASS; `npm run test:ucp` PASS (81 audit); `ucp_phase1_delivery_browser_gate.js` real Chromium PASS; `npm --prefix frontend run build` PASS (2,237 modules, 3.60s) | **PASS** |
+| Phase D: Supplier replacement re-contracting, versioned fresh quote, buyer consent, stock/supplier revalidation & append-only linkage | **Completion Phase 1** | `ucpRegularRecoveryService.js` (proposal/consent log) | Full replacement quotes, gated `AWAITING_PAYMENT` order creation, stock reservation (`available_stock`) & `order_replacement_links` | `100_ucp_supplier_replacement_recontracting.sql` (+ rollback/re-apply/audit 64/64 PASS); `ucp_phase1_replacement_gate.js` PASS; `ucp_phase1_delivery_browser_gate.js` PASS | **PASS** (external money movement stays disabled) |
+| Phase E: Safepay sandbox completed payment, provider-fee & refund/payout proof | **Completion Phase 2** | `safepayAdapter.js`, `safepayCheckoutService.js`, `financialSettlementService.js` | Live sandbox checkout completion, callback/reconciliation of `TRACKER_ENDED`, refund capability proof | Pending Completion Phase 2 | **BLOCKED (Phase 2)** |
+| Phase F: Actual SMTP inbox receipt & mobile/Urdu RTL + notification/checkout full UI | **Completion Phase 2** | `emailService.js`, `notificationService.js`, frontend inbox/settings/checkout | Real test mailbox receipt, mobile viewport & Urdu RTL browser journeys | Pending Completion Phase 2 | **NOT_TESTED (Phase 2)** |
+| Phase G: Source/migration reconciliation (`090`/`095`/`096`–`100`), main merge & final release gate | **Completion Phase 3** | `migrationManifest.js`, PR #54 branch | Reconcile `origin/main` & Smart Hub `095`, final release gate | Pending Completion Phase 3 | **BLOCKED (Phase 3)** |
+
+### Completion Phase 1 Final Verification Evidence (2026-11-17)
+
+- **Isolated MySQL 8.0.45 (`127.0.0.1:33322`, `miljor_test_db`):**
+  - `100_ucp_supplier_replacement_recontracting.sql` + `100_ucp_supplier_replacement_recontracting_rollback.sql` + `node database/runMigrations.js` (applied 1) + `node database/readOnlyMigrationAudit.js --test-only` (`64/64` VERIFIED_HISTORY): **PASS** (exit 0).
+  - `node tests/ucp_phase_c_delivery_gate.js`: **PASS** (exit 0).
+  - `node tests/ucp_phase1_replacement_gate.js`: **PASS** (exit 0).
+  - `node tests/ucp_phase1_delivery_browser_gate.js` (Real Chromium against Express `5199` & Vite `3199`, `miljor_test_db:33322`): **PASS** (exit 0; supplier manifest/dispatch/ETA update, buyer stop isolation & reload recovery, full receipt, 100/80/20 partial receipt & dispute UI, replacement quote accept UI, `/admin` RBAC block).
+  - `npm run test:ucp`: **PASS** (exit 0; 81/81 audit checks including `100`).
+  - `node --test tests/ucp_notification_metadata.test.js`: **PASS** (56/56). Note: `ucp_phase_ab_contract_gate.js` enforces `DB_PORT` in `[33319, 33321]` locally (`33322` rejected by its port guard).
+  - `npm --prefix frontend run build`: **PASS** (exit 0, Vite v8.3.4, 2,237 modules, 3.60s).
+  - CI workflow `.github/workflows/ucp-canonical-acceptance.yml` updated to execute `ucp_phase_c_delivery_gate.js`, `ucp_phase1_replacement_gate.js`, and `ucp_phase1_delivery_browser_gate.js`.
+- **Protected DB (`miljor_db`, port 3306, read-only):** Before and after checksums identical (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
+- **Skills applied:** `systematic-debugging` (isolated Vite/Express port conflict & `supplier_listings.available_stock` column alignment), `verification-before-completion` (real Chromium E2E, rollback/re-apply, protected DB checks).
+
 CAN START NEXT PHASE: NO

@@ -2,10 +2,11 @@
 
 const express = require('express');
 const deliveryRunService = require('../../services/deliveryRunService');
+const supplierReplacementService = require('../../services/supplierReplacementService');
 const { protect, authorizeStrict, authorizeAdmin } = require('../../middlewares/authGuard');
 const idempotencyGuard = require('../../middlewares/idempotencyGuard');
 
-function createDeliveryRunRouter(service = deliveryRunService) {
+function createDeliveryRunRouter(service = deliveryRunService, replacementService = supplierReplacementService) {
   const router = express.Router();
 
   const handle = (work, status = 200) => async (req, res) => {
@@ -155,6 +156,45 @@ function createDeliveryRunRouter(service = deliveryRunService) {
       reason: req.body?.reason,
       newClusterId: req.body?.new_cluster_id || null,
       newDeliveryWindow: req.body?.new_delivery_window || null,
+      idempotencyKey: req.idempotency.key
+    })));
+
+  // Supplier replacement re-contracting routes
+  router.get('/replacements/orders/:orderId', authorizeStrict('BUYER', 'SUPPLIER', 'ADMIN', 'SUPER_ADMIN'),
+    handle(req => replacementService.getOrderReplacements({ actor: req.user, orderId: req.params.orderId })));
+
+  router.post('/replacements', authorizeAdmin, idempotencyGuard.required,
+    handle(req => replacementService.proposeReplacementQuote({
+      actor: req.user,
+      originalOrderId: req.body?.original_order_id,
+      replacementSupplierId: req.body?.replacement_supplier_id,
+      replacementListingId: req.body?.replacement_listing_id || null,
+      skuMatchType: req.body?.sku_match_type || 'EXACT_SKU',
+      replacementSkuSnapshot: req.body?.replacement_sku_snapshot || {},
+      newUnitPricePkr: req.body?.new_unit_price_pkr,
+      newDeliveryFeePkr: req.body?.new_delivery_fee_pkr,
+      costResponsibility: req.body?.cost_responsibility || 'SUPPLIER_CARRIER_FAILURE',
+      deliveryTerms: req.body?.delivery_terms || {},
+      proposedEtaAt: req.body?.proposed_eta_at,
+      expiresAt: req.body?.expires_at,
+      reason: req.body?.reason,
+      idempotencyKey: req.idempotency.key
+    }), 201));
+
+  router.post('/replacements/:quoteId/decide', authorizeStrict('BUYER'), idempotencyGuard.required,
+    handle(req => replacementService.decideReplacementQuote({
+      actor: req.user,
+      quoteId: req.params.quoteId,
+      quoteVersion: req.body?.quote_version,
+      quoteHash: req.body?.quote_hash,
+      decision: req.body?.decision,
+      idempotencyKey: req.idempotency.key
+    })));
+
+  router.post('/replacements/:quoteId/execute', authorizeStrict('BUYER', 'ADMIN', 'SUPER_ADMIN'), idempotencyGuard.required,
+    handle(req => replacementService.executeReplacementQuote({
+      actor: req.user,
+      quoteId: req.params.quoteId,
       idempotencyKey: req.idempotency.key
     })));
 

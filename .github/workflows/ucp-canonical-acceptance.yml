@@ -135,6 +135,11 @@ jobs:
         run: cd backend && npm run test:ucp:notifications:mysql
       - name: Verify prospective metadata and owned Flash SQL-clock reminders without skips
         run: cd backend && node tests/ucp_phase_ab_contract_gate.js
+      - name: Verify Phase C delivery reliability and Phase 1 supplier replacement gates
+        run: |
+          cd backend
+          node tests/ucp_phase_c_delivery_gate.js
+          node tests/ucp_phase1_replacement_gate.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
         run: |
           cd backend
@@ -279,4 +284,7 @@ jobs:
           exit 1
       - name: Real Chromium separate buyer/supplier acceptance
         timeout-minutes: 10
-        run: cd backend && node tests/p0_real_browser_journey.js
+        run: |
+          cd backend
+          node tests/p0_real_browser_journey.js
+          node tests/ucp_phase1_delivery_browser_gate.js

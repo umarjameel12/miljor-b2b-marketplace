@@ -374,6 +374,17 @@ class DeliveryRunService {
           throw fail('INCOMPATIBLE_CLUSTER', `Order #${order.id} belongs to cluster #${orderClusterId}, not #${parsedClusterId}.`, 422);
         }
 
+        // If Regular pool has explicit pool_delivery_clusters, verify cluster authorization
+        if (order.pool_id && orderMode !== 'PICKUP') {
+          const [pdcRows] = await conn.query(
+            'SELECT cluster_id FROM pool_delivery_clusters WHERE pool_id = ?',
+            [order.pool_id]
+          );
+          if (pdcRows.length > 0 && !pdcRows.some(r => Number(r.cluster_id) === parsedClusterId)) {
+            throw fail('CLUSTER_NOT_AUTHORIZED_FOR_POOL', `Pool #${order.pool_id} does not authorize delivery to cluster #${parsedClusterId}.`, 422);
+          }
+        }
+
         let addressId = order.flash_address_id ? Number(order.flash_address_id) : null;
         let pickupPointId = order.flash_pickup_point_id ? Number(order.flash_pickup_point_id) : null;
 
@@ -1398,6 +1409,12 @@ class DeliveryRunService {
         [parsedOrderId]
       );
       const nextVer = Number(verRows[0].max_ver) + 1;
+
+      // Supersede any prior PENDING amendments for this order so stale quotes cannot be accepted later
+      await conn.query(
+        "UPDATE delivery_amendments SET decision = 'SUPERSEDED' WHERE order_id = ? AND decision = 'PENDING'",
+        [parsedOrderId]
+      );
 
       const skuSnapshot = {
         order_code: order.order_code,

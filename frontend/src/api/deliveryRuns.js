@@ -75,5 +75,18 @@ export const deliveryRunsApi = {
   adminRecoverStop: async (stopId, body, key = makeKey('admin-rec')) =>
     unwrap(await apiClient.post(`/delivery-runs/admin/stops/${encodeURIComponent(stopId)}/recover`, body, {
       headers: { 'X-Idempotency-Key': key }
+    })),
+
+  getOrderReplacements: async (orderId, { signal } = {}) =>
+    unwrap(await apiClient.get(`/delivery-runs/replacements/orders/${encodeURIComponent(orderId)}`, { signal })),
+
+  decideReplacementQuote: async (quoteId, body, key = makeKey('repl-dec')) =>
+    unwrap(await apiClient.post(`/delivery-runs/replacements/${encodeURIComponent(quoteId)}/decide`, body, {
+      headers: { 'X-Idempotency-Key': key }
+    })),
+
+  executeReplacementQuote: async (quoteId, key = makeKey('repl-exec')) =>
+    unwrap(await apiClient.post(`/delivery-runs/replacements/${encodeURIComponent(quoteId)}/execute`, {}, {
+      headers: { 'X-Idempotency-Key': key }
     }))
 };

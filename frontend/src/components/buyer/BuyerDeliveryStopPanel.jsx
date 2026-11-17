@@ -3,6 +3,7 @@ import { deliveryRunsApi } from '../../api/deliveryRuns';
 
 export function BuyerDeliveryStopPanel({ orderId, orderedQty }) {
   const [data, setData] = useState(null);
+  const [replacements, setReplacements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -17,8 +18,12 @@ export function BuyerDeliveryStopPanel({ orderId, orderedQty }) {
     setLoading(true);
     setError('');
     try {
-      const res = await deliveryRunsApi.getBuyerStop(orderId, { signal });
+      const [res, replRes] = await Promise.all([
+        deliveryRunsApi.getBuyerStop(orderId, { signal }),
+        deliveryRunsApi.getOrderReplacements(orderId, { signal }).catch(() => ({ quotes: [] }))
+      ]);
       setData(res);
+      setReplacements(replRes?.quotes || []);
       if (res?.stop?.ordered_qty && !acceptedQty) {
         setAcceptedQty(String(res.stop.ordered_qty));
       }
@@ -87,6 +92,27 @@ export function BuyerDeliveryStopPanel({ orderId, orderedQty }) {
     }
   };
 
+  const handleReplacementDecision = async (quote, decision) => {
+    if (pending) return;
+    setPending(true);
+    setError('');
+    setMessage('');
+    try {
+      await deliveryRunsApi.decideReplacementQuote(quote.id, {
+        quote_version: quote.quote_version,
+        quote_hash: quote.quote_hash,
+        decision
+      });
+      setMessage(`Replacement quote ${quote.quote_code} ${decision.toLowerCase()}.`);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || err.message || 'Could not record replacement decision.');
+      await load();
+    } finally {
+      setPending(false);
+    }
+  };
+
   if (loading) return <p className="text-xs text-[var(--text-muted)] mt-2">Loading delivery stop…</p>;
   if (error && !data) {
     return (
@@ -101,7 +127,7 @@ export function BuyerDeliveryStopPanel({ orderId, orderedQty }) {
   const attempts = data?.attempts || [];
   const amendments = data?.amendments || [];
 
-  if (!stop && amendments.length === 0) return null;
+  if (!stop && amendments.length === 0 && replacements.length === 0) return null;
 
   return (
     <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] space-y-2 text-xs" aria-label={`Delivery details for order ${orderId}`}>
@@ -239,6 +265,34 @@ export function BuyerDeliveryStopPanel({ orderId, orderedQty }) {
                     onClick={() => handleAmendmentDecision(amd, 'DECLINED')}
                     className="px-2 py-1 rounded border border-[var(--border-subtle)]"
                   >
+                    Decline
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {replacements.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="font-semibold">Supplier Replacement Quotes:</p>
+          {replacements.map((q) => (
+            <div key={q.id} className="p-2 rounded border border-[var(--border-subtle)] space-y-1">
+              <p>
+                <strong>{q.quote_code}</strong> (v{q.quote_version}) · {q.sku_match_type} · Status: <strong>{q.status}</strong>
+              </p>
+              <p>
+                Old Total: PKR {Number(q.old_total_pkr).toFixed(2)} → New Total: PKR {Number(q.new_total_pkr).toFixed(2)} (Diff: PKR {Number(q.charge_diff_pkr).toFixed(2)})
+              </p>
+              <p className="text-[var(--text-muted)]">
+                Reason: {q.reason} · Expires: {String(q.expires_at)}
+              </p>
+              {q.status === 'PENDING_BUYER_CONSENT' && (
+                <div className="flex gap-2 pt-1">
+                  <button type="button" disabled={pending} onClick={() => handleReplacementDecision(q, 'ACCEPTED')} className="px-2 py-1 rounded bg-[var(--brand-accent)] text-[#072a21] font-semibold">
+                    Accept Replacement
+                  </button>
+                  <button type="button" disabled={pending} onClick={() => handleReplacementDecision(q, 'DECLINED')} className="px-2 py-1 rounded border border-[var(--border-subtle)]">
                     Decline
                   </button>
                 </div>
