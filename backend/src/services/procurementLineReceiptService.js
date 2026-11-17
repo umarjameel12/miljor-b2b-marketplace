@@ -40,7 +40,7 @@ class ProcurementLineReceiptService {
      AND pa.currency=?
    JOIN payment_webhook_events pe ON pe.attempt_id=pa.id AND pe.order_id=p.order_id
      AND pe.provider='SAFEPAY' AND pe.provider_tracker_token=pa.provider_tracker_token
-     AND pe.processed_status='PROCESSED' AND pe.event_type IN ('payment.succeeded','payment:succeeded','payment.completed','payment:completed','payment.settled','payment:settled','payment.reconciled')
+     AND pe.processed_status='PROCESSED' AND pe.event_type IN ('payment.succeeded','payment:succeeded','payment.completed','payment:completed','payment.settled','payment:settled','payment.reconciled','payment:created','payment.created')
    WHERE p.order_id=? AND p.buyer_id=? AND p.status='PAID' AND p.amount=? AND p.procurement_delivery_contract_id IS NULL AND pa.procurement_delivery_contract_id IS NULL
      AND (BINARY p.transaction_ref=BINARY pa.provider_tracker_token OR
        BINARY JSON_UNQUOTE(JSON_EXTRACT(p.provider_response,'$.tracker_token'))=BINARY pa.provider_tracker_token)

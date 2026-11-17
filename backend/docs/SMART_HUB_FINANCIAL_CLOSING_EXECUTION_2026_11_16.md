@@ -221,3 +221,42 @@ Prepared a temporary runtime-only callback helper under ignored `backend/artifac
 Local and public checks observed: health200, admin404, orders404; POST invalid signature returned401 / INVALID_WEBHOOK_SIGNATURE through the real application handler. Public temporary base is https://firmware-grande-arcade-lightbox.trycloudflare.com, with callback path appended. Actual application expiry is2026-11-17T13:22:57.862Z; hostname lifetime/uptime is not guaranteed. Backend exec session77818; tunnel session61232. The tunnel is task-owned; stop it and the backend after verification. If the session expires, start a new isolated session/tunnel and replace the sandbox endpoint; do not reuse an expired URL. No genuine provider event/capture has been received or claimed by these checks, and no test payment/order was modified by the invalid-signature request.
 
 Next owner action: sandbox dashboard Developers > Endpoints > Add an endpoint, enter the exact public callback URL, then inspect Details/event choices. Official guide: https://safepay-docs.netlify.app/developers/webhooks/overview/ . Do not use the live dashboard, rotate existing API keys or publish secrets. Genuine signed callback/capture, tax applicability, main merge and original local source integration remain pending. No protected database or original frontend was modified. CAN START NEXT PHASE: NO.
+
+---
+
+# 2026-11-17 — Genuine Safepay Sandbox Capture, Live `payment:created` Webhook & Reconciliation Closure (PR #53)
+
+## 1. Live Provider Compatibility Fixes (`safepayAdapter.js`, `safepayCheckoutService.js`, `procurementDeliveryPaymentService.js`, `procurementLineReceiptService.js`)
+Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three schema/signature behaviors that differed from synthetic test payloads:
+1. **Envelope Signing (`safepayAdapter.verifyWebhookSignature`):** Safepay v1 webhooks wrap `{ data: { type, token, notification, ... } }` and sign `JSON.stringify(payload.data)` with `HMAC-SHA512` (`x-sfpy-signature`, 128-char hex) rather than the outer envelope. `verifyWebhookSignature` now verifies `HMAC-SHA512(secret, rawBody)` first and falls back to `HMAC-SHA512(secret, JSON.stringify(parsed.data))` when `parsed.data` is a plain object.
+2. **Envelope Metadata (`safepayCheckoutService.processWebhookEvent`):** `type` (`payment:created`) and `token` (`event_id`) reside under `parsedPayload.data` when `x-sfpy-event-id` / `x-sfpy-event-type` headers are omitted. `processWebhookEvent` now extracts `envelopeData?.token` and `envelopeData?.type` before falling back.
+3. **Nested Notification & Allowlists (`safepayCheckoutService.js`, `procurementDeliveryPaymentService.js`, `procurementLineReceiptService.js`):** Normalized `parsedPayload.notification || parsedPayload.data?.notification || parsedPayload.data || parsedPayload`; required `effectiveEventType` in `['payment:created','payment.created']` AND `normalizedProviderState === 'PAID'` (non-PAID states record `payment:created:<STATE>` without mutating payments; `net` fallback is refused on `payment:created`; PII `user` is excluded from `payments.provider_response`); added `'payment:created','payment.created'` to `payment_webhook_events.event_type` allowlists.
+
+## 2. Genuine Provider-Originated Safepay Sandbox Capture & Public Callback (`miljor_test_db` ONLY)
+- **Tunnel & Bridge:** `cloudflared` HTTP/2 tunnel (`https://waiver-select-salary-getting.trycloudflare.com`) -> narrow local bridge (`127.0.0.1:5418`, forwarding only `POST /api/v1/webhooks/safepay`) -> isolated `miljor_test_db` backend (`127.0.0.1:5417`, `gates=false`, `email_mode=mock`, `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).
+  - Public preflight: `GET /health` -> `200` (`database: "miljor_test_db"`), `GET /api/v1/admin` -> `404`, invalid-signature `POST /api/v1/webhooks/safepay` -> `401 INVALID_WEBHOOK_SIGNATURE`.
+- **Safepay Sandbox Dashboard Configuration:** Updated `https://sandbox.api.getsafepay.com/dashboard/developers/endpoints` Row 0 to `https://waiver-select-salary-getting.trycloudflare.com/api/v1/webhooks/safepay` with `payment:created (1.0.0)`, `refund:created (1.0.0)`, and `error:occurred (1.0.0)` subscribed (unrelated settings/secrets preserved).
+- **Genuine Sandbox Capture + Live `payment:created` Webhook (Order `234` / `MJQ-b7fa0a34989b`, separate from synthetic evidence):**
+  - Tracker: `track_10e2ea33-2376-4d73-82b3-1146b6da9327`, Rs. `355.00` PKR (`300.00` subtotal + `25.00` delivery + `30.00` buyer platform fee), dummy card `5200 0000 0000 1096`.
+  - Safepay delivered `payment:created` (`event_id: DBU6S15L2AHS7395PKC0`) with valid `x-sfpy-signature` -> **`200 OK`** (`2026-11-17T15:08:51.599Z`).
+  - `miljor_test_db` verified state:
+    - `orders.id=234`: `payment_status='PAID'`, `order_status='PAID'`, `fulfillment_status='AWAITING_SUPPLIER_ACKNOWLEDGEMENT'`.
+    - `payment_attempts.id=112`: `status='COMPLETED'`.
+    - `payments.id=170`: `payment_code='PAY-0a34989b-1516'`, `amount='355.00'`, `buyer_fee='30.00'`, `status='PAID'`, `escrow_status='HELD_IN_ESCROW'`, `provider_response` records `provider_fee='22.49'`, `provider_net='332.51'`, `provider_reference='479183'`, `provider_state='PAID'` (no PII).
+    - `payment_webhook_events.id=98`: `event_id='DBU6S15L2AHS7395PKC0'`, `event_type='payment:created'`, `processed_status='PROCESSED'`.
+    - `invoices.id=109`: `invoice_number='INV-2026-000234'`, `total_amount='355.00'`, `status='ISSUED'`.
+    - `supplier_inventory_allocations` (`ORDER_DIRECT`, `reference_id=234`): 2 rows `status='COMMITTED'`.
+  - Live `error:occurred` webhooks (`DBU6Q8LL2AHS7395PK70`, `DBU6R4DL2AHS7395PK9G`) also arrived with valid signatures -> `200 OK` (`PROCESSED`, zero order/payment mutation).
+  - Idempotent reconciliation check on Order `234`: `reconcilePaymentWithProvider` returned `already_paid: true`, `payments` count remained `1`.
+- **Genuine Sandbox Capture + Authenticated Reconciliation Recovery (Order `231` / `MJQ-37a661b05ba7`):**
+  - Tracker `track_7e276246-636e-4b87-9399-090ebaa557b9` completed on Safepay (`TRACKER_ENDED`, `has_txn=true`) prior to the `data`-envelope signature fix; `reconcilePaymentWithProvider({ orderId: 231 })` verified `TRACKER_ENDED` directly with Safepay's API and transitioned Order `231` to `PAID` (`payments.id=171`, `PAY-61b05ba7-7806`, `HELD_IN_ESCROW`).
+
+## 3. Automated Test Gates & Protected Database Verification
+- `node --test tests/safepay_payment_created_webhook.test.js tests/spec_code_collision_retry.test.js`: **14/14 PASS** (8/8 `safepay_payment_created_webhook` including `{ data: { type, token, notification } }` `HMAC-SHA512(data)` positive/negative + 6/6 `spec_code_collision_retry`).
+- `p0_safepay_signed_http_acceptance.js` (`miljor_test_db`, synthetic key): **5/5 PASS** (note: synthetic signed HTTP acceptance, separate from genuine provider evidence above).
+- **Protected Databases:** `miljor_db` (`orders: 0, payments: 0`), `miljor_sandbox_db` (`orders: 0, payments: 0`) — 100% untouched.
+- **Email Inbox:** Already verified (`outbox 28`, subject `MilJor | Inbox verification 17 Nov 2026`, ref `MILJOR-INBOX-1711`).
+
+## 4. Remaining Blocker & Release Decision
+- **Pakistan Tax Policy (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`):** Remains `DRAFT / AWAITING QUALIFIED TAX REVIEW & OWNER BUSINESS FACTS` (NTN/STRN/PRA registration, intermediary vs. principal role, and Punjab/Lahore supply scope).
+- **PR #53 Status:** **RETAINED AS DRAFT** (not merged to `main` and not integrated into `MilJor Project` until accountable tax policy approval and exact-head CI pass). Temporary tunnel/callback daemons stopped cleanly. `CAN START NEXT PHASE: NO`.

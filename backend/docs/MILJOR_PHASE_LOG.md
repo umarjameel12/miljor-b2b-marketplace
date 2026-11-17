@@ -1,5 +1,21 @@
 # MilJor — Phase Execution Log
 
+## PR #53 Financial Closing Update (Genuine Safepay Sandbox Capture & Live `payment:created` Webhook) — 2026-11-17
+
+- **Branch:** `feature/smart-procurement-hub-unified-entry` (PR #53 retained as **DRAFT** — not merged to `main`)
+- **Authoritative Reports:** `backend/docs/SMART_HUB_FINANCIAL_CLOSING_EXECUTION_2026_11_16.md`, `backend/docs/MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`
+- **Safepay Live Provider Compatibility & Fixes:**
+  - `safepayAdapter.verifyWebhookSignature`: Added fallback verification for Safepay's `{ data: { ... } }` envelope signed with `HMAC-SHA512(secret, JSON.stringify(payload.data))` alongside `rawBody` `HMAC-SHA512`.
+  - `safepayCheckoutService.processWebhookEvent`: Extracted `envelopeData.token` / `envelopeData.type` (`payment:created`), normalized nested `notification`, enforced `state === 'PAID'` for payment capture, excluded PII `user` from `payments.provider_response`, and updated `procurementDeliveryPaymentService.js` / `procurementLineReceiptService.js` event allowlists.
+- **Genuine Provider Evidence (`miljor_test_db` ONLY, separate from synthetic tests):**
+  - Order `234` (`MJQ-b7fa0a34989b`, tracker `track_10e2ea33-2376-4d73-82b3-1146b6da9327`, Rs. `355.00`): Paid via Safepay Sandbox hosted checkout (`5200 0000 0000 1096`), genuine provider `payment:created` webhook (`DBU6S15L2AHS7395PKC0`) delivered over HTTPS tunnel -> `200 OK`, Order `234` -> `PAID` (`AWAITING_SUPPLIER_ACKNOWLEDGEMENT`), Payment `170` (`HELD_IN_ESCROW`), Invoice `INV-2026-000234` (`ISSUED`), 2 `ORDER_DIRECT` inventory allocations (`COMMITTED`), idempotent reconciliation confirmed (`payments = 1`).
+  - Order `231` (`MJQ-37a661b05ba7`, tracker `track_7e276246-636e-4b87-9399-090ebaa557b9`): Paid on Safepay (`TRACKER_ENDED`), reconciled via authenticated `reconcilePaymentWithProvider` -> `PAID` (`payments.id=171`).
+- **Automated Gates:** `safepay_payment_created_webhook.test.js` + `spec_code_collision_retry.test.js` (**14/14 PASS**); `p0_safepay_signed_http_acceptance.js` (**5/5 PASS**).
+- **Protected Databases:** `miljor_db` (`orders: 0, payments: 0`), `miljor_sandbox_db` (`orders: 0, payments: 0`).
+- **Remaining Blocker:** Accountable Pakistan FBR/PRA tax policy approval (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`).
+
+---
+
 ## Post Master-E2E Gap Closure & Final Demo Acceptance (Production Hardened) — 2026-11-12
 
 - **Active Branch:** `feature/frontend-redesign-20261112`
