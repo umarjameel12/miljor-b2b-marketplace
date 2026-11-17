@@ -14,6 +14,7 @@ const groupOrders=require('../src/services/procurementCollectiveOrderService');
 const groupDelivery=require('../src/services/procurementCollectiveDeliveryService');
 const groupReceipt=require('../src/services/procurementCollectiveReceiptService');
 const finance=require('../src/services/financialSettlementService');
+const refundReadiness=require('../src/services/safepayRefundReadinessService');
 const invoiceService=require('../src/services/invoiceService');
 const {chromium}=require('playwright');
 const base=process.env.P0_BROWSER_BASE_URL||'http://127.0.0.1:3000';
@@ -388,6 +389,21 @@ async function verify(browser,fixture){
       notes:'Disposable acceptance financial review',actor:{id:1,role:'SUPER_ADMIN'}
    });
    assert.equal(approved.data.refund.status,'APPROVED');
+   // Real MySQL: approved grouped refund is correctly itemized, but synthetic
+   // PAID fixtures MUST NOT be mistaken for actual Safepay provider evidence.
+   const preview=await refundReadiness.inspect({
+     actor:{id:1,role:'SUPER_ADMIN'},refundId:assessment.data.refund.id
+   });
+   assert.equal(preview.requested_amount_pkr,'250.00');
+   assert.equal(preview.v3_refund_amount_minor_preview,'25000');
+   assert.equal(preview.can_execute_external_refund,false);
+   assert.equal(preview.external_execution_status,'DISABLED');
+   assert.ok(preview.blocking_reasons.includes('PROVIDER_TRACKER_OWNERSHIP_UNVERIFIED'),
+     'Synthetic payment row must not qualify as genuine provider-origin refund');
+   await assert.rejects(()=>refundReadiness.inspect({
+     actor:{id:created.secondBuyer.id,role:'BUYER'},refundId:assessment.data.refund.id
+   }),err=>err.code==='FORBIDDEN');
+
    const [refNotices]=await db.query(
      `SELECT recipient_id,recipient_role,event_type FROM procurement_notifications
       WHERE event_key IN (?,?,?,?) ORDER BY event_key`,[
