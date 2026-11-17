@@ -411,6 +411,14 @@
   "externalMoneyMovement": false,
   "providerCalls": false,
   "emailTransportCalls": false,
-  "phaseStatus": "LOCAL_PASS_REMOTE_CI_PENDING",
-  "fullMasterPlan": "PARTIAL_RELEASE_BLOCKED"
+  "phaseStatus": "PASS_FOR_SCOPED_PHASE_AB_CORRECTION",
+  "fullMasterPlan": "PARTIAL_RELEASE_BLOCKED",
+  "qualifiedSourceCommit": "1e3bc6c54b38112730da8e1e5e014d4b22683477",
+  "remoteCI": {
+    "runId": 43973636310,
+    "conclusion": "success",
+    "jobs": 3,
+    "url": "https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43973636310",
+    "evidence": "ucp-phase-ab-ci-2026-11-17.json"
+  }
 }

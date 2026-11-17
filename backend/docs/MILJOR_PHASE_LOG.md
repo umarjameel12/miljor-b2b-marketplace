@@ -1735,3 +1735,7 @@ Qualified source/test SHA:b264cc62cc4df42c46b39fc43891e1b9ae982f50. Canonical Ac
 - Final isolated33321 affected gate14/14 PASS; metadata56/56 and mandatory SQL10/10 with0 skips. Real concurrency/lock-wait/lease/rollback/replay/negative checks and owned cleanup pass. New fixture enum failure corrected narrowly; original expected-red evidence retained.
 - Read-only contemporaneous protected comparison6/6 unchanged; historical drift attribution remains unresolved. No original DB mutations/migrations, provider calls, email dispatch or real funds movement.
 - Report: MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md; machine evidence:evidence/ucp-phase-ab-hardening-2026-11-16.json. Exact corrected source/remote CI is added after qualification. Full master-plan release remains PARTIAL/BLOCKED; no PhaseC/main merge. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — Phase A/B correction exact-source acceptance
+
+Source/test/workflow SHA1e3bc6c54b38112730da8e1e5e014d4b22683477 qualified by canonical run43973636310 SUCCESS,3/3 jobs. Dedicated mandatory owned Flash SQL-clock step PASS on fresh CI schema. Local14/14 groups,56 metadata tests and10 owned SQL scenario groups had0 skips. Evidence: evidence/ucp-phase-ab-ci-2026-11-17.json and evidence/ucp-phase-ab-hardening-2026-11-16.json. Scoped PhaseA/B correction PASS; full master plan PARTIAL/RELEASE BLOCKED. Evidence-only follow-up changes no qualified application/tests/workflows. CAN START NEXT PHASE: NO.
