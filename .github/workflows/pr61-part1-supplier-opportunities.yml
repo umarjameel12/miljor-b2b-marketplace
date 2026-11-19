@@ -1,0 +1,32 @@
+name: PR61 Part 1 Supplier Opportunities Regression
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/services/supplierProcurementOpportunitiesService.js'
+      - 'backend/tests/pr61_part1_supplier_opportunities_service.test.js'
+      - '.github/workflows/pr61-part1-supplier-opportunities.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supplier-opportunities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Syntax validation
+        run: |
+          node --check backend/src/services/supplierProcurementOpportunitiesService.js
+          node --check backend/tests/pr61_part1_supplier_opportunities_service.test.js
+      - name: Supplier ownership, filtering, pagination and read-only regression
+        run: node backend/tests/pr61_part1_supplier_opportunities_service.test.js
