@@ -41,6 +41,7 @@ export const AdminVerificationPage = () => {
   // Modal states
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [selectedDocuments,setSelectedDocuments] = useState([]);
+  const [reviewHistory,setReviewHistory] = useState([]);
   const [modalMode, setModalMode] = useState(null); // 'approve' | 'reject' | null
   const [submitting, setSubmitting] = useState(false);
 
@@ -102,12 +103,17 @@ export const AdminVerificationPage = () => {
     }
   }, [isAuthenticated, isAuthorizedAdmin]);
 
+  const loadReviewHistory=async(supplier)=>{
+    try{const res=await adminApi.getSupplierReviewHistory(supplier.supplier_id);setReviewHistory(res.data?.revisions||[]);}
+    catch{setReviewHistory([]);toast.error('Could not retrieve immutable submission history');}
+  };
   const loadDocuments=async(supplier)=>{
     try{const res=await adminApi.getSupplierDocuments(supplier.supplier_id);setSelectedDocuments(res.data?.documents||[]);}
     catch{setSelectedDocuments([]);toast.error('Could not retrieve supplier evidence');}
   };
   const handleOpenApprove = (supplier) => {
     loadDocuments(supplier);
+    loadReviewHistory(supplier);
     setSelectedSupplier(supplier);
     const plan = supplier.subscription_plan || 'GROWTH';
     setApprovalForm({
@@ -129,6 +135,7 @@ export const AdminVerificationPage = () => {
 
   const handleOpenReject = (supplier, mode = 'reject') => {
     loadDocuments(supplier);
+    loadReviewHistory(supplier);
     setSelectedSupplier(supplier);
     setRejectionReason('');
     setCorrectionFields([]);
@@ -138,6 +145,7 @@ export const AdminVerificationPage = () => {
   const handleCloseModal = () => {
     setSelectedSupplier(null);
     setSelectedDocuments([]);
+    setReviewHistory([]);
     setModalMode(null);
     setRejectionReason('');
     setCorrectionFields([]);
@@ -475,6 +483,34 @@ export const AdminVerificationPage = () => {
             </p>
 
             <form onSubmit={handleSubmitApproval} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Immutable submission & review history</h4>
+                {reviewHistory.length===0 ? <p>No submitted revision history is available.</p> :
+                  reviewHistory.map(revision=><details key={revision.revision} className="border-t border-[var(--border-subtle)] pt-2">
+                    <summary className="cursor-pointer font-semibold">Revision {revision.revision} · {revision.review_action.replaceAll('_',' ')} · {revision.submitted_at?new Date(revision.submitted_at).toLocaleString():'Unknown date'}</summary>
+                    <div className="mt-2 grid gap-1 text-[var(--text-secondary)]">
+                      {Object.entries(revision.snapshot||{}).filter(([key])=>key!=='documents').map(([key,value])=>
+                        <p key={key}><span className="font-medium">{key.replaceAll('_',' ')}:</span> {value===null||value===undefined?'—':String(value)}</p>)}
+                      {(revision.snapshot?.documents||[]).map(doc=><p key={doc.id}>Document: {doc.kind} · v{doc.version} · {doc.filename} · SHA-256 {doc.sha256}</p>)}
+                      {revision.review_reason&&<p>Reviewer note: {revision.review_reason}</p>}
+                    </div>
+                  </details>)}
+              </div>
+
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Immutable submission & review history</h4>
+                {reviewHistory.length===0 ? <p>No submitted revision history is available.</p> :
+                  reviewHistory.map(revision=><details key={revision.revision} className="border-t border-[var(--border-subtle)] pt-2">
+                    <summary className="cursor-pointer font-semibold">Revision {revision.revision} · {revision.review_action.replaceAll('_',' ')} · {revision.submitted_at?new Date(revision.submitted_at).toLocaleString():'Unknown date'}</summary>
+                    <div className="mt-2 grid gap-1 text-[var(--text-secondary)]">
+                      {Object.entries(revision.snapshot||{}).filter(([key])=>key!=='documents').map(([key,value])=>
+                        <p key={key}><span className="font-medium">{key.replaceAll('_',' ')}:</span> {value===null||value===undefined?'—':String(value)}</p>)}
+                      {(revision.snapshot?.documents||[]).map(doc=><p key={doc.id}>Document: {doc.kind} · v{doc.version} · {doc.filename} · SHA-256 {doc.sha256}</p>)}
+                      {revision.review_reason&&<p>Reviewer note: {revision.review_reason}</p>}
+                    </div>
+                  </details>)}
+              </div>
+
               <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
                 <h4 className="font-semibold">Supplier evidence versions</h4>
                 {selectedDocuments.length===0 ? <p>No uploaded documents</p> :
