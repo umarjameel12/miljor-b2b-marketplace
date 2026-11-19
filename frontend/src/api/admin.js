@@ -18,6 +18,11 @@ export const adminApi = {
     return res.data;
   },
 
+  getSupplierReviewHistory: async (supplierId) => {
+    const res=await apiClient.get(`/admin/suppliers/${supplierId}/revisions`);
+    return res.data;
+  },
+
   getSupplierDocuments: async (supplierId) => {
     const res=await apiClient.get(`/admin/suppliers/${supplierId}/documents`);
     return res.data;
