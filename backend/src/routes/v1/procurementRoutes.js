@@ -33,7 +33,7 @@ router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER
 // One supplier-owned opportunities read endpoint; writes remain in canonical quote/group services.
 router.get('/procurement/supplier/opportunities',protect,authorizeStrict('SUPPLIER'),async(req,res)=>{
   try {
-    const data = await supplierOpportunities.list(req.user, { type:req.query.type });
+    const data = await supplierOpportunities.list(req.user, { type:req.query.type, search:req.query.search, page:req.query.page, limit:req.query.limit });
     return res.json({success:true,data});
   } catch(error) {
     return res.status(error.statusCode||500).json({
