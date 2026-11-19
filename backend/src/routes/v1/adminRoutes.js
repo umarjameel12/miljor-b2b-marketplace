@@ -33,6 +33,9 @@ router.get(
   (req, res) => adminController.getPendingSuppliers(req, res)
 );
 
+// Immutable submission snapshots and prior review decisions; verification admins only.
+router.get('/suppliers/:id/revisions',authorizeVerification,(req,res)=>adminController.getSupplierReviewHistory(req,res));
+
 // Restricted evidence review (binary remains private; no buyer-facing URL).
 const supplierEvidence=require('../../services/supplierVerificationDocumentService');
 router.get('/suppliers/:id/documents',authorizeVerification,async(req,res)=>{
