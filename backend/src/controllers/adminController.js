@@ -121,6 +121,56 @@ class AdminController {
     }
   }
 
+
+  // ---------------------------------------------------------------------------
+  // GET /api/v1/admin/suppliers/:id/revisions
+  // Immutable submitted snapshots and decision history for authorized reviewers.
+  // Snapshot fields are allowlisted and bank identifiers are always masked.
+  // ---------------------------------------------------------------------------
+  async getSupplierReviewHistory(req, res) {
+    try {
+      const supplierId = Number(req.params.id);
+      if (!Number.isSafeInteger(supplierId) || supplierId <= 0) {
+        return res.status(400).json({success:false,error:{code:'INVALID_SUPPLIER_ID',message:'Invalid supplier id'}});
+      }
+      const [rows] = await db.query(
+        `SELECT revision, submitted_at, submitted_snapshot, review_action,
+                reviewed_at, review_reason
+         FROM supplier_verification_revisions
+         WHERE supplier_id = ? ORDER BY revision DESC LIMIT 50`,
+        [supplierId]
+      );
+      const allowed = new Set([
+        'business_name','business_type','business_description','contact_person_name',
+        'contact_person_phone','warehouse_address','lahore_service_area','tax_ntn',
+        'food_license_no','food_license_type','bank_name','bank_account_title',
+        'bank_iban_masked','has_bank_details','documents'
+      ]);
+      const revisions = rows.map(row => {
+        let snapshot = row.submitted_snapshot;
+        if (typeof snapshot === 'string') {
+          try { snapshot = JSON.parse(snapshot); } catch { snapshot = {}; }
+        }
+        if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) snapshot = {};
+        const safeSnapshot = {};
+        for (const key of allowed) {
+          if (Object.prototype.hasOwnProperty.call(snapshot, key)) safeSnapshot[key] = snapshot[key];
+        }
+        // Defense in depth: never return raw account identifiers from legacy snapshots.
+        delete safeSnapshot.bank_iban;
+        return {
+          revision: Number(row.revision), submitted_at: row.submitted_at,
+          snapshot: safeSnapshot, review_action: row.review_action || 'PENDING',
+          reviewed_at: row.reviewed_at || null, review_reason: row.review_reason || null
+        };
+      });
+      return res.status(200).json({success:true,data:{supplier_id:supplierId,revisions}});
+    } catch (error) {
+      console.error('Get Supplier Review History Error:', error);
+      return res.status(500).json({success:false,error:{code:'REVIEW_HISTORY_UNAVAILABLE',message:'Could not load supplier review history'}});
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // PUT /api/v1/admin/suppliers/:id/verify
   // Permitted Roles: VERIFICATION_ADMIN, SUPER_ADMIN
