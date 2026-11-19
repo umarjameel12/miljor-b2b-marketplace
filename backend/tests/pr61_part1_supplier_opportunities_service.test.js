@@ -47,6 +47,6 @@ async function run() {
     ['single', 42], ['grouped', 42],
     ['single', 42], ['grouped', 42]
   ]);
-  console.log('PR61 Part 1 supplier opportunities service: 11 assertions PASS');
+  console.log('PR61 Part 1 supplier opportunities service: 16 assertions PASS');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
