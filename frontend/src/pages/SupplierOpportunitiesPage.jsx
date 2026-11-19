@@ -5,10 +5,15 @@ import { useAuth } from '../context/AuthContext';
 import { SupplierGroupDeliveryPanel } from '../components/procurement/SupplierGroupDeliveryPanel';
 
 const filters = ['all','single','grouped'];
+const PAGE_SIZE = 12;
 export const SupplierOpportunitiesPage = () => {
   const { user, token } = useAuth();
   const [type,setType] = useState('all');
+  const [search,setSearch] = useState('');
+  const [query,setQuery] = useState('');
+  const [page,setPage] = useState(1);
   const [items,setItems] = useState([]);
+  const [pagination,setPagination] = useState({page:1,limit:PAGE_SIZE,total:0,pages:0,has_more:false});
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
   const [counts,setCounts] = useState({all:0,single:0,grouped:0});
@@ -16,18 +21,22 @@ export const SupplierOpportunitiesPage = () => {
     if(!token) { setLoading(false); return; }
     setLoading(true); setError('');
     try {
-      const response = await fetch('/api/v1/procurement/supplier/opportunities?type='+encodeURIComponent(type), {
+      const params=new URLSearchParams({type,page:String(page),limit:String(PAGE_SIZE)});
+      if(query)params.set('search',query);
+      const response = await fetch('/api/v1/procurement/supplier/opportunities?'+params.toString(), {
         headers:{Authorization:'Bearer '+token},signal
       });
       const body = await response.json();
       if(!response.ok || !body.success) throw new Error(body.error?.message || 'Unable to load invitations');
       setItems(body.data?.items || []);
       setCounts(body.data?.counts || {all:0,single:0,grouped:0});
+      setPagination(body.data?.pagination || {page:1,limit:PAGE_SIZE,total:0,pages:0,has_more:false});
     } catch(e) {
       if(e.name !== 'AbortError') setError(e.message || 'Unable to load invitations');
     } finally { if(!signal?.aborted) setLoading(false); }
-  },[token,type]);
+  },[token,type,page,query]);
   useEffect(()=>{ const controller=new AbortController();reload(controller.signal);return()=>controller.abort(); },[reload]);
+  function applySearch(e){e.preventDefault();setPage(1);setQuery(search.trim().slice(0,100));}
   return (
     <AppShell>
       <main className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-8">
@@ -44,14 +53,23 @@ export const SupplierOpportunitiesPage = () => {
             {filters.map(f=>(
               <button key={f} type="button" role="tab" aria-selected={type===f}
                 className={'rounded-xl border px-4 py-2 text-sm font-medium '+(type===f?'border-[var(--brand-accent)] text-[var(--text-primary)]':'border-[var(--border-subtle)] text-[var(--text-muted)]')}
-                onClick={()=>setType(f)}>{f==='all'?'All':f==='single'?'Single':'Grouped'} ({counts[f]})</button>
+                onClick={()=>{setType(f);setPage(1);}}>{f==='all'?'All':f==='single'?'Single':'Grouped'} ({counts[f]})</button>
             ))}
           </div>
-          <button type="button" className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-sm"
-            onClick={()=>reload()} disabled={loading}>Refresh opportunities</button>
+          <form onSubmit={applySearch} className="flex flex-col gap-2 sm:flex-row">
+            <label className="sr-only" htmlFor="supplier-opportunity-search">Search opportunities</label>
+            <input id="supplier-opportunity-search" value={search} maxLength={100}
+              onChange={e=>setSearch(e.target.value)} placeholder="Search request code, product family or delivery area"
+              className="min-w-0 flex-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)] px-3 py-2 text-sm"/>
+            <button type="submit" className="rounded-xl border border-[var(--border-subtle)] px-4 py-2 text-sm">Search</button>
+            <button type="button" className="rounded-xl border border-[var(--border-subtle)] px-4 py-2 text-sm"
+              onClick={()=>{setSearch('');setQuery('');setPage(1);}}>Clear</button>
+            <button type="button" className="rounded-xl border border-[var(--border-subtle)] px-4 py-2 text-sm"
+              onClick={()=>reload()} disabled={loading}>Refresh</button>
+          </form>
           {loading && <p role="status">Loading eligible invitations…</p>}
           {error && <div role="alert" className="space-y-2"><p>{error}</p><button type="button" onClick={()=>reload()}>Retry</button></div>}
-          {!loading && !error && items.length===0 && <p className="rounded-2xl border border-[var(--border-subtle)] p-6 text-sm text-[var(--text-muted)]">No active {type==='all'?'':type} invitations right now. New opportunities will appear here when your supplier account is invited.</p>}
+          {!loading && !error && items.length===0 && <p className="rounded-2xl border border-[var(--border-subtle)] p-6 text-sm text-[var(--text-muted)]">No active {type==='all'?'':type} invitations match this search. New eligible opportunities will appear here when your supplier account is invited.</p>}
           {!loading && !error && <div className="grid gap-4 md:grid-cols-2">
             {items.map(row=>(
               <article key={row.key} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-sm">
@@ -78,6 +96,13 @@ export const SupplierOpportunitiesPage = () => {
               </article>
             ))}
           </div>}
+          {!loading && !error && pagination.pages>1 && <nav aria-label="Opportunity pages" className="flex items-center justify-between gap-3">
+            <button type="button" disabled={page<=1} onClick={()=>setPage(value=>Math.max(1,value-1))}
+              className="rounded-xl border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-40">Previous</button>
+            <span className="text-xs text-[var(--text-muted)]">Page {pagination.page} of {pagination.pages} · {pagination.total} opportunities</span>
+            <button type="button" disabled={!pagination.has_more} onClick={()=>setPage(value=>value+1)}
+              className="rounded-xl border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-40">Next</button>
+          </nav>}
         </>}
       </main>
     </AppShell>
