@@ -71,6 +71,15 @@ async function main(){
      assert.equal(own.body.data.items.length,0);
      const denied=await call('/api/v1/procurement/supplier/opportunities?type=all',adminToken);
      assert.equal(denied.status,403);
+     const history=await call('/api/v1/admin/suppliers/'+sid+'/revisions',adminToken);
+     assert.equal(history.status,200,JSON.stringify(history.body));
+     assert.equal(history.body.data.revisions.length,1);
+     assert.equal(history.body.data.revisions[0].revision,1);
+     assert.equal(Object.hasOwn(history.body.data.revisions[0].snapshot,'bank_iban'),false);
+     assert.equal(JSON.stringify(history.body).includes('PK36SCBL0000001123456702'),false);
+     const historyDenied=await call('/api/v1/admin/suppliers/'+sid+'/revisions',supplierToken);
+     assert.equal(historyDenied.status,403);
+
      const invalid=await call('/api/v1/procurement/supplier/opportunities?type=other',supplierToken);
      assert.equal(invalid.status,400);
      const correctionForbidden=await call('/api/v1/supplier/verification/corrections',adminToken,{
