@@ -36,6 +36,21 @@ test('supplier exception and buyer receipt/dispute notify the counterparty trans
   assert.ok(body.indexOf('notificationService.enqueueEvent')<body.indexOf('await connection.commit()'));
  }
 });
+test('dispute creation, supplier shortage and supplier response notify the correct counterparty',()=>{
+ const dispute=read('disputeService.js');
+ const buyerFiled=method(dispute,'async createBuyerDispute(','async createSupplierShortageException(');
+ const shortage=method(dispute,'async createSupplierShortageException(','async submitSupplierResponse(');
+ const response=method(dispute,'async submitSupplierResponse(','async declareSupplierRemediationDispatched(');
+ for(const [body,event,role,field] of [
+  [buyerFiled,'DISPUTE_OPENED','SUPPLIER','order.supplier_id'],
+  [shortage,'DISPUTE_OPENED','BUYER','order.buyer_id'],
+  [response,'DISPUTE_RESPONSE_RECEIVED','BUYER','dispute.buyer_id']
+ ]){
+  assert.match(body,new RegExp("eventType:'"+event+"'"));
+  assert.match(body,new RegExp("userId:Number\\("+field.replaceAll('.','\\.')+"\\),role:'"+role+"'"));
+  assert.ok(body.indexOf('notificationService.enqueueEvent')<body.indexOf('await connection.commit()'));
+ }
+});
 test('Flash hold, verified payment and expiry have recipient-owned transactional events',()=>{
  const hold=method(flash,'async requestHold(','async claimCheckout(');
  const paid=method(flash,'async reconcilePaidOrder(','async listHoldsForBuyer(');
