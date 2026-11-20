@@ -18,6 +18,9 @@ function fixture(){
     const row=state.row;if(!row||row.order_id!==Number(args[1])||row.buyer_id!==Number(args[2])||row.payment_hold_status!=='ACTIVE')return [{affectedRows:0}];
     row.payment_expires_at='2099-01-01 00:15:00';return [{affectedRows:1}];
    }
+   if(q.startsWith('SELECT DATE_FORMAT(payment_expires_at')){
+    return [[{payment_expires_at:'2099-01-01T00:15:00Z'}]];
+   }
    if(q.startsWith('SELECT co.id,co.order_id,co.buyer_id,co.payment_hold_status,o.payment_status')){
     return [state.row&&state.row.is_open===0&&['ACTIVE','PAYMENT_PENDING'].includes(state.row.payment_hold_status)?[{...state.row}]:[]];
    }
