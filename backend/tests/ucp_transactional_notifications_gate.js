@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {recordInAppOnConnection,sanitizePayload} = require('../src/services/ucpTransactionalNotifications');
+const {recordInAppOnConnection,recordReservationEventOnConnection,sanitizePayload} = require('../src/services/ucpTransactionalNotifications');
 (async () => {
   let queries = [];
   const db = {query:async (sql,params) => {
@@ -27,5 +27,27 @@ const {recordInAppOnConnection,sanitizePayload} = require('../src/services/ucpTr
   const route=fs.readFileSync(path.resolve(__dirname,'../src/routes/v1/notificationRoutes.js'),'utf8');
   assert.match(route,/markAsRead\(req\.user\.id, notificationId\)/,'ownership order fixed');
   assert.match(route,/Number\.isSafeInteger\(notificationId\)/,'invalid notification IDs rejected');
-  console.log('PASS: transactional notification writer mock and routes source gate');
+  const projected=[];
+  const seen=new Set();
+  const reservationConn={query:async(sql,params=[])=>{
+    if(sql.includes('SELECT supplier_id FROM pools'))return [[{supplier_id:20}]];
+    if(sql.includes('SELECT buyer_id FROM reservations WHERE id=? AND pool_id=?'))return [[{buyer_id:10}]];
+    if(sql.includes('SELECT id,role FROM users WHERE id=?'))return [[{id:params[0],role:Number(params[0])===10?'BUYER':'SUPPLIER'}]];
+    if(sql.includes('INSERT INTO platform_notifications')){
+      const key=String(params[0])+':'+String(params[3]);
+      const fresh=!seen.has(key);seen.add(key);projected.push(params);
+      return [{affectedRows:fresh?1:0}];
+    }
+    throw Error('Unexpected reservation notification SQL '+sql);
+  }};
+  const reservationEvent={event_id:'EVT-RESERVATION-CREATED-001',event_type:'RESERVATION_CREATED',pool_id:5,reservation_id:7};
+  const first=await recordReservationEventOnConnection(reservationConn,reservationEvent);
+  assert.equal(first.inserted,2,'buyer and supplier each receive the reservation receipt');
+  assert.deepEqual(projected.map(x=>x[0]).sort(),[10,20]);
+  const replay=await recordReservationEventOnConnection(reservationConn,reservationEvent);
+  assert.equal(replay.inserted,0,'same durable event cannot duplicate recipient notices');
+  const ucp=fs.readFileSync(path.resolve(__dirname,'../src/services/reservationEventService.js'),'utf8');
+  assert.match(ucp,/recordReservationEventOnConnection\(conn,eventData\)/,'reservation outbox is projected in the same transaction');
+  console.log('PASS: transactional notification writer, reservation event projection and routes source gates');
+
 })().catch(err=>{console.error(err);process.exitCode=1});
