@@ -128,6 +128,7 @@ class SafepayCheckoutService {
     // orders this is a no-op; B6's separate award hooks remain untouched.
     await require('./flashPoolService').claimCheckout(orderId,actor.id);
     await require('./regularPoolPaymentHoldService').claimCheckout(orderId,actor.id);
+    await require('./collectivePaymentHoldService').claimCheckout(orderId,actor.id);
 
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
@@ -176,11 +177,14 @@ class SafepayCheckoutService {
     // A NEW attempt cannot be created after the original 15-minute hold ends.
     try {
       await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+      await require('./collectivePaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
     } catch (holdError) {
       // If the deadline elapsed between claim and provider call, do not strand
       // the order in PAYMENT_PENDING when no checkout was actually created.
       await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
         .catch(error => console.error('[B4] Could not unwind uninitiated checkout:',error));
+      await require('./collectivePaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[PR61] Could not unwind collective checkout:',error));
       throw holdError;
     }
 
@@ -206,6 +210,8 @@ class SafepayCheckoutService {
         await require('./flashPoolService').releaseCheckoutClaim(orderId,actor.id)
           .catch(()=>{});
         await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+          .catch(()=>{});
+        await require('./collectivePaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
           .catch(()=>{});
         throw providerError;
       }
@@ -248,6 +254,8 @@ class SafepayCheckoutService {
         });
       await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
         .catch(error => console.error('[B4] Regular pool payment claim recovery:', error));
+      await require('./collectivePaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[PR61] Collective payment claim recovery:', error));
       throw trackerError;
     }
 
