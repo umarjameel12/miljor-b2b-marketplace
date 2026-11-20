@@ -151,8 +151,45 @@ async function run() {
     assert.equal(Boolean(markedByB), false, 'Buyer B must not be able to mark Buyer A notification as read');
     console.log('[PASS] Cross-user notification isolation & mark-as-read authorization verified');
 
+    // 5. Email OTP supersession (REGISTRATION_OTP + EMAIL_VERIFICATION_OTP, QUEUED/FAILED, next_attempt_at = NULL)
+    const emailService = require('../src/services/emailService');
+    const otpEmail = `p1-ba-${tag}@example.invalid`;
+    await db.query(
+      `INSERT INTO transactional_email_outbox (recipient_email, recipient_user_id, template_name, subject, payload_json, status, next_attempt_at, idempotency_key)
+       VALUES
+       (?, ?, 'REGISTRATION_OTP', 'Old reg OTP', '{}', 'QUEUED', NOW(), ?),
+       (?, ?, 'EMAIL_VERIFICATION_OTP', 'Old verif OTP', '{}', 'FAILED', DATE_ADD(NOW(), INTERVAL 5 MINUTE), ?),
+       (?, ?, 'PASSWORD_RESET_OTP', 'Unrelated reset OTP', '{}', 'QUEUED', NOW(), ?)`,
+      [otpEmail, bA.insertId, `otp-reg-${tag}`, otpEmail, bA.insertId, `otp-ver-${tag}`, otpEmail, bA.insertId, `otp-rst-${tag}`]
+    );
+    await emailService.createAndSendOtp({
+      userId: bA.insertId,
+      email: otpEmail,
+      recipientName: 'Prompt1 Buyer A',
+      purpose: 'REGISTRATION_VERIFY',
+      emailContext: 'verification'
+    });
+    const [outboxRows] = await db.query(
+      `SELECT template_name, status, last_error, next_attempt_at FROM transactional_email_outbox WHERE recipient_user_id = ? AND idempotency_key IN (?, ?, ?) ORDER BY id ASC`,
+      [bA.insertId, `otp-reg-${tag}`, `otp-ver-${tag}`, `otp-rst-${tag}`]
+    );
+    assert.equal(outboxRows.length, 3);
+    assert.equal(outboxRows[0].status, 'FAILED');
+    assert.equal(outboxRows[0].last_error, 'SUPERSEDED_BY_NEWER_REQUEST');
+    assert.equal(outboxRows[0].next_attempt_at, null);
+    assert.equal(outboxRows[1].status, 'FAILED');
+    assert.equal(outboxRows[1].last_error, 'SUPERSEDED_BY_NEWER_REQUEST');
+    assert.equal(outboxRows[1].next_attempt_at, null);
+    assert.equal(outboxRows[2].status, 'QUEUED', 'PASSWORD_RESET_OTP must not be superseded by verification OTP');
+    console.log('[PASS] Email OTP supersession covers REGISTRATION_OTP + EMAIL_VERIFICATION_OTP in QUEUED/FAILED with next_attempt_at=NULL');
+
     console.log('ALL PROMPT 1 HARDENING CHECKS PASSED');
   } finally {
+    if (createdUsers.length) {
+      const ph = createdUsers.map(() => '?').join(',');
+      await db.query(`DELETE FROM transactional_email_outbox WHERE recipient_user_id IN (${ph})`, createdUsers).catch(() => {});
+      await db.query(`DELETE FROM email_verifications WHERE user_id IN (${ph})`, createdUsers).catch(() => {});
+    }
     if (createdEventIds.length) {
       await db.query(`DELETE FROM payment_webhook_events WHERE event_id IN (${createdEventIds.map(() => '?').join(',')})`, createdEventIds).catch(() => {});
     }

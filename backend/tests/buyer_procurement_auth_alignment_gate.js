@@ -29,8 +29,8 @@ const checks = [
     const otp = auth.indexOf("await emailService.createAndSendOtp({\n            userId");
     assert.ok(committed >= 0 && otp > committed);
   }],
-  ['OTP never automatically verifies suppliers', () => assert.match(auth, /WHEN role = 'BUYER' AND verification_status NOT IN \('BLOCKED', 'VERIFIED'\)/)],
-  ['Blocked accounts cannot receive buyer verification', () => assert.match(auth, /WHEN role = 'BUYER' AND verification_status <> 'BLOCKED'/)],
+  ['OTP never automatically verifies suppliers', () => assert.match(auth, /user\.role === 'BUYER'[\s\S]*?WHERE id = \? AND role = 'BUYER'/)],
+  ['Blocked accounts cannot receive buyer verification', () => assert.match(auth, /user\.verification_status !== 'BLOCKED'[\s\S]*?AND verification_status <> 'BLOCKED'/)],
   ['Buyer request accepts verified-email status', () => assert.match(request, /\['VERIFIED', 'EMAIL_VERIFIED'\]\.includes\(rows\[0\]\.verification_status\)/)],
   ['Buyer request requires is_verified', () => assert.match(request, /Number\(rows\[0\]\.is_verified\) !== 1/)],
   ['Buyer request rejects suspended buyers', () => assert.match(request, /buyer_trust_status === 'SUSPENDED'/)],

@@ -483,3 +483,34 @@ Evidence: `evidence/ucp-paid-return-ci-review-2026-11-17.json`. No database conn
   - `npm --prefix frontend run build`: **PASS** (`2,243` modules, `7.75s`, exit `0`).
 - **Protected DB (`miljor_db`, `3306`, read-only):** Checksums unchanged (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
 - **Prompt 1 Status:** **PASS** (all Prompt 1 engineering & regression criteria satisfied; Prompts 2–4 & external provider/merge blockers remain separate). CAN START NEXT PHASE: NO.
+
+### 2026-11-20 — Prompt 2/4: Main + Smart Hub Integration, Conflict Resolution & Full Regression
+
+- **Baseline & Integrated Targets:**
+  - **Starting HEAD:** `9fe406493a36d64e2c33e1f787ae46a6fb557255` (`plan/ucp-resilience-notification-coverage`).
+  - **Integrated `origin/main`:** `9c0a81979b852198c04c00de42ba763a1aa09c2f` (merge commit `fdec22941cbc366ca7ccd8730a1038c49bedb264`). Resolved `backend/src/services/emailService.js` OTP supersession conflict by combining `main`'s `template_name IN (?)` (`['REGISTRATION_OTP', 'EMAIL_VERIFICATION_OTP']` vs `['PASSWORD_RESET_OTP']`) with PR #54's `next_attempt_at = NULL` and `status IN ('QUEUED','FAILED')`.
+  - **Integrated `origin/feature/smart-procurement-hub-unified-entry`:** `fd11489bcc7981b103cd216ab5931464cfece346` (merge commit `707103b76386a221a5a298a33b69417edaa4a530` + conflict resolution `78b7290fb1d2d519463b07220d6c2b29d293d2a7`). Preserved `main`'s `LandingPage.jsx` `miljor-public-landing` design + carousel + `poolsError` state, `App.jsx` unified `/procurement` & `/demand-requests` redirect, and `MILJOR_PHASE_LOG.md` chronological history.
+- **Targeted Regression Fixes:**
+  - `backend/tests/ucp_prompt1_hardening_gate.js`: Added OTP supersession test across `REGISTRATION_OTP` (`QUEUED`) and `EMAIL_VERIFICATION_OTP` (`FAILED`) verifying `next_attempt_at = NULL` and `PASSWORD_RESET_OTP` non-interference.
+  - `backend/tests/buyer_otp_mysql_acceptance.test.js`: Added missing inline DDL columns/tables (`transactional_email_outbox.next_attempt_at`, `users.buyer_trust_status`, `platform_notifications`, `procurement_notifications`) matching PR #54's schema while preserving the `TEST_DB_NAME=miljor_otp_acceptance_test` guard.
+  - `backend/tests/smart_hub_unified_legacy_requests.test.js`: Fixed MySQL environment determinism on isolated disposable ports (`isIsolatedPort` avoids loading external `.env` `DB_PASSWORD` when PowerShell `$env:DB_PASSWORD=''` unsets the variable, asserts `SELECT DATABASE() AS db, @@port AS port`, and checks `miljor_db`/`miljor_sandbox_db` via `information_schema.SCHEMATA` when present on the connected instance).
+  - `backend/tests/buyer_procurement_auth_alignment_gate.js`: Aligned 2 SQL-regex checks with PR #54's stricter `authController.verifyEmail` guard (`user.role === 'BUYER'`, `verification_status <> 'BLOCKED'`, `buyer_trust_status <> 'SUSPENDED'`).
+- **Migrations & Compatibility (`miljor_test_db:33321`):**
+  - `node database/migrationManifest.js`: **PASS** (`71` migrations `001`–`106`, `0` duplicate numbers, `096`–`101` immutable, `095` + `102`–`106` preserved).
+  - `node database/runMigrations.js` (idempotent replay): **PASS** (`applied: 0`).
+  - `node database/readOnlyMigrationAudit.js --test-only`: **PASS** (`VERIFIED_HISTORY`, `applied: 71`, `planned: 71`).
+- **Full Regression & Browser Verification (`miljor_test_db` / `miljor_otp_acceptance_test` on `127.0.0.1:33321`):**
+  - `node tests/ucp_prompt1_hardening_gate.js`: **PASS** (`5/5` sections, exit `0`).
+  - `node --test tests/buyer_otp_mysql_acceptance.test.js` (`miljor_otp_acceptance_test`): **PASS** (`1/1`, `0` failed, `0` skipped, exit `0`).
+  - `node --test tests/email_outbox_queue_gate.js tests/email_otp_template_branding.test.js tests/smart_hub_unified_legacy_requests.test.js`: **PASS** (`38/38` = `31 + 6 + 1`, `0` failed, `0` skipped, exit `0`).
+  - `node tests/buyer_procurement_auth_alignment_gate.js`: **PASS** (`18/18`, exit `0`).
+  - `node tests/ucp_phase_c_delivery_gate.js`: **PASS** (exit `0`).
+  - `node tests/ucp_phase1_replacement_gate.js`: **PASS** (exit `0`).
+  - `node tests/ucp_final_affected_gate.js`: **PASS** (`14/14` groups, exit `0`).
+  - `node tests/ucp_phase2_finance_integrity_gate.js`: **PASS** (exit `0`).
+  - `node tests/ucp_phase2_email_gate.js`: **PASS** (exit `0`).
+  - `node tests/ucp_phase2_full_ui_browser_gate.js` (Chromium `35162`/`35163`): **PASS** (exit `0`).
+  - `npm --prefix frontend run build`: **PASS** (`2,243` modules, `1.59s`, exit `0`).
+- **Provider Capability & External Blockers:**
+  - Mounted callback routes verified: `POST /api/v1/payments/webhook/safepay` (`paymentRoutes.js:17`) and `POST /api/v1/webhooks/safepay` (`server.js:200`) with `req.rawBody` HMAC-SHA512 + `SAFEPAY_WEBHOOK_SECRET`. Direct provider-signed webhook delivery and account-specific sandbox refund capability remain **UNVERIFIED / BLOCKED** pending authorized staging HTTPS endpoint + Safepay dashboard registration and sandbox dashboard refund verification.
+  - Protected `miljor_db` (`3306`) checksums unchanged (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`). PR #54 remains open/draft/unmerged (`mergeable` against `main` `9c0a8197` resolved in branch). CAN START NEXT PHASE: NO.
