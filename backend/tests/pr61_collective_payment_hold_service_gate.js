@@ -51,6 +51,10 @@ function fixture(){
    if(q.startsWith('SELECT co.id,co.order_id,co.payment_hold_status')){
     return [state.row?[{...state.row}]:[]];
    }
+   if(q.startsWith('SELECT id,payment_hold_status,payment_expires_at')){
+    return [state.row?[{id:state.row.id,payment_hold_status:state.row.payment_hold_status,
+      payment_expires_at:state.row.payment_expires_at,is_open:state.row.is_open}]:[]];
+   }
    if(q.startsWith('SELECT id,payment_hold_status FROM procurement_collective_buyer_orders')){
     return [state.row?[{id:state.row.id,payment_hold_status:state.row.payment_hold_status}]:[]];
    }
@@ -110,12 +114,25 @@ async function main(){
   assert.equal(g.state.row.payment_hold_status,'RECONCILIATION_REQUIRED');
   assert.equal(g.state.allocations[0].status,'PENDING');
  });
+ await check('signed provider failure reopens an unexpired lease or releases expired stock',async()=>{
+  const f=fixture();f.state.row.payment_hold_status='PAYMENT_PENDING';
+  const open=await f.service.markFailed(f.conn,91);
+  assert.equal(open.status,'ACTIVE');assert.equal(f.state.row.payment_hold_status,'ACTIVE');
+  const expired=fixture();expired.state.row.payment_hold_status='RECONCILIATION_REQUIRED';
+  expired.state.row.is_open=0;expired.state.row.payment_expires_at='2000-01-01 00:00:00';
+  const released=await expired.service.markFailed(expired.conn,91);
+  assert.equal(released.status,'RELEASED');assert.equal(expired.state.allocations[0].status,'RELEASED');
+  const uncertain=fixture();uncertain.state.row.payment_hold_status='RECONCILIATION_REQUIRED';
+  uncertain.state.attempts=[{order_id:91,status:'INITIATED'}];
+  const pending=await uncertain.service.markFailed(uncertain.conn,91);
+  assert.equal(pending.status,'RECONCILIATION_REQUIRED');
+ });
  await check('authoritative PAID transition commits the hold and refuses released inventory',async()=>{
   const f=fixture();await f.service.markPaid(f.conn,91);
   assert.equal(f.state.row.payment_hold_status,'COMMITTED');
   f.state.row.payment_hold_status='RELEASED';
   await assert.rejects(f.service.markPaid(f.conn,91),e=>e.code==='COLLECTIVE_STOCK_HOLD_RELEASED');
  });
- console.log('PR61 COLLECTIVE PAYMENT HOLD SERVICE: '+tests.length+'/6 PASS');
+ console.log('PR61 COLLECTIVE PAYMENT HOLD SERVICE: '+tests.length+'/7 PASS');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
