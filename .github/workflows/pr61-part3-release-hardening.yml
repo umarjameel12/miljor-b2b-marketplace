@@ -11,6 +11,11 @@ on:
       - 'backend/src/services/flashPoolService.js'
       - 'backend/src/services/collectivePaymentHoldService.js'
       - 'backend/tests/pr61_collective_payment_hold_service_gate.js'
+      - 'backend/src/services/reservationEventService.js'
+      - 'backend/src/services/ucpTransactionalNotifications.js'
+      - 'backend/src/services/ucpNotificationEventCatalog.js'
+      - 'backend/tests/ucp_transactional_notifications_gate.js'
+      - 'backend/tests/ucp_notification_catalog_gate.js'
       - 'backend/tests/pr61_domain_notification_producer_gate.test.js'
       - 'backend/tests/pr61_part3_release_gate.test.js'
       - 'backend/tests/p0_safepay_signed_http_acceptance.js'
@@ -46,6 +51,11 @@ jobs:
           node --check backend/src/services/flashPoolService.js
           node --check backend/src/services/collectivePaymentHoldService.js
           node --check backend/tests/pr61_collective_payment_hold_service_gate.js
+          node --check backend/src/services/reservationEventService.js
+          node --check backend/src/services/ucpTransactionalNotifications.js
+          node --check backend/src/services/ucpNotificationEventCatalog.js
+          node --check backend/tests/ucp_transactional_notifications_gate.js
+          node --check backend/tests/ucp_notification_catalog_gate.js
           node --check backend/tests/pr61_domain_notification_producer_gate.test.js
           node --check backend/tests/pr61_part3_release_gate.test.js
           node --check backend/tests/p0_safepay_signed_http_acceptance.js
@@ -115,5 +125,7 @@ jobs:
           node --test tests/pr61_domain_notification_producer_gate.test.js
           node tests/demo_fulfillment_discrepancy_service_gate.js
           node tests/pr61_collective_payment_hold_service_gate.js
+          node tests/ucp_notification_catalog_gate.js
+          node tests/ucp_transactional_notifications_gate.js
       - name: Final canonical migration journal integrity (read only)
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
