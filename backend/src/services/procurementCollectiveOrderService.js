@@ -201,6 +201,8 @@ class ProcurementCollectiveOrderService {
        VALUES (?,'ORDER_DIRECT',?,?,?,'PENDING')`,
        [listingId,orderId,amount,sample.unit]);
    }
+   // Bound each buyer's pending stock allocation to a 15-minute payment lease.
+   await require('./collectivePaymentHoldService').createForOrder(conn,{orderId,buyerId:buyer});
    await notify.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'PAYMENT_PENDING',
      eventKey:'collective:'+gid+':order:'+orderId+':payment',entityId:orderId});
    await conn.commit();
@@ -218,8 +220,11 @@ class ProcurementCollectiveOrderService {
  // transaction. Never accepts a caller-supplied PAID claim.
  async reconcilePaidOrder(conn,orderId){
   const oid=id(orderId);
-  const [records]=await conn.query('SELECT group_id FROM procurement_collective_buyer_orders WHERE order_id=?',[oid]);
+  const [records]=await conn.query('SELECT group_id,payment_hold_status FROM procurement_collective_buyer_orders WHERE order_id=? FOR UPDATE',[oid]);
   if(!records.length)return {handled:false};
+  if(records[0].payment_hold_status==='RELEASED')
+    throw fail('COLLECTIVE_STOCK_HOLD_RELEASED','Paid callback cannot commit a released collective stock hold',409);
+  await require('./collectivePaymentHoldService').markPaid(conn,oid);
   const gid=Number(records[0].group_id);
   const [groups]=await conn.query('SELECT id,status FROM procurement_collective_groups WHERE id=?',[gid]);
   if(!groups.length||groups[0].status!=='QUALIFIED')
