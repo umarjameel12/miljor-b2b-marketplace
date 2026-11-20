@@ -6,6 +6,7 @@ const db=require('../config/db');
 const exact=require('./exactDecimal');
 const procurementMatchingService=require('./procurementMatchingService');
 const {buildCollectiveBidPreview}=require('./procurementCollectiveBidPolicy');
+const notificationService=require('./notificationService');
 const err=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=v=>{if(v==null||typeof v==='boolean'||!/^[1-9]\d*$/.test(String(v))||
   !Number.isSafeInteger(Number(v)))throw err('INVALID_ID','Positive identifier required.');return Number(v)};
@@ -103,6 +104,8 @@ class ProcurementCollectiveBidService {
    await conn.query("INSERT INTO procurement_collective_supplier_invitations (group_id,supplier_id,status) VALUES (?,?,'INVITED') ON DUPLICATE KEY UPDATE id=id",[gid,supplier]);
    const [rows]=await conn.query('SELECT id,group_id,supplier_id,status FROM procurement_collective_supplier_invitations WHERE group_id=? AND supplier_id=?',[gid,supplier]);
    if(rows[0].status!=='INVITED')throw err('INVITATION_REVOKED','Supplier invitation is not active.',409);
+   await notificationService.enqueueEvent(conn,{userId:supplier,role:'SUPPLIER',eventType:'GROUP_INVITED',
+    eventKey:'collective:group:'+gid+':invitation:'+rows[0].id,entityId:gid});
    await conn.commit();return rows[0];
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
@@ -208,6 +211,14 @@ class ProcurementCollectiveBidService {
     await conn.query("INSERT INTO procurement_collective_bid_lines(bid_version_id,request_item_id,supplier_listing_id,supplier_sku_id,product_spec_id,aggregate_quantity,min_aggregate_quantity,purchasing_unit,unit_price,subtotal,physical_snapshot) VALUES (?,?,?,?,?,?,?,?,?,?,?)",[saved.insertId,l.request_item_id,l.supplier_listing_id,l.supplier_sku_id,l.product_spec_id,l.aggregate_quantity,l.min_aggregate_quantity,l.purchasing_unit,l.unit_price,l.subtotal,JSON.stringify(l.physical_snapshot)]);
    }
    await conn.query('UPDATE procurement_collective_bids SET current_version=? WHERE id=?',[version,bid.id]);
+   // Each joined buyer must explicitly review and consent to this exact bid version.
+   // Notifications are inserted on the same transaction and are recipient-owned.
+   const buyerIds=[...new Set(demand.participants
+    .filter(p=>p.status==='JOINED'&&p.consent_confirmed).map(p=>Number(p.buyer_id)))];
+   for(const buyerId of buyerIds){
+    await notificationService.enqueueEvent(conn,{userId:buyerId,role:'BUYER',eventType:'CONSENT_REQUIRED',
+     eventKey:'collective:group:'+gid+':bid:'+bid.id+':version:'+version+':buyer:'+buyerId,entityId:gid});
+   }
    await conn.commit();return {bid:snapshot,is_replay:false};
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw err('BID_CONFLICT','Concurrent supplier bid conflict.',409);throw e}finally{conn.release()}
  }
