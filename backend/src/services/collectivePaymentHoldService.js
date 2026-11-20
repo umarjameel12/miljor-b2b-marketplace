@@ -134,6 +134,9 @@ class CollectivePaymentHoldService{
    await conn.query(`UPDATE procurement_collective_buyer_orders
     SET payment_hold_status='ACTIVE',checkout_started_at=NULL
     WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING','RECONCILIATION_REQUIRED')`,[row.id]);
+   const [owners]=await conn.query('SELECT buyer_id FROM procurement_collective_buyer_orders WHERE order_id=?',[orderId]);
+   if(owners[0])await notificationService.enqueueEvent(conn,{userId:Number(owners[0].buyer_id),role:'BUYER',eventType:'PAYMENT_FAILED',
+    eventKey:'collective-order:'+orderId+':provider-payment-failed',entityId:Number(orderId)});
    return {handled:true,status:'ACTIVE'};
   }
   await this._release(conn,{...row,order_id:orderId},'PROVIDER_CONFIRMED_PAYMENT_FAILURE_AFTER_EXPIRY');
