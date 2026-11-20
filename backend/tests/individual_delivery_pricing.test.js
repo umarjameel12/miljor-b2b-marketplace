@@ -44,7 +44,7 @@ function fixture(){
    assert.equal((sql.match(/\?/g)||[]).length,args.length,'SQL placeholder count');
    if(sql.startsWith('SELECT UTC_TIMESTAMP'))return [[{quote_now:state.clock}]];
    if(sql.includes('expires_at > UTC_TIMESTAMP'))return [[{is_live:state.live===false?0:1}]];
-   if(sql.startsWith('SELECT')&&sql.includes('FROM users'))return [[{id:7}]];
+   if(sql.startsWith('SELECT')&&sql.includes('FROM users'))return [[Number(args[0])===11?{id:11,role:'SUPPLIER'}:{id:Number(args[0])||7,role:'BUYER'}]];
    if(sql.startsWith('SELECT')&&sql.includes('FROM buyer_delivery_addresses')){
     const owned=sql.includes('WHERE id = ?')?Number(args[0])===state.address.id&&Number(args[1])===state.address.user_id:Number(args[0])===state.address.user_id;
     return [owned?[state.address]:[]];
@@ -77,6 +77,7 @@ function fixture(){
     }
     quote.status='EXPIRED';return [{affectedRows:1}];
    }
+   if(sql.includes('INSERT INTO procurement_notifications')||sql.includes('INSERT INTO platform_notifications'))return [{insertId:1,affectedRows:1}];
    throw Error('Unexpected SQL: '+sql);
   }};
  current={state,connection};return current;
