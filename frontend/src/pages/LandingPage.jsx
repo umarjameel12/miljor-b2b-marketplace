@@ -265,7 +265,6 @@ export const LandingPage = () => {
               </Link>
             )}
           </div>
-<<<<<<< HEAD
           <div className="mb-3 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -320,11 +319,6 @@ export const LandingPage = () => {
               <Link to="/register" className="landing-gradient-cta mt-5 inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Join MilJor <ArrowRight className="ml-2" size={16}/></Link>
             </div>
           )}
-=======
-          {loadingPools ? <div role="status" className="rounded-2xl border p-9 text-sm" style={panel}>Loading current pools…</div>
-            : featuredPools.length ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{featuredPools.map((pool) => <PoolCard key={pool.id} pool={pool} />)}</div>
-            : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-7" style={panel}><div><h3 className="font-semibold">No active pools to show right now</h3><p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Check the full pool board or request a quote for your business.</p></div><Link to="/procurement" className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold" style={buttonGold}>Request Quote <ArrowRight size={15} /></Link></div>}
->>>>>>> origin/feature/smart-procurement-hub-unified-entry
         </section>
 
         <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -356,14 +350,9 @@ export const LandingPage = () => {
       </main>
 
       <footer className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-<<<<<<< HEAD
         <div className="mx-auto max-w-7xl px-5 py-6 text-center text-xs sm:px-8" style={{ color: 'var(--text-secondary)' }}>
           © {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.
-=======
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-xs sm:px-8 lg:px-10">
-          <span style={{ color: 'var(--text-secondary)' }}>© {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.</span>
-          <div className="flex flex-wrap gap-5"><Link to="/pools">Pools</Link><Link to="/procurement">Smart Procurement Hub</Link><Link to="/login">Sign In</Link></div>
->>>>>>> origin/feature/smart-procurement-hub-unified-entry
+          <div className="flex flex-wrap justify-center gap-5 mt-2"><Link to="/pools">Pools</Link><Link to="/procurement">Smart Procurement Hub</Link><Link to="/login">Sign In</Link></div>
         </div>
       </footer>
     </div>

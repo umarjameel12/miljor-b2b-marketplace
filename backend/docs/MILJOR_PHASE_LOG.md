@@ -1902,7 +1902,6 @@ Owner confirmed initial delivery is Lahore only, directed use of the existing we
 
 Verification: documentation/source consistency script PASS (25/25 seeded family names present, Lahore-only and no-implementation instruction present); git diff --check PASS. Source baseline 9f06d256b622dd6fea14528edef74daa560962d1. Documentation only; no application build/test rerun, database connection/mutation, migration execution, provider transaction, environment change, PR54 action or original frontend integration performed. Historical protected-DB and CI results are not claimed as fresh checks. Qualified tax review and implementation deferred for commercial-launch preparation; PR53 stays unmerged. Applied using-superpowers instruction-selection workflow; no new feature planning needed. CAN START NEXT PHASE: NO.
 
-<<<<<<< HEAD
 
 ### 2026-11-17 — Approved UCP integration and actual inbox proof
 
@@ -1961,7 +1960,7 @@ Evidence: `evidence/ucp-paid-return-ci-review-2026-11-17.json`. No database conn
   - `ucp_phase2_finance_integrity_gate.js`: **PASS**; `ucp_phase2_email_gate.js`: **PASS**; `email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped); `npm --prefix frontend run build`: **PASS** (`2,243` modules, `7.75s`).
 - **Protected DB (`miljor_db`, `3306`):** Unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
 - **RESULT:** **Prompt 1 COMPLETE (PASS)**; Prompts 2–4 & external provider/merge blockers remain separate. **CAN START NEXT PHASE: NO.**
-=======
+
 ## 2026-11-17 - Demo notification delivery and browser closure
 
 Completed the previously partial notification rehearsal on baseline7f1baee. Existing dispatcher projected27 original demo events (buyers724/725 and supplier726); correct-recipient counts22/2/3, unread21/2/3 after buyer mark-read. Seven labelled SQL/service/real-Chromium checks PASS, final exit0, including duplicate prevention, cross-buyer read rejection, authenticated API isolation, badge/content, mark-read/deep-link and protected counts unchanged (miljor_db0orders/0payments; miljor_sandbox_db0/0). Actual email delivery NOT performed;12 email rows QUEUED. Temporary canonical test sessions revoked, credentials unchanged.
@@ -1969,4 +1968,3 @@ Completed the previously partial notification rehearsal on baseline7f1baee. Exis
 Initial operational failures are preserved: health response assertion corrected to actual environment field; missing trusted frontend origin caused12 queue errors and was corrected process-only, honoring five-minute retry; unauthenticated harness API request401 corrected to real frontend authenticated client. No application source change or gate bypass. Local ignored helpers `artifacts/pr53-demo-notifications.cjs` and `artifacts/demo-notification-worker.cjs` pass node --check. Bounded scoped worker left running PID16588/session9443 for60minutes with mock email; no sender or payment job. Frontend3100/backend5517 retained; PR54/original frontend untouched. Detailed commands/results/artifact paths and recovery instructions saved in existing demo guide.
 
 CI connector independently observed11/11 PR-triggered workflows SUCCESS at7f1baee; no claim to freshly verify14/16 through its filtered response. Applied using-superpowers, systematic-debugging and verification-before-completion. Documentation-only closure; no full application/build rerun necessary. Tax review/market launch/main merge/local integration deferred. CAN START NEXT PHASE: NO.
->>>>>>> origin/feature/smart-procurement-hub-unified-entry
