@@ -392,3 +392,12 @@ CI connector independently observed11/11 PR-triggered workflows SUCCESS at7f1bae
 - **Chromium Synthetic Paid Browser Acceptance:** `smart_hub_paid_browser_journey.js` (+ `extra_fee` + `partial_review`) **PASS** (exit 0) on `miljor_test_db` (synthetic signed sandbox callback only; genuine live Safepay I/O NOT claimed). `smart_hub_paid_browser_provider_readiness.test.js` + `smart_hub_paid_browser_safety.test.js`: **12/12 PASS**.
 - **Regression & Frontend:** `b6_release_gate.js` **23/23 PASS**; `test:hardening`, `test:buyer:source` (18/18), `test:p0:commission:source`, `test:ucp`, `test:ucp:reconciliation` (14/14) **PASS**; `master_regression_runner.js` blocked at setup line 171 (`ER_ROW_IS_REFERENCED_2` on `buyer_delivery_addresses`) and not run destructively on `miljor_test_db`. Frontend `oxlint` **0 errors** (160 warnings), `vite build` **PASS (1.94s)**, `parse_deadline.test.js` **14/14 PASS**, `design_system_tokens.test.js` **FAIL (pre-existing `origin/main` landing copy mismatch)**.
 - **Protected DBs:** `miljor_db` (`orders: 0, payments: 0`), `miljor_sandbox_db` (`orders: 0, payments: 0`). `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `B6_TAX_POLICY_APPROVED=false`, PR #53 stays `DRAFT`. `CAN START NEXT PHASE: NO`.
+
+## 2026-11-20 - PR #53 Prompt 4 of 4: Final Closure Audit & Release Readiness
+
+- **Prior Head `9ad1c8f` CI & Mergeability:** **14/14** GitHub Actions workflows `completed / success`; `mergeable: True`, `mergeable_state: clean` (`draft: True`).
+- **Prompt 4 Fixes:**
+  1. `frontend/tests/design_system_tokens.test.js`: aligned landing copy/tagline assertions with `origin/main` (`Buy Better` + `Together`, `Mil Kar Khareedo, Behtar Pao`, `For buyers and suppliers`) — **10/10 PASS**, `parse_deadline.test.js` **14/14 PASS**, `oxlint` **0 errors**, `vite build` **PASS (3.92s)**.
+  2. `backend/tests/master_regression_runner.js`: added FK-safe PR #53 cleanup order + populated-DB safety guard (`ALLOW_DESTRUCTIVE_TEST_DB_WIPE=1` required on disposable CI DBs), preserving `miljor_test_db` retained Orders `231`/`234`.
+- **Additional Suites Run:** `test:canonical:preflight` **PASS**, `collective_commitment_*` **14/14 PASS**, `procurement_delivery_binding_*` **PASS**, `delivery_evidence/recovery/pricing` **26/26 PASS**, `line_receipt_*` + `notification_events_verification` **32/32 PASS**.
+- **External Approvals Pending (Unchanged):** `B6_TAX_POLICY_APPROVED=false`, `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, live SMTP, PR #53 owner review/merge. `CAN START NEXT PHASE: NO`.

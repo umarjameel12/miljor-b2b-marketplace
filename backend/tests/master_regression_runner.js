@@ -166,6 +166,53 @@ async function runMasterRegression() {
 
   // Ensure test baseline is clean and regular pools maintain active future expiry across calendar dates
   const setupConn = await mysql.createConnection({ host, user, password, database: 'miljor_test_db' });
+  const [[{ existingOrders }]] = await setupConn.query('SELECT COUNT(*) AS existingOrders FROM orders');
+  const [[{ existingRequests }]] = await setupConn.query(
+    "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'miljor_test_db' AND TABLE_NAME = 'procurement_requests') THEN (SELECT COUNT(*) FROM procurement_requests) ELSE 0 END AS existingRequests"
+  );
+  if ((Number(existingOrders) > 0 || Number(existingRequests) > 0) && process.env.ALLOW_DESTRUCTIVE_TEST_DB_WIPE !== '1') {
+    await setupConn.end();
+    throw new Error(
+      `[SAFETY GUARD] Refusing destructive wipe of populated miljor_test_db (orders=${existingOrders}, procurement_requests=${existingRequests}). Set ALLOW_DESTRUCTIVE_TEST_DB_WIPE=1 ONLY on a disposable CI database.`
+    );
+  }
+
+  // Delete PR #53 child tables in FK-safe leaf-to-parent order before shared legacy tables (never disable FOREIGN_KEY_CHECKS)
+  const pr53LeafToParent = [
+    'procurement_financial_reviews',
+    'procurement_line_receipts',
+    'procurement_delivery_attempt_payments',
+    'procurement_delivery_attempts',
+    'procurement_delivery_run_stops',
+    'procurement_delivery_runs',
+    'procurement_order_delivery_choices',
+    'procurement_delivery_options',
+    'procurement_award_items',
+    'procurement_awards',
+    'procurement_collective_bid_consents',
+    'procurement_collective_bids',
+    'procurement_collective_commitments',
+    'procurement_collective_participants',
+    'procurement_quote_counteroffers',
+    'procurement_quote_negotiations',
+    'procurement_quote_items',
+    'procurement_quotes',
+    'procurement_supplier_invitations',
+    'procurement_recurring_cycles',
+    'procurement_recurring_schedules',
+    'procurement_request_items',
+    'procurement_requests'
+  ];
+  const [existingTables] = await setupConn.query(
+    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'miljor_test_db'"
+  );
+  const tableSet = new Set(existingTables.map((r) => r.TABLE_NAME));
+  for (const tbl of pr53LeafToParent) {
+    if (tableSet.has(tbl)) {
+      await setupConn.query(`DELETE FROM \`${tbl}\``);
+    }
+  }
+
   await setupConn.query('DELETE FROM pool_delivery_clusters');
   await setupConn.query('DELETE FROM delivery_quotes');
   await setupConn.query('DELETE FROM buyer_delivery_addresses');
