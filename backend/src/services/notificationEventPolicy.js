@@ -56,6 +56,7 @@ const definitions={
   REFUND_INITIATED:['Refund initiated','رقم کی واپسی شروع ہو گئی','order'],
   REFUND_COMPLETED:['Refund completed','رقم کی واپسی مکمل ہو گئی','order'],
   DISPUTE_OPENED:['Dispute opened','تنازع درج ہو گیا','order'],
+  DISPUTE_RESPONSE_RECEIVED:['Supplier responded to your dispute','سپلائر نے آپ کے تنازع کا جواب دیا','order'],
   DISPUTE_RESOLVED:['Dispute resolved','تنازع حل ہو گیا','order'],
   SETTLEMENT_PENDING:['Settlement pending','سپلائر کی ادائیگی زیر التوا ہے','order'],
   SETTLEMENT_COMPLETED:['Settlement completed','سپلائر کی ادائیگی مکمل ہو گئی','order'],
