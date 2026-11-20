@@ -449,25 +449,56 @@ class SafepayCheckoutService {
     ].includes(effectiveEventType);
 
     if (!isSuccessEvent) {
-      // Record event but take no financial mutation
-      await db.query(
-        `INSERT INTO payment_webhook_events (
-          event_id, provider, event_type, provider_tracker_token,
-          signature, timestamp_header, raw_payload, processed_status
-        ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
-        [
-          effectiveEventId,
-          effectiveEventType,
-          trackerToken,
-          signature,
-          String(timestamp),
-          JSON.stringify(parsedPayload)
-        ]
-      );
+      // A signed provider failure is authoritative for that one attempt. For
+      // collective buyer orders, release/reopen only that buyer's own stock
+      // lease; never touch another participant's order or any refund ledger.
+      if (['payment.failed','payment:failed'].includes(effectiveEventType) && trackerToken) {
+        const connection=await db.getConnection();
+        try {
+          await connection.beginTransaction();
+          const [matched]=await connection.query(`SELECT pa.id,pa.order_id,pa.status,
+            o.payment_status,o.notes,o.buyer_id
+            FROM payment_attempts pa JOIN orders o ON o.id=pa.order_id
+            WHERE pa.provider='SAFEPAY' AND pa.provider_tracker_token=? FOR UPDATE`,[trackerToken]);
+          const attempt=matched[0];
+          if(attempt && attempt.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT' &&
+             attempt.status==='INITIATED' && attempt.payment_status!=='PAID'){
+            await connection.query(`UPDATE payment_attempts SET status='FAILED'
+              WHERE id=? AND status='INITIATED'`,[attempt.id]);
+            await require('./collectivePaymentHoldService').markFailed(connection,attempt.order_id);
+            await connection.query(`UPDATE orders SET payment_status='AWAITING_PAYMENT',updated_at=UTC_TIMESTAMP()
+              WHERE id=? AND payment_status='PAYMENT_INITIATED'`,[attempt.order_id]);
+          }
+          await connection.query(
+            `INSERT INTO payment_webhook_events (
+              event_id, provider, event_type, order_id, attempt_id, provider_tracker_token,
+              signature, timestamp_header, raw_payload, processed_status
+            ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, ?, ?, 'PROCESSED')`,
+            [effectiveEventId,effectiveEventType,attempt?.order_id||null,attempt?.id||null,
+              trackerToken,signature,String(timestamp),JSON.stringify(parsedPayload)]
+          );
+          await connection.commit();
+        } catch(error) {
+          await connection.rollback();
+          if(error.code==='ER_DUP_ENTRY')return {success:true,is_duplicate:true,
+            message:'Duplicate provider failure event acknowledged'};
+          throw error;
+        } finally {connection.release();}
+      } else {
+        // Unknown/non-payment events are recorded without financial mutation.
+        await db.query(
+          `INSERT INTO payment_webhook_events (
+            event_id, provider, event_type, provider_tracker_token,
+            signature, timestamp_header, raw_payload, processed_status
+          ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
+          [effectiveEventId,effectiveEventType,trackerToken,signature,String(timestamp),
+            JSON.stringify(parsedPayload)]
+        );
+      }
       return {
         success: true,
         event_type: effectiveEventType,
-        message: 'Webhook event recorded; no state transition required'
+        message: 'Webhook event recorded; no payment success transition required'
       };
     }
 
