@@ -9,6 +9,7 @@
 const db = require('../config/db');
 const encryptionService = require('../services/encryptionService');
 const validationService = require('../services/supplierValidationService');
+const notificationService = require('../services/notificationService');
 
 class AdminController {
 
@@ -425,6 +426,18 @@ class AdminController {
            JSON.stringify({ status: current.verification_status }),
            JSON.stringify({ verification_status, verification_level: isApproved ? verification_level : current.verification_level, reason: effectiveRejectionReason })]
         );
+        const verificationEvent = {
+          UNDER_REVIEW:'VERIFICATION_UNDER_REVIEW',
+          VERIFIED:'VERIFICATION_APPROVED',
+          MORE_INFORMATION_REQUIRED:'VERIFICATION_INFO_REQUESTED',
+          REJECTED:'VERIFICATION_REJECTED'
+        }[verification_status];
+        if(verificationEvent){
+          await notificationService.enqueueEvent(connection,{userId:Number(id),role:'SUPPLIER',
+            eventType:verificationEvent,
+            eventKey:'supplier-verification:'+id+':revision:'+Number(current.submitted_revision||0)+':decision:'+verification_status,
+            entityId:Number(id)});
+        }
         await connection.commit();
         return res.status(200).json({
           success: true, message: `Supplier verification status updated to '${verification_status}'`,
