@@ -7,13 +7,14 @@ const vm=require('node:vm');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/services/fulfillmentService.js'),'utf8');
 function instantiate(options={}){
-  const events=[],updates=[],businessEvents=[];
+  const events=[],updates=[],businessEvents=[],notifications=[];
   const order={
     id:70, order_code:'TEST-ORDER-70', buyer_id:11, supplier_id:12,
     payment_status:'PAID', fulfillment_status:'SUPPLIER_DELIVERED',
     exception_reason:null,total_qty:'100.00',pool_id:17,reservation_id:18
   };
   const tx={commit:0,rollback:0,release:0};
+  let connectionRef;
   const connection={
     async query(sql,params){
       if(sql.includes('SELECT * FROM orders WHERE id = ? FOR UPDATE'))return [[order]];
@@ -32,6 +33,7 @@ function instantiate(options={}){
     async rollback(){tx.rollback++},
     release(){tx.release++}
   };
+  connectionRef=connection;
   const moduleRef={exports:{}};
   const policy=require('../src/services/deliveryQuantityPolicy');
   vm.runInNewContext(source,{
@@ -42,10 +44,11 @@ function instantiate(options={}){
       if(name==='./reservationEventService')return {generateEventId:()=> 'TEST-EVENT-70'};
       if(name==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
       if(name==='./deliveryQuantityPolicy')return policy;
+      if(name==='./notificationService')return {enqueueEvent:async(connection,event)=>{assert.equal(connection,connectionRef);notifications.push(event);return {insertId:1};}};
       throw Error('Unexpected dependency: '+name);
     }
   },{filename:'fulfillmentService.js'});
-  return {service:moduleRef.exports,events,updates,businessEvents,tx};
+  return {service:moduleRef.exports,events,updates,businessEvents,notifications,tx};
 }
 async function execute(){
   let passed=0;
@@ -67,6 +70,10 @@ async function execute(){
     assert.equal(x.tx.rollback,0);
     assert.equal(x.events.length,1);
     assert.equal(x.businessEvents.length,1);
+    assert.equal(x.notifications.length,1);
+    assert.equal(x.notifications[0].eventType,'DISPUTE_OPENED');
+    assert.equal(x.notifications[0].role,'SUPPLIER');
+    assert.equal(x.notifications[0].userId,12);
     const evidence=JSON.parse(x.events[0].find(v=>typeof v==='string'&&v.includes('"short_quantity"')));
     assert.equal(evidence.reported_quantity,'80.00');
     assert.equal(evidence.expected_quantity,'100.00');
