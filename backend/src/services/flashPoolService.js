@@ -4,6 +4,7 @@ const db = require('../config/db');
 const money = require('./exactDecimal');
 const entitlement = require('./subscriptionEntitlementService');
 const feeService = require('./feeService');
+const notificationService = require('./notificationService');
 
 const fail = (code, message, statusCode = 400) => {
   const e = new Error(message); e.code = code; e.statusCode = statusCode; return e;
@@ -602,6 +603,8 @@ class FlashPoolService {
       const [[holdClock]]=await conn.query(
         "SELECT DATE_FORMAT(expires_at,'%Y-%m-%dT%H:%i:%sZ') AS hold_expires_at FROM flash_purchase_holds WHERE id=?",
         [h.insertId]);
+      await notificationService.enqueueEvent(conn,{userId:Number(buyerId),role:'BUYER',eventType:'PAYMENT_PENDING',
+        eventKey:'flash-order:'+order.insertId+':payment-pending',entityId:Number(order.insertId)});
       await conn.commit();
       return {id:h.insertId,order_id:order.insertId,order_code:orderCode,
         hold_expires_at:holdClock.hold_expires_at,
@@ -683,7 +686,7 @@ class FlashPoolService {
          ORDER BY h.id ASC FOR UPDATE`,[flashId]);
       let released=0;
       for(const hold of expired){
-        const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=? FOR UPDATE',[hold.order_id]);
+        const [orders]=await conn.query('SELECT buyer_id,payment_status,order_status FROM orders WHERE id=? FOR UPDATE',[hold.order_id]);
         if(!orders.length || orders[0].payment_status!=='AWAITING_PAYMENT' ||
           orders[0].order_status!=='AWAITING_PAYMENT')continue;
         const [paidPayments]=await conn.query("SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[hold.order_id]);
@@ -703,6 +706,8 @@ class FlashPoolService {
            version_number=version_number+1
            WHERE id=? AND held_stock>=?`,[hold.quantity,hold.quantity,flashId,hold.quantity]);
         if(updated.affectedRows!==1)throw fail('FLASH_STOCK_DRIFT','Expired hold exceeds authoritative held stock.',409);
+        await notificationService.enqueueEvent(conn,{userId:Number(orders[0].buyer_id),role:'BUYER',eventType:'PAYMENT_FAILED',
+          eventKey:'flash-order:'+hold.order_id+':hold-expired',entityId:Number(hold.order_id)});
         released++;
       }
       if(owns)await conn.commit();
@@ -725,7 +730,7 @@ class FlashPoolService {
       const [holds]=await conn.query(
         'SELECT * FROM flash_purchase_holds WHERE order_id=? FOR UPDATE',[orderId]);
       const hold=holds[0];
-      const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=?',[orderId]);
+      const [orders]=await conn.query('SELECT buyer_id,supplier_id,payment_status,order_status FROM orders WHERE id=?',[orderId]);
       const [payments]=await conn.query(
         "SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[orderId]);
       if(!orders.length || orders[0].payment_status!=='PAID' ||
@@ -744,6 +749,10 @@ class FlashPoolService {
           [hold.quantity,hold.quantity,flashId,hold.quantity]);
         if(updated.affectedRows!==1)throw fail('FLASH_STOCK_DRIFT','Paid hold exceeds authoritative held stock.',409);
       }
+      await notificationService.enqueueEvent(conn,{userId:Number(orders[0].buyer_id),role:'BUYER',eventType:'PAYMENT_VERIFIED',
+        eventKey:'flash-order:'+orderId+':payment-verified',entityId:Number(orderId)});
+      await notificationService.enqueueEvent(conn,{userId:Number(orders[0].supplier_id),role:'SUPPLIER',eventType:'PAYMENT_VERIFIED',
+        eventKey:'flash-order:'+orderId+':supplier-payment-verified',entityId:Number(orderId)});
       await conn.commit();
       return {flash_order:true,hold_status:'PAID',flash_pool_id:flashId};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
