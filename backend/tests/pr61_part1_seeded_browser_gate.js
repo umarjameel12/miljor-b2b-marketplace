@@ -501,6 +501,9 @@ async function cleanup(){
    for(const aid of created.addresses)await db.query('DELETE FROM buyer_delivery_addresses WHERE id=?',[aid]);
    if(created.groupId){
      const gid=created.groupId;
+     // Collective invitation/bid notifications reference buyer and supplier users.
+     // Remove the isolated fixture's outbox rows before deleting those users.
+     await db.query('DELETE FROM procurement_notifications WHERE event_key LIKE ?',['collective:group:'+gid+':%']);
      await db.query('DELETE FROM procurement_collective_buyer_approvals WHERE group_id=?',[gid]);
      await db.query(`DELETE FROM procurement_collective_bid_lines WHERE bid_version_id IN
        (SELECT v.id FROM procurement_collective_bid_versions v
