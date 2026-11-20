@@ -391,21 +391,32 @@ class SafepayCheckoutService {
       const recordedEventType = (isCreatedEvent || (isExplicitSuccessType && normalizedProviderState))
         ? `${effectiveEventType}:${normalizedProviderState || 'UNKNOWN'}`.slice(0, 100)
         : effectiveEventType;
-      // Record event but take no financial mutation
-      await db.query(
-        `INSERT INTO payment_webhook_events (
-          event_id, provider, event_type, provider_tracker_token,
-          signature, timestamp_header, raw_payload, processed_status
-        ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
-        [
-          effectiveEventId,
-          recordedEventType,
-          trackerToken,
-          signature,
-          String(timestamp),
-          JSON.stringify(parsedPayload)
-        ]
-      );
+      // Record event but take no financial mutation (idempotent under concurrent replay)
+      try {
+        await db.query(
+          `INSERT INTO payment_webhook_events (
+            event_id, provider, event_type, provider_tracker_token,
+            signature, timestamp_header, raw_payload, processed_status
+          ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
+          [
+            effectiveEventId,
+            recordedEventType,
+            trackerToken,
+            signature,
+            String(timestamp),
+            JSON.stringify(parsedPayload)
+          ]
+        );
+      } catch (insertErr) {
+        if (insertErr?.code === 'ER_DUP_ENTRY') {
+          return {
+            success: true,
+            is_duplicate: true,
+            message: 'Duplicate webhook event acknowledged without state mutation'
+          };
+        }
+        throw insertErr;
+      }
       return {
         success: true,
         event_type: effectiveEventType,
@@ -433,22 +444,34 @@ class SafepayCheckoutService {
       );
 
       if (attempts.length === 0) {
-        // Unknown tracker: record event in RECONCILIATION_REQUIRED
-        await connection.query(
-          `INSERT INTO payment_webhook_events (
-            event_id, provider, event_type, provider_tracker_token,
-            signature, timestamp_header, raw_payload, processed_status, error_message
-          ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'RECONCILIATION_REQUIRED', 'No payment_attempt row matches tracker token')`,
-          [
-            effectiveEventId,
-            effectiveEventType,
-            trackerToken,
-            signature,
-            String(timestamp),
-            JSON.stringify(parsedPayload)
-          ]
-        );
-        await connection.commit();
+        // Unknown tracker: record event in RECONCILIATION_REQUIRED (idempotent under concurrent replay)
+        try {
+          await connection.query(
+            `INSERT INTO payment_webhook_events (
+              event_id, provider, event_type, provider_tracker_token,
+              signature, timestamp_header, raw_payload, processed_status, error_message
+            ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'RECONCILIATION_REQUIRED', 'No payment_attempt row matches tracker token')`,
+            [
+              effectiveEventId,
+              effectiveEventType,
+              trackerToken,
+              signature,
+              String(timestamp),
+              JSON.stringify(parsedPayload)
+            ]
+          );
+          await connection.commit();
+        } catch (insertErr) {
+          await connection.rollback();
+          if (insertErr?.code === 'ER_DUP_ENTRY') {
+            return {
+              success: true,
+              is_duplicate: true,
+              message: 'Duplicate webhook event acknowledged without state mutation'
+            };
+          }
+          throw insertErr;
+        }
         return {
           success: true,
           status: 'RECONCILIATION_REQUIRED',

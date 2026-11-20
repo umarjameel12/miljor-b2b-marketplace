@@ -466,3 +466,20 @@ Correct implemented callback routes are `POST /api/v1/webhooks/safepay` and `POS
 The previous refund statement “documented & account-enabled” is not established by account-level observation in this closeout. Documentation availability and absence of a method in safepayAdapter do not prove account enablement or public-API unavailability. Classify account-specific refund capability and execution as UNVERIFIED / NOT_EXECUTED until direct account/current authoritative evidence exists; do not execute refund/reversal/payout without the required authorization.
 
 Evidence: `evidence/ucp-paid-return-ci-review-2026-11-17.json`. No database connection/mutation, provider action, branch merge, public exposure or deployment performed. RESULT: exact-source canonical CI PASS; master-plan PARTIAL on direct webhook/refund evidence and actual latest-source review. Historical supplier-verification attribution remains separate from newer buyer metadata. CAN START NEXT PHASE: NO.
+
+### 2026-11-20 — Prompt 1/4: UCP Reliability, Flash Recovery, Transactional Notifications & Webhook Identity Hardening
+
+- **Original Head:** `7b9a51604f8f5346dc77fa3087a48a3f93dfe040` (`plan/ucp-resilience-notification-coverage`).
+- **Discovered Bugs & Root Causes Fixed:**
+  1. **`poolClosureService.processExpiredFlashPools()` bypassed UCP recovery (`backend/src/services/poolClosureService.js`):** Executed a raw bulk `UPDATE flash_pools SET status='EXPIRED'` without row locks, payment-hold preservation, `supplier_inventory_allocations` release, or `UCP.POOL_EXPIRED` notifications. **Fix:** Delegated `processExpiredFlashPools()` to `ucpRecoveryService.runFlashRecoveryBatch({ limit: 50 })`, returning `result.processed`.
+  2. **Concurrent non-success & unknown-tracker webhook `ER_DUP_ENTRY` (`backend/src/services/safepayCheckoutService.js`):** Pre-lock `SELECT * FROM payment_webhook_events` allowed concurrent duplicate deliveries of non-success or unknown-tracker events with the same `event_id` to hit `ER_DUP_ENTRY` instead of returning `{ success: true, is_duplicate: true }`. **Fix:** Caught `ER_DUP_ENTRY` on both `INSERT INTO payment_webhook_events` paths cleanly (while keeping `FOR UPDATE` serialized event-id recheck on tracked success events and preserving `!value.startsWith('track_')` separation between tracker ID and event ID).
+- **Regression Test Added:** `backend/tests/ucp_prompt1_hardening_gate.js` (bulk Flash expiry delegation with suspended supplier + held stock preservation, same-tracker distinct webhook events + concurrent duplicate replay, cross-user notification isolation & mark-as-read authorization).
+- **Consolidated Verification (`miljor_test_db` on `127.0.0.1:33321`):**
+  - `node tests/ucp_prompt1_hardening_gate.js`: **PASS** (exit `0`).
+  - `node tests/ucp_final_affected_gate.js`: **PASS** (`14/14` groups, exit `0`, including `56/56` `ucp_notification_metadata.test.js` + `ucp_phase_ab_contract_gate.js`).
+  - `node tests/ucp_phase2_finance_integrity_gate.js`: **PASS** (exit `0`; synthetic webhook/replay/`PAID` non-downgrade/exact-decimal PASS; live Safepay card/refund remains `BLOCKED` / `UNVERIFIED`).
+  - `node tests/ucp_phase2_email_gate.js`: **PASS** (exit `0`; capture transport PASS).
+  - `node --test tests/email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped, exit `0`).
+  - `npm --prefix frontend run build`: **PASS** (`2,243` modules, `7.75s`, exit `0`).
+- **Protected DB (`miljor_db`, `3306`, read-only):** Checksums unchanged (`{"users":2302417835,"pools":2265355547,"reservations":0,"orders":0,"payments":0,"platform_ledger":0}`).
+- **Prompt 1 Status:** **PASS** (all Prompt 1 engineering & regression criteria satisfied; Prompts 2–4 & external provider/merge blockers remain separate). CAN START NEXT PHASE: NO.

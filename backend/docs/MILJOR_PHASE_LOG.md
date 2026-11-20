@@ -1940,3 +1940,16 @@ Correct implemented callback routes are `POST /api/v1/webhooks/safepay` and `POS
 The previous refund statement “documented & account-enabled” is not established by account-level observation in this closeout. Documentation availability and absence of a method in safepayAdapter do not prove account enablement or public-API unavailability. Classify account-specific refund capability and execution as UNVERIFIED / NOT_EXECUTED until direct account/current authoritative evidence exists; do not execute refund/reversal/payout without the required authorization.
 
 Evidence: `evidence/ucp-paid-return-ci-review-2026-11-17.json`. No database connection/mutation, provider action, branch merge, public exposure or deployment performed. RESULT: exact-source canonical CI PASS; master-plan PARTIAL on direct webhook/refund evidence and actual latest-source review. Historical supplier-verification attribution remains separate from newer buyer metadata. CAN START NEXT PHASE: NO.
+
+### 2026-11-20 — Prompt 1/4: UCP Reliability, Flash Recovery, Transactional Notifications & Webhook Identity Hardening (PR #54)
+
+- **Baseline:** `7b9a51604f8f5346dc77fa3087a48a3f93dfe040` (`plan/ucp-resilience-notification-coverage`).
+- **Fixes:**
+  - `backend/src/services/poolClosureService.js`: Delegated `processExpiredFlashPools()` to `ucpRecoveryService.runFlashRecoveryBatch({ limit: 50 })` so bulk Flash expiry never bypasses row locks, payment-hold preservation, stock release, or `UCP.POOL_EXPIRED` notifications.
+  - `backend/src/services/safepayCheckoutService.js`: Added idempotent `ER_DUP_ENTRY` handling on concurrent non-success and unknown-tracker `payment_webhook_events` inserts, preserving tracker-vs-event identity separation (`!value.startsWith('track_')`).
+- **Tests Added & Executed (`miljor_test_db:33321`):**
+  - `ucp_prompt1_hardening_gate.js`: **PASS** (exit `0`).
+  - `ucp_final_affected_gate.js`: **PASS** (`14/14` groups, exit `0`, incl. `56/56` metadata tests).
+  - `ucp_phase2_finance_integrity_gate.js`: **PASS**; `ucp_phase2_email_gate.js`: **PASS**; `email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped); `npm --prefix frontend run build`: **PASS** (`2,243` modules, `7.75s`).
+- **Protected DB (`miljor_db`, `3306`):** Unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
+- **RESULT:** **Prompt 1 COMPLETE (PASS)**; Prompts 2–4 & external provider/merge blockers remain separate. **CAN START NEXT PHASE: NO.**

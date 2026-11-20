@@ -61,17 +61,16 @@ class PoolClosureService {
   }
 
   // ---------------------------------------------------------------------------
-  // processExpiredFlashPools — Mark flash pools EXPIRED after expiry_time
+  // processExpiredFlashPools — Delegate to transaction-bound UCP Flash recovery
+  // (never bypasses payment hold preservation, stock release, or notifications)
   // ---------------------------------------------------------------------------
   async processExpiredFlashPools() {
     try {
-      const [result] = await db.query(
-        "UPDATE flash_pools SET status = 'EXPIRED', updated_at = NOW() WHERE status = 'ACTIVE' AND expiry_time <= NOW()"
-      );
-      if (result.affectedRows > 0) {
-        console.log(`[Scheduler] ${result.affectedRows} flash pool(s) expired`);
+      const result = await require('./ucpRecoveryService').runFlashRecoveryBatch({ limit: 50 });
+      if (result.processed > 0) {
+        console.log(`[Scheduler] ${result.processed} flash pool(s) processed via UCP recovery`);
       }
-      return result.affectedRows;
+      return result.processed;
     } catch (error) {
       console.error('[Scheduler] Error processing flash pool expiry:', error);
     }
