@@ -186,6 +186,10 @@ async function main(){
    assert.equal(rejectedFinal.verification_status,'REJECTED');
    assert.equal(rejectedFinal.subscription_plan,'STARTER');
    assert.equal(Number(rejectedFinal.max_active_listings),4);
+   const [rejectedRevision]=await db.query(
+     'SELECT review_action,review_reason FROM supplier_verification_revisions WHERE supplier_id=? AND revision=3',[sid]);
+   assert.equal(rejectedRevision[0].review_action,'REJECTED');
+   assert.equal(rejectedRevision[0].review_reason,'Business identity could not be verified');
    console.log('PASS: rejection is terminal, blocks self-resubmission and preserves entitlements');
    console.log('PR61 PART1 REAL MYSQL ACCEPTANCE PASS');
  }finally{
