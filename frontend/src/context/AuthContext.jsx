@@ -147,12 +147,24 @@ export const AuthProvider = ({ children }) => {
       throw new Error(response.error?.message || 'Verification failed');
     }
 
-    const profile = await authApi.getMe();
-    if (!profile.success || !profile.data?.user) {
-      throw new Error('Email verified, but your account could not be refreshed. Please log in again.');
+    // Verification succeeded on the server. A transient /auth/me or session
+    // refresh failure must not turn that successful, single-use OTP into a
+    // visible verification failure (the same OTP cannot be submitted again).
+    try {
+      const profile = await authApi.getMe();
+      if (profile.success && profile.data?.user) {
+        setUser(profile.data.user);
+        return { success: true, user: profile.data.user };
+      }
+    } catch {
+      // Allow the buyer to sign in again rather than requesting a new OTP.
     }
-    setUser(profile.data.user);
-    return { success: true, user: profile.data.user };
+    setUser(current => current ? {
+      ...current,
+      is_verified: true,
+      verification_status: 'EMAIL_VERIFIED'
+    } : current);
+    return { success: true, profileSyncPending: true };
   };
 
   // Resend OTP handler

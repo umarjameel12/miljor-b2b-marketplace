@@ -18,6 +18,12 @@ const routes = read('backend/src/routes/v1/procurementRoutes.js');
 
 const checks = [
   ['Buyer signup requests OTP verification', () => assert.match(auth, /requires_verification:\s*assignedRole === 'BUYER'/)],
+  ['Initial buyer OTP uses verification-specific email, not signup copy', () => {
+    assert.match(auth, /userName: full_name \|\| business_name \|\| 'Buyer',\s*purpose: 'REGISTRATION_VERIFY',\s*emailContext: 'verification'/);
+  }],
+  ['Resent buyer OTP uses verification-specific email', () => {
+    assert.match(auth, /userName: user\.full_name,\s*purpose: 'REGISTRATION_VERIFY',\s*emailContext: 'verification'/);
+  }],
   ['Buyer OTP dispatched only after registration commits', () => {
     const committed = auth.indexOf('await connection.commit()');
     const otp = auth.indexOf("await emailService.createAndSendOtp({\n            userId");
