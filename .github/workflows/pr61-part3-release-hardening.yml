@@ -7,6 +7,9 @@ on:
       - 'backend/src/services/supplierSubscriptionCheckoutService.js'
       - 'backend/src/services/financialSettlementService.js'
       - 'backend/src/services/notificationEventPolicy.js'
+      - 'backend/src/services/fulfillmentService.js'
+      - 'backend/src/services/flashPoolService.js'
+      - 'backend/tests/pr61_domain_notification_producer_gate.test.js'
       - 'backend/tests/pr61_part3_release_gate.test.js'
       - 'backend/tests/p0_safepay_signed_http_acceptance.js'
       - 'backend/tests/supplier_subscription_checkout_mysql_gate.js'
@@ -37,6 +40,9 @@ jobs:
           node --check backend/src/services/safepayCheckoutService.js
           node --check backend/src/services/supplierSubscriptionCheckoutService.js
           node --check backend/src/services/financialSettlementService.js
+          node --check backend/src/services/fulfillmentService.js
+          node --check backend/src/services/flashPoolService.js
+          node --check backend/tests/pr61_domain_notification_producer_gate.test.js
           node --check backend/tests/pr61_part3_release_gate.test.js
           node --check backend/tests/p0_safepay_signed_http_acceptance.js
       - name: Fail-closed pure security and provider-origin truth tests
@@ -102,5 +108,7 @@ jobs:
           node tests/supplier_subscription_checkout_contract_gate.js
           node tests/notification_projection_gate.js
           node tests/notification_transaction_gate.js
+          node --test tests/pr61_domain_notification_producer_gate.test.js
+          node tests/demo_fulfillment_discrepancy_service_gate.js
       - name: Final canonical migration journal integrity (read only)
         run: cd backend && node database/readOnlyMigrationAudit.js --test-only
