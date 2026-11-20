@@ -68,7 +68,7 @@ async function adminRegressions(){
       payload.correction_fields=['tax_ntn'];
       payload.correction_notes={tax_ntn:'Please update tax certificate'};
     }
-    const {res,writes}=await decision(status,payload);
+    const {res,writes,notifications}=await decision(status,payload);
     assert.equal(res.statusCode,200,status);
     const commands=writes.filter(x=>x&&x.sql).map(x=>x.sql);
     assert.equal(commands.some(x=>/UPDATE users/i.test(x)),false,status+' must not reset user identity');
