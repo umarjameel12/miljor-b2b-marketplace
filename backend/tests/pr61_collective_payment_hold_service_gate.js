@@ -8,7 +8,7 @@ function fixture(){
  const state={row:{id:1,order_id:91,buyer_id:201,payment_hold_status:'ACTIVE',
   payment_expires_at:'2099-01-01 00:00:00',is_open:1,payment_status:'AWAITING_PAYMENT',
   order_status:'AWAITING_PAYMENT'},allocations:[{status:'PENDING'}],attempts:[],
-  commits:0,rollbacks:0};
+  commits:0,rollbacks:0,notifications:[]};
  const conn={
   async beginTransaction(){},async commit(){state.commits++;},
   async rollback(){state.rollbacks++;},release(){},
@@ -58,6 +58,8 @@ function fixture(){
    if(q.startsWith('SELECT id,payment_hold_status FROM procurement_collective_buyer_orders')){
     return [state.row?[{id:state.row.id,payment_hold_status:state.row.payment_hold_status}]:[]];
    }
+   if(q.startsWith('SELECT co.buyer_id,o.supplier_id FROM procurement_collective_buyer_orders'))return [[{buyer_id:state.row.buyer_id,supplier_id:22}]];
+   if(q.startsWith('SELECT buyer_id FROM procurement_collective_buyer_orders'))return [[{buyer_id:state.row.buyer_id}]];
    if(q.startsWith("UPDATE procurement_collective_buyer_orders SET payment_hold_status='COMMITTED'")){
     state.row.payment_hold_status='COMMITTED';return [{affectedRows:1}];
    }
@@ -70,6 +72,7 @@ function fixture(){
  const fakeDb={getConnection:async()=>conn,query:conn.query.bind(conn)};
  Module._load=function(request,parent,isMain){
   if(parent?.filename===servicePath&&request==='../config/db')return fakeDb;
+  if(parent?.filename===servicePath&&request==='./notificationService')return {enqueueEvent:async(conn,event)=>{state.notifications.push(event);return {insertId:1};}};
   return originalLoad.call(this,request,parent,isMain);
  };
  delete require.cache[servicePath];
@@ -94,6 +97,7 @@ async function main(){
   await assert.rejects(f.service.claimCheckout(91,201),e=>e.code==='COLLECTIVE_PAYMENT_HOLD_EXPIRED');
   assert.equal(f.state.row.payment_hold_status,'RELEASED');
   assert.equal(f.state.allocations[0].status,'RELEASED');
+  assert.equal(f.state.notifications[0].eventType,'PAYMENT_FAILED');
  });
  await check('provider-started attempt is retained for authoritative reconciliation, never released',async()=>{
   const f=fixture();f.state.row.is_open=0;f.state.row.payment_expires_at='2000-01-01 00:00:00';
@@ -130,6 +134,7 @@ async function main(){
  await check('authoritative PAID transition commits the hold and refuses released inventory',async()=>{
   const f=fixture();await f.service.markPaid(f.conn,91);
   assert.equal(f.state.row.payment_hold_status,'COMMITTED');
+  assert.deepEqual(f.state.notifications.map(x=>x.eventType),['PAYMENT_VERIFIED','PAYMENT_VERIFIED']);
   f.state.row.payment_hold_status='RELEASED';
   await assert.rejects(f.service.markPaid(f.conn,91),e=>e.code==='COLLECTIVE_STOCK_HOLD_RELEASED');
  });
