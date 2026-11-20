@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const ALLOWED_SUPPLIER_TRANSITIONS = {
   'AWAITING_SUPPLIER_ACKNOWLEDGEMENT': ['PREPARING'],
@@ -497,6 +498,12 @@ class FulfillmentService {
       );
       }
 
+      // Recipient-owned buyer notice is committed atomically with the fulfillment milestone.
+      const buyerMilestoneEvent={READY_FOR_DISPATCH:'DISPATCH_SCHEDULED',DISPATCHED:'OUT_FOR_DELIVERY',SUPPLIER_DELIVERED:'DELIVERY_REPORTED'}[toStatus];
+      if(buyerMilestoneEvent){
+        await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',
+          eventType:buyerMilestoneEvent,eventKey:'order:'+order.id+':fulfillment:'+toStatus+':'+trimmedKey,entityId:Number(order.id)});
+      }
       await connection.commit();
 
       return {
@@ -694,6 +701,10 @@ class FulfillmentService {
       );
       }
 
+      await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',
+        eventType:'DELIVERY_DELAYED',eventKey:'order:'+order.id+':supplier-exception:'+trimmedKey,entityId:Number(order.id)});
+      await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',
+        eventType:'DISPUTE_OPENED',eventKey:'order:'+order.id+':buyer-discrepancy:'+trimmedKey,entityId:Number(order.id)});
       await connection.commit();
 
       return {
@@ -1048,6 +1059,8 @@ class FulfillmentService {
       );
       }
 
+      await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',
+        eventType:'RECEIPT_CONFIRMED',eventKey:'order:'+order.id+':buyer-confirmed:'+trimmedKey,entityId:Number(order.id)});
       await connection.commit();
 
       return {
