@@ -43,6 +43,8 @@ jobs:
           node --test backend/tests/pr61_domain_notification_producer_gate.test.js
           node backend/tests/pr61_collective_payment_hold_service_gate.js
           node backend/tests/ucp_notification_catalog_gate.js
+          node backend/tests/ucp_flash_delivery_source_gate.js
+          node --check backend/tests/demo_dispute_refund_safety_gate.js
           node backend/tests/ucp_transactional_notifications_gate.js
           node --test backend/tests/notification_projection_gate.js
           node backend/tests/notification_transaction_gate.js
