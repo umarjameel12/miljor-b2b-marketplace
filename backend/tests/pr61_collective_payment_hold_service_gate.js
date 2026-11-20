@@ -122,10 +122,12 @@ async function main(){
   const f=fixture();f.state.row.payment_hold_status='PAYMENT_PENDING';
   const open=await f.service.markFailed(f.conn,91);
   assert.equal(open.status,'ACTIVE');assert.equal(f.state.row.payment_hold_status,'ACTIVE');
+  assert.equal(f.state.notifications[0].eventType,'PAYMENT_FAILED');
   const expired=fixture();expired.state.row.payment_hold_status='RECONCILIATION_REQUIRED';
   expired.state.row.is_open=0;expired.state.row.payment_expires_at='2000-01-01 00:00:00';
   const released=await expired.service.markFailed(expired.conn,91);
   assert.equal(released.status,'RELEASED');assert.equal(expired.state.allocations[0].status,'RELEASED');
+  assert.equal(expired.state.notifications[0].eventType,'PAYMENT_FAILED');
   const uncertain=fixture();uncertain.state.row.payment_hold_status='RECONCILIATION_REQUIRED';
   uncertain.state.attempts=[{order_id:91,status:'INITIATED'}];
   const pending=await uncertain.service.markFailed(uncertain.conn,91);
