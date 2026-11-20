@@ -26,7 +26,7 @@ class CollectivePaymentHoldService{
   await conn.query(`UPDATE procurement_collective_buyer_orders
    SET payment_hold_status='RELEASED',payment_hold_released_at=UTC_TIMESTAMP(),
        payment_hold_release_reason=?
-   WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING')`,[reason,row.id]);
+   WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING','RECONCILIATION_REQUIRED')`,[reason,row.id]);
  }
  async claimCheckout(orderId,buyerId){
   const conn=await db.getConnection();let expired=false;
