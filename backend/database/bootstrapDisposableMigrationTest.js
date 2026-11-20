@@ -5,9 +5,10 @@
 const fs=require('fs'),path=require('path'),mysql=require('mysql2/promise');
 async function main(){
  const target=process.env.DB_NAME, testDb=process.env.TEST_DB_NAME;
+ const isDisposableTestDb=(n)=>/^(?:miljor_test_db|miljor_[a-z0-9_]+_test_db)$/.test(String(n||''));
  if(process.env.NODE_ENV!=='test'||process.env.MILJOR_TEST_ONLY_MIGRATIONS!=='1'||
-    target!=='miljor_test_db'||testDb!=='miljor_test_db')
-   throw Error('TEST_BOOTSTRAP_PROTECTED_DB_BLOCKED: only disposable miljor_test_db in test mode');
+    !isDisposableTestDb(target)||target!==testDb)
+   throw Error('TEST_BOOTSTRAP_PROTECTED_DB_BLOCKED: only disposable miljor_test_db (or *_test_db) in test mode');
  const db=await mysql.createConnection({
    host:process.env.DB_HOST||'127.0.0.1',user:process.env.DB_USER||'root',
    password:process.env.DB_PASSWORD||'',database:target

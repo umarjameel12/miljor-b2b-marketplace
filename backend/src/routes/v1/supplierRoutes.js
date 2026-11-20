@@ -12,6 +12,10 @@ const { protect, authorize, authorizeStrict } = require('../../middlewares/authG
 
 // All supplier portal routes require authenticated session
 router.use(protect);
+router.get('/operations/overview',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{return res.json({success:true,data:await require('../../services/supplierOperationsService').get(req.user)});}
+  catch(error){const status=error.statusCode||500;return res.status(status).json({success:false,error:{code:status<500?error.code:'OPERATIONS_UNAVAILABLE',message:status<500?error.message:'Unable to load supplier operations'}});}
+});
 
 // Unified supplier management READ MODEL only. Mutations stay on B4/B5 routes.
 router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{

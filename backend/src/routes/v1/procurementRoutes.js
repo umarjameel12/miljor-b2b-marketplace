@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../../controllers/procurementController');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
+const idempotencyGuard = require('../../middlewares/idempotencyGuard');
 
 // Flash Pools
 router.get('/flash-pools', (req, res) => controller.getFlashPools(req, res));
@@ -25,6 +26,8 @@ router.post('/flash-pools/:id/expire', protect, authorizeStrict('SUPPLIER'), (re
 // Registered before legacy RFQ routes, preserving B0-B4 compatibility.
 router.post('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.createSmartRequest(req,res));
 router.get('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.listSmartRequests(req,res));
+router.get('/procurement/legacy-requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.listLegacyRequests(req,res));
+router.post('/procurement/legacy-requests/:id/convert', protect, authorizeStrict('BUYER'), (req,res)=>controller.convertLegacyRequest(req,res));
 router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.getSmartRequest(req,res));
 router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
 router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));
@@ -46,9 +49,19 @@ router.post('/procurement/supplier/quotes/:quoteId/withdraw',protect,authorizeSt
 
 // B6-F — Buyer comparison and non-binding improvement requests.
 router.get('/procurement/requests/:id/compare',protect,authorizeStrict('BUYER'),(req,res)=>controller.compareSmartQuotes(req,res));
-router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>controller.requestSmartBetterOffer(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>res.status(410).json({success:false,error:{code:'LEGACY_FREE_TEXT_NEGOTIATION_DISABLED',message:'Use selected-product numeric counteroffers in the Smart Procurement Hub.'}}));
 router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
 router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
+
+router.get('/procurement/requests/:id/quotes/:quoteId/delivery-options',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartDeliveryOptions(req,res));
+
+// Smart Hub product-wise numeric counteroffers (no free-text or chat).
+router.post('/procurement/requests/:id/quotes/:quoteId/delivery-choice',protect,authorizeStrict('BUYER'),(req,res)=>controller.chooseDelivery(req,res));
+router.get('/procurement/supplier/requests/:id/delivery-choices',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.supplierDeliveryChoices(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitProductCounteroffers(req,res));
+router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerProductCounteroffers(req,res));
+router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierProductCounteroffers(req,res));
+router.post('/procurement/supplier/counteroffers/:offerId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondProductCounteroffer(req,res));
 
 // B6-G/H award preview: buyer explicitly selects quote version and physical SKU.
 // No order, hold, ledger or checkout route is exposed before inventory/Safepay gate.
@@ -72,6 +85,14 @@ router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',prot
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
 
 // B6-L/M — buyer-owned recurring template and cycle controls.
+router.post('/procurement/collectives/:groupId/commitment',protect,authorizeStrict('BUYER'),idempotencyGuard.required,async(req,res)=>{
+  try{res.json({success:true,data:await require('../../services/procurementCollectiveCommitmentService').prepareMine(req.user.id,req.params.groupId)});}
+  catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.code||'GROUP_COMMITMENT_FAILED',message:error.statusCode?error.message:'Unable to prepare group commitment'}});}
+});
+router.post('/procurement/collectives/:groupId/commitment/release',protect,authorizeStrict('BUYER'),idempotencyGuard.required,async(req,res)=>{
+  try{res.json({success:true,data:await require('../../services/procurementCollectiveCommitmentService').releaseMine(req.user.id,req.params.groupId)});}
+  catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.code||'GROUP_COMMITMENT_FAILED',message:error.statusCode?error.message:'Unable to release group commitment'}});}
+});
 // No automatic checkout/payment or buyer impersonation.
 router.post('/procurement/requests/:id/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.createSmartRecurring(req,res));
 router.get('/procurement/recurring',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartRecurring(req,res));
@@ -86,10 +107,16 @@ router.post('/procurement/recurring/:contractId/cycles/:cycleId/skip',protect,au
 router.post('/procurement/recurring/:contractId/cycles/schedule',protect,authorizeStrict('BUYER'),(req,res)=>controller.scheduleRecurringCycles(req,res));
 router.get('/procurement/recurring/:contractId/cycles',protect,authorizeStrict('BUYER'),(req,res)=>controller.listRecurringCycles(req,res));
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/prepare',protect,authorizeStrict('BUYER'),(req,res)=>controller.prepareRecurringCycle(req,res));
+router.get('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.getRecurringCycleInputs(req,res));
+router.put('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.updateRecurringCycleInputs(req,res));
 
 // B6-G/H — Fee-inclusive preview and server-gated real order acceptance.
 router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartPayable(req,res));
 router.post('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptSmartAward(req,res));
+router.get('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),async(req,res)=>{
+ try{res.json({success:true,data:{award:await require('../../services/procurementAwardService').findMineByRequest(req.user.id,req.params.id)}});}
+ catch(error){res.status(error.statusCode||500).json({success:false,error:{code:error.code||'AWARD_RECOVERY_FAILED',message:error.statusCode?error.message:'Unable to recover award'}});}
+});
 router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartAward(req,res));
 
 // Demand Pool Requests ("Request a Pool")

@@ -76,7 +76,7 @@ class DeliveryQuotationController {
         });
       }
 
-      const accepted = await deliveryEligibilityService.verifyAndAcceptQuote(req.user.id, quote_code, req.body || {});
+      const accepted = await deliveryEligibilityService.verifyAndAcceptQuote(req.user.id, quote_code, {});
       return res.status(200).json({
         success: true,
         data: accepted,

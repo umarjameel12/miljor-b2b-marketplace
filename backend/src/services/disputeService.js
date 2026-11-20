@@ -33,6 +33,7 @@ const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const DISPUTE_CATEGORIES = [
   'SHORT_QUANTITY',
@@ -79,6 +80,45 @@ const ACTIVE_DISPUTE_STATUSES = [
 
 class DisputeService {
 
+  // Internal receipt hook: caller owns the parent order lock and transaction.
+  // All quantities/prices/evidence are read from the immutable receipt, never
+  // from an order-level aggregate or a caller-supplied money amount.
+  async recordProcurementLineDisputeWithinTransaction(connection, { receiptId, actor }) {
+    const policy = require('./procurementLineReceiptPolicy');
+    const rid = policy.id(receiptId);
+    const [rows] = await connection.query(
+      `SELECT lr.*,o.buyer_id,o.supplier_id,o.reservation_id,o.payment_status
+       FROM procurement_line_receipts lr JOIN orders o ON o.id=lr.order_id
+       WHERE lr.id=? FOR UPDATE`, [rid]);
+    const receipt = rows[0];
+    if (!receipt || !actor || actor.role !== 'BUYER' || String(actor.id) !== String(receipt.buyer_id))
+      throw policy.fail('FORBIDDEN','Only the receipt owner may file a line dispute.',403);
+    if (receipt.payment_status !== 'PAID' || !exactDecimal.exactDecimalGte(receipt.disputed_quantity,'0.0001',4))
+      throw policy.fail('INVALID_LINE_DISPUTE','A paid disputed line receipt is required.',409);
+    const [prior] = await connection.query('SELECT id FROM order_disputes WHERE procurement_line_receipt_id=? FOR UPDATE',[rid]);
+    if (prior.length) return prior[0].id;
+    const category = receipt.reason === 'DAMAGED_GOODS' ? 'DAMAGED_GOODS' :
+      receipt.reason === 'WRONG_PRODUCT' ? 'WRONG_ITEM' : 'SHORT_QUANTITY';
+    const reason = category === 'WRONG_ITEM' ? 'WRONG_PRODUCT' : category === 'DAMAGED_GOODS' ? 'DAMAGED_GOODS' : 'SHORTAGE_IN_QUANTITY';
+    const metadata = {receipt_id:rid,award_line_id:receipt.award_line_id,
+      purchasing_unit:receipt.purchasing_unit,policy_version:policy.FEE_POLICY_VERSION};
+    const [insert] = await connection.query(
+      `INSERT INTO order_disputes
+       (dispute_code,order_id,reservation_id,buyer_id,supplier_id,reason,dispute_category,
+        reporting_actor_role,description,expected_quantity,reported_quantity,disputed_quantity,
+        claimed_amount,currency,evidence_metadata,status,idempotency_key,procurement_line_receipt_id)
+       VALUES (?,?,?,?,?,?,?,'BUYER',?,?,?,?,?,'PKR',?,'ESCALATED_FINANCIAL_REVIEW',?,?)`,
+      ['D4-'+rid,receipt.order_id,receipt.reservation_id||null,receipt.buyer_id,receipt.supplier_id,
+       reason,category,receipt.evidence_notes,receipt.ordered_quantity,receipt.received_quantity,
+       receipt.disputed_quantity,receipt.refund_assessment_amount,JSON.stringify(metadata),'r4-dispute:'+rid,rid]);
+    await connection.query(
+      `INSERT INTO order_dispute_events
+       (dispute_id,event_code,from_status,to_status,action,actor_id,actor_role,notes,metadata,idempotency_key)
+       VALUES (?,?,'NONE','ESCALATED_FINANCIAL_REVIEW','BUYER_FILED_LINE_DISPUTE',?,'BUYER',?,?,?)`,
+      [insert.insertId,'DE-R4-'+rid,actor.id,receipt.evidence_notes,JSON.stringify(metadata),'r4-dispute:'+rid]);
+    return insert.insertId;
+  }
+
   /**
    * Helper to generate deterministic event code for dispute timeline
    */
@@ -110,6 +150,21 @@ class DisputeService {
     }
 
     return metadata;
+  }
+
+  async _enqueueDisputeNotification(connection, orderId, disputeId, eventType) {
+    // Resolve recipients from the order, never from a caller or dispute payload.
+    const [orders] = await connection.query(
+      'SELECT id, buyer_id, supplier_id FROM orders WHERE id = ?', [orderId]
+    );
+    if (!orders.length) throw new Error('Dispute notification order not found');
+    const order = orders[0];
+    const transition = eventType === 'DISPUTE_OPENED' ? 'opened' : 'resolved';
+    for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+      await notificationService.enqueueEvent(connection, {
+        userId, role, eventType, eventKey: `dispute:${disputeId}:${transition}`, entityId: order.id
+      });
+    }
   }
 
   /**
@@ -507,6 +562,7 @@ class DisputeService {
         [actor.id, disputeId, JSON.stringify({ dispute_code: disputeCode, category, claimed_amount: calculatedClaimStr })]
       );
 
+      await this._enqueueDisputeNotification(connection, order.id, disputeId, 'DISPUTE_OPENED');
       await connection.commit();
 
       return {
@@ -731,6 +787,7 @@ class DisputeService {
         ]
       );
 
+      await this._enqueueDisputeNotification(connection, order.id, disputeId, 'DISPUTE_OPENED');
       await connection.commit();
 
       return {
@@ -1142,6 +1199,10 @@ class DisputeService {
         throw err;
       }
 
+      if (dispute.procurement_line_receipt_id) {
+        throw Object.assign(new Error('Line receipt amendments and financial reconciliation require a line-aware review.'),
+          {code:'LINE_FINANCIAL_ADMIN_REVIEW_REQUIRED',statusCode:409});
+      }
       if (dispute.remediation_status !== 'IN_PROGRESS' && dispute.remediation_status !== 'PROPOSED') {
         const err = new Error(`Cannot confirm remediation: Remediation status is '${dispute.remediation_status}'`);
         err.code = 'INVALID_REMEDIATION_STATE';
@@ -1202,6 +1263,7 @@ class DisputeService {
         orderResumed = true;
       }
 
+      await this._enqueueDisputeNotification(connection, dispute.order_id, dispute.id, 'DISPUTE_RESOLVED');
       await connection.commit();
 
       return {
@@ -1294,6 +1356,10 @@ class DisputeService {
 
       const dispute = disputeRows[0];
 
+      if (dispute.procurement_line_receipt_id) {
+        throw Object.assign(new Error('Line financial allocations must be reconciled before closure or fulfillment resumption.'),
+          {code:'LINE_FINANCIAL_ADMIN_REVIEW_REQUIRED',statusCode:409});
+      }
       if (dispute.status === 'CLOSED') {
         const err = new Error('Dispute is already closed');
         err.code = 'DISPUTE_ALREADY_CLOSED';
@@ -1472,6 +1538,10 @@ class DisputeService {
       }
 
       // Enforce that mandatory remediation is not left dangling
+      if (dispute.procurement_line_receipt_id) {
+        throw Object.assign(new Error('Line financial allocations must be reconciled before closure or fulfillment resumption.'),
+          {code:'LINE_FINANCIAL_ADMIN_REVIEW_REQUIRED',statusCode:409});
+      }
       if (dispute.remediation_status === 'PROPOSED' || dispute.remediation_status === 'IN_PROGRESS') {
         const err = new Error(`Cannot close dispute while operational remediation is '${dispute.remediation_status}'`);
         err.code = 'REMEDIATION_INCOMPLETE';
@@ -1533,6 +1603,8 @@ class DisputeService {
         }
       }
 
+      // A later closure after confirmed remediation reuses the resolution key.
+      await this._enqueueDisputeNotification(connection, dispute.order_id, dispute.id, 'DISPUTE_RESOLVED');
       await connection.commit();
 
       return {

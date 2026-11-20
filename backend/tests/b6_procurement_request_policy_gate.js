@@ -19,6 +19,9 @@ const fails = (name, input, code) => check(name, () => {
   assert.throws(() => normalizeRequestDraft(input), x => x.code === code);
 });
 
+check('Biweekly request frequency survives normalization', () => {
+  assert.equal(normalizeRequestDraft({...sample(),frequency:'BIWEEKLY'}).frequency,'BIWEEKLY');
+});
 check('Multi-product single one-time defaults', () => {
   const x = normalizeRequestDraft(sample());
   assert.equal(x.items.length, 2);

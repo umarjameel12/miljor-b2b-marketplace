@@ -19,13 +19,14 @@ function service(file,deps){
     if(id==='./procurementAwardPolicy')return {buildAwardPreview:()=>({})};
     if(id==='./reservationEventService')return {};
     if(id==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
+    if(id==='./notificationService')return deps.notifications;
     return require(id);
   });
   return m.exports;
 }
 async function main(){
   let passed=0;const check=(name,fn)=>{fn();console.log('PASS '+(++passed)+': '+name)};
-  const states={101:'PAID',102:'PENDING'},updates=[];
+  const states={101:'PAID',102:'PENDING'},updates=[],notificationEvents=[];
   const conn={
     async query(sql,args){
       if(sql.includes('SELECT award_id FROM procurement_award_orders'))return [[{award_id:9}]];
@@ -49,8 +50,13 @@ async function main(){
     },release(){}
   };
   const db={getConnection:async()=>conn};
-  const award=service('procurementAwardService.js',{db});
-  const fulfillment=service('fulfillmentService.js',{db});
+  const notifications={async enqueueEvent(connection,event){
+    assert.equal(connection,conn,'notification must use caller connection');
+    notificationEvents.push({...event});
+    throw Error('Reconciliation and fulfillment reads must not enqueue notifications');
+  }};
+  const award=service('procurementAwardService.js',{db,notifications});
+  const fulfillment=service('fulfillmentService.js',{db,notifications});
   const first=await award.reconcilePaidOrder(conn,101);
   check('first paid supplier award stays PARTIALLY_PAID',()=>{
     assert.equal(first.status,'PARTIALLY_PAID');
@@ -58,17 +64,20 @@ async function main(){
     assert.equal(first.total_orders,2);
     assert.equal(updates.filter(x=>x.kind==='allocation').length,1);
     assert.equal(updates.filter(x=>x.kind==='request').length,0);
+    assert.equal(notificationEvents.length,0);
   });
   const firstSupplier=await fulfillment.listSupplierFulfillmentOrders({actor:{id:11,role:'SUPPLIER'}});
   check('supplier 11 sees its paid poolless B6 order',()=>{
     assert.equal(firstSupplier.pagination.total,1);
     assert.equal(firstSupplier.orders[0].order_id,101);
     assert.equal(firstSupplier.orders[0].pool_id,null);
+    assert.equal(notificationEvents.length,0);
   });
   const secondBefore=await fulfillment.listSupplierFulfillmentOrders({actor:{id:12,role:'SUPPLIER'}});
   check('supplier 12 cannot see its unpaid B6 order',()=>{
     assert.equal(secondBefore.pagination.total,0);
     assert.equal(secondBefore.orders.length,0);
+    assert.equal(notificationEvents.length,0);
   });
   states[102]='PAID';
   const second=await award.reconcilePaidOrder(conn,102);
@@ -79,6 +88,7 @@ async function main(){
     assert.equal(secondAfter.orders[0].order_id,102);
     assert.ok(updates.some(x=>x.kind==='request'&&x.id===5));
     assert.deepEqual(updates.filter(x=>x.kind==='allocation').map(x=>x.id),[101,102]);
+    assert.equal(notificationEvents.length,0);
   });
   console.log('B6 PAID FULFILLMENT SERVICE: '+passed+'/'+passed+' PASS (mocked SQL only)');
 }

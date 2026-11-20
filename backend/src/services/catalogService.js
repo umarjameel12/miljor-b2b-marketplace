@@ -42,6 +42,23 @@ class CatalogService {
   // ---------------------------------------------------------------------------
   // 1.Ensure Family Has Base Product Row (for backward-compatible FK on product_specifications)
   // ---------------------------------------------------------------------------
+  async _createSpecWithUniqueCode(connection, specData, categoryName, variety) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const spec_code = specificationService.generateSpecCode(categoryName, variety);
+      try {
+        return await productSpecRepo.create({ ...specData, spec_code }, connection);
+      } catch (err) {
+        const keyMatch = /\bfor key\s+['"`]([^'"`]+)['"`]\s*$/i.exec(err && (err.sqlMessage || err.message || ''));
+        const isSpecCodeCollision =
+          (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) &&
+          keyMatch && keyMatch[1].split('.').pop() === 'spec_code';
+        if (!isSpecCodeCollision || attempt === 3) {
+          throw err;
+        }
+      }
+    }
+  }
+
   async ensureDefaultProductForFamily(family, connection = null) {
     const executor = connection || db;
     if (family.default_product_id) {
@@ -881,17 +898,16 @@ class CatalogService {
           [category.id, family.id, adminId, specId]
         );
       } else {
-        const specCode = specificationService.generateSpecCode(category.name, finalVariety);
         const title = `${finalBrand} ${family.name} - ${finalVariety} (${finalGrade}) - ${finalPackSize}${finalPackUnit} ${finalPackaging}`;
         const variantTitle = `${finalBrand} — ${finalVariety} (${finalGrade}) — ${finalPackSize}${finalPackUnit} ${finalPackaging}`;
 
-        specId = await productSpecRepo.create(
+        specId = await this._createSpecWithUniqueCode(
+          connection,
           {
             product_id: baseProduct.id,
             category_id: category.id,
             family_id: family.id,
             variant_title: variantTitle,
-            spec_code: specCode,
             title,
             brand: finalBrand,
             variety: finalVariety,
@@ -909,7 +925,8 @@ class CatalogService {
             approved_by: adminId,
             approved_at: new Date()
           },
-          connection
+          category.name,
+          finalVariety
         );
       }
 
@@ -1919,9 +1936,9 @@ class CatalogService {
           const gradeDisplay = product.quality_grade ? ` (${product.quality_grade})` : '';
           const title = `${brandDisplay} ${family.name} — ${product.variety}${gradeDisplay} — ${sku.pack_size}${sku.pack_unit} ${sku.packaging_type}`;
           const variantTitle = `${brandDisplay} — ${product.variety}${gradeDisplay} — ${sku.pack_size}${sku.pack_unit} ${sku.packaging_type}`;
-          const specCode = specificationService.generateSpecCode(family.category_name, product.variety);
 
-          linkedSpecId = await productSpecRepo.create(
+          linkedSpecId = await this._createSpecWithUniqueCode(
+            connection,
             {
               product_id: baseProduct.id,
               category_id: sku.category_id,
@@ -1930,7 +1947,6 @@ class CatalogService {
               supplier_product_id: product.id,
               supplier_sku_id: sku.id,
               variant_title: variantTitle,
-              spec_code: specCode,
               title,
               brand: product.brand || null,
               is_unbranded: product.is_unbranded,
@@ -1953,7 +1969,8 @@ class CatalogService {
               approved_by: supplierId,
               approved_at: new Date()
             },
-            connection
+            family.category_name,
+            product.variety
           );
         }
       }

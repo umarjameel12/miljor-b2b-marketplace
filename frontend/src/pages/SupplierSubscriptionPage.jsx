@@ -104,7 +104,7 @@ export const SupplierSubscriptionPage = () => {
       features: [
         'Up to 13 active canonical product families',
         'Online automated subscription billing scheduled for Phase B11',
-        'Priority matching on buyer RFQs & Demand Requests',
+        'Priority matching on Smart Procurement Hub requests',
         'Flash pool clearance capability',
         'Dedicated dispatch & multi-hub cluster routing',
         'Comprehensive sales & demand forecasting analytics'

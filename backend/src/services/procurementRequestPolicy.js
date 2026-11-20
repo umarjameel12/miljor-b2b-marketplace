@@ -7,7 +7,7 @@
 const exact = require('./exactDecimal');
 
 const OWNERSHIP = new Set(['SINGLE_BUYER', 'COLLECTIVE']);
-const FREQUENCY = new Set(['ONE_TIME', 'WEEKLY', 'MONTHLY']);
+const FREQUENCY = new Set(['ONE_TIME', 'WEEKLY', 'BIWEEKLY', 'MONTHLY']);
 const AWARD = new Set(['FULL_BASKET', 'SPLIT_ALLOWED']);
 const PRIORITY = new Set(['LOWEST_DELIVERED_COST', 'FASTEST_DELIVERY', 'BEST_VALUE']);
 const UNIT = new Set(['kg', 'g', 'l', 'ml', 'bag', 'tin', 'carton', 'sack', 'bundle', 'pack']);

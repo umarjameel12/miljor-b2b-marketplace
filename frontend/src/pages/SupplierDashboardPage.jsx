@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
+import { SupplierOperationsOverview } from '../components/supplier/SupplierOperationsOverview';
+import { ProcurementReliabilityReport } from '../components/procurement/ProcurementReliabilityReport';
+import { SupplierDeliveryRuns } from '../components/procurement/SupplierDeliveryRuns';
 import {
   TrendingUp,
   Package,
@@ -15,54 +18,64 @@ import {
   Clock,
   Sparkles
 } from 'lucide-react';
-import { toast } from 'react-toastify';
 
 export const SupplierDashboardPage = () => {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setSubscription(null); setProfile(null); setError('');
     const fetchData = async () => {
       try {
         setLoading(true);
         const [subRes, profRes] = await Promise.all([
           fetch('/api/v1/supplier/subscription', {
+            signal: controller.signal,
             headers: { Authorization: `Bearer ${token}` }
           }),
           fetch('/api/v1/supplier/profile', {
+            signal: controller.signal,
             headers: { Authorization: `Bearer ${token}` }
           })
         ]);
 
+        if (!active) return;
+        if (!subRes.ok || !profRes.ok) throw new Error('Dashboard data unavailable');
         if (subRes.ok) {
           const subData = await subRes.json();
+          if (!active) return;
           setSubscription(subData.data.entitlements);
         }
         if (profRes.ok) {
           const profData = await profRes.json();
+          if (!active) return;
           setProfile(profData.data.profile);
         }
       } catch (err) {
-        toast.error('Failed to load supplier dashboard data');
+        if (active && !controller.signal.aborted) setError('Dashboard details unavailable. Reload to retry.');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     if (token) {
       fetchData();
     }
-  }, [token]);
+    return () => { active = false; controller.abort(); };
+  }, [token, user?.id]);
 
-  const currentPlan = subscription?.plan_code || subscription?.current_plan || 'STARTER';
-  const maxFam = subscription?.max_allowed_families ?? subscription?.max_families ?? 4;
-  const usedFam = subscription?.active_families_count ?? subscription?.used_distinct_families ?? 0;
+  const currentPlan = subscription?.plan_code || subscription?.current_plan || 'Unavailable';
+  const maxFam = subscription?.max_allowed_families ?? subscription?.max_families ?? null;
+  const usedFam = subscription?.active_families_count ?? subscription?.used_distinct_families ?? null;
   const remainingFam = subscription?.remaining_family_slots !== undefined 
     ? subscription.remaining_family_slots 
-    : (subscription?.remaining_slots !== undefined ? subscription.remaining_slots : Math.max(0, maxFam - usedFam));
-  const percentUsed = Math.min(100, Math.round((usedFam / maxFam) * 100));
+    : (subscription?.remaining_slots !== undefined ? subscription.remaining_slots : (maxFam !== null && usedFam !== null ? Math.max(0, maxFam - usedFam) : '—'));
+  const percentUsed = maxFam > 0 && usedFam !== null ? Math.min(100, Math.round((usedFam / maxFam) * 100)) : 0;
 
   return (
     <AppShell>
@@ -102,6 +115,11 @@ export const SupplierDashboardPage = () => {
           </div>
         </div>
 
+        {error && <p role="alert" className="mb-4 text-sm">{error}</p>}
+        {loading && <p role="status" className="mb-4 text-sm">Loading dashboard details…</p>}
+        <SupplierOperationsOverview key={user?.id} />
+        <SupplierDeliveryRuns key={`delivery:${user?.id}`} />
+        <ProcurementReliabilityReport key={`report:${user?.id}`} />
         {/* Over limit warning */}
         {subscription?.is_over_limit && (
           <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-3">
@@ -138,10 +156,10 @@ export const SupplierDashboardPage = () => {
             </div>
             <div className="flex items-baseline gap-2 mb-2">
               <span className="text-3xl font-serif font-bold text-[var(--text-primary)]">
-                {usedFam}
+                {usedFam ?? '—'}
               </span>
               <span className="text-sm text-[var(--text-muted)]">
-                / {maxFam} families used
+                / {maxFam ?? '—'} families used
               </span>
             </div>
             {/* Progress Bar */}
@@ -169,7 +187,7 @@ export const SupplierDashboardPage = () => {
               </span>
               <div className="space-y-2">
                 <Link
-                  to="/rfqs"
+                  to="/procurement#supplier-invitations"
                   className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--bg-card)] transition-colors text-xs font-medium text-[var(--text-primary)]"
                 >
                   <span className="flex items-center gap-2">
@@ -187,7 +205,7 @@ export const SupplierDashboardPage = () => {
                   <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 </Link>
                 <Link
-                  to="/demand-requests"
+                  to="/procurement#supplier-collective"
                   className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--bg-card)] transition-colors text-xs font-medium text-[var(--text-primary)]"
                 >
                   <span className="flex items-center gap-2">
@@ -211,15 +229,15 @@ export const SupplierDashboardPage = () => {
                 </div>
                 <div>
                   <div className="text-sm font-bold text-[var(--text-primary)]">
-                    {profile?.verification_status === 'VERIFIED' ? 'Verified Tier 1 Supplier' : 'Verification In Progress'}
+                    {profile?.verification_status === 'VERIFIED' ? 'Verified Supplier' : (profile?.verification_status || 'Verification unavailable')}
                   </div>
                   <div className="text-xs text-[var(--text-muted)]">
-                    NTN: {profile?.tax_ntn || 'Verified at Onboarding'}
+                    NTN: {profile?.tax_ntn || 'Not provided'}
                   </div>
                 </div>
               </div>
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                Bank IBAN encrypted with AES-256-GCM. Payouts processed automatically upon buyer delivery confirmation.
+                Buyer receipt and supplier settlement are verified separately. External financial execution remains disabled.
               </p>
             </div>
             <Link

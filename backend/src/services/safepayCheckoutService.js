@@ -21,6 +21,7 @@ const safepayAdapter = require('./safepayAdapter');
 const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
+const notificationService = require('./notificationService');
 
 class SafepayCheckoutService {
 
@@ -138,7 +139,7 @@ class SafepayCheckoutService {
     // Check for existing active attempt with same idempotency key (idempotent replay)
     const [existingAttempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND idempotency_key = ?
+       WHERE order_id = ? AND idempotency_key = ? AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId, trimmedKey]
     );
@@ -154,7 +155,7 @@ class SafepayCheckoutService {
     // Check for currently active attempt to prevent duplicate concurrent sessions
     const [activeAttempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND status = 'INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+       WHERE order_id = ? AND status = 'INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );
@@ -279,12 +280,12 @@ class SafepayCheckoutService {
     eventType
   }) {
     // 1. Signature Verification (Official Safepay HMAC-SHA512 over untouched raw body bytes)
-    const isAuthentic = safepayAdapter.verifyWebhookSignature({
+    const signatureScope = safepayAdapter.verifyWebhookSignatureScope({
       rawBody,
       signature
     });
 
-    if (!isAuthentic) {
+    if (!signatureScope) {
       const err = new Error('Cryptographic signature verification failed');
       err.code = 'INVALID_WEBHOOK_SIGNATURE';
       err.statusCode = 401;
@@ -294,6 +295,8 @@ class SafepayCheckoutService {
     let parsedPayload;
     try {
       parsedPayload = typeof rawBody === 'string' ? JSON.parse(rawBody) : JSON.parse(rawBody.toString('utf8'));
+      if (signatureScope === 'data') parsedPayload = parsedPayload.data;
+      if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) throw new Error('Object payload required');
     } catch (e) {
       const err = new Error('Malformed webhook JSON payload');
       err.code = 'INVALID_PAYLOAD';
@@ -301,8 +304,27 @@ class SafepayCheckoutService {
       throw err;
     }
 
-    const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
-    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.event || parsedPayload.webhook_event_type || 'unknown';
+    const envelopeData = (parsedPayload.data && typeof parsedPayload.data === 'object' && !Array.isArray(parsedPayload.data))
+      ? parsedPayload.data
+      : null;
+    const effectiveEventId = parsedPayload.token
+      || parsedPayload.id
+      || envelopeData?.token
+      || envelopeData?.id
+      || (signatureScope === 'raw_body' ? eventId : null)
+      || (signatureScope === 'raw_body' ? `evt_${Date.now()}` : null);
+    if (!effectiveEventId) {
+      const err = new Error('Authenticated webhook payload requires a stable event identity');
+      err.code = 'MISSING_WEBHOOK_EVENT_ID'; err.statusCode = 400; throw err;
+    }
+    const effectiveEventType = parsedPayload.type
+      || parsedPayload.event
+      || parsedPayload.webhook_event_type
+      || envelopeData?.type
+      || envelopeData?.event
+      || envelopeData?.webhook_event_type
+      || (signatureScope === 'raw_body' ? eventType : null)
+      || 'unknown';
 
     // 2. Check for duplicate webhook receipt (Idempotency)
     const [existingEvent] = await db.query(
@@ -319,7 +341,13 @@ class SafepayCheckoutService {
     }
 
     // 3. Extract transaction details from webhook payload
-    const data = parsedPayload.data || parsedPayload;
+    // Official Safepay v1/v2 webhooks (e.g. payment:created 1.0.0) nest fields inside `notification`
+    const notification = (parsedPayload.notification && typeof parsedPayload.notification === 'object' && !Array.isArray(parsedPayload.notification))
+      ? parsedPayload.notification
+      : ((parsedPayload.data?.notification && typeof parsedPayload.data.notification === 'object' && !Array.isArray(parsedPayload.data.notification))
+          ? parsedPayload.data.notification
+          : null);
+    const data = notification || parsedPayload.data || parsedPayload;
     
     // Official Safepay v2 schema: data.tracker can be a string ('track_...') or an object ({ token: 'track_...' })
     let trackerToken = null;
@@ -333,18 +361,24 @@ class SafepayCheckoutService {
       trackerToken = parsedPayload.token;
     }
 
-    const providerAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
-      ? Number(data.tracker.amount)
+    const isCreatedEvent = ['payment:created', 'payment.created'].includes(effectiveEventType);
+    const rawProviderAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
+      ? data.tracker.amount
       : (data.amount !== undefined
-          ? Number(data.amount)
-          : (data.net !== undefined && data.net !== null ? Number(data.net) : null));
+          ? data.amount
+          : null);
+    const providerAmount = (rawProviderAmount !== null && rawProviderAmount !== '' && !Number.isNaN(Number(rawProviderAmount)))
+      ? Number(rawProviderAmount)
+      : null;
     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
       || data.currency
       || parsedPayload.currency
-      || 'PKR';
+      || null;
 
-    // Support both official Safepay event 'payment.succeeded' and backwards-compatible 'payment.completed' / variants
-    const isSuccessEvent = [
+    // Support both official Safepay event 'payment.succeeded', 'payment:created' (ONLY when state === 'PAID'),
+    // and backwards-compatible 'payment.completed' / variants
+    const normalizedProviderState = String(data.state || parsedPayload.state || '').trim().toUpperCase();
+    const isExplicitSuccessType = [
       'payment.succeeded',
       'payment:succeeded',
       'payment.completed',
@@ -352,8 +386,14 @@ class SafepayCheckoutService {
       'payment.settled',
       'payment:settled'
     ].includes(effectiveEventType);
+    const isCreatedPaidEvent = isCreatedEvent && normalizedProviderState === 'PAID';
+    const explicitStateAllowsSuccess = !normalizedProviderState || ['PAID', 'COMPLETED', 'SUCCEEDED', 'SETTLED'].includes(normalizedProviderState);
+    const isSuccessEvent = (isExplicitSuccessType && explicitStateAllowsSuccess) || isCreatedPaidEvent;
 
     if (!isSuccessEvent) {
+      const recordedEventType = (isCreatedEvent || (isExplicitSuccessType && normalizedProviderState))
+        ? `${effectiveEventType}:${normalizedProviderState || 'UNKNOWN'}`.slice(0, 100)
+        : effectiveEventType;
       // Record event but take no financial mutation
       await db.query(
         `INSERT INTO payment_webhook_events (
@@ -362,7 +402,7 @@ class SafepayCheckoutService {
         ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
         [
           effectiveEventId,
-          effectiveEventType,
+          recordedEventType,
           trackerToken,
           signature,
           String(timestamp),
@@ -372,6 +412,7 @@ class SafepayCheckoutService {
       return {
         success: true,
         event_type: effectiveEventType,
+        provider_state: normalizedProviderState || null,
         message: 'Webhook event recorded; no state transition required'
       };
     }
@@ -420,6 +461,7 @@ class SafepayCheckoutService {
 
       const attempt = attempts[0];
 
+
       // The initial event lookup is deliberately fast but NOT sufficient under
       // concurrent provider retries. Acquiring the payment attempt's FOR UPDATE
       // lock serializes callbacks for the same tracker; recheck event identity
@@ -434,6 +476,10 @@ class SafepayCheckoutService {
           message:'Duplicate authenticated webhook acknowledged after serialized tracker lock'};
       }
 
+      if(attempt.procurement_delivery_contract_id){
+        const result=await require('./procurementDeliveryPaymentService').captureWithinTransaction(connection,{attempt,providerAmount,providerCurrency,eventId:effectiveEventId,eventType:effectiveEventType,signature,timestamp,rawPayload:parsedPayload});
+        await connection.commit();return result;
+      }
       // Lock parent order row FOR UPDATE
       const [orders] = await connection.query(
         `SELECT * FROM orders WHERE id = ? FOR UPDATE`,
@@ -537,7 +583,11 @@ class SafepayCheckoutService {
             event_id: effectiveEventId,
             event_type: effectiveEventType,
             provider: 'SAFEPAY',
-            tracker_token: trackerToken
+            tracker_token: trackerToken,
+            provider_state: normalizedProviderState || null,
+            provider_reference: data.reference || null,
+            provider_fee: data.fee !== undefined ? String(data.fee) : null,
+            provider_net: data.net !== undefined ? String(data.net) : null
           })
         ]
       );
@@ -600,6 +650,14 @@ class SafepayCheckoutService {
             effectiveEventId
           ]
         );
+      }
+
+      // One order payment transition identity across webhook and reconciliation.
+      for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+        await notificationService.enqueueEvent(connection, {
+          userId, role, eventType: 'PAYMENT_VERIFIED',
+          eventKey: `order:${order.id}:payment:verified`, entityId: order.id
+        });
       }
 
       await connection.commit();
@@ -682,7 +740,7 @@ class SafepayCheckoutService {
     // Fetch latest payment attempt
     const [attempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? 
+       WHERE order_id = ? AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );
@@ -778,7 +836,7 @@ class SafepayCheckoutService {
     // If order is already PAID, return idempotent confirmation
     if (order.order_status === 'PAID') {
       const [existingPayments] = await db.query(
-        `SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1`,
+        `SELECT * FROM payments WHERE order_id = ? AND procurement_delivery_contract_id IS NULL ORDER BY id DESC LIMIT 1`,
         [orderId]
       );
       return {
@@ -803,7 +861,7 @@ class SafepayCheckoutService {
     // Find latest payment attempt
     const [attempts] = await db.query(
       `SELECT * FROM payment_attempts 
-       WHERE order_id = ? AND status = 'INITIATED'
+       WHERE order_id = ? AND status = 'INITIATED' AND procurement_delivery_contract_id IS NULL
        ORDER BY id DESC LIMIT 1`,
       [orderId]
     );
@@ -1021,6 +1079,13 @@ class SafepayCheckoutService {
           reconciliationEventId
         ]
       );
+      }
+
+      for (const [userId, role] of [[lockedOrder.buyer_id, 'BUYER'], [lockedOrder.supplier_id, 'SUPPLIER']]) {
+        await notificationService.enqueueEvent(connection, {
+          userId, role, eventType: 'PAYMENT_VERIFIED',
+          eventKey: `order:${lockedOrder.id}:payment:verified`, entityId: lockedOrder.id
+        });
       }
 
       await connection.commit();

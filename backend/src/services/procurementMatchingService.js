@@ -1,4 +1,5 @@
 'use strict';
+const notifications=require('./notificationService');
 
 // B6-D: Eligible supplier matching and private invitations.
 // This stage never creates a quote, reserves stock, takes payment or discloses
@@ -153,6 +154,10 @@ class ProcurementMatchingService {
         'SELECT id,request_id,supplier_id,status,eligible_line_ids,invited_at,responded_at FROM procurement_supplier_invitations WHERE request_id=? AND supplier_id=?',
         [request.id,supplier]
       );
+      for(const recipient of [{userId:Number(buyerId),role:'BUYER'},{userId:supplier,role:'SUPPLIER'}]){
+        await notifications.enqueueEvent(conn,{...recipient,eventType:'SUPPLIER_MATCHED',
+          eventKey:'match:'+request.id+':'+supplier,entityId:request.id});
+      }
       await conn.commit();
       return rows[0];
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}

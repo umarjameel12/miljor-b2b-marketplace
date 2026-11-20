@@ -15,13 +15,14 @@ async function runMigrations(targetDb) {
   // Failed/mismatched branch migrations must be rejected before any SQL.
   const manifest = scanMigrations();
   const selectedDb = targetDb || process.env.DB_NAME || 'miljor_db';
-  if(process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' && selectedDb!=='miljor_test_db')
-    throw new Error('MIGRATION_PROTECTED_DB_BLOCKED: test acceptance can only target miljor_test_db');
+  const isDisposableTestDb = (n) => /^(?:miljor_test_db|miljor_[a-z0-9_]+_test_db)$/.test(String(n || ''));
+  if(process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' && !isDisposableTestDb(selectedDb))
+    throw new Error('MIGRATION_PROTECTED_DB_BLOCKED: test acceptance can only target miljor_test_db (or *_test_db)');
   // Explicit TEST-ONLY historical fixture hook; never truncate release migrations.
   const stopBefore=process.env.MILJOR_TEST_STOP_BEFORE_VERSION || null;
   if(stopBefore && !(process.env.NODE_ENV==='test' &&
        process.env.MILJOR_TEST_ONLY_MIGRATIONS==='1' &&
-       selectedDb==='miljor_test_db' &&
+       isDisposableTestDb(selectedDb) &&
        /^0[0-9]{2}$/.test(stopBefore)))
     throw new Error('MIGRATION_PARTIAL_RUN_FORBIDDEN: stop-before is restricted to disposable test database');
   const connection = await mysql.createConnection({

@@ -189,6 +189,11 @@ app.use('/api/v1/catalog', catalogRoutes);
 app.use('/api/v1', deliveryQuotationRoutes);
 app.use('/api/v1', procurementRoutes);
 app.use('/api/v1', marketplaceOperationsRoutes);
+app.use('/api/v1', require('./src/routes/v1/procurementReportingRoutes'));
+app.use('/api/v1', require('./src/routes/v1/procurementDeliveryRoutes'));
+app.use('/api/v1', require('./src/routes/v1/procurementFinancialReviewRoutes'));
+app.use('/api/v1', require('./src/routes/v1/procurementDeliveryEvidenceRoutes'));
+app.use('/api/v1', require('./src/routes/v1/procurementLineReceiptRoutes'));
 app.use('/api/v1/notifications', require('./src/routes/v1/notificationRoutes'));
 app.post('/api/v1/webhooks/safepay', (req, res) => paymentController.handleSafepayWebhook(req, res));
 

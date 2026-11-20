@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const ALLOWED_SUPPLIER_TRANSITIONS = {
   'AWAITING_SUPPLIER_ACKNOWLEDGEMENT': ['PREPARING'],
@@ -54,6 +55,21 @@ const VALID_BUYER_DISCREPANCY_REASONS = [
 ];
 
 class FulfillmentService {
+  constructor(database=db){this.database=database;}
+
+  // Use only the locked order's participants and immutable milestone identity.
+  // Enqueue errors propagate to the enclosing mutation's rollback.
+  async _enqueueOrderNotifications(connection, order, eventType, eventCode) {
+    for (const [userId, role] of [[order.buyer_id, 'BUYER'], [order.supplier_id, 'SUPPLIER']]) {
+      await notificationService.enqueueEvent(connection, {
+        userId,
+        role,
+        eventType,
+        eventKey: `${eventCode}:${eventType}`,
+        entityId: order.id
+      });
+    }
+  }
 
   /**
    * Generates a deterministic event code for fulfillment milestone events
@@ -111,7 +127,7 @@ class FulfillmentService {
    * List paid orders assigned to the calling supplier with bounded pagination
    */
   async listSupplierFulfillmentOrders({ actor, status = null, page = 1, limit = 20 }) {
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       await this._assertVerifiedSupplier(actor, connection);
 
@@ -182,7 +198,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       await this._assertVerifiedSupplier(actor, connection);
 
@@ -274,7 +290,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -314,6 +330,7 @@ class FulfillmentService {
       }
 
       const currentStatus = order.fulfillment_status || 'AWAITING_SUPPLIER_ACKNOWLEDGEMENT';
+      if(order.notes==='SMART_PROCUREMENT_BASKET')await require('./procurementCollectiveCommitmentService').assertFunded(connection,order.id);
 
       // Idempotency replay check: If identical target status was recorded with the same key
       if (currentStatus === toStatus) {
@@ -393,6 +410,11 @@ class FulfillmentService {
       }
 
       // Update order state and timestamps
+      if(toStatus==='DISPATCHED' && order.procurement_delivery_snapshot &&
+         order.delivery_type!=='SUPPLIER_PICKUP' && deliveryMethod==='BUYER_PICKUP') {
+        const err=new Error('Bound procurement delivery requires the buyer-approved delivery type.');
+        err.code='PROCUREMENT_DELIVERY_METHOD_MISMATCH';err.statusCode=422;throw err;
+      }
       let updateSql = 'UPDATE orders SET fulfillment_status = ?, updated_at = NOW()';
       const updateParams = [toStatus];
 
@@ -487,6 +509,15 @@ class FulfillmentService {
       );
       }
 
+      const notificationType = {
+        READY_FOR_DISPATCH: 'DISPATCH_SCHEDULED',
+        DISPATCHED: 'OUT_FOR_DELIVERY',
+        SUPPLIER_DELIVERED: 'DELIVERY_REPORTED'
+      }[toStatus];
+      if (notificationType) {
+        await this._enqueueOrderNotifications(connection, order, notificationType, eventCode);
+      }
+
       await connection.commit();
 
       return {
@@ -546,7 +577,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -680,6 +711,15 @@ class FulfillmentService {
       );
       }
 
+      const notificationType = {
+        SUPPLIER_DELIVERY_DELAYED: 'DELIVERY_DELAYED',
+        SUPPLIER_LOGISTICS_FAILURE: 'DELIVERY_FAILED'
+      }[reason];
+      // Inventory shortage does not establish partial delivery or a failed attempt.
+      if (notificationType) {
+        await this._enqueueOrderNotifications(connection, order, notificationType, eventCode);
+      }
+
       await connection.commit();
 
       return {
@@ -715,7 +755,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       const parsedPage = Math.max(1, parseInt(page, 10) || 1);
       const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
@@ -791,7 +831,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       const [orderRows] = await connection.query(
         `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
@@ -881,7 +921,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -966,6 +1006,15 @@ class FulfillmentService {
         throw err;
       }
 
+      // Procurement quantities are per award line; an aggregate receipt cannot
+      // establish physical acceptance of a basket or erase disputed units.
+      const [procurementLines] = await connection.query(
+        'SELECT COUNT(*) AS line_count FROM procurement_award_lines al JOIN procurement_award_orders ao ON ao.id=al.award_order_id WHERE ao.order_id=?',
+        [orderId]
+      );
+      if (Number(procurementLines[0]?.line_count || 0) > 0) {
+        await require('./procurementLineReceiptService').assertFullyAcceptedWithinTransaction(connection, orderId);
+      }
       // Advance to BUYER_CONFIRMED
       await connection.query(
         `UPDATE orders 
@@ -1029,6 +1078,8 @@ class FulfillmentService {
         ]
       );
       }
+
+      await this._enqueueOrderNotifications(connection, order, 'RECEIPT_CONFIRMED', eventCode);
 
       await connection.commit();
 
@@ -1097,7 +1148,7 @@ class FulfillmentService {
     }
 
     const trimmedKey = idempotencyKey.trim();
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
 
     try {
       await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
@@ -1270,6 +1321,13 @@ class FulfillmentService {
       );
       }
 
+      // Only a persisted, validated single-item shortage with some goods received
+      // establishes partial delivery. Other discrepancies and B6 aggregate claims
+      // cannot safely produce this event; no failure is inferred from non-receipt.
+      if (shortageEvidence && Number(shortageEvidence.received_quantity) > 0) {
+        await this._enqueueOrderNotifications(connection, order, 'PARTIAL_DELIVERY', eventCode);
+      }
+
       await connection.commit();
 
       return {
@@ -1306,7 +1364,7 @@ class FulfillmentService {
       throw err;
     }
 
-    const connection = await db.getConnection();
+    const connection = await this.database.getConnection();
     try {
       const [orderRows] = await connection.query(
         `SELECT o.*, p.pool_code, p.pool_unit, p.promised_delivery_at, p.scheduled_close_at,
@@ -1412,3 +1470,4 @@ class FulfillmentService {
 }
 
 module.exports = new FulfillmentService();
+module.exports.FulfillmentService = FulfillmentService;

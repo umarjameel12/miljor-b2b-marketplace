@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/services/fulfillmentService.js'),'utf8');
 function instantiate(options={}){
-  const events=[],updates=[],businessEvents=[];
+  const events=[],updates=[],businessEvents=[],notifications=[],enqueueAttempts=[];
   const order={
     id:70, order_code:'TEST-ORDER-70', buyer_id:11, supplier_id:12,
     payment_status:'PAID', fulfillment_status:'SUPPLIER_DELIVERED',
@@ -27,7 +27,7 @@ function instantiate(options={}){
     },
     async beginTransaction(){},
     async commit(){tx.commit++},
-    async rollback(){tx.rollback++},
+    async rollback(){tx.rollback++;notifications.length=0},
     release(){tx.release++}
   };
   const moduleRef={exports:{}};
@@ -40,10 +40,20 @@ function instantiate(options={}){
       if(name==='./reservationEventService')return {generateEventId:()=> 'TEST-EVENT-70'};
       if(name==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
       if(name==='./deliveryQuantityPolicy')return policy;
+      if(name==='./notificationService')return {async enqueueEvent(conn,event){
+        assert.equal(conn,connection);
+        assert.equal(tx.commit,0,'notification must be enqueued before commit');
+        assert.equal(updates.length,1,'discrepancy must be mutated before enqueue');
+        assert.equal(events.length,1,'milestone evidence must precede enqueue');
+        assert.equal(businessEvents.length,1,'legacy outbox evidence must precede enqueue');
+        enqueueAttempts.push({...event});
+        if(options.failNotificationAt===enqueueAttempts.length)throw Error('Notification enqueue failed');
+        notifications.push({...event});
+      }};
       throw Error('Unexpected dependency: '+name);
     }
   },{filename:'fulfillmentService.js'});
-  return {service:moduleRef.exports,events,updates,businessEvents,tx};
+  return {service:moduleRef.exports,events,updates,businessEvents,notifications,enqueueAttempts,tx};
 }
 async function execute(){
   let passed=0;
@@ -72,6 +82,15 @@ async function execute(){
     const outbox=JSON.parse(x.businessEvents[0].find(v=>typeof v==='string'&&v.includes('"short_quantity"')));
     assert.equal(outbox.short_quantity,'20.00');
     assert.equal(x.updates.length,1);
+    const hash=require('node:crypto').createHash('sha256')
+      .update('70:BUYER_DISCREPANCY:demo-discrepancy-70').digest('hex').slice(0,20);
+    assert.deepEqual(x.notifications,[
+      {userId:11,role:'BUYER',eventType:'PARTIAL_DELIVERY',
+        eventKey:`FE-ORD-70-BUYER_DISCREPANCY-${hash}:PARTIAL_DELIVERY`,entityId:70},
+      {userId:12,role:'SUPPLIER',eventType:'PARTIAL_DELIVERY',
+        eventKey:`FE-ORD-70-BUYER_DISCREPANCY-${hash}:PARTIAL_DELIVERY`,entityId:70}
+    ]);
+    assert.equal(x.tx.release,1);
   });
   await check('over-delivery refuses mutation and rolls back',async()=>{
     const x=instantiate();
@@ -80,6 +99,7 @@ async function execute(){
     assert.equal(x.tx.rollback,1);
     assert.equal(x.events.length,0);
     assert.equal(x.updates.length,0);
+    assert.equal(x.enqueueAttempts.length,0);
   });
   await check('B6 awarded order requires line-specific evidence',async()=>{
     const x=instantiate({awardLines:2});
@@ -88,6 +108,7 @@ async function execute(){
     assert.equal(x.tx.rollback,1);
     assert.equal(x.events.length,0);
     assert.equal(x.updates.length,0);
+    assert.equal(x.enqueueAttempts.length,0);
   });
   await check('other buyer cannot mutate delivery evidence',async()=>{
     const x=instantiate();
@@ -95,6 +116,16 @@ async function execute(){
       e=>e.code==='FORBIDDEN');
     assert.equal(x.tx.rollback,1);
     assert.equal(x.events.length,0);
+    assert.equal(x.enqueueAttempts.length,0);
+  });
+  await check('notification enqueue failure propagates and rolls back without commit',async()=>{
+    const x=instantiate({failNotificationAt:2});
+    await assert.rejects(x.service.reportBuyerDiscrepancy(payload),/Notification enqueue failed/);
+    assert.equal(x.enqueueAttempts.length,2);
+    assert.equal(x.notifications.length,0);
+    assert.equal(x.tx.commit,0);
+    assert.equal(x.tx.rollback,1);
+    assert.equal(x.tx.release,1);
   });
   console.log('FULFILLMENT DISCREPANCY SERVICE: '+passed+'/'+passed+' PASS (in-memory transactions only)');
 }

@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const supDelivRepo = require('../repositories/supplierDeliveryRepository');
 const supDelivService = require('./supplierDeliveryService');
+const exact = require('./exactDecimal');
 const geoRepo = require('../repositories/geographicRepository');
 
 /**
@@ -29,7 +30,7 @@ class DeliveryEligibilityService {
    * Evaluate fulfillment option eligibility for a buyer's cluster against a supplier
    * Supports authoritative pool-binding and Asia/Karachi cutoff verification
    */
-  async getDeliveryOptions(buyerId, params, connection) {
+  async getDeliveryOptions(buyerId, params, connection, context = {}) {
     const { supplier_id, cluster_id, pool_id, address_id, currentTime } = params;
 
     let sId = supplier_id ? Number(supplier_id) : null;
@@ -106,7 +107,7 @@ class DeliveryEligibilityService {
     }
 
     // Fetch supplier delivery settings
-    const settings = await supDelivService.getSupplierSettings(sId, connection);
+    const settings = await supDelivService.getSupplierSettings(sId, connection, context.procurement === true && Boolean(connection));
     const { configuration, cluster_rates, pickup_points } = settings;
 
     // Check pool-specific multi-cluster authorization & coverage policy (Phase 6D.3 & 6D.3.2)
@@ -289,6 +290,27 @@ class DeliveryEligibilityService {
       });
     }
 
+    // Internal procurement callers opt into this mode; public payload flags cannot.
+    if (context.procurement === true && !pool) {
+      const rate = cluster_rates.find(r => Number(r.cluster_id) === cId && r.mode === 'INDIVIDUAL');
+      if (Number(configuration.individual_delivery_enabled) !== 1) {
+        ineligibleModes.push({mode:'INDIVIDUAL',reason_code:'MODE_DISABLED_BY_SUPPLIER',message:'Supplier has not enabled individual procurement delivery.'});
+      } else if (!rate || Number(rate.is_eligible) !== 1) {
+        ineligibleModes.push({mode:'INDIVIDUAL',reason_code:'CLUSTER_NOT_COVERED_BY_SUPPLIER',message:'No individual delivery rate for this cluster.'});
+      } else {
+        let fee;
+        try {
+          fee = exact.toCanonical(exact.toDecimalString(rate.fee_pkr,{maxPrecision:10,maxScale:2,allowNegative:false}),2);
+          if (!Number.isSafeInteger(Number(rate.version)) || Number(rate.version)<1) throw Error();
+        } catch {
+          throw Object.assign(new Error('Individual supplier rate is invalid.'),{code:'INVALID_DELIVERY_FEE',statusCode:422});
+        }
+        eligibleModes.push({mode:'INDIVIDUAL',label:'Individual doorstep delivery',fee_pkr:fee,
+          supplier_rate_version:Number(rate.version),cluster_id:cId,cluster_name:cluster.name,
+          description:'Dedicated procurement delivery at the supplier configured cluster rate.'});
+      }
+    }
+
     return {
       buyer_cluster: {
         id: cluster.id,
@@ -310,7 +332,7 @@ class DeliveryEligibilityService {
    * Immune to client-side tampering of fees or disabled modes
    * Supports dynamic expiration alignment (DEFECT-G2-03)
    */
-  async createAuthoritativeQuote(buyerId, payload, connection) {
+  async createAuthoritativeQuote(buyerId, payload, connection, context = {}) {
     const {
       supplier_id,
       pool_id = null,
@@ -323,15 +345,22 @@ class DeliveryEligibilityService {
 
     const activeDb = connection || db;
 
-    if (!['STANDARD_CLUSTERED', 'PICKUP', 'EXPRESS'].includes(mode)) {
+    if (!['STANDARD_CLUSTERED', 'PICKUP', 'EXPRESS', 'INDIVIDUAL'].includes(mode)) {
       const err = new Error(`Invalid fulfillment mode '${mode}'. Must be STANDARD_CLUSTERED, PICKUP, or EXPRESS.`);
       err.code = 'INVALID_MODE';
       err.statusCode = 400;
       throw err;
     }
 
+    if (mode === 'INDIVIDUAL' && (context.procurement !== true || !connection || pool_id != null)) {
+      throw Object.assign(new Error('Individual delivery is available only through procurement quotation.'),{code:'PROCUREMENT_DELIVERY_REQUIRED',statusCode:409});
+    }
+    if (mode === 'INDIVIDUAL') {
+      await activeDb.query('SELECT id FROM supplier_delivery_configurations WHERE supplier_id=? FOR UPDATE',[supplier_id]);
+      await activeDb.query('SELECT id FROM supplier_delivery_cluster_rates WHERE supplier_id=? AND cluster_id=? FOR UPDATE',[supplier_id,cluster_id]);
+    }
     // 0. Delivery Address Enforcement (Phase 6D.3: Mandatory for STANDARD_CLUSTERED & EXPRESS, NOT required for PICKUP)
-    if (mode === 'STANDARD_CLUSTERED' || mode === 'EXPRESS') {
+    if (mode === 'STANDARD_CLUSTERED' || mode === 'EXPRESS' || mode === 'INDIVIDUAL') {
       let hasAddress = false;
       if (address_id) {
         const [addrRows] = await activeDb.query(
@@ -378,7 +407,7 @@ class DeliveryEligibilityService {
       pool_id,
       address_id,
       currentTime
-    }, connection);
+    }, connection, context);
 
     const matchedMode = eligibility.eligible_modes.find(m => m.mode === mode);
     if (!matchedMode) {
@@ -392,8 +421,8 @@ class DeliveryEligibilityService {
     let quotedFee = 0.00;
     let selectedPickupId = null;
 
-    if (mode === 'STANDARD_CLUSTERED' || mode === 'EXPRESS') {
-      quotedFee = typeof matchedMode.fee_pkr === 'number' ? matchedMode.fee_pkr : 0.00;
+    if (mode === 'STANDARD_CLUSTERED' || mode === 'EXPRESS' || mode === 'INDIVIDUAL') {
+      quotedFee = mode === 'INDIVIDUAL' ? matchedMode.fee_pkr : (typeof matchedMode.fee_pkr === 'number' ? matchedMode.fee_pkr : 0.00);
     } else if (mode === 'PICKUP') {
       if (!pickup_point_id) {
         selectedPickupId = matchedMode.pickup_points[0].id;
@@ -416,7 +445,7 @@ class DeliveryEligibilityService {
     // Capture destination address snapshot for delivery modes (Phase 6D.3.2 & 6D.3.3)
     let destinationAddressSnapshot = null;
     let destinationFingerprint = null;
-    if (mode === 'STANDARD_CLUSTERED' || mode === 'EXPRESS') {
+    if (mode === 'STANDARD_CLUSTERED' || mode === 'EXPRESS' || mode === 'INDIVIDUAL') {
       let addr = null;
       if (address_id) {
         const [addrRows] = await activeDb.query(
@@ -432,6 +461,9 @@ class DeliveryEligibilityService {
         if (addrRows.length > 0) addr = addrRows[0];
       }
 
+      if (mode === 'INDIVIDUAL' && (!addr || addr.geographic_match_status !== 'VERIFIED' || Number(addr.cluster_id) !== Number(cluster_id))) {
+        throw Object.assign(new Error('Individual delivery requires your verified saved address in this cluster.'),{code:'VERIFIED_DELIVERY_DESTINATION_REQUIRED',statusCode:422});
+      }
       if (addr) {
         destinationFingerprint = computeAddressFingerprint(addr);
         destinationAddressSnapshot = {
@@ -450,7 +482,12 @@ class DeliveryEligibilityService {
 
     // Dynamic Quote Expiration Alignment (DEFECT-G2-03 Fix)
     const maxTtlMs = 24 * 60 * 60 * 1000;
-    const nowMs = currentTime ? new Date(currentTime).getTime() : Date.now();
+    let nowMs = currentTime ? new Date(currentTime).getTime() : Date.now();
+    if (mode === 'INDIVIDUAL') {
+      const [clock] = await activeDb.query('SELECT UTC_TIMESTAMP() AS quote_now');
+      nowMs = new Date(clock[0].quote_now).getTime();
+      if (!Number.isFinite(nowMs)) throw Object.assign(new Error('Invalid quote clock.'),{code:'INVALID_QUOTE_CLOCK',statusCode:500});
+    }
     let quoteExpiresAtMs = nowMs + maxTtlMs;
 
     if (eligibility.pool && eligibility.pool.expires_at) {
@@ -479,11 +516,12 @@ class DeliveryEligibilityService {
       supplier_id: eligibility.supplier_id,
       pool_id: eligibility.pool_id,
       cluster_id: Number(cluster_id),
-      address_id: address_id ? Number(address_id) : null,
+      address_id: mode === 'INDIVIDUAL' ? destinationAddressSnapshot.address_id : (address_id ? Number(address_id) : null),
       destination_address_snapshot: destinationAddressSnapshot,
       destination_fingerprint: destinationFingerprint,
       mode,
-      quoted_delivery_fee_pkr: Number(quotedFee.toFixed(2)),
+      quoted_delivery_fee_pkr: mode === 'INDIVIDUAL' ? quotedFee : Number(quotedFee.toFixed(2)),
+      supplier_rate_version: mode === 'INDIVIDUAL' ? matchedMode.supplier_rate_version : null,
       pickup_point_id: selectedPickupId,
       supplier_config_version: eligibility.supplier_config_version,
       expires_at: expiresAt
@@ -527,7 +565,14 @@ class DeliveryEligibilityService {
         throw err;
       }
 
+      if (quote.mode === 'INDIVIDUAL' && (!quote.procurement_request_id || !quote.procurement_quote_id || quote.pool_id)) {
+        throw Object.assign(new Error('Individual delivery requires procurement binding.'),{code:'PROCUREMENT_AWARD_REQUIRED',statusCode:409});
+      }
+      if (quote.mode === 'INDIVIDUAL') require('./procurementDeliveryBindingPolicy').snapshotDeliveryTerms(quote);
       // Validate Single-Use / Replay Prevention
+      if(quote.procurement_request_id&&(!isExternalConn||Number(options.procurementRequestId)!==Number(quote.procurement_request_id))){
+        throw Object.assign(new Error('Procurement delivery terms must be accepted through gated award checkout.'),{code:'PROCUREMENT_AWARD_REQUIRED',statusCode:409});
+      }
       if (quote.status === 'ACCEPTED') {
         const err = new Error('This delivery quote has already been accepted (replay prevented).');
         err.code = 'QUOTE_ALREADY_ACCEPTED';
@@ -543,7 +588,11 @@ class DeliveryEligibilityService {
       }
 
       // Validate Expiration
-      const now = options.currentTime ? new Date(options.currentTime) : new Date();
+      let now = options.currentTime ? new Date(options.currentTime) : new Date();
+      if (quote.mode === 'INDIVIDUAL') {
+        const [clock] = await activeDb.query('SELECT UTC_TIMESTAMP() AS quote_now');
+        now = new Date(clock[0].quote_now);
+      }
       if (new Date(quote.expires_at) <= now) {
         await activeDb.query("UPDATE delivery_quotes SET status = 'EXPIRED' WHERE id = ?", [quote.id]);
         const err = new Error('Delivery quote has expired.');
@@ -568,7 +617,7 @@ class DeliveryEligibilityService {
       }
 
       // Validate Destination Address for Delivery Modes (Phase 6D.3.2 & 6D.3.3)
-      if (quote.mode === 'STANDARD_CLUSTERED' || quote.mode === 'EXPRESS') {
+      if (quote.mode === 'STANDARD_CLUSTERED' || quote.mode === 'EXPRESS' || quote.mode === 'INDIVIDUAL') {
         let snap = null;
         if (quote.destination_address_snapshot) {
           snap = typeof quote.destination_address_snapshot === 'string'
@@ -592,6 +641,9 @@ class DeliveryEligibilityService {
           }
 
           const currentAddr = addrRows[0];
+          if (quote.mode === 'INDIVIDUAL' && (!snap || !quote.destination_fingerprint || currentAddr.geographic_match_status !== 'VERIFIED')) {
+            throw Object.assign(new Error('Individual destination requires fresh approval.'),{code:'DELIVERY_REAPPROVAL_REQUIRED',statusCode:409});
+          }
 
           // 1. Cluster check
           if (Number(currentAddr.cluster_id) !== Number(quote.cluster_id)) {
@@ -639,6 +691,19 @@ class DeliveryEligibilityService {
         }
       }
 
+      if (quote.mode === 'INDIVIDUAL') {
+        await activeDb.query('SELECT id FROM supplier_delivery_configurations WHERE supplier_id=? FOR UPDATE',[quote.supplier_id]);
+        await activeDb.query('SELECT id FROM supplier_delivery_cluster_rates WHERE supplier_id=? AND cluster_id=? FOR UPDATE',[quote.supplier_id,quote.cluster_id]);
+        const options = await this.getDeliveryOptions(buyerId,{supplier_id:quote.supplier_id,cluster_id:quote.cluster_id},activeDb,{procurement:true});
+        const individual = options.eligible_modes.find(mode => mode.mode === 'INDIVIDUAL');
+        if (!individual || Number(options.supplier_config_version) !== Number(quote.supplier_config_version) ||
+          individual.supplier_rate_version !== Number(quote.supplier_rate_version) ||
+          !exact.exactDecimalEquals(individual.fee_pkr,quote.quoted_delivery_fee_pkr,2)) {
+          throw Object.assign(new Error('Individual pricing changed; review fresh terms.'),{code:'DELIVERY_REAPPROVAL_REQUIRED',statusCode:409});
+        }
+        const [deadline] = await activeDb.query('SELECT expires_at > UTC_TIMESTAMP() AS is_live FROM delivery_quotes WHERE id=?',[quote.id]);
+        if (Number(deadline[0]?.is_live) !== 1) throw Object.assign(new Error('Delivery quote has expired.'),{code:'QUOTE_EXPIRED',statusCode:422});
+      }
       // Atomic single-use state transition: PENDING -> ACCEPTED
       const [result] = await activeDb.query(
         "UPDATE delivery_quotes SET status = 'ACCEPTED' WHERE quote_code = ? AND status = 'PENDING'",
