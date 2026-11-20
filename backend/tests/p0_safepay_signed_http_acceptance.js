@@ -110,7 +110,10 @@ async function main(){
       'SELECT (SELECT COUNT(*) FROM payments WHERE order_id=?) AS payments,(SELECT COUNT(*) FROM payment_webhook_events WHERE order_id=? AND processed_status=?) AS processed',
       [order,order,'PROCESSED']);
     assert.equal(Number(counts.payments),1);
-    assert.equal(Number(counts.processed),1);
+    // Three distinct authenticated transitions were intentionally recorded for this order:
+    // the first signed failure, the shared-token signed failure, and the later success.
+    // Retries of the success are deduplicated above and must not add more rows.
+    assert.equal(Number(counts.processed),3,'Each distinct authenticated state transition is recorded once');
     console.log('PASS repeated signed callbacks produce exactly one PAID payment');
 
     // V3 provider webhooks use integer minor units. This test pins the contract
