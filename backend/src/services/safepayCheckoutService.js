@@ -465,9 +465,11 @@ class SafepayCheckoutService {
              attempt.status==='INITIATED' && attempt.payment_status!=='PAID'){
             await connection.query(`UPDATE payment_attempts SET status='FAILED'
               WHERE id=? AND status='INITIATED'`,[attempt.id]);
-            await require('./collectivePaymentHoldService').markFailed(connection,attempt.order_id);
-            await connection.query(`UPDATE orders SET payment_status='AWAITING_PAYMENT',updated_at=UTC_TIMESTAMP()
-              WHERE id=? AND payment_status='PAYMENT_INITIATED'`,[attempt.order_id]);
+            const holdResult=await require('./collectivePaymentHoldService').markFailed(connection,attempt.order_id);
+            if(holdResult.status!=='RECONCILIATION_REQUIRED'){
+              await connection.query(`UPDATE orders SET payment_status='AWAITING_PAYMENT',updated_at=UTC_TIMESTAMP()
+                WHERE id=? AND payment_status='PAYMENT_INITIATED'`,[attempt.order_id]);
+            }
           }
           await connection.query(
             `INSERT INTO payment_webhook_events (
