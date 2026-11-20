@@ -40,6 +40,10 @@ class CollectivePaymentHoldService{
    if(row.payment_status==='PAID'||row.payment_hold_status==='COMMITTED'){
     await conn.commit();return {collective_order:true,paid:true};
    }
+   // Rows created before this lease migration retain their historical policy.
+   if(!row.payment_expires_at){
+    await conn.commit();return {collective_order:true,legacy:true,pending:true};
+   }
    if(row.payment_hold_status==='RELEASED')throw fail('COLLECTIVE_PAYMENT_HOLD_EXPIRED','This group order stock hold has expired; request a fresh group award');
    if(row.payment_hold_status==='RECONCILIATION_REQUIRED'){
     await conn.commit();return {collective_order:true,reconciliation_required:true};
@@ -65,7 +69,7 @@ class CollectivePaymentHoldService{
   const [rows]=await db.query(`SELECT payment_hold_status,
    (payment_expires_at>UTC_TIMESTAMP()) AS is_open
    FROM procurement_collective_buyer_orders WHERE order_id=? AND buyer_id=?`,[orderId,buyerId]);
-  if(!rows.length)return;
+  if(!rows.length||rows[0].is_open==null)return; // Legacy orders have no retroactive deadline.
   if(!['ACTIVE','PAYMENT_PENDING'].includes(rows[0].payment_hold_status)||Number(rows[0].is_open)!==1)
    throw fail('COLLECTIVE_PAYMENT_HOLD_CLOSED','Collective stock hold is closed; no new Safepay session may be created');
  }
