@@ -137,7 +137,9 @@ class CollectivePaymentHoldService{
    FROM procurement_collective_buyer_orders WHERE order_id=? AND buyer_id=?`,[orderId,buyerId]);
   if(!rows[0])return null;
   const r=rows[0];
-  return {kind:'COLLECTIVE',status:r.payment_hold_status==='ACTIVE'&&!r.can_start?'EXPIRED':r.payment_hold_status,
+  const expired=['ACTIVE','PAYMENT_PENDING'].includes(r.payment_hold_status)&&!r.can_start;
+  const status=expired?(r.checkout_started?'RECONCILIATION_REQUIRED':'EXPIRED'):r.payment_hold_status;
+  return {kind:'COLLECTIVE',status,
    expires_at:r.expires_at_utc,server_time:r.server_time_utc,
    checkout_started:Boolean(r.checkout_started),can_start_checkout:['ACTIVE','PAYMENT_PENDING'].includes(r.payment_hold_status)&&Boolean(r.can_start),
    release_reason:r.payment_hold_release_reason||null};
