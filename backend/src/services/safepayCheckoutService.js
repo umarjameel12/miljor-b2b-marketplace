@@ -836,6 +836,8 @@ class SafepayCheckoutService {
 
     const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
       .readForOrder(order.id,order.buyer_id);
+    const collectivePaymentHold = await require('./collectivePaymentHoldService')
+      .readForOrder(order.id,order.buyer_id);
 
     return {
       order_id: order.id,
@@ -847,6 +849,7 @@ class SafepayCheckoutService {
       currency: order.currency,
       lifecycle_phase: lifecyclePhase,
       regular_pool_payment_hold: regularPoolPaymentHold,
+      collective_payment_hold: collectivePaymentHold,
       latest_attempt: latestAttempt ? {
         attempt_code: latestAttempt.attempt_code,
         status: latestAttempt.status,
