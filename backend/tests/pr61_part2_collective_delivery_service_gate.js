@@ -144,7 +144,46 @@ async function main(){
   const f=fixture();await f.service.propose(supplier,group,{delivery_day:date,delivery_window:window},key);
   const first=await f.service.decide(201,group,{run_id:501,decision:'ACCEPT'});
   assert.equal(first.status,'ACCEPTED_PENDING_GROUP_CONFIRMATION');assert.equal(f.state.run.status,'PROPOSED');
-  const readyBefore=await f.service.assertDispatchReady(f.conn,1001);assert.fail('Expected consent guard to reject: '+JSON.stringify(readyBefore));
+  await assert.rejects(f.service.assertDispatchReady(f.conn,1001),e=>e.code==='COLLECTIVE_ROUTE_CONSENT_REQUIRED');
+  const second=await f.service.decide(202,group,{run_id:501,decision:'ACCEPT'});
+  assert.equal(second.status,'ACCEPTED_PENDING_GROUP_CONFIRMATION');assert.equal(f.state.run.status,'CONFIRMED');
+  assert.equal((await f.service.assertDispatchReady(f.conn,1001)).is_collective,true);
+  assert.equal((await f.service.assertDispatchReady(f.conn,1002)).is_collective,true);
+  const replay=await f.service.decide(201,group,{run_id:501,decision:'ACCEPT'});
+  assert.equal(replay.is_replay,true);assert.equal(f.state.notifications.length,4);
  });
+ await check('Unpaid buyer cannot consent; one buyer rejection blocks the entire shared route',async()=>{
+  const f=fixture();await f.service.propose(supplier,group,{delivery_day:date,delivery_window:window},key);
+  f.state.orders[0].payment_status='AWAITING_PAYMENT';
+  await assert.rejects(f.service.decide(201,group,{run_id:501,decision:'ACCEPT'}),e=>e.code==='BUYER_PAYMENT_NOT_VERIFIED');
+  f.state.orders[0].payment_status='PAID';
+  await assert.rejects(f.service.decide(201,group,{run_id:501,decision:'REJECT',reason:'No access at this time'}),e=>e.code==='REJECTION_REASON_REQUIRED');
+  const rejected=await f.service.decide(201,group,{run_id:501,decision:'REJECT',reason:'Delivery window does not work'});
+  assert.equal(rejected.status,'EXCEPTION');assert.equal(f.state.run.status,'EXCEPTION');
+  await assert.rejects(f.service.assertDispatchReady(f.conn,1001),e=>e.code==='COLLECTIVE_ROUTE_CONSENT_REQUIRED');
+ });
+ await check('Collective fulfilment synchronizes each stop and closes route only after every buyer receipt',async()=>{
+  const f=fixture();await f.service.propose(supplier,group,{delivery_day:date,delivery_window:window},key);
+  await f.service.decide(201,group,{run_id:501,decision:'ACCEPT'});
+  await f.service.decide(202,group,{run_id:501,decision:'ACCEPT'});
+  await f.service.syncFulfillment(f.conn,1001,'DISPATCHED');
+  await f.service.syncFulfillment(f.conn,1001,'SUPPLIER_DELIVERED');
+  await f.service.syncFulfillment(f.conn,1001,'BUYER_CONFIRMED');
+  assert.equal(f.state.run.status,'DISPATCHED');
+  await f.service.syncFulfillment(f.conn,1002,'DISPATCHED');
+  await f.service.syncFulfillment(f.conn,1002,'SUPPLIER_DELIVERED');
+  await f.service.syncFulfillment(f.conn,1002,'BUYER_CONFIRMED');
+  assert.equal(f.state.run.status,'DELIVERED');
+  assert.deepEqual(f.state.stops.map(x=>x.status),['BUYER_CONFIRMED','BUYER_CONFIRMED']);
+ });
+ await check('Any stop exception marks the collective run exceptional without auto-refund',async()=>{
+  const f=fixture();await f.service.propose(supplier,group,{delivery_day:date,delivery_window:window},key);
+  await f.service.decide(201,group,{run_id:501,decision:'ACCEPT'});
+  await f.service.decide(202,group,{run_id:501,decision:'ACCEPT'});
+  await f.service.syncFulfillment(f.conn,1001,'EXCEPTION');
+  assert.equal(f.state.run.status,'EXCEPTION');
+  assert.equal(f.state.notifications.length,4);
+ });
+ console.log('PR61 PART 2 COLLECTIVE DELIVERY SERVICE: '+tests.length+'/'+tests.length+' PASS (real service, deterministic transactional SQL adapter; no money movement)');
 }
 main().catch(error=>{console.error('FAIL PR61 PART2 COLLECTIVE DELIVERY',error.stack||error);process.exit(1);});
