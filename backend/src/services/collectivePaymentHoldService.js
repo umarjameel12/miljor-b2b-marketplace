@@ -16,6 +16,9 @@ class CollectivePaymentHoldService{
    WHERE order_id=? AND buyer_id=? AND payment_hold_status='ACTIVE'`,
    [HOLD_MINUTES,orderId,buyerId]);
   if(r.affectedRows!==1)throw fail('COLLECTIVE_HOLD_CREATE_FAILED','Could not create the collective payment lease',500);
+  const [rows]=await conn.query(`SELECT DATE_FORMAT(payment_expires_at,'%Y-%m-%dT%H:%i:%sZ') AS payment_expires_at
+   FROM procurement_collective_buyer_orders WHERE order_id=? AND buyer_id=?`,[orderId,buyerId]);
+  return {payment_expires_at:rows[0]?.payment_expires_at||null};
  }
  async _release(conn,row,reason){
   await conn.query(`UPDATE supplier_inventory_allocations SET status='RELEASED'
