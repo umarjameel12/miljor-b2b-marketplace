@@ -3,6 +3,7 @@
 // A provider-started attempt is never released on a local timeout; it moves to
 // RECONCILIATION_REQUIRED until an authoritative provider result is available.
 const db=require('../config/db');
+const notificationService=require('./notificationService');
 const HOLD_MINUTES=15;
 const fail=(code,message,statusCode=409)=>Object.assign(new Error(message),{code,statusCode});
 class CollectivePaymentHoldService{
@@ -57,7 +58,10 @@ class CollectivePaymentHoldService{
      await conn.query("UPDATE procurement_collective_buyer_orders SET payment_hold_status='RECONCILIATION_REQUIRED' WHERE id=?",[row.id]);
      await conn.commit();return {collective_order:true,reconciliation_required:true};
     }
-    await this._release(conn,row,'PAYMENT_WINDOW_EXPIRED');expired=true;
+    await this._release(conn,row,'PAYMENT_WINDOW_EXPIRED');
+    await notificationService.enqueueEvent(conn,{userId:Number(row.buyer_id),role:'BUYER',eventType:'PAYMENT_FAILED',
+     eventKey:'collective-order:'+orderId+':payment-window-expired:'+row.id,entityId:Number(orderId)});
+    expired=true;
    }else{
     await conn.query(`UPDATE procurement_collective_buyer_orders
       SET payment_hold_status='PAYMENT_PENDING',checkout_started_at=COALESCE(checkout_started_at,UTC_TIMESTAMP())
@@ -104,6 +108,14 @@ class CollectivePaymentHoldService{
   await conn.query(`UPDATE procurement_collective_buyer_orders
    SET payment_hold_status='COMMITTED',checkout_started_at=COALESCE(checkout_started_at,UTC_TIMESTAMP())
    WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING','RECONCILIATION_REQUIRED','COMMITTED')`,[rows[0].id]);
+  const [owners]=await conn.query(`SELECT co.buyer_id,o.supplier_id FROM procurement_collective_buyer_orders co
+   JOIN orders o ON o.id=co.order_id WHERE co.order_id=?`,[orderId]);
+  if(owners[0]){
+   await notificationService.enqueueEvent(conn,{userId:Number(owners[0].buyer_id),role:'BUYER',eventType:'PAYMENT_VERIFIED',
+    eventKey:'collective-order:'+orderId+':payment-verified',entityId:Number(orderId)});
+   await notificationService.enqueueEvent(conn,{userId:Number(owners[0].supplier_id),role:'SUPPLIER',eventType:'PAYMENT_VERIFIED',
+    eventKey:'collective-order:'+orderId+':supplier-payment-verified',entityId:Number(orderId)});
+  }
   return {handled:true};
  }
  async markFailed(conn,orderId){
@@ -125,6 +137,9 @@ class CollectivePaymentHoldService{
    return {handled:true,status:'ACTIVE'};
   }
   await this._release(conn,{...row,order_id:orderId},'PROVIDER_CONFIRMED_PAYMENT_FAILURE_AFTER_EXPIRY');
+  const [owners]=await conn.query('SELECT buyer_id FROM procurement_collective_buyer_orders WHERE order_id=?',[orderId]);
+  if(owners[0])await notificationService.enqueueEvent(conn,{userId:Number(owners[0].buyer_id),role:'BUYER',eventType:'PAYMENT_FAILED',
+   eventKey:'collective-order:'+orderId+':provider-payment-failed',entityId:Number(orderId)});
   return {handled:true,status:'RELEASED'};
  }
  async readForOrder(orderId,buyerId){
@@ -165,7 +180,10 @@ class CollectivePaymentHoldService{
      await conn.query("UPDATE procurement_collective_buyer_orders SET payment_hold_status='RECONCILIATION_REQUIRED' WHERE id=?",[row.id]);
      result.reconciliation_required++;continue;
     }
-    await this._release(conn,row,'PAYMENT_WINDOW_EXPIRED');result.released++;
+    await this._release(conn,row,'PAYMENT_WINDOW_EXPIRED');
+    await notificationService.enqueueEvent(conn,{userId:Number(row.buyer_id),role:'BUYER',eventType:'PAYMENT_FAILED',
+     eventKey:'collective-order:'+row.order_id+':payment-window-expired:'+row.id,entityId:Number(row.order_id)});
+    result.released++;
    }
    await conn.commit();return result;
   }catch(e){await conn.rollback();throw e;}finally{conn.release();}
