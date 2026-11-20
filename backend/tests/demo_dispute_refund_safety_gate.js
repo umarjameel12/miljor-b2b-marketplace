@@ -21,7 +21,7 @@ function service(name, sql) {
     if (id==='./feeService')return {};
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
-    if (id==='./notificationService')return {enqueueEvent:async()=>{throw Error('Unexpected notification in legacy non-group order')}};
+    if (id==='./notificationService')return {enqueueEvent:async(conn,event)=>{assert.equal(conn,sql);sql.trace.notifications.push(event);return {insertId:1};}};
     return require(id);
   };
   const fn = new Function('require','module','exports','__filename','__dirname',source(name));
@@ -29,7 +29,7 @@ function service(name, sql) {
   return m.exports;
 }
 function fixture(cfg={}) {
-  const trace={writes:[],commits:0,rollbacks:0};
+  const trace={writes:[],notifications:[],commits:0,rollbacks:0};
   const order={
     id:31,order_code:'DEMO-31',buyer_id:4,supplier_id:8,
     payment_status:'PAID',fulfillment_status:'SUPPLIER_DELIVERED',
@@ -88,6 +88,10 @@ async function run() {
     assert.equal(f.trace.commits,1);
     assert.equal(f.trace.rollbacks,0);
     assert.ok(f.trace.writes.some(x=>x.query.includes('INSERT INTO order_disputes')));
+    assert.equal(f.trace.notifications.length,1);
+    assert.equal(f.trace.notifications[0].eventType,'DISPUTE_OPENED');
+    assert.equal(f.trace.notifications[0].role,'SUPPLIER');
+    assert.equal(f.trace.notifications[0].userId,8);
   });
   for(const [name,changes,code,flags] of [
     ['wrong disputed quantity',{disputedQuantity:'30'},'DISPUTED_QUANTITY_MISMATCH',{}],
