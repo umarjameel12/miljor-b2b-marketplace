@@ -106,6 +106,27 @@ class CollectivePaymentHoldService{
    WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING','RECONCILIATION_REQUIRED','COMMITTED')`,[rows[0].id]);
   return {handled:true};
  }
+ async markFailed(conn,orderId){
+  const [rows]=await conn.query(`SELECT id,payment_hold_status,payment_expires_at,
+   (payment_expires_at>UTC_TIMESTAMP()) AS is_open
+   FROM procurement_collective_buyer_orders WHERE order_id=? FOR UPDATE`,[orderId]);
+  const row=rows[0];if(!row)return {handled:false};
+  if(['COMMITTED','RELEASED'].includes(row.payment_hold_status))
+   return {handled:true,status:row.payment_hold_status};
+  const [active]=await conn.query("SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' LIMIT 1 FOR UPDATE",[orderId]);
+  if(active.length){
+   await conn.query("UPDATE procurement_collective_buyer_orders SET payment_hold_status='RECONCILIATION_REQUIRED' WHERE id=?",[row.id]);
+   return {handled:true,status:'RECONCILIATION_REQUIRED'};
+  }
+  if(!row.payment_expires_at||Number(row.is_open)===1){
+   await conn.query(`UPDATE procurement_collective_buyer_orders
+    SET payment_hold_status='ACTIVE',checkout_started_at=NULL
+    WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING','RECONCILIATION_REQUIRED')`,[row.id]);
+   return {handled:true,status:'ACTIVE'};
+  }
+  await this._release(conn,{...row,order_id:orderId},'PROVIDER_CONFIRMED_PAYMENT_FAILURE_AFTER_EXPIRY');
+  return {handled:true,status:'RELEASED'};
+ }
  async readForOrder(orderId,buyerId){
   const [rows]=await db.query(`SELECT payment_hold_status,
    DATE_FORMAT(payment_expires_at,'%Y-%m-%dT%H:%i:%sZ') AS expires_at_utc,
