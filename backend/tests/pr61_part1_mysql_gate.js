@@ -143,6 +143,50 @@ async function main(){
    const [finalRows]=await db.query('SELECT review_action FROM supplier_verification_revisions WHERE supplier_id=? AND revision=2',[sid]);
    assert.equal(finalRows[0].review_action,'APPROVED');
    console.log('PASS: correction revision 2, replay, stale approval denial, verified approval without paid entitlements');
+
+   // A later material identity change must create a fresh immutable revision
+   // that can be reviewed and approved using the same expected_revision contract.
+   const materialChange=await profileService.updateProfile(sid,{
+     business_name:'Part1 Wholesale Updated'
+   });
+   assert.equal(materialChange.reReviewTriggered,true);
+   const [[reReview]]=await db.query(
+     'SELECT verification_status,submitted_revision,subscription_plan,max_active_listings FROM supplier_profiles WHERE supplier_id=?',[sid]);
+   assert.equal(reReview.verification_status,'PENDING_REVIEW');
+   assert.equal(Number(reReview.submitted_revision),3);
+   assert.equal(reReview.subscription_plan,'STARTER');
+   assert.equal(Number(reReview.max_active_listings),4);
+   const [reReviewRows]=await db.query(
+     'SELECT revision,submitted_snapshot,review_action FROM supplier_verification_revisions WHERE supplier_id=? AND revision=3',[sid]);
+   assert.equal(reReviewRows.length,1);
+   const reReviewSnapshot=typeof reReviewRows[0].submitted_snapshot==='string'
+     ?JSON.parse(reReviewRows[0].submitted_snapshot):reReviewRows[0].submitted_snapshot;
+   assert.equal(reReviewSnapshot.business_name,'Part1 Wholesale Updated');
+   const reApprove=resp();
+   await admin.verifySupplier(adminReq('VERIFIED',{expected_revision:3}),reApprove);
+   failure(200,reApprove);
+   const [[reApproved]]=await db.query(
+     'SELECT verification_status,submitted_revision,subscription_plan FROM supplier_profiles WHERE supplier_id=?',[sid]);
+   assert.equal(reApproved.verification_status,'VERIFIED');
+   assert.equal(Number(reApproved.submitted_revision),3);
+   assert.equal(reApproved.subscription_plan,'STARTER');
+   console.log('PASS: verified material change creates immutable revision 3 and can be re-approved');
+
+   // Rejection is terminal unless an explicit administrator appeal workflow exists.
+   const rejected=resp();
+   await admin.verifySupplier(adminReq('REJECTED',{
+     expected_revision:3,rejection_reason:'Business identity could not be verified'
+   }),rejected);
+   failure(200,rejected);
+   await assert.rejects(profileService.submitVerification(sid),e=>e.code==='VERIFICATION_STATE_LOCKED');
+   await assert.rejects(profileService.updateProfile(sid,{business_description:'Unapproved retry'}),
+     e=>e.code==='VERIFICATION_PROFILE_LOCKED');
+   const [[rejectedFinal]]=await db.query(
+     'SELECT verification_status,subscription_plan,max_active_listings FROM supplier_profiles WHERE supplier_id=?',[sid]);
+   assert.equal(rejectedFinal.verification_status,'REJECTED');
+   assert.equal(rejectedFinal.subscription_plan,'STARTER');
+   assert.equal(Number(rejectedFinal.max_active_listings),4);
+   console.log('PASS: rejection is terminal, blocks self-resubmission and preserves entitlements');
    console.log('PR61 PART1 REAL MYSQL ACCEPTANCE PASS');
  }finally{
    await db.query('DELETE FROM system_audit_logs WHERE entity_name=? AND entity_id=?',
