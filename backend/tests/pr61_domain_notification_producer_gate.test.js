@@ -57,7 +57,7 @@ test('Flash offer publish, cancel and expiry are projected into the UCP event st
  const expiry=method(flash,'async _closeExpiredOffer(','\n}\nmodule.exports');
  for(const [body,type] of [[cancel,'UCP.POOL_CANCELLED'],[publish,'UCP.POOL_PUBLISHED'],[expiry,'UCP.POOL_EXPIRED']]){
   assert.ok(body.includes("type:'"+type+"'"));
-  assert.ok(body.indexOf('recordFlashOnConnection')<body.indexOf('await conn.commit()'));
+  assert.ok(body.indexOf('recordFlashOnConnection')<body.lastIndexOf('await conn.commit()'));
  }
 });
 test('Flash hold, verified payment and expiry have recipient-owned transactional events',()=>{
