@@ -808,9 +808,13 @@ class FlashPoolService {
     const conn=await db.getConnection();
     try {
       await conn.beginTransaction();
-      await this._lockVerifiedSupplier(conn,supplierId);
-      const [rows]=await conn.query(
-        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+      // Recovery is a system-owned expiry transition and must not depend on a supplier
+      // remaining verified after publication. Manual supplier expiry remains owner-gated.
+      if(!systemRecovery)await this._lockVerifiedSupplier(conn,supplierId);
+      const [rows]=await conn.query(systemRecovery
+        ? 'SELECT * FROM flash_pools WHERE id=? FOR UPDATE'
+        : 'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',
+        systemRecovery?[id]:[id,supplierId]);
       let pool=rows[0];
       if(!pool)throw fail('FLASH_NOT_FOUND','Flash Pool not found.',404);
       await this.reclaimExpiredUninitiatedHolds(id,conn);
