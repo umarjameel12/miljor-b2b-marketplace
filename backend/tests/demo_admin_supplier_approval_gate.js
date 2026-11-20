@@ -54,6 +54,7 @@ const controller=load(controllerSrc,id=>{
   if(id==='../config/db')return db;
   if(id==='../services/encryptionService')return {isEncrypted:()=>false};
   if(id==='../services/supplierValidationService')return {maskIban:()=>{throw Error('Plaintext should never be decrypted')}};
+  if(id==='../services/notificationService')return {enqueueEvent:async()=>({insertId:1})};
   throw Error('Unexpected controller require: '+id);
 });
 async function main(){
