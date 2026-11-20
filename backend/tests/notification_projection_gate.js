@@ -52,6 +52,13 @@ test('supplier verification lifecycle actions are mandatory and email-enabled',(
     assert.equal(projection.email,true,eventType+' must queue critical email');
   }
 });
+test('paid subscription plan changes have mandatory actionable notifications',()=>{
+  for(const eventType of ['SUBSCRIPTION_PLAN_CHANGE_SCHEDULED','SUBSCRIPTION_PLAN_CHANGE_PAYMENT_REQUIRED']){
+    const projection=eventProjection({eventType,entityId:31});
+    assert.equal(projection.mandatory,true);
+    assert.equal(projection.email,true);
+  }
+});
 test('mandatory payment ignores optional-email opt-out; projection does not assert provider delivery',async()=>{
   const state=fixture();
   assert.deepEqual(await state.service.processPending({limit:1,emailService:state.emailService}),{processed:1,projected:1,failed:0});
