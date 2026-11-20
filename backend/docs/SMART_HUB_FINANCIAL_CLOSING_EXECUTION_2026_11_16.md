@@ -294,6 +294,14 @@ Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three s
 - **Tax Classification Draft (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`):** Expanded to cover all 8 charge categories (merchandise, marketplace commission, delivery/logistics, supplemental delivery/reattempt, processing/buyer platform fees, withholding obligations, refunds/credit notes/partial acceptance, and scope variations) with all 10 required fields per category, an application tax-readiness inspection (`B6_TAX_POLICY_APPROVED`, `tax_calculated: false`, `invoiceService`, `procurementLineReceiptService`), a concise review package for a qualified Pakistan tax professional, and 3 simple factual business questions for the owner. Status remains **`DRAFT / AWAITING QUALIFIED TAX REVIEW & OWNER BUSINESS FACTS`**.
 - **Code Inspection Result:** Existing services already enforce fail-closed tax gating (`503 B6_FINANCIAL_GATE_BLOCKED`), explicit `tax_calculated: false` visibility, exact decimal separation, and immutable snapshots; no speculative tax engine or code change was introduced.
 - **Protected Databases & Safety:** `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`), `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `SAFEPAY_ENV=sandbox`.
+
+---
+
+# 2026-11-20 — Prompt 2: Mergeability, Remaining MySQL Gates & Safepay Provenance
+
+- **Mergeability:** `origin/main` (`9fb07cf`) is an ancestor of PR #53 (`git merge-tree --write-tree` exit `0`), yet GitHub API reports `mergeable: false, mergeable_state: dirty`.
+- **Gates Executed:** Recurring (`17/17`, `11/11`, `9/9`, `20/20` MySQL PASS), Counteroffer MySQL on disposable `miljor_counteroffer_test_db` (PASS), Delivery Options (PASS after `db.end()` fix), Delivery Run Policy (`2/2` PASS), `b6_release_gate.js` (8 sub-gates PASS; `package_e2_catalog_foundation_gate.js` hit `84 !== 5` accumulated rice variants in populated `miljor_test_db`).
+- **Safepay Provenance:** Orders `231` & `234` verified in `miljor_test_db` (`DELIVERED / BUYER_CONFIRMED`, `payments` `171` & `170` `HELD_IN_ESCROW`, `invoices` `110` & `109` `ISSUED`, `payables` `39` & `38` `ACCRUED` PKR `317.50`, `disbursed=0.00`). Note: genuine Safepay sandbox *refund* (G) remains external/unexecuted (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).
 - **Conditional Merge & Local Integration:** **BLOCKED (PR #53 retained as DRAFT)** — cannot merge to `main` or integrate into `MilJor Project` (`feature/frontend-redesign-20261112` @ `83565c4e`, 12 dirty frontend files preserved) until factual business confirmation and qualified Pakistan tax sign-off complete. `CAN START NEXT PHASE: NO`.
 
 ---
