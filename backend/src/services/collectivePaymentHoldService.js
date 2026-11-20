@@ -106,6 +106,21 @@ class CollectivePaymentHoldService{
    WHERE id=? AND payment_hold_status IN ('ACTIVE','PAYMENT_PENDING','RECONCILIATION_REQUIRED','COMMITTED')`,[rows[0].id]);
   return {handled:true};
  }
+ async readForOrder(orderId,buyerId){
+  const [rows]=await db.query(`SELECT payment_hold_status,
+   DATE_FORMAT(payment_expires_at,'%Y-%m-%dT%H:%i:%sZ') AS expires_at_utc,
+   DATE_FORMAT(UTC_TIMESTAMP(),'%Y-%m-%dT%H:%i:%sZ') AS server_time_utc,
+   (payment_expires_at>UTC_TIMESTAMP()) AS can_start,
+   checkout_started_at IS NOT NULL AS checkout_started,
+   payment_hold_release_reason
+   FROM procurement_collective_buyer_orders WHERE order_id=? AND buyer_id=?`,[orderId,buyerId]);
+  if(!rows[0])return null;
+  const r=rows[0];
+  return {kind:'COLLECTIVE',status:r.payment_hold_status==='ACTIVE'&&!r.can_start?'EXPIRED':r.payment_hold_status,
+   expires_at:r.expires_at_utc,server_time:r.server_time_utc,
+   checkout_started:Boolean(r.checkout_started),can_start_checkout:['ACTIVE','PAYMENT_PENDING'].includes(r.payment_hold_status)&&Boolean(r.can_start),
+   release_reason:r.payment_hold_release_reason||null};
+ }
  async processExpiredBatch(limit=100){
   const size=Math.max(1,Math.min(500,Number(limit)||100));
   const conn=await db.getConnection();const result={checked:0,released:0,reconciliation_required:0,committed:0};
