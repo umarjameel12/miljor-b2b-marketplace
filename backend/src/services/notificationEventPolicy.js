@@ -58,12 +58,18 @@ const definitions={
   SETTLEMENT_PENDING:['Settlement pending','سپلائر کی ادائیگی زیر التوا ہے','order'],
   SETTLEMENT_COMPLETED:['Settlement completed','سپلائر کی ادائیگی مکمل ہو گئی','order'],
   SUPPLIER_VERIFIED:['Supplier verified','سپلائر کی تصدیق ہو گئی','account'],
+  VERIFICATION_SUBMITTED:['Supplier verification submitted','سپلائر کی تصدیق کے لیے درخواست جمع ہو گئی','account'],
+  VERIFICATION_CORRECTED:['Supplier verification corrections submitted','سپلائر کی تصحیحات جمع ہو گئیں','account'],
+  VERIFICATION_UNDER_REVIEW:['Supplier verification under review','سپلائر کی تصدیق کا جائزہ جاری ہے','account'],
+  VERIFICATION_APPROVED:['Supplier verification approved','سپلائر کی تصدیق منظور ہو گئی','account'],
+  VERIFICATION_INFO_REQUESTED:['More information requested','مزید معلومات درکار ہیں','account'],
+  VERIFICATION_REJECTED:['Supplier verification rejected','سپلائر کی تصدیق مسترد ہو گئی','account'],
   APPROVAL_GRANTED:['Approval granted','منظوری مل گئی','account'],
   APPROVAL_REJECTED:['Approval rejected','منظوری مسترد ہو گئی','account'],
   SUSPICIOUS_ACTIVITY:['Suspicious activity detected','مشکوک سرگرمی کی نشاندہی ہوئی','account'],
   FINANCIAL_INCONSISTENCY:['Financial inconsistency detected','مالی حساب میں فرق کی نشاندہی ہوئی','account']
 };
-const mandatory=type=>/^(PAYMENT_|REFUND_|DISPUTE_|SETTLEMENT_|SUBSCRIPTION_|SUSPICIOUS_|FINANCIAL_)/.test(type);
+const mandatory=type=>/^(PAYMENT_|REFUND_|DISPUTE_|SETTLEMENT_|SUBSCRIPTION_|VERIFICATION_|SUSPICIOUS_|FINANCIAL_)/.test(type);
 function eventProjection({eventType,entityId,locale='en'}){
   const definition=definitions[eventType];
   if(!definition)throw Error('Unsupported notification event');
