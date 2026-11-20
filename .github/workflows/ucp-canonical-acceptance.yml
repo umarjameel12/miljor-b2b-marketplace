@@ -146,6 +146,8 @@ jobs:
           cd backend
           node tests/ucp_phase2_finance_integrity_gate.js
           node tests/ucp_phase2_email_gate.js
+      - name: Verify Prompt 1 UCP Flash recovery, webhook identity & notification isolation gate
+        run: cd backend && node tests/ucp_prompt1_hardening_gate.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
         run: |
           cd backend
