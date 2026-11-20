@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 const supplierProfileRepo = require('../repositories/supplierProfileRepository');
 const validationService = require('./supplierValidationService');
 const supplierEvidence = require('./supplierVerificationDocumentService');
+const notificationService = require('./notificationService');
 
 class SupplierProfileService {
   _asJson(value, fallback) {
@@ -272,6 +273,14 @@ class SupplierProfileService {
         `INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,new_value)
          VALUES (?,'SUPPLIER','SUPPLIER_VERIFICATION_SUBMITTED','supplier_profiles',?,?)`,
         [supplierId,supplierId,JSON.stringify({status:'PENDING_REVIEW',revision})]);
+      const [reviewers]=await connection.query(
+        "SELECT id,role FROM users WHERE role IN ('ADMIN','SUPER_ADMIN') ORDER BY id LIMIT 100");
+      for(const reviewer of reviewers){
+        await notificationService.enqueueEvent(connection,{userId:Number(reviewer.id),role:reviewer.role,
+          eventType:'VERIFICATION_SUBMITTED',
+          eventKey:'supplier-verification:'+supplierId+':revision:'+revision+':submitted:reviewer:'+reviewer.id,
+          entityId:Number(supplierId)});
+      }
       const [rows]=await connection.query('SELECT submitted_at FROM supplier_profiles WHERE supplier_id=?',[supplierId]);
       await connection.commit();
       return {success:true,verification_status:'PENDING_REVIEW',submitted_at:rows[0]?.submitted_at,
@@ -374,6 +383,14 @@ class SupplierProfileService {
         `INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,new_value)
          VALUES (?,'SUPPLIER','SUPPLIER_VERIFICATION_CORRECTED','supplier_profiles',?,?)`,
         [supplierId,supplierId,JSON.stringify({revision,corrected_fields:changed})]);
+      const [reviewers]=await connection.query(
+        "SELECT id,role FROM users WHERE role IN ('ADMIN','SUPER_ADMIN') ORDER BY id LIMIT 100");
+      for(const reviewer of reviewers){
+        await notificationService.enqueueEvent(connection,{userId:Number(reviewer.id),role:reviewer.role,
+          eventType:'VERIFICATION_CORRECTED',
+          eventKey:'supplier-verification:'+supplierId+':revision:'+revision+':corrected:reviewer:'+reviewer.id,
+          entityId:Number(supplierId)});
+      }
       await connection.commit();
       return {success:true,verification_status:'PENDING_REVIEW',submitted_revision:revision};
     }catch(error){await connection.rollback();throw error;}finally{connection.release();}
