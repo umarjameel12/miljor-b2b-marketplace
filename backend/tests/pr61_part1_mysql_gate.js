@@ -172,10 +172,18 @@ async function main(){
    assert.equal(reApproved.subscription_plan,'STARTER');
    console.log('PASS: verified material change creates immutable revision 3 and can be re-approved');
 
-   // Rejection is terminal unless an explicit administrator appeal workflow exists.
+   // A new material change opens revision 4; rejection is terminal for that review cycle.
+   const rejectionCycle=await profileService.updateProfile(sid,{
+     business_name:'Part1 Wholesale Pending Rejection'
+   });
+   assert.equal(rejectionCycle.reReviewTriggered,true);
+   const [[pendingRejection]]=await db.query(
+     'SELECT verification_status,submitted_revision FROM supplier_profiles WHERE supplier_id=?',[sid]);
+   assert.equal(pendingRejection.verification_status,'PENDING_REVIEW');
+   assert.equal(Number(pendingRejection.submitted_revision),4);
    const rejected=resp();
    await admin.verifySupplier(adminReq('REJECTED',{
-     expected_revision:3,rejection_reason:'Business identity could not be verified'
+     expected_revision:4,rejection_reason:'Business identity could not be verified'
    }),rejected);
    failure(200,rejected);
    await assert.rejects(profileService.submitVerification(sid),e=>e.code==='VERIFICATION_STATE_LOCKED');
@@ -187,7 +195,7 @@ async function main(){
    assert.equal(rejectedFinal.subscription_plan,'STARTER');
    assert.equal(Number(rejectedFinal.max_active_listings),4);
    const [rejectedRevision]=await db.query(
-     'SELECT review_action,review_reason FROM supplier_verification_revisions WHERE supplier_id=? AND revision=3',[sid]);
+     'SELECT review_action,review_reason FROM supplier_verification_revisions WHERE supplier_id=? AND revision=4',[sid]);
    assert.equal(rejectedRevision[0].review_action,'REJECTED');
    assert.equal(rejectedRevision[0].review_reason,'Business identity could not be verified');
    console.log('PASS: rejection is terminal, blocks self-resubmission and preserves entitlements');
