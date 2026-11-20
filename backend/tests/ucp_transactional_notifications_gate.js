@@ -48,6 +48,10 @@ const {recordInAppOnConnection,recordReservationEventOnConnection,sanitizePayloa
   assert.equal(replay.inserted,0,'same durable event cannot duplicate recipient notices');
   const ucp=fs.readFileSync(path.resolve(__dirname,'../src/services/reservationEventService.js'),'utf8');
   assert.match(ucp,/recordReservationEventOnConnection\(conn,eventData\)/,'reservation outbox is projected in the same transaction');
+  const flashSource=fs.readFileSync(path.resolve(__dirname,'../src/services/flashPoolService.js'),'utf8');
+  for(const type of ['UCP.POOL_PUBLISHED','UCP.POOL_CANCELLED','UCP.POOL_EXPIRED'])assert.ok(flashSource.includes("type:'"+type+"'"));
+  const reservationProjection=fs.readFileSync(path.resolve(__dirname,'../src/services/ucpTransactionalNotifications.js'),'utf8');
+  for(const type of ['POOL_DEMAND_CHANGED','SUPPLIER_MINIMUM_REACHED','SUPPLIER_MINIMUM_LOST','TARGET_LOST'])assert.ok(reservationProjection.includes(type));
   console.log('PASS: transactional notification writer, reservation event projection and routes source gates');
 
 })().catch(err=>{console.error(err);process.exitCode=1});
