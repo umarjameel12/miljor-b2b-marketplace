@@ -182,7 +182,8 @@ export function CheckoutPage() {
   const isCollectiveReconciliationRequired = collectiveHold?.status === 'RECONCILIATION_REQUIRED';
   const isHoldExpired = Boolean(hold?.status === 'EXPIRED' ||
     collectiveHold?.status === 'EXPIRED' || collectiveHold?.status === 'RELEASED');
-  const isHoldClosed = isHoldExpired || isCollectiveReconciliationRequired;
+  const isHoldClosed = isHoldExpired || isCollectiveReconciliationRequired ||
+    Boolean(collectiveHold && collectiveHold.can_start_checkout === false && order?.payment_status !== 'PAID');
 
   const subtotal = Number(order?.subtotal_amount || (Number(order?.quantity || 0) * Number(order?.final_unit_price || 0)));
   const deliveryFee = Number(order?.delivery_fee || 0);
