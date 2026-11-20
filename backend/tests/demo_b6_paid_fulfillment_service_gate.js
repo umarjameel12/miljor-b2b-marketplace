@@ -18,6 +18,8 @@ function service(file,deps){
     if(id==='./procurementMatchingService')return {};
     if(id==='./procurementAwardPolicy')return {buildAwardPreview:()=>({})};
     if(id==='./reservationEventService')return {};
+    // Reconciliation must never emit a new contractual notification or charge.
+    if(id==='./notificationService')return {enqueueEvent:async()=>{throw Error('No new notification during paid-order reconciliation')}};
     if(id==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
     return require(id);
   });

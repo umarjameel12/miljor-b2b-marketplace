@@ -3,27 +3,60 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { inspect, configured } = require('../scripts/safepaySandboxPreflight');
 const source = {
  adapter: 'sandbox.api.getsafepay.com createTracker verifyWebhookSignature timingSafeEqual',
+ v3Client: 'https://sandbox.api.getsafepay.com/order/payments/v3/ /client/passport/v1/token /reporter/api/v1/payments',
+ v3Contract: 'toMinorPkr normalizeSucceededWebhook payments-v3-minor',
  provider: 'initiateRefund REFUND_PENDING_GATEWAY',
- settlement: 'External refund and payout execution are strictly DISABLED'
+ settlement: 'External refund and payout execution are strictly DISABLED',
+ subscriptionService: 'acceptSignedV3Capture normalizeSucceededWebhook supplier_subscription_capture_events',
+ subscriptionJournal: 'UNIQUE KEY uq_supplier_capture_attempt',
+ checkout: 'acceptSignedV3Capture'
 };
 const valid = {
  SAFEPAY_ENV:'sandbox', ALLOW_EXTERNAL_MONEY_MOVEMENT:'false',
  DB_NAME:'miljor_test_db', SAFEPAY_PUBLIC_KEY:'sec_sand_randompublickey1234',
  SAFEPAY_SECRET_KEY:'sec_sand_randomsecretkey1234',
- SAFEPAY_WEBHOOK_SECRET:'safepay-sandbox-hmac-secret-unique1234'
+ SAFEPAY_WEBHOOK_SECRET:'safepay-sandbox-hmac-secret-unique1234', SAFEPAY_TRACKER_CONTRACT:'legacy-v1-major',
+ SAFEPAY_LEGACY_CONTRACT_VERIFIED:'true'
 };
 test('no placeholders qualify as real credentials', () => {
  assert.equal(configured('sec_sand_placeholder_public_key'),false);
  assert.equal(configured('YOUR_SANDBOX_SECRET'),false);
  assert.equal(configured('sec_sand_randompublickey1234'),true);
+ for(const candidate of [
+   'sec_sand_synthetic_test_key_2026',
+   'ci_only_safepay_secret_abcdef123',
+   'sec_sand_mock_public_key_123',
+   'sec_sand_fixture_public_key_123',
+   'sandbox-unit-only-secret-12345'
+ ])assert.equal(configured(candidate),false,'Synthetic credential must fail preflight');
 });
 test('safe sandbox configuration is ready for provider attempts but not certified', () => {
  const result=inspect(valid,source);
  assert.equal(result.safe_to_attempt_provider_test,true);
  assert.equal(result.real_funds_moved,false);
+ assert.equal(result.v3_supplier_subscription_activation,'INTERNAL_SIGNED_CAPTURE_JOURNALED_NOT_PROVIDER_CERTIFIED');
+ assert.equal(result.v3_supplier_subscription_sandbox_attempt,'BLOCKED_OR_NOT_ENABLED');
+ assert.equal(result.v3_supplier_subscription_provider_evidence,'NOT_OBTAINED');
+ assert.equal(result.production_security_approval,'BLOCKED_INDEPENDENT_SECURITY_REVIEW_REQUIRED');
+ assert.equal(result.release_approval,'BLOCKED_EXTERNAL_PROVIDER_AND_SECURITY_EVIDENCE_REQUIRED');
  assert.match(result.provider_checkout,/NOT_YET_EXECUTED/);
  assert.match(result.provider_refund,/BLOCKED/);
  assert.match(result.provider_bank_payout,/BLOCKED/);
+});
+test('credentials without provider contract attestation cannot initiate testing',()=>{
+ const result=inspect({...valid,SAFEPAY_LEGACY_CONTRACT_VERIFIED:'false'},source);
+ assert.equal(result.safe_to_attempt_provider_test,false);
+ assert.match(result.tracker_contract_review,/BLOCKED/);
+ assert.equal(result.provider_checkout,'BLOCKED_NOT_EXECUTED');
+});
+test('v3 minor-unit contract requires explicit Sandbox enablement and uses v3 client',()=>{
+ const result=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor',
+   SAFEPAY_V3_SANDBOX_ENABLED:'true'},source);
+ assert.equal(result.safe_to_attempt_provider_test,true);
+ assert.equal(result.checks.v3_hosted_checkout_and_reporter_present,true);
+ assert.match(result.tracker_contract_review,/PAYMENTS_V3_MINOR_IMPLEMENTED/);
+ const disabled=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor'},source);
+ assert.equal(disabled.safe_to_attempt_provider_test,false);
 });
 test('production Safepay configuration fails closed', () => {
  const result=inspect({...valid,SAFEPAY_ENV:'production'},source);
@@ -51,4 +84,25 @@ test('gateway refund stub does not masquerade as real refund', () => {
 test('supplier payout remains unverified even for sandbox credentials', () => {
  const result=inspect(valid,source);
  assert.equal(result.provider_bank_payout,'BLOCKED_NO_VERIFIED_SANDBOX_DISBURSEMENT_CONTRACT');
+});
+
+test('synthetic CI Safepay credentials cannot qualify for authorized provider attempts',()=>{
+ const result=inspect({...valid,SAFEPAY_PUBLIC_KEY:'sec_sand_synthetic_test_key_2026'},source);
+ assert.equal(result.safe_to_attempt_provider_test,false);
+ assert.deepEqual(result.missing_configuration,['SAFEPAY_PUBLIC_KEY']);
+ assert.equal(result.provider_checkout,'BLOCKED_NOT_EXECUTED');
+ assert.equal(result.real_funds_moved,false);
+});
+
+test('v3 subscription needs explicit capture enabled flag even with internally journaled code',()=>{
+ const enabled=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor',
+   SAFEPAY_V3_SANDBOX_ENABLED:'true',
+   SAFEPAY_V3_SUBSCRIPTION_SIGNED_CAPTURE_ENABLED:'true'},source);
+ assert.equal(enabled.checks.v3_supplier_signed_capture_journal_present,true);
+ assert.equal(enabled.v3_supplier_subscription_sandbox_attempt,
+   'READY_FOR_AUTHORIZED_SANDBOX_TEST_NOT_PROVIDER_CERTIFIED');
+ assert.equal(enabled.v3_supplier_subscription_provider_evidence,'NOT_OBTAINED');
+ const disabled=inspect({...valid,SAFEPAY_TRACKER_CONTRACT:'payments-v3-minor',
+   SAFEPAY_V3_SANDBOX_ENABLED:'true'},source);
+ assert.equal(disabled.v3_supplier_subscription_sandbox_attempt,'BLOCKED_OR_NOT_ENABLED');
 });

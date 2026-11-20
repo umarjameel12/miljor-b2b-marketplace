@@ -178,7 +178,12 @@ export function CheckoutPage() {
 
   const isAlreadyPaid = order?.payment_status === 'PAID' || paymentStatus?.payment_status === 'PAID';
   const hold = paymentStatus?.regular_pool_payment_hold;
-  const isHoldExpired = hold && hold.status === 'EXPIRED';
+  const collectiveHold = paymentStatus?.collective_payment_hold;
+  const isCollectiveReconciliationRequired = collectiveHold?.status === 'RECONCILIATION_REQUIRED';
+  const isHoldExpired = Boolean(hold?.status === 'EXPIRED' ||
+    collectiveHold?.status === 'EXPIRED' || collectiveHold?.status === 'RELEASED');
+  const isHoldClosed = isHoldExpired || isCollectiveReconciliationRequired ||
+    Boolean(collectiveHold && collectiveHold.can_start_checkout === false && order?.payment_status !== 'PAID');
 
   const subtotal = Number(order?.subtotal_amount || (Number(order?.quantity || 0) * Number(order?.final_unit_price || 0)));
   const deliveryFee = Number(order?.delivery_fee || 0);
@@ -275,10 +280,23 @@ export function CheckoutPage() {
                 Payment Hold Expired
               </h3>
               <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">
-                The committed payment window for this pool reservation has elapsed. A new checkout session is locked by policy to prevent inventory overdraft. Please contact MilJor support or check active pools to place a new reservation.
+                {collectiveHold
+                  ? 'Your collective order payment window ended and its pending stock allocation was released. The group must be requalified before a new payment order can be created.'
+                  : 'The committed payment window for this pool reservation has elapsed. A new checkout session is locked by policy to prevent inventory overdraft. Please contact MilJor support or check active pools to place a new reservation.'}
               </p>
             </div>
           </div>
+        )}
+
+        {isCollectiveReconciliationRequired && !isAlreadyPaid && (
+          <div role="status" className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-300">
+            Safepay has an initiated payment attempt that needs authoritative provider reconciliation. A second checkout is blocked while its payment outcome is unresolved.
+          </div>
+        )}
+        {collectiveHold?.expires_at && !isHoldClosed && !isAlreadyPaid && (
+          <p className="text-xs" style={{color:'var(--text-muted)'}}>
+            Your individual group payment window ends: {new Date(collectiveHold.expires_at).toLocaleString()}
+          </p>
         )}
 
         {/* Main Grid: Left Details & Right Commercial Breakdown */}
@@ -508,7 +526,7 @@ export function CheckoutPage() {
 
               {/* Action Buttons */}
               <div className="space-y-2 pt-2">
-                {!isAlreadyPaid && !isHoldExpired ? (
+                {!isAlreadyPaid && !isHoldClosed ? (
                   <button
                     type="button"
                     disabled={initiating}

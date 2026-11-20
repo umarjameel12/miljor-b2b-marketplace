@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const db = require('../config/db');
 const exact = require('./exactDecimal');
 const matching = require('./procurementMatchingService');
+const notifications = require('./notificationService');
 
 const failure = (code,message,statusCode=400) => Object.assign(new Error(message),{code,statusCode});
 function positiveId(value){
@@ -46,6 +47,7 @@ function key(raw){
 function normalize(payload){
   if(!payload||typeof payload!=='object'||Array.isArray(payload))
     throw failure('INVALID_QUOTE','Quote must be an object.');
+  if(payload.delivery_quote_code!==undefined&&(typeof payload.delivery_quote_code!=='string'||!payload.delivery_quote_code.length||payload.delivery_quote_code.length>60))throw failure('INVALID_DELIVERY_CHOICE','Invalid delivery quote code');
   if(!Array.isArray(payload.lines)||payload.lines.length<1||payload.lines.length>50)
     throw failure('INVALID_QUOTE_LINES','Quote must contain 1–50 lines.');
   const lines=payload.lines.map(line=>({
@@ -66,6 +68,7 @@ function normalize(payload){
       /(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/.test(payload.supplier_notes)))
     throw failure('DIRECT_CONTACT_NOT_ALLOWED','Use MilJor messages for supplier communication.');
   return {lines,delivery_fee:price(payload.delivery_fee??'0',true),
+    ...(payload.delivery_quote_code?{delivery_quote_code:String(payload.delivery_quote_code)}:{}),
     delivery_lead_days:days,supplier_notes:payload.supplier_notes?.trim()||null,
     valid_until:toUtc(payload.valid_until)};
 }
@@ -80,7 +83,7 @@ class ProcurementQuoteService{
       await conn.beginTransaction();
       // Parent request is always locked before quote rows to serialize close/withdraw/revisions.
       const [requests]=await conn.query(
-        `SELECT id, status, quote_deadline, delivery_area
+        `SELECT id, buyer_id, status, quote_deadline, delivery_area
            FROM procurement_requests WHERE id=? FOR UPDATE`,[rid]);
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
       // Durable response replay precedes expiry and stock checks: retries must
@@ -197,9 +200,17 @@ class ProcurementQuoteService{
         quote={id:created.insertId,current_version:0,status:'ACTIVE'};
       }
       const version=Number(quote.current_version)+1;
+      if(!input.delivery_quote_code&&Number(quote.current_version)>0){
+        const [choices]=await conn.query('SELECT id FROM delivery_quotes WHERE procurement_request_id=? AND procurement_quote_id=? LIMIT 1',[rid,quote.id]);
+        if(choices.length)throw failure('DELIVERY_CHOICE_CONFIRMATION_REQUIRED','Buyer requested specific delivery terms; publish a confirmed mode-specific quote.',409);
+      }
+      const deliveryTerms=input.delivery_quote_code?await require('./procurementDeliveryBindingService').validate(conn,{
+        buyerId:requests[0].buyer_id,supplierId:supplier,requestId:rid,quoteId:quote.id,
+        code:input.delivery_quote_code,fee:input.delivery_fee,validUntil:input.valid_until}):null;
       const coverage=snapshots.length===items.length?'FULL_BASKET':'PARTIAL';
       const payable=exact.exactDecimalSum([total,input.delivery_fee],2);
       const response={quote_id:quote.id,request_id:rid,supplier_id:supplier,
+        ...(deliveryTerms?{delivery_terms:deliveryTerms}:{}),
         version_number:version,coverage,items_total:total,delivery_fee:input.delivery_fee,
         quoted_total:payable,delivery_lead_days:input.delivery_lead_days,
         valid_until:input.valid_until,supplier_notes:input.supplier_notes,lines:snapshots};
@@ -236,6 +247,9 @@ class ProcurementQuoteService{
            AND requested_version < ?`,
         [version,quote.id,supplier,version]
       );
+      await notifications.enqueueEvent(conn,{userId:requests[0].buyer_id,role:'BUYER',
+        eventType:version===1?'QUOTE_RECEIVED':'QUOTE_REVISED',
+        eventKey:'quote:'+quote.id+':version:'+version,entityId:rid});
       await conn.commit();
       return {...response,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')

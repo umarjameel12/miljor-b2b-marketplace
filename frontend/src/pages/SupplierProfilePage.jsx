@@ -12,6 +12,8 @@ import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import { SupplierVerificationBadge } from '../components/supplier/SupplierVerificationBadge';
 import { SupplierOnboardingWizard } from '../components/supplier/SupplierOnboardingWizard';
+import { SupplierVerificationCorrections } from '../components/supplier/SupplierVerificationCorrections';
+import { SupplierVerificationDocuments } from '../components/supplier/SupplierVerificationDocuments';
 import SupplierDeliverySettingsForm from '../components/delivery/SupplierDeliverySettingsForm';
 import supplierApi from '../api/supplier';
 import {
@@ -35,6 +37,7 @@ export const SupplierProfilePage = () => {
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [reviewHistory,setReviewHistory] = useState([]);
   const [activeTab, setActiveTab] = useState('onboarding'); // 'onboarding', 'delivery', 'subscription'
   const [error, setError] = useState(null);
 
@@ -44,6 +47,12 @@ export const SupplierProfilePage = () => {
       setError(null);
       const res = await supplierApi.getProfile();
       setProfile(res.data.profile);
+      try {
+        const history=await supplierApi.getVerificationHistory();
+        setReviewHistory(history.data?.history||[]);
+      }catch{
+        setReviewHistory([]);
+      }
     } catch (err) {
       console.error('Failed to load supplier profile:', err);
       setError(err.response?.data?.error?.message || err.message || 'Could not load profile');
@@ -162,6 +171,18 @@ export const SupplierProfilePage = () => {
           )}
         </Card>
 
+        {reviewHistory.length>0 && <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Verification review history</h2>
+          <ol className="space-y-2 text-xs text-[var(--text-secondary)]">
+            {reviewHistory.map(row=><li key={row.revision} className="flex flex-wrap justify-between gap-2 border-t border-[var(--border-subtle)] pt-2">
+              <span>Revision {row.revision} · {row.review_action.replaceAll('_',' ')}
+                {row.review_reason ? ' · '+row.review_reason : ''}
+              </span>
+              <time>{new Date(row.submitted_at).toLocaleString()}</time>
+            </li>)}
+          </ol>
+        </section>}
+
         {/* Tab Navigation */}
         <div className="flex border-b border-[var(--border-subtle)] gap-2 sm:gap-4 overflow-x-auto pb-px">
           {[
@@ -193,10 +214,28 @@ export const SupplierProfilePage = () => {
         {/* TAB 1: BUSINESS PROFILE & ONBOARDING */}
         {activeTab === 'onboarding' && (
           <div className="space-y-6">
-            <SupplierOnboardingWizard
-              initialProfile={profile}
-              onProfileUpdated={(updated) => setProfile(updated)}
-            />
+            {profile?.verification_status === 'MORE_INFORMATION_REQUIRED' ? (
+              <SupplierVerificationCorrections profile={profile} onSubmitted={fetchProfile} />
+            ) : isPending ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 space-y-2 text-sm">
+                <h2 className="font-semibold">Submitted application receipt</h2>
+                <p>Revision {profile?.submitted_revision || 'legacy'} · Submitted {profile?.submitted_at ? new Date(profile.submitted_at).toLocaleString() : 'previously'}</p>
+                <p className="text-[var(--text-muted)]">Your business details are locked during review. You do not need to submit them again.</p>
+              </div>
+            ) : isRejected ? (
+              <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 text-sm">
+                The application is rejected. A new review is available only if an authorized administrator opens an appeal. Your existing documents are retained.
+              </div>
+            ) : (
+              <>
+                {profile?.verification_status==='NOT_SUBMITTED'&&
+                  <SupplierVerificationDocuments profile={profile}/>}
+                <SupplierOnboardingWizard
+                  initialProfile={profile}
+                  onProfileUpdated={(updated) => setProfile(updated)}
+                />
+              </>
+            )}
           </div>
         )}
 

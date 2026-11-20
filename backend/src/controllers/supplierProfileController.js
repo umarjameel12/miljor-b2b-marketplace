@@ -48,6 +48,12 @@ class SupplierProfileController {
         }
       });
     } catch (error) {
+      if (error.code === 'VERIFICATION_PROFILE_LOCKED') {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'VERIFICATION_PROFILE_LOCKED', message: error.message }
+        });
+      }
       if (error.code === 'VALIDATION_ERROR') {
         return res.status(400).json({
           success: false,
@@ -83,10 +89,14 @@ class SupplierProfileController {
           verification_status: result.verification_status,
           submitted_at: result.submitted_at,
           already_pending: Boolean(result.alreadyPending),
-          already_verified: Boolean(result.alreadyVerified)
+          already_verified: Boolean(result.alreadyVerified),
+          submitted_revision: result.submitted_revision || 0
         }
       });
     } catch (error) {
+      if(error.code==='VERIFICATION_STATE_LOCKED') {
+        return res.status(409).json({success:false,error:{code:error.code,message:error.message}});
+      }
       if (error.code === 'INCOMPLETE_PROFILE') {
         return res.status(400).json({
           success: false,
@@ -110,6 +120,39 @@ class SupplierProfileController {
         success: false,
         error: { code: 'SERVER_ERROR', message: 'Could not submit verification application' }
       });
+    }
+  }
+
+  async getVerificationHistory(req,res) {
+    try{
+      const history=await profileService.getVerificationHistory(req.user.id);
+      return res.json({success:true,data:{history}});
+    }catch(error){
+      return res.status(error.statusCode||500).json({success:false,error:{
+        code:error.statusCode?error.code:'VERIFICATION_HISTORY_UNAVAILABLE',
+        message:error.statusCode?error.message:'Unable to load verification history'
+      }});
+    }
+  }
+
+  /**
+   * POST /api/v1/supplier/verification/corrections
+   * Corrections are review-specific; this route never starts a new application.
+   */
+  async submitCorrections(req,res) {
+    try {
+      const data=await profileService.submitCorrections(req.user.id,req.body,req.get('X-Idempotency-Key'));
+      return res.status(200).json({success:true,data});
+    }catch(error){
+      if(error.statusCode && error.statusCode<500) {
+        return res.status(error.statusCode).json({success:false,error:{
+          code:error.code,message:error.message
+        }});
+      }
+      console.error('Submit Supplier Corrections Error:',error);
+      return res.status(500).json({success:false,error:{
+        code:'CORRECTIONS_UNAVAILABLE',message:'Could not submit supplier corrections'
+      }});
     }
   }
 

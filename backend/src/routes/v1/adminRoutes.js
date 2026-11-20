@@ -33,6 +33,28 @@ router.get(
   (req, res) => adminController.getPendingSuppliers(req, res)
 );
 
+// Immutable submission snapshots and prior review decisions; verification admins only.
+router.get('/suppliers/:id/revisions',authorizeVerification,(req,res)=>adminController.getSupplierReviewHistory(req,res));
+
+// Restricted evidence review (binary remains private; no buyer-facing URL).
+const supplierEvidence=require('../../services/supplierVerificationDocumentService');
+router.get('/suppliers/:id/documents',authorizeVerification,async(req,res)=>{
+  try{return res.json({success:true,data:{documents:await supplierEvidence.versions(req.params.id)}});}
+  catch(e){return res.status(e.statusCode||500).json({success:false,error:{
+    code:e.statusCode?e.code:'EVIDENCE_UNAVAILABLE',message:e.statusCode?e.message:'Cannot inspect evidence'}});}
+});
+router.get('/suppliers/:id/documents/:docId/file',authorizeVerification,async(req,res)=>{
+  try{
+    const doc=await supplierEvidence.download(req.params.id,req.params.docId);
+    res.set('Cache-Control','no-store');
+    res.set('Content-Type',doc.mime);
+    res.set('Content-Disposition','attachment; filename="review-evidence"');
+    res.set('X-Content-Type-Options','nosniff');
+    return res.send(doc.bytes);
+  }catch(e){return res.status(e.statusCode||500).json({success:false,error:{
+    code:e.statusCode?e.code:'EVIDENCE_UNAVAILABLE',message:e.statusCode?e.message:'Cannot retrieve evidence'}});}
+});
+
 // Approve or reject supplier verification
 router.put(
   '/suppliers/:id/verify',

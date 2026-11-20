@@ -24,6 +24,10 @@ const db={
     return {
       async beginTransaction(){writes.push('BEGIN')},
       async query(sql,args){
+        if(sql.includes('SELECT supplier_id, verification_status')) return [[{
+          supplier_id:Number(args[0]), verification_status:'PENDING_REVIEW',
+          verification_level:'LEVEL_1_CONTACT', subscription_plan:'STARTER'
+        }]];
         if(sql.startsWith('UPDATE supplier_profiles')){writes.push({table:'supplier_profiles',args});return [{affectedRows:1}]}
         if(sql.startsWith('UPDATE users')){writes.push({table:'users',args});return [{affectedRows:1}]}
         if(sql.includes('INSERT INTO system_audit_logs')){writes.push({table:'system_audit_logs',args});return [{insertId:1}]}
@@ -50,6 +54,7 @@ const controller=load(controllerSrc,id=>{
   if(id==='../config/db')return db;
   if(id==='../services/encryptionService')return {isEncrypted:()=>false};
   if(id==='../services/supplierValidationService')return {maskIban:()=>{throw Error('Plaintext should never be decrypted')}};
+  if(id==='../services/notificationService')return {enqueueEvent:async()=>({insertId:1})};
   throw Error('Unexpected controller require: '+id);
 });
 async function main(){
@@ -79,8 +84,7 @@ async function main(){
   await check('admin approval updates supplier, user and audit in transaction',async()=>{
     writes=[];const res=mockResponse();
     await controller.verifySupplier({params:{id:'2'},user:{id:99,role:'ADMIN'},
-      body:{verification_status:'VERIFIED',verification_level:'LEVEL_2_BUSINESS',
-        subscription_plan:'STARTER',max_active_listings:4,transaction_fee_percent:1.5}},res);
+      body:{verification_status:'VERIFIED',verification_level:'LEVEL_2_BUSINESS'}},res);
     assert.equal(res.statusCode,200,JSON.stringify(res.body));
     assert.equal(res.body.data.verification_status,'VERIFIED');
     assert.equal(writes.filter(w=>w?.table==='supplier_profiles').length,1);
@@ -101,7 +105,8 @@ async function main(){
   await check('request more information is not a rejection',async()=>{
     writes=[];const res=mockResponse();await controller.verifySupplier({
       params:{id:'2'},user:{id:99,role:'ADMIN'},
-      body:{verification_status:'MORE_INFORMATION_REQUIRED',rejection_reason:'Please supply food licence'}
+      body:{verification_status:'MORE_INFORMATION_REQUIRED',rejection_reason:'Please supply food licence',
+        correction_fields:['food_license_no'],correction_notes:{food_license_no:'Please supply food licence'}}
     },res);assert.equal(res.statusCode,200);
     assert.equal(res.body.data.verification_status,'MORE_INFORMATION_REQUIRED');
     assert.equal(writes.filter(w=>w?.table==='system_audit_logs').length,1);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { ShieldCheck, Users, FolderCheck, RefreshCw, AlertTriangle, ArrowRight, LockKeyhole } from 'lucide-react';
+import { ShieldCheck, Users, FolderCheck, RefreshCw, AlertTriangle, ArrowRight, LockKeyhole, ReceiptText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import adminApi from '../api/admin';
@@ -18,6 +18,7 @@ export function AdminDashboardPage() {
   const role = user?.role;
   const canVerify = VERIFIERS.includes(role);
   const canCatalog = CATALOG.includes(role);
+  const canFinance = ['ADMIN','SUPER_ADMIN','FINANCE_ADMIN'].includes(role);
 
   const refresh = async () => {
     if (!canVerify) return;
@@ -95,6 +96,12 @@ export function AdminDashboardPage() {
             <h2 className="text-lg font-bold">Catalog governance</h2>
             <p className="text-sm opacity-70">Moderate supplier catalog requests, families and categories.</p>
             <span className="text-xs font-bold inline-flex items-center gap-1">Open catalog <ArrowRight className="w-3.5 h-3.5" /></span>
+          </Link>}
+          {canFinance && <Link to="/admin/finance" className="rounded-2xl border p-6 hover:shadow-lg transition-shadow space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
+            <ReceiptText className="w-7 h-7" style={{color:'var(--brand-accent)'}} />
+            <h2 className="text-lg font-bold">Refund readiness</h2>
+            <p className="text-sm opacity-70">Review buyer-specific refund ceilings and Safepay eligibility. Read-only; external refunds and payouts stay disabled.</p>
+            <span className="text-xs font-bold inline-flex items-center gap-1">Open finance review <ArrowRight className="w-3.5 h-3.5" /></span>
           </Link>}
           {canVerify && <Link to="/admin/verifications" className="rounded-2xl border p-6 hover:shadow-lg transition-shadow space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
             <ShieldCheck className="w-7 h-7" style={{color:'var(--brand-accent)'}} />

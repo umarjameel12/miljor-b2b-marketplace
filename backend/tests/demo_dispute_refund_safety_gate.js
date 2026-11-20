@@ -21,6 +21,7 @@ function service(name, sql) {
     if (id==='./feeService')return {};
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
+    if (id==='./notificationService')return {enqueueEvent:async(conn,event)=>{assert.equal(conn,sql);sql.trace.notifications.push(event);return {insertId:1};}};
     return require(id);
   };
   const fn = new Function('require','module','exports','__filename','__dirname',source(name));
@@ -28,7 +29,7 @@ function service(name, sql) {
   return m.exports;
 }
 function fixture(cfg={}) {
-  const trace={writes:[],commits:0,rollbacks:0};
+  const trace={writes:[],notifications:[],commits:0,rollbacks:0};
   const order={
     id:31,order_code:'DEMO-31',buyer_id:4,supplier_id:8,
     payment_status:'PAID',fulfillment_status:'SUPPLIER_DELIVERED',
@@ -45,10 +46,18 @@ function fixture(cfg={}) {
         return [cfg.replay?[{id:81,order_id:31,buyer_id:4,dispute_id:17,refund_type:'PARTIAL',disputed_quantity:'20.00'}]:[]];
       if(query.includes('FROM order_disputes WHERE id=? AND order_id=?'))
         return [cfg.unrelated?[]:[{id:17,order_id:31,buyer_id:4,disputed_quantity:'20.00',status:'OPEN'}]];
-      if(query.includes('FROM refund_obligations')&&query.includes("status IN ('REQUESTED'"))
+      if(query.includes('SELECT id FROM refund_obligations')&&query.includes("status IN ('REQUESTED'"))
         return [cfg.duplicate?[{id:81}]:[]];
-      if(query.includes('SELECT SUM(total_refund_amount)'))return [[{total_refunded:'0.00'}]];
-      if(query.includes('COUNT(*) AS line_count'))return [[{line_count:cfg.multiLine?2:0}]];
+      if(query.includes('SELECT SUM(total_refund_amount)')){
+        // Pending obligations consume reserved refund capacity, not just PAID.
+        assert.ok(query.includes("'REQUESTED'")&&query.includes("'UNDER_REVIEW'"),
+          'Pending assessment states must count toward captured refund ceiling');
+        return [[{total_refunded:cfg.pendingReservedAmount||'0.00'}]];
+      }
+      if(query.includes('COUNT(*) AS line_count') && query.includes('procurement_collective_order_lines'))
+        return [[{line_count:cfg.groupLines?2:0}]];
+      if(query.includes('COUNT(*) AS line_count'))
+        return [[{line_count:cfg.multiLine?2:0}]];
       if(query.includes('FROM order_disputes WHERE order_id = ? AND idempotency_key'))return [[]];
       if(query.includes('SELECT id, dispute_code, disputed_quantity'))return [[]];
       if(query.includes('FROM supplier_payables'))return [[]];
@@ -79,6 +88,10 @@ async function run() {
     assert.equal(f.trace.commits,1);
     assert.equal(f.trace.rollbacks,0);
     assert.ok(f.trace.writes.some(x=>x.query.includes('INSERT INTO order_disputes')));
+    assert.equal(f.trace.notifications.length,1);
+    assert.equal(f.trace.notifications[0].eventType,'DISPUTE_OPENED');
+    assert.equal(f.trace.notifications[0].role,'SUPPLIER');
+    assert.equal(f.trace.notifications[0].userId,8);
   });
   for(const [name,changes,code,flags] of [
     ['wrong disputed quantity',{disputedQuantity:'30'},'DISPUTED_QUANTITY_MISMATCH',{}],
@@ -99,6 +112,8 @@ async function run() {
     ['refund blocks unrelated dispute',{},'REFUND_DISPUTE_MISMATCH',{unrelated:true}],
     ['refund quantity cannot exceed dispute',{disputedQuantity:'30'},'REFUND_QUANTITY_EXCEEDS_DISPUTE',{}],
     ['refund rejects second obligation on same dispute',{},'REFUND_ALREADY_ASSESSED_FOR_DISPUTE',{duplicate:true}],
+    ['pending 23k already reserved prevents a further 5k shortage obligation',{},
+      'REFUND_EXCEEDS_CAPTURED_AMOUNT',{pendingReservedAmount:'23000.00'}],
     ['B6 partial refund cannot use aggregate SKU price',{},'LINE_ITEM_REFUND_ALLOCATION_REQUIRED',{multiLine:true}]
   ])await check(name,async()=>{
     const f=fixture(flags),s=service('financialSettlementService.js',f.sql);

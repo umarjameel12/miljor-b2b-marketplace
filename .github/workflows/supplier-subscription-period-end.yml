@@ -1,0 +1,42 @@
+name: Supplier Subscription Period-End Contract
+on:
+  pull_request:
+    paths:
+      - 'backend/src/services/subscriptionEntitlementService.js'
+      - 'backend/src/controllers/subscriptionController.js'
+      - 'backend/src/routes/v1/supplierRoutes.js'
+      - 'backend/src/services/schedulerService.js'
+      - 'backend/database/migrations/061_supplier_subscription_scheduled_changes.sql'
+      - 'backend/database/migrations/062_supplier_safepay_subscription_checkout.sql'
+      - 'backend/database/migrations/105_safepay_v3_supplier_subscription_contract.sql'
+      - 'backend/src/services/safepayV3SandboxClient.js'
+      - 'backend/src/services/safepayV3ContractService.js'
+      - 'backend/src/services/supplierSubscriptionCheckoutService.js'
+      - 'backend/tests/supplier_subscription_checkout_contract_gate.js'
+      - 'frontend/src/pages/SupplierSubscriptionPage.jsx'
+      - 'backend/tests/subscription_period_end_contract_gate.js'
+      - '.github/workflows/supplier-subscription-period-end.yml'
+  push:
+    branches:
+      - 'feature/supplier-subscription-safe-lifecycle'
+jobs:
+  subscription-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Migration manifest and JavaScript syntax
+        run: |
+          node backend/database/migrationManifest.js
+          node --check backend/src/services/subscriptionEntitlementService.js
+          node --check backend/src/controllers/subscriptionController.js
+          node --check backend/src/routes/v1/supplierRoutes.js
+          node --check backend/src/services/schedulerService.js
+          node --check backend/src/services/supplierSubscriptionCheckoutService.js
+      - name: Supplier ownership, cancellation, and period-end idempotency
+        run: node backend/tests/subscription_period_end_contract_gate.js
+      - name: Isolated Safepay subscription checkout and provider proof contract
+        run: node backend/tests/supplier_subscription_checkout_contract_gate.js

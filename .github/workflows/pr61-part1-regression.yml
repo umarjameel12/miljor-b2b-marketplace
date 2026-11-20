@@ -1,0 +1,104 @@
+name: PR61 Part 1 Supplier Verification and Unified Opportunities
+on:
+  pull_request:
+    paths:
+      - 'backend/src/controllers/adminController.js'
+      - 'backend/database/migrations/098_supplier_verification_revisions.sql'
+      - 'backend/database/migrations/099_supplier_correction_replay_hash.sql'
+      - 'backend/database/migrations/100_supplier_verification_documents.sql'
+      - 'backend/src/services/supplierVerificationDocumentService.js'
+      - 'backend/tests/pr61_part1_document_mysql_gate.js'
+      - 'frontend/src/components/supplier/SupplierVerificationDocuments.jsx'
+      - 'backend/tests/pr61_part1_mysql_gate.js'
+      - 'frontend/src/components/supplier/SupplierVerificationCorrections.jsx'
+      - 'frontend/src/pages/SupplierProfilePage.jsx'
+      - 'frontend/src/api/supplier.js'
+      - 'backend/src/controllers/supplierProfileController.js'
+      - 'backend/src/services/supplierProfileService.js'
+      - 'backend/src/services/supplierProcurementOpportunitiesService.js'
+      - 'backend/src/routes/v1/procurementRoutes.js'
+      - 'frontend/src/pages/SupplierOpportunitiesPage.jsx'
+      - 'frontend/src/pages/AdminVerificationPage.jsx'
+      - 'frontend/src/App.jsx'
+      - 'backend/tests/pr61_part1_regression_gate.js'
+      - '.github/workflows/pr61-part1-regression.yml'
+  workflow_dispatch:
+jobs:
+  supplier-part1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Server syntax checks
+        run: |
+          node --check backend/src/controllers/adminController.js
+          node --check backend/src/controllers/supplierProfileController.js
+          node --check backend/src/services/supplierProfileService.js
+          node --check backend/src/services/supplierProcurementOpportunitiesService.js
+          node --check backend/src/routes/v1/procurementRoutes.js
+          node --check backend/tests/pr61_part1_regression_gate.js
+          node --check backend/tests/pr61_part1_mysql_gate.js
+          node --check backend/src/services/supplierVerificationDocumentService.js
+          node --check backend/tests/pr61_part1_document_mysql_gate.js
+      - name: Supplier verification and opportunities regression
+        run: node backend/tests/pr61_part1_regression_gate.js
+      - name: Production frontend compile
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+  supplier-part1-real-mysql:
+    name: Disposable MySQL 8 supplier correction and approval lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_only_mysql_password
+          MYSQL_DATABASE: miljor_test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_mysql_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: test_only_mysql_password
+      DB_NAME: miljor_test_db
+      TEST_DB_NAME: miljor_test_db
+      MILJOR_TEST_ONLY_MIGRATIONS: '1'
+      ALLOW_EXTERNAL_MONEY_MOVEMENT: 'false'
+      SAFEPAY_ENV: sandbox
+      JWT_SECRET: ci_isolated_testing_secret_at_least_32_chars_long
+      OTP_HMAC_SECRET: ci_isolated_otp_hmac_secret_32_chars_long
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Initialize disposable test schema and run canonical migrations
+        run: |
+          cd backend
+          node database/financeCompatibilityGate.js
+          node database/bootstrapDisposableMigrationTest.js
+          node database/runMigrations.js
+          node database/migrationManifest.js
+      - name: Execute REAL MySQL verification revision and correction lifecycle
+        run: |
+          cd backend
+          node tests/pr61_part1_mysql_gate.js
+          node tests/pr61_part1_document_mysql_gate.js

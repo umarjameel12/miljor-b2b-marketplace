@@ -20,6 +20,7 @@ const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const feeService = require('./feeService');
 const reservationEventService = require('./reservationEventService');
+const notificationService = require('./notificationService');
 
 function exactSub(a, b, scale = 2) {
   const bStr = exactDecimal.toCanonical(b, scale);
@@ -684,11 +685,16 @@ class FinancialSettlementService {
         }
       }
 
-      // Check existing approved/confirmed refunds to prevent over-refunding
+      // Count ALL unresolved refund obligations, including REQUESTED and
+      // UNDER_REVIEW. Otherwise two separate SKU shortages could each reserve
+      // the same captured funds while awaiting admin approval. Order FOR UPDATE
+      // serializes these checks against concurrent assessments for this order.
       const [existingRefunds] = await connection.query(
         `SELECT SUM(total_refund_amount) AS total_refunded
          FROM refund_obligations
-         WHERE order_id = ? AND status IN ('APPROVED', 'CONFIRMED', 'AWAITING_EXTERNAL_EXECUTION', 'EXTERNAL_PROCESSING')`,
+         WHERE order_id = ? AND status IN ('REQUESTED', 'UNDER_REVIEW',
+           'APPROVED', 'CONFIRMED', 'AWAITING_EXTERNAL_EXECUTION',
+           'EXTERNAL_PROCESSING')`,
         [orderId]
       );
 
@@ -728,33 +734,84 @@ class FinancialSettlementService {
            WHERE ao.order_id=?`,
           [orderId]
         );
-        if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
-          const err = new Error('Partial refunds for awarded procurement orders require line-item quantities, verified receipts and itemized contractual prices');
-          err.code = 'LINE_ITEM_REFUND_ALLOCATION_REQUIRED';
-          err.statusCode = 409;
-          throw err;
+        const [groupLineCounts]=await connection.query(
+          `SELECT COUNT(*) AS line_count FROM procurement_collective_order_lines gl
+           JOIN procurement_collective_buyer_orders co ON co.id=gl.collective_order_id
+           WHERE co.order_id=?`,[orderId]);
+        if (Number(groupLineCounts[0]?.line_count || 0) > 0) {
+          // A collective order has no meaningful aggregate order.unit_price:
+          // derive the exact refundable amount from the buyer's independently
+          // confirmed immutable per-SKU shortage receipt.
+          if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
+            const err = new Error('Conflicting awarded and collective refund line sources');
+            err.code = 'REFUND_SOURCE_CONFLICT'; err.statusCode = 409; throw err;
+          }
+          if (!Number.isSafeInteger(Number(disputeId)) || Number(disputeId) <= 0) {
+            const err = new Error('Collective refunds require the owned SKU-specific shortage dispute');
+            err.code = 'COLLECTIVE_LINE_DISPUTE_REQUIRED';err.statusCode = 409;throw err;
+          }
+          const [receiptLines] = await connection.query(
+            `SELECT rl.shortage_quantity,rl.shortage_value,rl.ordered_quantity,
+              rl.received_quantity,rl.locked_unit_price,rl.collective_order_line_id,
+              d.disputed_quantity AS disputed_line_quantity,d.claimed_amount,
+              d.dispute_category,rs.id AS receipt_id,rs.status AS receipt_status,
+              rs.order_id,rs.buyer_id
+             FROM order_disputes d
+             JOIN procurement_collective_receipt_submissions rs
+               ON rs.order_id=d.order_id AND rs.buyer_id=d.buyer_id
+             JOIN procurement_collective_receipt_lines rl
+               ON rl.receipt_id=rs.id
+               AND rl.collective_order_line_id=CAST(
+                 JSON_UNQUOTE(JSON_EXTRACT(d.evidence_metadata,'$.line_id')) AS UNSIGNED)
+             JOIN procurement_collective_order_lines gl
+               ON gl.id=rl.collective_order_line_id
+             JOIN procurement_collective_buyer_orders co
+               ON co.id=gl.collective_order_id
+               AND co.order_id=d.order_id AND co.buyer_id=d.buyer_id
+             WHERE d.id=? AND d.order_id=? AND d.buyer_id=?
+               AND d.dispute_category='SHORT_QUANTITY'
+               AND rs.status='EXCEPTION' FOR UPDATE`,
+            [disputeId,orderId,order.buyer_id]
+          );
+          if (receiptLines.length!==1) {
+            const err = new Error('No unique immutable buyer receipt line backs this shortage dispute');
+            err.code = 'COLLECTIVE_RECEIPT_EVIDENCE_REQUIRED';err.statusCode=409;throw err;
+          }
+          const line=receiptLines[0];
+          const shortage=exactDecimal.toCanonical(line.shortage_quantity,4);
+          const requested=exactDecimal.toCanonical(disputedQuantity,4);
+          const expectedValue=exactDecimal.exactMultiplyRound(
+            shortage,line.locked_unit_price,2);
+          if (!exactDecimal.exactDecimalEquals(shortage,requested,4) ||
+              !exactDecimal.exactDecimalEquals(shortage,line.disputed_line_quantity,4) ||
+              !exactDecimal.exactDecimalEquals(
+                line.ordered_quantity,
+                exactDecimal.exactDecimalSum([
+                  String(line.received_quantity),shortage],4),4) ||
+              !exactDecimal.exactDecimalEquals(expectedValue,line.shortage_value,2) ||
+              !exactDecimal.exactDecimalEquals(expectedValue,line.claimed_amount,2) ||
+              !exactDecimal.exactDecimalGte(shortage,'0.0001',4)) {
+            const err = new Error('Claim quantity or value differs from immutable SKU receipt');
+            err.code = 'COLLECTIVE_REFUND_EVIDENCE_MISMATCH';err.statusCode=409;throw err;
+          }
+          assessedItemAmount=expectedValue;
+          feeRefundAmount='0.00';
+        } else {
+          if (Number(awardLineCounts[0]?.line_count || 0) > 0) {
+            const err = new Error('Partial refunds for awarded procurement require line-scoped allocation');
+            err.code = 'LINE_ITEM_REFUND_ALLOCATION_REQUIRED';err.statusCode=409;throw err;
+          }
+          if (!disputedQuantity || Number(disputedQuantity)<=0) {
+            const err = new Error('Valid disputed quantity is required for partial refund assessment');
+            err.code = 'DISPUTED_QUANTITY_REQUIRED';err.statusCode=400;throw err;
+          }
+          if (Number(disputedQuantity)>Number(order.total_qty)) {
+            const err = new Error('Disputed quantity cannot exceed the locked order quantity');
+            err.code = 'QUANTITY_EXCEEDS_ORDER';err.statusCode=422;throw err;
+          }
+          assessedItemAmount=exactDecimal.exactMultiplyRound(
+            disputedQuantity.toString(),order.unit_price.toString(),2);
         }
-        // PARTIAL: based on disputed quantity and locked order.unit_price
-        if (!disputedQuantity || Number(disputedQuantity) <= 0) {
-          const err = new Error('Valid disputed quantity is required for partial refund assessment');
-          err.code = 'DISPUTED_QUANTITY_REQUIRED';
-          err.statusCode = 400;
-          throw err;
-        }
-
-        if (Number(disputedQuantity) > Number(order.total_qty)) {
-          const err = new Error(`Disputed quantity (${disputedQuantity}) cannot exceed total order quantity (${order.total_qty})`);
-          err.code = 'QUANTITY_EXCEEDS_ORDER';
-          err.statusCode = 422;
-          throw err;
-        }
-
-        // Server-calculated: exactMultiplyRound(qty, unit_price, 2)
-        assessedItemAmount = exactDecimal.exactMultiplyRound(
-          disputedQuantity.toString(),
-          order.unit_price.toString(),
-          2
-        );
       }
 
       const totalRefundAmount = exactDecimal.exactDecimalSum([assessedItemAmount, feeRefundAmount], 2);
@@ -806,32 +863,35 @@ class FinancialSettlementService {
         const payable = payables[0];
         const holdCode = `HOLD-RFND-${refundId}-${Date.now().toString().slice(-4)}`;
         const currentHeld = payable.held_amount.toString();
-        const newHeld = exactDecimal.exactDecimalSum([currentHeld, assessedItemAmount], 2);
         const maxEntitlement = exactSub(
           payable.net_payable_amount.toString(),
           payable.refund_deduction_amount.toString(),
           2
         );
+        const remainingHoldCapacity=exactSub(maxEntitlement,currentHeld,2);
+        const actualHold=exactDecimal.exactDecimalGte(
+          remainingHoldCapacity,assessedItemAmount,2)
+          ? assessedItemAmount
+          : (exactDecimal.exactDecimalGte(remainingHoldCapacity,'0.01',2)
+            ? remainingHoldCapacity : '0.00');
+        const newHeld=exactDecimal.exactDecimalSum([currentHeld,actualHold],2);
         const newAvailable = Number(newHeld) >= Number(maxEntitlement) 
           ? '0.00' 
           : exactSub(maxEntitlement, newHeld, 2);
 
-        await connection.query(
-          `INSERT INTO financial_holds (
-            hold_code, order_id, supplier_payable_id, dispute_id,
-            hold_amount, currency, reason, status, placed_by_role,
-            placed_by_id, notes, created_at
-          ) VALUES (?, ?, ?, ?, ?, 'PKR', 'ACTIVE_DISPUTE', 'ACTIVE', 'SYSTEM', ?, ?, NOW())`,
-          [
-            holdCode,
-            orderId,
-            payable.id,
-            disputeId,
-            assessedItemAmount,
-            actor.id,
-            `Auto-hold for pending refund obligation ${refundCode}`
-          ]
-        );
+        if (exactDecimal.exactDecimalGte(actualHold,'0.01',2)) {
+          await connection.query(
+            `INSERT INTO financial_holds (
+              hold_code, order_id, supplier_payable_id, dispute_id,
+              hold_amount, currency, reason, status, placed_by_role,
+              placed_by_id, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, 'PKR', 'ACTIVE_DISPUTE', 'ACTIVE', 'SYSTEM', ?, ?, NOW())`,
+            [
+              holdCode,orderId,payable.id,disputeId,actualHold,actor.id,
+              `Auto-hold capped to remaining entitlement for refund obligation ${refundCode}`
+            ]
+          );
+        }
 
         await connection.query(
           `UPDATE supplier_payables
@@ -855,6 +915,16 @@ class FinancialSettlementService {
         amountDelta: totalRefundAmount,
         notes: `Assessed refund obligation: PKR ${totalRefundAmount} (${refundType})`
       });
+
+      if(order.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',order.buyer_id],['SUPPLIER',order.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'REFUND_ASSESSED',
+            eventKey:'collective:order:'+order.id+':refund:'+refundId+':assessed:'+role,
+            entityId:order.id
+          });
+        }
+      }
 
       await connection.commit();
 
@@ -892,7 +962,7 @@ class FinancialSettlementService {
 
     try {
       const [refunds] = await connection.query(
-        `SELECT r.*, o.order_code
+        `SELECT r.*, o.order_code,o.notes AS collective_order_notes,o.supplier_id
          FROM refund_obligations r
          JOIN orders o ON r.order_id = o.id
          WHERE r.id = ? FOR UPDATE`,
@@ -931,28 +1001,34 @@ class FinancialSettlementService {
 
         // Forfeit the auto-hold
         const [holds] = await connection.query(
-          `SELECT id FROM financial_holds 
-           WHERE order_id = ? AND supplier_payable_id = ? AND status = 'ACTIVE' LIMIT 1 FOR UPDATE`,
-          [refund.order_id, payable.id]
+          `SELECT id,hold_amount FROM financial_holds
+           WHERE order_id = ? AND supplier_payable_id = ? AND dispute_id = ?
+             AND status = 'ACTIVE' FOR UPDATE`,
+          [refund.order_id, payable.id,refund.dispute_id]
         );
 
-        if (holds.length > 0) {
+        for (const hold of holds) {
           await connection.query(
             `UPDATE financial_holds SET status = 'FORFEITED_TO_REFUND', updated_at = NOW() WHERE id = ?`,
-            [holds[0].id]
+            [hold.id]
           );
         }
 
         const currentHeld = payable.held_amount.toString();
-        const newHeld = Number(currentHeld) >= Number(refundItemAmount)
-          ? exactSub(currentHeld, refundItemAmount, 2)
-          : '0.00';
+        const forfeitedHeld=exactDecimal.exactDecimalSum(
+          holds.map(hold=>String(hold.hold_amount)),2);
+        const heldAfterForfeiture=exactSub(currentHeld,forfeitedHeld,2);
 
         const maxEntitlement = exactSub(
           payable.net_payable_amount.toString(),
           newDeductions,
           2
         );
+        // Accrual may already have held the entire payable for an active
+        // delivery exception. After refund deduction, never retain a held
+        // balance larger than the remaining supplier entitlement.
+        const newHeld=exactDecimal.exactDecimalGte(heldAfterForfeiture,maxEntitlement,2)
+          ? maxEntitlement:heldAfterForfeiture;
         const newAvailable = Number(newHeld) >= Number(maxEntitlement)
           ? '0.00'
           : exactSub(maxEntitlement, newHeld, 2);
@@ -989,6 +1065,16 @@ class FinancialSettlementService {
         amountDelta: refund.total_refund_amount.toString(),
         notes: `Admin approved refund obligation of PKR ${refund.total_refund_amount}. External execution remains DISABLED.`
       });
+
+      if(refund.collective_order_notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',refund.buyer_id],['SUPPLIER',refund.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'REFUND_APPROVED',
+            eventKey:'collective:order:'+refund.order_id+':refund:'+refundId+':approved:'+role,
+            entityId:refund.order_id
+          });
+        }
+      }
 
       await connection.commit();
 

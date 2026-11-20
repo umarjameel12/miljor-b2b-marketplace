@@ -32,6 +32,22 @@ jobs:
         run: node backend/tests/demo_b6_fulfillment_invoice_source_gate.js
       - name: Dispute and refund safety service behaviors (11 cases)
         run: node backend/tests/demo_dispute_refund_safety_gate.js
+      - name: PR61 transactional domain notification producer and UCP event projection gates
+        run: |
+          node --check backend/src/services/fulfillmentService.js
+          node --check backend/src/services/flashPoolService.js
+          node --check backend/src/services/collectivePaymentHoldService.js
+          node --check backend/src/services/disputeService.js
+          node --check backend/src/services/reservationEventService.js
+          node --check backend/src/services/ucpTransactionalNotifications.js
+          node --test backend/tests/pr61_domain_notification_producer_gate.test.js
+          node backend/tests/pr61_collective_payment_hold_service_gate.js
+          node backend/tests/ucp_notification_catalog_gate.js
+          node backend/tests/ucp_flash_delivery_source_gate.js
+          node --check backend/tests/demo_dispute_refund_safety_gate.js
+          node backend/tests/ucp_transactional_notifications_gate.js
+          node --test backend/tests/notification_projection_gate.js
+          node backend/tests/notification_transaction_gate.js
       - name: B6 award paid supplier fulfillment service (4 cases)
         run: node backend/tests/demo_b6_paid_fulfillment_service_gate.js
       - name: Exact two-product B6 invoice service (3 cases)

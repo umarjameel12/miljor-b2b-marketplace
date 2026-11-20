@@ -57,12 +57,19 @@ class SafepayAdapter {
       err.statusCode = 500;
       throw err;
     }
-    return {
-      env: this.env,
-      publicKey: this.publicKey,
-      secretKey: this.secretKey,
-      webhookSecret: this.webhookSecret
-    };
+    // Never return secrets to callers, logs, responses or diagnostics.
+    return { env: this.env, configured: true };
+  }
+
+  // Read-only contract check, safe to call BEFORE creating payment attempts.
+  assertTrackerContract(){
+    if(process.env.SAFEPAY_TRACKER_CONTRACT!=='legacy-v1-major' ||
+       process.env.SAFEPAY_LEGACY_CONTRACT_VERIFIED!=='true'){
+      const err=new Error('Safepay merchant tracker version and amount units need verification');
+      err.code='SAFEPAY_TRACKER_CONTRACT_UNVERIFIED';err.statusCode=503;
+      throw err;
+    }
+    return true;
   }
 
   /**
@@ -89,6 +96,9 @@ class SafepayAdapter {
     if (mockClient && typeof mockClient.init === 'function') {
       return mockClient.init({ amount, currency, orderCode });
     }
+
+    // Fail closed before making an outgoing merchant-authenticated request.
+    this.assertTrackerContract();
 
     const payload = JSON.stringify({
       client: this.publicKey,
@@ -278,8 +288,12 @@ class SafepayAdapter {
   async fetchTracker(trackerToken, { mockClient = null } = {}) {
     this.validateConfig();
 
-    if (!trackerToken || typeof trackerToken !== 'string') {
-      const err = new Error('Valid tracker token is required');
+    // Tracker is read from durable payment attempts, but must still be an
+    // opaque, single HTTP path segment. A corrupted/malicious DB value may not
+    // escape /order/v1/ or alter the request sent with the merchant secret.
+    if (typeof trackerToken!=='string' ||
+        !/^track_[A-Za-z0-9_-]{3,180}$/.test(trackerToken)) {
+      const err = new Error('Valid opaque Safepay tracker token is required');
       err.code = 'INVALID_TRACKER_TOKEN';
       err.statusCode = 400;
       throw err;

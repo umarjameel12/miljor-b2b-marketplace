@@ -4,7 +4,9 @@
 const crypto=require('node:crypto');
 const db=require('../config/db');
 const exact=require('./exactDecimal');
+const procurementMatchingService=require('./procurementMatchingService');
 const {buildCollectiveBidPreview}=require('./procurementCollectiveBidPolicy');
+const notificationService=require('./notificationService');
 const err=(code,message,statusCode=400)=>Object.assign(new Error(message),{code,statusCode});
 const id=v=>{if(v==null||typeof v==='boolean'||!/^[1-9]\d*$/.test(String(v))||
   !Number.isSafeInteger(Number(v)))throw err('INVALID_ID','Positive identifier required.');return Number(v)};
@@ -74,21 +76,60 @@ class ProcurementCollectiveBidService {
     throw err('GROUP_NOT_QUOTING','Supplier invitation requires qualified collective bidding.',409);
    const [verified]=await conn.query("SELECT u.id FROM users u JOIN supplier_profiles p ON p.supplier_id=u.id WHERE u.id=? AND u.role='SUPPLIER' AND u.is_verified=1 AND u.verification_status='VERIFIED' AND p.verification_status='VERIFIED'",[supplier]);
    if(!verified.length)throw err('SUPPLIER_NOT_VERIFIED','Verified supplier required.',403);
+   // Pre-invitation eligibility uses the canonical SKU, published spec, inventory
+   // and delivery-zone matcher. Aggregate JOINED/consented buyer demand first.
+   const demand=await this.demand(conn,group);
+   const joined=demand.participants.filter(p=>p.status==='JOINED'&&p.consent_confirmed);
+   if(joined.length<Number(group.minimum_buyers))
+     throw err('GROUP_NOT_QUALIFIED','Not enough consenting buyers.',409);
+   const aggregate=new Map(demand.items.map(item=>[Number(item.id),'0.0000']));
+   for(const participant of joined) {
+     for(const line of participant.lines) {
+       const requestItem=demand.items.find(item=>Number(item.id)===Number(line.request_item_id));
+       if(!requestItem || String(line.unit).toLowerCase()!==String(requestItem.unit).toLowerCase())
+         throw err('MIXED_GROUP_UNITS','Participant item units do not match the published request.',409);
+       aggregate.set(Number(line.request_item_id),exact.exactDecimalSum([
+         aggregate.get(Number(line.request_item_id))||'0.0000',String(line.quantity)
+       ],4));
+     }
+   }
+   const aggregatedItems=demand.items.map(item=>({...item,quantity:aggregate.get(Number(item.id))||'0.0000'}));
+   const eligible=await procurementMatchingService._candidates(conn,{
+     delivery_area:group.delivery_area,items:aggregatedItems
+   });
+   if(!eligible.some(candidate=>Number(candidate.supplier_id)===supplier &&
+     Number(candidate.covered_item_count)===aggregatedItems.length))
+     throw err('COLLECTIVE_SUPPLIER_NOT_ELIGIBLE',
+       'Supplier must have eligible live stock, SKU/spec and delivery coverage for every grouped item.',409);
    await conn.query("INSERT INTO procurement_collective_supplier_invitations (group_id,supplier_id,status) VALUES (?,?,'INVITED') ON DUPLICATE KEY UPDATE id=id",[gid,supplier]);
    const [rows]=await conn.query('SELECT id,group_id,supplier_id,status FROM procurement_collective_supplier_invitations WHERE group_id=? AND supplier_id=?',[gid,supplier]);
    if(rows[0].status!=='INVITED')throw err('INVITATION_REVOKED','Supplier invitation is not active.',409);
+   await notificationService.enqueueEvent(conn,{userId:supplier,role:'SUPPLIER',eventType:'GROUP_INVITED',
+    eventKey:'collective:group:'+gid+':invitation:'+rows[0].id,entityId:gid});
    await conn.commit();return rows[0];
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
  }
  async supplierInbox(supplierId){
   const supplier=id(supplierId);
-  const [rows]=await this.database.query("SELECT i.id AS invitation_id,i.group_id,i.status,g.join_deadline,g.minimum_buyers,r.quote_deadline,r.delivery_area FROM procurement_collective_supplier_invitations i JOIN procurement_collective_groups g ON g.id=i.group_id JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.quote_deadline>UTC_TIMESTAMP() ORDER BY i.invited_at DESC LIMIT 100",[supplier]);
+  const [rows]=await this.database.query("SELECT i.id AS invitation_id,i.group_id,i.status,g.request_id,g.join_deadline,g.minimum_buyers,r.quote_deadline,r.delivery_area FROM procurement_collective_supplier_invitations i JOIN procurement_collective_groups g ON g.id=i.group_id JOIN procurement_requests r ON r.id=g.request_id WHERE i.supplier_id=? AND i.status='INVITED' AND g.status='QUOTING' AND r.quote_deadline>UTC_TIMESTAMP() ORDER BY i.invited_at DESC LIMIT 100",[supplier]);
   // Only aggregate request lines are visible; buyer identities and addresses are excluded.
   for(const row of rows){
    const [items]=await this.database.query("SELECT ri.id AS request_item_id,ri.family_id,ri.unit,ri.requirements FROM procurement_request_items ri JOIN procurement_collective_groups g ON g.request_id=ri.request_id WHERE g.id=? ORDER BY ri.line_number",[row.group_id]);
-   row.items=items.map(x=>({...x,requirements:String(x.requirements||'')
-      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
-      .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')}));
+   const demand=await this.demand(this.database,{id:row.group_id,request_id:row.request_id});
+   const participating=demand.participants.filter(p=>p.status==='JOINED'&&p.consent_confirmed);
+   row.participant_count=participating.length;
+   // Never send the source participants, IDs, consent snapshots, or addresses.
+   row.items=items.map(x=>{
+     const quantities=participating.flatMap(p=>p.lines)
+       .filter(l=>Number(l.request_item_id)===Number(x.request_item_id));
+     const aggregateQuantity=exact.exactDecimalSum([
+       '0.0000',...quantities.map(l=>String(l.quantity))
+     ],4);
+     return {...x,aggregate_quantity:aggregateQuantity,
+       requirements:String(x.requirements||'')
+         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[contact hidden]')
+         .replace(/(?:\+?92|0)\s*3\d{2}[\s().-]*\d{3}[\s().-]*\d{4}/g,'[contact hidden]')};
+   });
   }
   return rows;
  }
@@ -170,6 +211,14 @@ class ProcurementCollectiveBidService {
     await conn.query("INSERT INTO procurement_collective_bid_lines(bid_version_id,request_item_id,supplier_listing_id,supplier_sku_id,product_spec_id,aggregate_quantity,min_aggregate_quantity,purchasing_unit,unit_price,subtotal,physical_snapshot) VALUES (?,?,?,?,?,?,?,?,?,?,?)",[saved.insertId,l.request_item_id,l.supplier_listing_id,l.supplier_sku_id,l.product_spec_id,l.aggregate_quantity,l.min_aggregate_quantity,l.purchasing_unit,l.unit_price,l.subtotal,JSON.stringify(l.physical_snapshot)]);
    }
    await conn.query('UPDATE procurement_collective_bids SET current_version=? WHERE id=?',[version,bid.id]);
+   // Each joined buyer must explicitly review and consent to this exact bid version.
+   // Notifications are inserted on the same transaction and are recipient-owned.
+   const buyerIds=[...new Set(demand.participants
+    .filter(p=>p.status==='JOINED'&&p.consent_confirmed).map(p=>Number(p.buyer_id)))];
+   for(const buyerId of buyerIds){
+    await notificationService.enqueueEvent(conn,{userId:buyerId,role:'BUYER',eventType:'CONSENT_REQUIRED',
+     eventKey:'collective:group:'+gid+':bid:'+bid.id+':version:'+version+':buyer:'+buyerId,entityId:gid});
+   }
    await conn.commit();return {bid:snapshot,is_replay:false};
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw err('BID_CONFLICT','Concurrent supplier bid conflict.',409);throw e}finally{conn.release()}
  }

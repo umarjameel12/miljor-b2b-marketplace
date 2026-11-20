@@ -1,0 +1,117 @@
+'use strict';
+// Read-only, admin-scoped Safepay refund readiness. NEVER issues a refund.
+// Separate buyer refunds in grouped orders; never assume external settlement.
+const db=require('../config/db');
+const exact=require('./exactDecimal');
+const VALID_ROLES=new Set(['ADMIN','SUPER_ADMIN','FINANCE_ADMIN']);
+const error=(code,statusCode,message)=>Object.assign(new Error(message),{code,statusCode});
+function cents(value){
+  const s=exact.toCanonicalString(value,2);
+  if(s.startsWith('-'))throw error('INVALID_AMOUNT',422,'Refund amount must be non-negative');
+  const [a,b]=s.split('.');
+  return BigInt(a)*100n+BigInt(b);
+}
+function evaluate({refund,payment,attempt,otherApprovedMinor=0n,now=Date.now()}){
+  const faults=[];
+  const state=String(refund.status||'');
+  if(state!=='APPROVED')faults.push('ADMIN_APPROVAL_REQUIRED');
+  if(refund.currency!=='PKR')faults.push('UNSUPPORTED_CURRENCY');
+  if(payment.status!=='PAID'||refund.order_payment_status!=='PAID')
+    faults.push('CAPTURE_NOT_VERIFIED');
+  if(!attempt||attempt.provider!=='SAFEPAY'||attempt.environment!=='sandbox'||
+     attempt.status!=='COMPLETED'||attempt.currency!==refund.currency||
+     !exact.exactDecimalEquals(attempt.amount,payment.amount,2)||
+     Number(attempt.order_id)!==Number(refund.order_id)||
+     Number(attempt.buyer_id)!==Number(refund.buyer_id))
+    faults.push('PROVIDER_TRACKER_OWNERSHIP_UNVERIFIED');
+  const requested=cents(refund.total_refund_amount);
+  const paid=cents(payment.amount);
+  if(requested<=0n)faults.push('NON_POSITIVE_REFUND');
+  if(requested>paid||requested+otherApprovedMinor>paid)
+    faults.push('CAPTURED_REFUND_CEILING_EXCEEDED');
+  const time=payment.paid_at==null?NaN:new Date(payment.paid_at).getTime();
+  const ageHours=(now-time)/3600000;
+  if(!Number.isFinite(time)||!Number.isFinite(ageHours)||ageHours<0)
+    faults.push('CAPTURE_TIMESTAMP_UNVERIFIED');
+  else if(ageHours>90*24)faults.push('PROVIDER_CARD_REFUND_WINDOW_EXCEEDED');
+  const method=Number.isFinite(ageHours)&&ageHours>=0&&ageHours<24?
+    'PROVIDER_REVERSAL_REVIEW':'PROVIDER_REFUND_REVIEW';
+  // Even if business/financial rules pass, operator must verify merchant
+  // refund API, payment provider and actual signed completion.
+  return {
+    refund_id:Number(refund.id),order_id:Number(refund.order_id),
+    currency:'PKR',requested_amount_pkr:exact.toCanonicalString(refund.total_refund_amount,2),
+    // Safepay Payments v3/refund documentation uses PKR minor units. Display
+    // a non-executable precision-safe preview, never feed to legacy v1 API.
+    v3_refund_amount_minor_preview:requested.toString(),
+    v3_preview_only:true,
+    provider:'SAFEPAY',recommended_provider_action:method,
+    internal_financial_check:faults.length===0?'PASS':'BLOCKED',
+    blocking_reasons:faults,external_execution_status:'DISABLED',
+    can_execute_external_refund:false,
+    provider_origin_confirmation:'NOT_OBTAINED',
+    note:'This is a read-only assessment, not a refund request or confirmation.'
+  };
+}
+function capturedTracker(row){
+  // Direct provider reconciliation can save transaction.token as transaction_ref.
+  // The original checkout tracker is preserved separately in provider_response.
+  // Never query payment_attempts using an arbitrary transaction id.
+  let payload;
+  try{
+    payload=typeof row.provider_response==='string'
+      ?JSON.parse(row.provider_response):row.provider_response;
+  }catch(_){return null;}
+  const token=payload&&typeof payload==='object'
+    ?payload.tracker_token:null;
+  const validToken=value=>typeof value==='string'&&
+    /^track_[A-Za-z0-9_-]{3,180}$/.test(value);
+  const ref=row.transaction_ref;
+  // A persisted but malformed tracker is an integrity failure; do not
+  // silently fall back to a different reference.
+  if(token!==undefined&&token!==null){
+    if(!validToken(token))return null;
+    if(validToken(ref)&&ref!==token)return null;
+    return token;
+  }
+  // Legacy signed-webhook payments store the tracker as transaction_ref.
+  return validToken(ref)?ref:null;
+}
+class SafepayRefundReadinessService{
+  constructor(database=db){this.db=database;}
+  async inspect({actor,refundId,now=Date.now()}){
+    if(!actor||!VALID_ROLES.has(actor.role))
+      throw error('FORBIDDEN',403,'Finance/admin authorization required');
+    const id=Number(refundId);
+    if(!Number.isSafeInteger(id)||id<=0)
+      throw error('INVALID_REFUND_ID',400,'Positive numeric refund ID required');
+    const [rows]=await this.db.query(
+      `SELECT r.id,r.order_id,r.buyer_id,r.payment_id,r.total_refund_amount,
+       r.currency,r.status,o.payment_status AS order_payment_status,
+       p.amount AS captured_amount,p.status AS captured_status,p.paid_at,p.transaction_ref,p.provider_response
+       FROM refund_obligations r
+       JOIN orders o ON o.id=r.order_id
+       JOIN payments p ON p.id=r.payment_id AND p.order_id=r.order_id AND p.buyer_id=r.buyer_id
+       WHERE r.id=?`,[id]);
+    if(rows.length!==1)throw error('REFUND_NOT_FOUND',404,'Refund obligation not found');
+    const refund=rows[0];
+    const tracker=capturedTracker(refund);
+    const [attempts]=tracker?await this.db.query(
+      'SELECT provider,environment,status,amount,currency,order_id,buyer_id FROM payment_attempts WHERE provider_tracker_token=? LIMIT 2',
+      [tracker]):[[]];
+    const [others]=await this.db.query(
+      `SELECT total_refund_amount FROM refund_obligations
+       WHERE payment_id=? AND id<>? AND status IN
+         ('REQUESTED','UNDER_REVIEW','APPROVED','AWAITING_EXTERNAL_EXECUTION',
+          'EXTERNAL_PROCESSING','CONFIRMED')`,
+      [refund.payment_id,id]);
+    const aggregate=others.reduce((s,x)=>s+cents(x.total_refund_amount),0n);
+    return evaluate({refund,
+      payment:{status:refund.captured_status,amount:refund.captured_amount,paid_at:refund.paid_at},
+      attempt:attempts.length===1?attempts[0]:null,otherApprovedMinor:aggregate,now});
+  }
+}
+module.exports=new SafepayRefundReadinessService();
+module.exports.SafepayRefundReadinessService=SafepayRefundReadinessService;
+module.exports.evaluate=evaluate;
+module.exports.capturedTracker=capturedTracker;

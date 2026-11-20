@@ -24,14 +24,21 @@ const SupplierOnboardingPage = lazy(() => import('./pages/SupplierOnboardingPage
 const SupplierCatalogPage = lazy(() => import('./pages/SupplierCatalogPage').then((m) => ({ default: m.SupplierCatalogPage })));
 const AdminVerificationPage = lazy(() => import('./pages/AdminVerificationPage').then((m) => ({ default: m.AdminVerificationPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminFinancePage = lazy(() => import('./pages/AdminFinancePage').then((m) => ({ default: m.AdminFinancePage })));
 const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then((m) => ({ default: m.AdminCatalogPage })));
 const SupplierDashboardPage = lazy(() => import('./pages/SupplierDashboardPage').then((m) => ({ default: m.SupplierDashboardPage })));
+const SupplierOpportunitiesPage = lazy(() => import('./pages/SupplierOpportunitiesPage').then((m) => ({ default: m.SupplierOpportunitiesPage })));
 const SupplierPoolsPage = lazy(() => import('./pages/SupplierPoolsPage').then((m) => ({ default: m.SupplierPoolsPage })));
 const SupplierSubscriptionPage = lazy(() => import('./pages/SupplierSubscriptionPage').then((m) => ({ default: m.SupplierSubscriptionPage })));
 const DemandRequestsPage = lazy(() => import('./pages/DemandRequestsPage').then((m) => ({ default: m.DemandRequestsPage })));
 const RfqPage = lazy(() => import('./pages/RfqPage').then((m) => ({ default: m.RfqPage })));
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
 const PaymentReturnPage = lazy(() => import('./pages/PaymentReturnPage').then((m) => ({ default: m.PaymentReturnPage })));
+const SupplierDeliveryPage = lazy(() => import('./pages/SupplierDeliveryPage').then((m) => ({ default: m.SupplierDeliveryPage })));
+const SupplierSettlementsPage = lazy(() => import('./pages/SupplierSettlementsPage').then((m) => ({ default: m.SupplierSettlementsPage })));
+const SupplierDisputesPage = lazy(() => import('./pages/SupplierDisputesPage').then((m) => ({ default: m.SupplierDisputesPage })));
+const SupplierAnalyticsPage = lazy(() => import('./pages/SupplierAnalyticsPage').then((m) => ({ default: m.SupplierAnalyticsPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 
 function RouteFallback() {
   return (
@@ -80,14 +87,21 @@ function AppContent() {
           <Route path="/flash-pools" element={<Navigate to="/pools?type=FLASH" replace />} />
           <Route path="/demand-requests" element={<DemandRequestsPage />} />
           <Route path="/rfqs" element={<RfqPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
           <Route path="/supplier/pools" element={<SupplierPoolsPage />} />
           <Route path="/supplier/subscription" element={<SupplierSubscriptionPage />} />
           <Route path="/supplier/profile" element={<SupplierProfilePage />} />
           <Route path="/supplier/onboarding" element={<SupplierOnboardingPage />} />
           <Route path="/supplier/catalog" element={<SupplierCatalogPage />} />
+          <Route path="/supplier/deliveries" element={<SupplierDeliveryPage />} />
+          <Route path="/supplier/settlements" element={<SupplierSettlementsPage />} />
+          <Route path="/supplier/disputes" element={<SupplierDisputesPage />} />
+          <Route path="/supplier/analytics" element={<SupplierAnalyticsPage />} />
+          <Route path="/supplier/procurement" element={<SupplierOpportunitiesPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/finance" element={<AdminFinancePage />} />
           <Route path="/admin/verifications" element={<AdminVerificationPage />} />
           <Route path="/admin/suppliers/verification" element={<AdminVerificationPage />} />
           <Route path="/admin/catalog" element={<AdminCatalogPage />} />

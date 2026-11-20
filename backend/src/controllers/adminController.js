@@ -9,6 +9,7 @@
 const db = require('../config/db');
 const encryptionService = require('../services/encryptionService');
 const validationService = require('../services/supplierValidationService');
+const notificationService = require('../services/notificationService');
 
 class AdminController {
 
@@ -40,6 +41,9 @@ class AdminController {
            sp.max_active_listings,
            sp.transaction_fee_percent,
            sp.rejection_reason,
+           sp.submitted_revision,
+           sp.correction_fields,
+           sp.correction_notes,
            sp.submitted_at,
            sp.created_at,
            u.full_name,
@@ -99,6 +103,9 @@ class AdminController {
           max_active_listings: r.max_active_listings,
           transaction_fee_percent: r.transaction_fee_percent,
           rejection_reason: r.rejection_reason || null,
+          submitted_revision: Number(r.submitted_revision || 0),
+          correction_fields: typeof r.correction_fields==='string' ? JSON.parse(r.correction_fields) : (r.correction_fields || []),
+          correction_notes: typeof r.correction_notes==='string' ? JSON.parse(r.correction_notes) : (r.correction_notes || {}),
           submitted_at: r.submitted_at || null,
           created_at: r.created_at
         };
@@ -115,6 +122,56 @@ class AdminController {
     }
   }
 
+
+  // ---------------------------------------------------------------------------
+  // GET /api/v1/admin/suppliers/:id/revisions
+  // Immutable submitted snapshots and decision history for authorized reviewers.
+  // Snapshot fields are allowlisted and bank identifiers are always masked.
+  // ---------------------------------------------------------------------------
+  async getSupplierReviewHistory(req, res) {
+    try {
+      const supplierId = Number(req.params.id);
+      if (!Number.isSafeInteger(supplierId) || supplierId <= 0) {
+        return res.status(400).json({success:false,error:{code:'INVALID_SUPPLIER_ID',message:'Invalid supplier id'}});
+      }
+      const [rows] = await db.query(
+        `SELECT revision, submitted_at, submitted_snapshot, review_action,
+                reviewed_at, review_reason
+         FROM supplier_verification_revisions
+         WHERE supplier_id = ? ORDER BY revision DESC LIMIT 50`,
+        [supplierId]
+      );
+      const allowed = new Set([
+        'business_name','business_type','business_description','contact_person_name',
+        'contact_person_phone','warehouse_address','lahore_service_area','tax_ntn',
+        'food_license_no','food_license_type','bank_name','bank_account_title',
+        'bank_iban_masked','has_bank_details','documents'
+      ]);
+      const revisions = rows.map(row => {
+        let snapshot = row.submitted_snapshot;
+        if (typeof snapshot === 'string') {
+          try { snapshot = JSON.parse(snapshot); } catch { snapshot = {}; }
+        }
+        if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) snapshot = {};
+        const safeSnapshot = {};
+        for (const key of allowed) {
+          if (Object.prototype.hasOwnProperty.call(snapshot, key)) safeSnapshot[key] = snapshot[key];
+        }
+        // Defense in depth: never return raw account identifiers from legacy snapshots.
+        delete safeSnapshot.bank_iban;
+        return {
+          revision: Number(row.revision), submitted_at: row.submitted_at,
+          snapshot: safeSnapshot, review_action: row.review_action || 'PENDING',
+          reviewed_at: row.reviewed_at || null, review_reason: row.review_reason || null
+        };
+      });
+      return res.status(200).json({success:true,data:{supplier_id:supplierId,revisions}});
+    } catch (error) {
+      console.error('Get Supplier Review History Error:', error);
+      return res.status(500).json({success:false,error:{code:'REVIEW_HISTORY_UNAVAILABLE',message:'Could not load supplier review history'}});
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // PUT /api/v1/admin/suppliers/:id/verify
   // Permitted Roles: VERIFICATION_ADMIN, SUPER_ADMIN
@@ -127,9 +184,9 @@ class AdminController {
       const {
         verification_status,
         verification_level = 'LEVEL_2_BUSINESS',
-        subscription_plan = 'GROWTH',
+        subscription_plan,
         max_active_listings,
-        transaction_fee_percent = 1.50,
+        transaction_fee_percent,
         rejection_reason = null
       } = req.body;
       const adminId = req.user.id;
@@ -142,7 +199,7 @@ class AdminController {
         });
       }
 
-      const validStatuses = ['VERIFIED', 'REJECTED', 'SUSPENDED', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED'];
+      const validStatuses = ['VERIFIED', 'REJECTED', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED'];
       if (!validStatuses.includes(verification_status)) {
         return res.status(400).json({
           success: false,
@@ -238,80 +295,169 @@ class AdminController {
         effectiveListingCap = requestedCap;
       }
 
-      // Check supplier profile exists
-      const [profiles] = await db.query('SELECT * FROM supplier_profiles WHERE supplier_id = ?', [id]);
-      if (!profiles[0]) {
-        return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier profile not found' } });
+      // Verification and commercial subscription entitlements are independent.
+      // Admin review never changes supplier plan, fees or paid listing caps.
+      if (subscription_plan !== undefined || max_active_listings !== undefined || transaction_fee_percent !== undefined) {
+        return res.status(400).json({ success: false, error: {
+          code: 'SUBSCRIPTION_MANAGED_SEPARATELY',
+          message: 'Subscription plan, listing cap and transaction fee are managed only by verified billing flows'
+        } });
+      }
+      if (['UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED', 'REJECTED'].includes(verification_status) &&
+          verification_level !== 'LEVEL_2_BUSINESS') {
+        return res.status(400).json({ success: false, error: { code: 'REVIEW_LEVEL_CHANGE_NOT_ALLOWED', message: 'Review-only decisions cannot change the verification level' } });
+      }
+
+      const corrections = req.body.correction_fields;
+      const correctionNotes = req.body.correction_notes;
+      const correctionAllowlist = new Set([
+        'business_name','business_type','business_description','contact_person_name',
+        'contact_person_phone','warehouse_address','lahore_service_area','tax_ntn',
+        'food_license_no','food_license_type','bank_name','bank_account_title','bank_iban',
+        'document:BUSINESS_LICENSE','document:TAX_CERTIFICATE',
+        'document:WAREHOUSE_PROOF','document:BANK_PROOF'
+      ]);
+      if (verification_status === 'MORE_INFORMATION_REQUIRED' &&
+        (!Array.isArray(corrections) || !corrections.length || corrections.length>17 ||
+          new Set(corrections).size !== corrections.length ||
+          corrections.some(field=>typeof field!=='string'||!correctionAllowlist.has(field)))) {
+        return res.status(400).json({success:false,error:{
+          code:'CORRECTION_FIELDS_REQUIRED',
+          message:'Select at least one valid field that the supplier must correct'
+        }});
+      }
+      if (verification_status === 'MORE_INFORMATION_REQUIRED' &&
+          (correctionNotes === null || typeof correctionNotes !== 'object' ||
+           Array.isArray(correctionNotes) || corrections.some(field =>
+             typeof correctionNotes[field] !== 'string' || correctionNotes[field].trim().length < 5 ||
+             correctionNotes[field].length > 1000))) {
+        return res.status(400).json({success:false,error:{
+          code:'FIELD_SPECIFIC_NOTES_REQUIRED',
+          message:'Explain each requested correction in at least five characters'
+        }});
+      }
+      if (verification_status !== 'MORE_INFORMATION_REQUIRED' &&
+          (corrections !== undefined || correctionNotes !== undefined)) {
+        return res.status(400).json({success:false,error:{
+          code:'UNEXPECTED_CORRECTION_FIELDS',message:'Correction requests are only allowed for Request Info'
+        }});
       }
 
       const connection = await db.getConnection();
       try {
         await connection.beginTransaction();
+        // Lock the reviewed profile before comparing its state; eliminate stale concurrent decisions.
+        const [profiles] = await connection.query(
+          'SELECT supplier_id, verification_status, verification_level, subscription_plan, submitted_revision FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+          [id]
+        );
+        const current = profiles[0];
+        if (!current) {
+          await connection.rollback();
+          return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier profile not found' } });
+        }
+        const allowedTransitions = {
+          PENDING_REVIEW: ['UNDER_REVIEW', 'VERIFIED', 'MORE_INFORMATION_REQUIRED', 'REJECTED'],
+          UNDER_REVIEW: ['VERIFIED', 'MORE_INFORMATION_REQUIRED', 'REJECTED']
+        };
+        if (!(allowedTransitions[current.verification_status] || []).includes(verification_status)) {
+          await connection.rollback();
+          return res.status(409).json({ success: false, error: {
+            code: 'STALE_OR_INVALID_VERIFICATION_TRANSITION',
+            message: 'Supplier review changed or has already been decided. Refresh before proceeding.'
+          } });
+        }
+        if (req.body.expected_status && req.body.expected_status !== current.verification_status) {
+          await connection.rollback();
+          return res.status(409).json({ success: false, error: { code: 'STALE_REVIEW', message: 'Review status has changed' } });
+        }
 
+        // The admin must review the exact immutable revision, not a subsequently corrected form.
+        if (Number(current.submitted_revision || 0) > 0 &&
+            (!Number.isSafeInteger(Number(req.body.expected_revision)) ||
+             Number(req.body.expected_revision) !== Number(current.submitted_revision))) {
+          await connection.rollback();
+          return res.status(409).json({success:false,error:{
+            code:'STALE_REVIEW_REVISION',message:'Supplier application revision changed; refresh before deciding'
+          }});
+        }
         const isApproved = verification_status === 'VERIFIED';
         const effectiveRejectionReason = isApproved ? null : (rejection_reason || null);
-
-        // Update supplier profile
         await connection.query(
-          `UPDATE supplier_profiles
-           SET verification_status = ?,
-               verification_level = ?,
-               subscription_plan = ?,
-               max_active_listings = ?,
-               transaction_fee_percent = ?,
-               rejection_reason = ?,
-               verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END
+          `UPDATE supplier_profiles SET verification_status = ?,
+             verification_level = CASE WHEN ? = 1 THEN ? ELSE verification_level END,
+             rejection_reason = ?,
+             verified_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE verified_at END,
+             correction_fields = ?, correction_notes = ?,
+             correction_requested_revision = ?, correction_requested_at = CASE WHEN ? = 1 THEN UTC_TIMESTAMP() ELSE NULL END
            WHERE supplier_id = ?`,
-          [verification_status, verification_level, effectivePlan, effectiveListingCap, transaction_fee_percent, effectiveRejectionReason, isApproved ? 1 : 0, id]
+          [verification_status, isApproved ? 1 : 0, verification_level, effectiveRejectionReason,
+           isApproved ? 1 : 0,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? JSON.stringify(corrections) : null,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? JSON.stringify(correctionNotes) : null,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? Number(current.submitted_revision||0) : null,
+           verification_status === 'MORE_INFORMATION_REQUIRED' ? 1 : 0, id]
         );
-
-        // Update users table
-        await connection.query(
-          `UPDATE users
-           SET role = CASE WHEN ? = 1 THEN 'SUPPLIER' ELSE role END,
-               is_verified = ?,
-               verification_status = ?
-           WHERE id = ?`,
-          [isApproved ? 1 : 0, isApproved ? 1 : 0, isApproved ? 'VERIFIED' : 'PENDING_SUPPLIER_VERIFICATION', id]
-        );
-
-        // Audit Log
+        if (Number(current.submitted_revision || 0) > 0 && verification_status !== 'UNDER_REVIEW') {
+          const reviewAction = isApproved ? 'APPROVED' :
+            verification_status === 'REJECTED' ? 'REJECTED' : 'REQUEST_INFO';
+          const [revisionWrite] = await connection.query(
+            `UPDATE supplier_verification_revisions
+             SET review_action=?, reviewed_by=?, reviewed_at=UTC_TIMESTAMP(), review_reason=?
+             WHERE supplier_id=? AND revision=? AND review_action='PENDING'`,
+            [reviewAction,adminId,effectiveRejectionReason,id,Number(current.submitted_revision)]
+          );
+          if(revisionWrite.affectedRows!==1) {
+            const e=new Error('Reviewed revision already decided');
+            e.code='STALE_REVIEW_REVISION';e.statusCode=409;throw e;
+          }
+        }
+        // Review-only actions do not strip existing account/trust status.
+        if (isApproved) {
+          await connection.query(
+            `UPDATE users SET role = 'SUPPLIER', is_verified = 1, verification_status = 'VERIFIED' WHERE id = ?`,
+            [id]
+          );
+        }
         await connection.query(
           `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
            VALUES (?, ?, 'SUPPLIER_VERIFICATION_UPDATE', 'supplier_profiles', ?, ?, ?)`,
-          [
-            adminId,
-            req.user.role,
-            id,
-            JSON.stringify({ status: profiles[0].verification_status }),
-            JSON.stringify({ verification_status, verification_level, subscription_plan })
-          ]
+          [adminId, req.user.role, id,
+           JSON.stringify({ status: current.verification_status }),
+           JSON.stringify({ verification_status, verification_level: isApproved ? verification_level : current.verification_level, reason: effectiveRejectionReason })]
         );
-
+        const verificationEvent = {
+          UNDER_REVIEW:'VERIFICATION_UNDER_REVIEW',
+          VERIFIED:'VERIFICATION_APPROVED',
+          MORE_INFORMATION_REQUIRED:'VERIFICATION_INFO_REQUESTED',
+          REJECTED:'VERIFICATION_REJECTED'
+        }[verification_status];
+        if(verificationEvent){
+          await notificationService.enqueueEvent(connection,{userId:Number(id),role:'SUPPLIER',
+            eventType:verificationEvent,
+            eventKey:'supplier-verification:'+id+':revision:'+Number(current.submitted_revision||0)+':decision:'+verification_status,
+            entityId:Number(id)});
+        }
         await connection.commit();
-        connection.release();
-
         return res.status(200).json({
-          success: true,
-          message: `Supplier verification status updated to '${verification_status}'`,
-          data: {
-            supplier_id: parseInt(id),
-            verification_status,
-            verification_level,
-            subscription_plan,
-            rejection_reason: effectiveRejectionReason
-          }
+          success: true, message: `Supplier verification status updated to '${verification_status}'`,
+          data: { supplier_id: Number(id), verification_status,
+            verification_level: isApproved ? verification_level : current.verification_level,
+            subscription_plan: current.subscription_plan, rejection_reason: effectiveRejectionReason }
         });
-
       } catch (err) {
         await connection.rollback();
-        connection.release();
         throw err;
+      } finally {
+        connection.release();
       }
 
     } catch (error) {
+      if(error.statusCode && error.statusCode < 500) {
+        return res.status(error.statusCode).json({success:false,error:{code:error.code,message:error.message}});
+      }
       console.error('Verify Supplier Error:', error);
-      return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+      return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: 'Supplier review could not be processed' } });
     }
   }
 

@@ -29,7 +29,8 @@ function fixture(config={}){
     async query(sql,args){
       if(sql.includes('FROM orders o')&&sql.includes('FOR UPDATE'))return [[order]];
       if(sql.includes('FROM invoices WHERE order_id = ? FOR UPDATE'))return [[]];
-      if(sql.includes('FROM procurement_award_lines'))return [lines];
+      if(sql.includes('FROM procurement_award_lines'))return [config.grouped ? [] : lines];
+      if(sql.includes('FROM procurement_collective_order_lines'))return [config.grouped ? lines.map(x=>({...x,physical_snapshot:x.immutable_sku_snapshot})) : []];
       if(sql.includes('INSERT INTO invoices')){
         trace.snapshot=JSON.parse(args[9]);trace.writes++;return [{insertId:88}];
       }
@@ -64,6 +65,11 @@ async function main(){
   assert.equal(valid.trace.snapshot.items[1].description,'Cooking Oil B');
   assert.equal(valid.trace.snapshot.pricing.total_amount,2150);
   pass('Two-line supplier invoice exact 2000+100+50=2150');
+  const grouped=fixture({grouped:true});
+  const groupedInvoice=await grouped.service.generateInvoiceForOrder(51,{id:1,role:'BUYER'});
+  assert.equal(groupedInvoice.invoice_snapshot_json.items.length,2);
+  assert.equal(grouped.trace.snapshot.pricing.total_amount,2150);
+  pass('Grouped buyer invoice uses exact two immutable supplier SKU lines');
   const badGrand=fixture({wrongTotal:true});
   await assert.rejects(badGrand.service.generateInvoiceForOrder(51,{id:1,role:'BUYER'}),
     e=>e.code==='INVOICE_TOTAL_MISMATCH');

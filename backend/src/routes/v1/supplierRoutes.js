@@ -8,10 +8,26 @@ const router = express.Router();
 const profileController = require('../../controllers/supplierProfileController');
 const supDelivController = require('../../controllers/supplierDeliveryController');
 const subscriptionController = require('../../controllers/subscriptionController');
+const dashboardController = require('../../controllers/supplierDashboardController');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
 
 // All supplier portal routes require authenticated session
 router.use(protect);
+
+// Master Supplier Operations Center — Live KPIs & Priority Action Center
+router.get('/dashboard-kpis', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => dashboardController.getDashboardKpis(req, res));
+
+// PR53 supplier operations: read-only, always scoped to the verified actor.
+router.get('/operations', authorizeStrict('SUPPLIER'), async(req,res)=>{
+  try {
+    return res.json({success:true,data:await require('../../services/supplierOperationsService').get(req.user)});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({success:false,error:{
+      code:error.statusCode?error.code:'SUPPLIER_OPERATIONS_UNAVAILABLE',
+      message:error.statusCode?error.message:'Unable to load supplier operations'
+    }});
+  }
+});
 
 // Unified supplier management READ MODEL only. Mutations stay on B4/B5 routes.
 router.get('/pools/overview', authorizeStrict('SUPPLIER'), async (req,res)=>{
@@ -53,15 +69,62 @@ for (const [route,action] of [
 // ---------------------------------------------------------------------------
 router.get('/profile', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => profileController.getProfile(req, res));
 router.put('/profile', authorizeStrict('SUPPLIER'), (req, res) => profileController.updateProfile(req, res));
+router.get('/verification/history', authorizeStrict('SUPPLIER'), (req,res)=>profileController.getVerificationHistory(req,res));
+router.post('/verification/corrections', authorizeStrict('SUPPLIER'), (req,res)=>profileController.submitCorrections(req,res));
 router.post('/verification/submit', authorizeStrict('SUPPLIER'), (req, res) => profileController.submitVerification(req, res));
 router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => profileController.getVerificationStatus(req, res));
+
+// PR61 append-only verification evidence. Never expose a public download URL.
+const supplierEvidence=require('../../services/supplierVerificationDocumentService');
+const evidenceError=(res,e)=>res.status(e.statusCode||500).json({success:false,error:{
+  code:e.statusCode?e.code:'EVIDENCE_UNAVAILABLE',
+  message:e.statusCode?e.message:'Unable to process private verification evidence'
+}});
+router.get('/verification/documents',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{return res.json({success:true,data:{documents:await supplierEvidence.versions(req.user.id)}});}
+  catch(e){return evidenceError(res,e);}
+});
+router.post('/verification/documents',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{return res.status(201).json({success:true,data:{document:await supplierEvidence.upload(
+    req.user.id,req.body,req.get('X-Idempotency-Key'))}});}
+  catch(e){return evidenceError(res,e);}
+});
+router.get('/verification/documents/:docId/file',authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try{
+    const doc=await supplierEvidence.download(req.user.id,req.params.docId);
+    res.set('Cache-Control','no-store');
+    res.set('Content-Type',doc.mime);
+    res.set('Content-Disposition','attachment; filename="verified-evidence"');
+    res.set('X-Content-Type-Options','nosniff');
+    return res.send(doc.bytes);
+  }catch(e){return evidenceError(res,e);}
+});
 
 // ---------------------------------------------------------------------------
 // 2. Supplier Subscriptions & Entitlements (Package E3)
 // ---------------------------------------------------------------------------
 router.get('/subscription', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.getMySubscription(req, res));
 router.post('/subscription/upgrade', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.changePlan(req, res));
+router.post('/subscription/cancel-renewal', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.cancelRenewal(req, res));
+router.post('/subscription/change-at-period-end', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.schedulePlanChange(req,res));
 router.get('/subscription/plans', (req, res) => subscriptionController.getPlans(req, res));
+router.post('/subscription/checkout', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.initiateCheckout(req,res));
+router.get('/subscription/checkout-attempts', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.listCheckoutAttempts(req,res));
+router.post('/subscription/checkout/:id/reconcile', authorizeStrict('SUPPLIER'), (req,res)=>subscriptionController.reconcileCheckout(req,res));
+
+
+// Read-only, supplier-isolated delivery run list. Never marks fulfillment/settlement.
+router.get('/delivery-runs', authorizeStrict('SUPPLIER'), async(req,res)=>{
+  try {
+    const data=await require('../../services/supplierDeliveryRunsService').list(req.user.id);
+    return res.json({success:true,data:{runs:data}});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({success:false,error:{
+      code:error.statusCode?error.code:'DELIVERY_RUNS_UNAVAILABLE',
+      message:error.statusCode?error.message:'Unable to load delivery runs'
+    }});
+  }
+});
 
 // ---------------------------------------------------------------------------
 // 3. Supplier Delivery Settings & Pickup Points (Special Phase G2 Backward Compatibility)

@@ -6,6 +6,7 @@
 // =============================================================================
 
 const db = require('../config/db');
+const notificationService = require('./notificationService');
 
 const PLAN_LIMITS = {
   STARTER: { maxFamilies: 4, maxListings: 4, name: 'Starter Supplier' },
@@ -275,6 +276,15 @@ class SubscriptionEntitlementService {
         throw err;
       }
 
+      // A supplier on a paid plan must not lose paid access immediately.
+      // Cancellation/downgrade uses the period-end endpoint exclusively.
+      if (normalizedPlan === 'STARTER' && profiles[0].subscription_plan !== 'STARTER') {
+        const error = new Error('Use cancel renewal to move to Starter at the paid period end');
+        error.code = 'SUBSCRIPTION_SCHEDULE_REQUIRED';
+        error.statusCode = 409;
+        throw error;
+      }
+
       const previousPlan = profiles[0].subscription_plan;
       const newStatus = normalizedPlan === 'STARTER' ? 'STARTER_ACTIVE' : 'ACTIVE';
 
@@ -328,6 +338,182 @@ class SubscriptionEntitlementService {
     } finally {
       if (connection) connection.release();
     }
+  }
+
+  /**
+   * Schedule a paid supplier to return to STARTER at the existing paid period end.
+   * No refund, provider charge, premature entitlement reduction, or data deletion.
+   * Paid-to-paid changes remain unavailable until verified subscription billing exists.
+   */
+  async scheduleStarterAtPeriodEnd(supplierId, actor) {
+    if (!actor || actor.role !== 'SUPPLIER' || Number(actor.id) !== Number(supplierId)) {
+      const error = new Error('Only the account supplier can manage this subscription');
+      error.statusCode = 403; error.code = 'FORBIDDEN'; throw error;
+    }
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [profiles] = await connection.query(
+        'SELECT supplier_id, subscription_plan FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+        [supplierId]
+      );
+      if (!profiles.length) {
+        const error = new Error('Supplier profile not found');
+        error.statusCode = 404; error.code = 'SUPPLIER_NOT_FOUND'; throw error;
+      }
+      if (!['GROWTH', 'BUSINESS'].includes(profiles[0].subscription_plan)) {
+        const error = new Error('There is no active paid plan to cancel');
+        error.statusCode = 409; error.code = 'NO_ACTIVE_PAID_SUBSCRIPTION'; throw error;
+      }
+      const [rows] = await connection.query(
+        'SELECT id, plan_code, status, current_period_end, pending_plan_code FROM supplier_subscriptions WHERE supplier_id = ? ORDER BY id DESC LIMIT 1 FOR UPDATE',
+        [supplierId]
+      );
+      const row = rows[0];
+      if (!row || row.plan_code !== profiles[0].subscription_plan || row.status !== 'ACTIVE' ||
+          !row.current_period_end || new Date(row.current_period_end).getTime() <= Date.now()) {
+        const error = new Error('Active paid subscription period could not be verified');
+        error.statusCode = 409; error.code = 'SUBSCRIPTION_PERIOD_UNVERIFIED'; throw error;
+      }
+      if (row.pending_plan_code !== 'STARTER') {
+        await connection.query(
+          "UPDATE supplier_subscriptions SET pending_plan_code = 'STARTER', auto_renew = 0 WHERE id = ?",
+          [row.id]
+        );
+        await connection.query(
+          "INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value) VALUES (?, 'SUPPLIER', 'SUBSCRIPTION_CANCEL_RENEWAL_SCHEDULED', 'supplier_subscriptions', ?, ?, ?)",
+          [supplierId, row.id,
+           JSON.stringify({ pending_plan_code: row.pending_plan_code }),
+           JSON.stringify({ pending_plan_code: 'STARTER', effective_at: row.current_period_end })]
+        );
+        await notificationService.enqueueEvent(connection,{
+          userId:supplierId,role:'SUPPLIER',eventType:'SUBSCRIPTION_DOWNGRADE_SCHEDULED',
+          eventKey:'supplier:subscription:'+row.id+':starter-scheduled',
+          entityId:row.id
+        });
+      }
+      await connection.commit();
+      return { current_plan: row.plan_code, pending_plan_code: 'STARTER',
+        effective_at: row.current_period_end, already_scheduled: row.pending_plan_code === 'STARTER' };
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
+  }
+
+  /**
+   * Schedule a paid-to-paid plan change at the existing period end.
+   * No proration, early entitlement changes, automatic charge or refund.
+   * At expiry the supplier returns to Starter and must explicitly pay for the
+   * selected next plan; this avoids charging without fresh customer consent.
+   */
+  async schedulePaidPlanChangeAtPeriodEnd(supplierId,targetPlanCode,actor){
+    const target=String(targetPlanCode||'').toUpperCase();
+    if(!['GROWTH','BUSINESS'].includes(target))
+      throw Object.assign(new Error('Choose Growth or Business for a paid plan change'),{code:'INVALID_PLAN_CODE',statusCode:400});
+    if(!actor||actor.role!=='SUPPLIER'||Number(actor.id)!==Number(supplierId))
+      throw Object.assign(new Error('Only the account supplier can manage this subscription'),{code:'FORBIDDEN',statusCode:403});
+    const connection=await db.getConnection();
+    try{
+      await connection.beginTransaction();
+      const [profiles]=await connection.query(
+        'SELECT supplier_id,subscription_plan FROM supplier_profiles WHERE supplier_id=? FOR UPDATE',[supplierId]);
+      if(!profiles.length)
+        throw Object.assign(new Error('Supplier profile not found'),{code:'SUPPLIER_NOT_FOUND',statusCode:404});
+      const current=profiles[0].subscription_plan;
+      if(!['GROWTH','BUSINESS'].includes(current)||current===target)
+        throw Object.assign(new Error('A different active paid plan is required'),{code:'INVALID_PLAN_CHANGE',statusCode:409});
+      const [rows]=await connection.query(
+        'SELECT id,plan_code,status,current_period_end,pending_plan_code FROM supplier_subscriptions WHERE supplier_id=? ORDER BY id DESC LIMIT 1 FOR UPDATE',[supplierId]);
+      const row=rows[0];
+      if(!row||row.plan_code!==current||row.status!=='ACTIVE'||!row.current_period_end||
+        new Date(row.current_period_end).getTime()<=Date.now())
+        throw Object.assign(new Error('Active paid subscription period could not be verified'),{code:'SUBSCRIPTION_PERIOD_UNVERIFIED',statusCode:409});
+      const [plans]=await connection.query(
+        'SELECT plan_code,is_active FROM subscription_plans WHERE plan_code=? FOR UPDATE',[target]);
+      if(!plans.length||Number(plans[0].is_active)!==1)
+        throw Object.assign(new Error('Target subscription plan is unavailable'),{code:'PLAN_NOT_AVAILABLE',statusCode:409});
+      if(row.pending_plan_code!==target){
+        await connection.query(
+          'UPDATE supplier_subscriptions SET pending_plan_code=?,auto_renew=0 WHERE id=?',[target,row.id]);
+        await connection.query(
+          "INSERT INTO system_audit_logs (actor_id,actor_role,action,entity_name,entity_id,previous_value,new_value) VALUES (?,'SUPPLIER','SUBSCRIPTION_PAID_PLAN_CHANGE_SCHEDULED','supplier_subscriptions',?,?,?)",
+          [supplierId,row.id,JSON.stringify({pending_plan_code:row.pending_plan_code}),
+            JSON.stringify({pending_plan_code:target,effective_at:row.current_period_end,requires_new_payment:true})]);
+        await notificationService.enqueueEvent(connection,{
+          userId:supplierId,role:'SUPPLIER',eventType:'SUBSCRIPTION_PLAN_CHANGE_SCHEDULED',
+          eventKey:'supplier:subscription:'+row.id+':plan-change:'+target,
+          entityId:row.id
+        });
+      }
+      await connection.commit();
+      return {current_plan:current,pending_plan_code:target,effective_at:row.current_period_end,
+        requires_new_payment:true,automatic_charge:false,already_scheduled:row.pending_plan_code===target};
+    }catch(e){await connection.rollback();throw e;}
+    finally{connection.release();}
+  }
+
+  /**
+   * Idempotent, DB-locked period-end transition. Call from the existing scheduler.
+   * Only explicitly cancelled paid periods transition; no automatic renewal is invented.
+   */
+  async processScheduledStarterChanges(limit = 50) {
+    const [candidates] = await db.query(
+      "SELECT supplier_id FROM supplier_subscriptions WHERE plan_code IN ('GROWTH','BUSINESS') AND status='ACTIVE' AND current_period_end <= NOW() ORDER BY current_period_end, id LIMIT ?",
+      [Math.min(50, Math.max(1, Number(limit) || 50))]
+    );
+    let processed = 0;
+    for (const candidate of candidates) {
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        // Same lock order as scheduleStarterAtPeriodEnd.
+        const [profiles] = await connection.query(
+          'SELECT supplier_id, subscription_plan FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE',
+          [candidate.supplier_id]
+        );
+        const [rows] = await connection.query(
+          'SELECT id, plan_code, current_period_end, pending_plan_code, status FROM supplier_subscriptions WHERE supplier_id = ? ORDER BY id DESC LIMIT 1 FOR UPDATE',
+          [candidate.supplier_id]
+        );
+        const row = rows[0];
+        if (profiles.length && row && ['GROWTH','BUSINESS'].includes(row.plan_code) &&
+            row.status === 'ACTIVE' && row.current_period_end &&
+            new Date(row.current_period_end).getTime() <= Date.now() &&
+            profiles[0].subscription_plan === row.plan_code) {
+          await connection.query(
+            "UPDATE supplier_subscriptions SET pending_plan_code = NULL, auto_renew = 0, status = 'CANCELLED' WHERE id = ?",
+            [row.id]
+          );
+          await connection.query(
+            "UPDATE supplier_profiles SET subscription_plan = 'STARTER', subscription_status = 'STARTER_ACTIVE', max_active_listings = 4, updated_at = NOW() WHERE supplier_id = ?",
+            [candidate.supplier_id]
+          );
+          const nextPaidPlan=row.pending_plan_code&&row.pending_plan_code!=='STARTER'
+            ?row.pending_plan_code:null;
+          await connection.query(
+            "INSERT INTO supplier_subscriptions (supplier_id,plan_code,status,current_period_start,billing_cycle,auto_renew,price_pkr,pending_plan_code) VALUES (?, 'STARTER','STARTER_ACTIVE',NOW(),'FREE',0,0,?)",
+            [candidate.supplier_id,nextPaidPlan]
+          );
+          await connection.query(
+            "INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value) VALUES (?, 'SYSTEM', 'SUBSCRIPTION_CANCEL_RENEWAL_APPLIED', 'supplier_profiles', ?, ?, ?)",
+            [candidate.supplier_id, candidate.supplier_id,
+             JSON.stringify({ plan: row.plan_code, subscription_id: row.id }),
+             JSON.stringify({ plan: 'STARTER' })]
+          );
+          await notificationService.enqueueEvent(connection,{
+            userId:candidate.supplier_id,role:'SUPPLIER',
+            eventType:nextPaidPlan?'SUBSCRIPTION_PLAN_CHANGE_PAYMENT_REQUIRED':'SUBSCRIPTION_DOWNGRADED',
+            eventKey:'supplier:subscription:'+row.id+':starter-effective'+(nextPaidPlan?':'+nextPaidPlan:''),
+            entityId:row.id
+          });
+          processed++;
+        }
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally { connection.release(); }
+    }
+    return { processed };
   }
 
   /**

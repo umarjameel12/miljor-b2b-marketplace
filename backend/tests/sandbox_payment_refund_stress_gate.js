@@ -63,7 +63,9 @@ async function run(){
     const failures=burst.filter(x=>x.status!==200);
     assert.equal(failures.length,0,'Concurrent duplicate webhook must not 500: '+JSON.stringify(failures.slice(0,3)));
     const [paymentRows]=await db.query('SELECT id,amount,status,escrow_status FROM payments WHERE order_id=?',[orderId]);
-    const [events]=await db.query('SELECT event_id FROM payment_webhook_events WHERE event_id=?',[evt]);
+    const authenticatedEventId='evt_sha256_'+crypto.createHash('sha256')
+      .update(Buffer.from(JSON.stringify(event))).digest('hex');
+    const [events]=await db.query('SELECT event_id FROM payment_webhook_events WHERE event_id=?',[authenticatedEventId]);
     const [invoiceRows]=await db.query('SELECT id FROM invoices WHERE order_id=?',[orderId]);
     const [[order]]=await db.query('SELECT payment_status,fulfillment_status FROM orders WHERE id=?',[orderId]);
     assert.equal(order.payment_status,'PAID');

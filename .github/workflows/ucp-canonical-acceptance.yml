@@ -156,6 +156,7 @@ jobs:
       - name: Synthetic signed Safepay HTTP/escrow/replay acceptance (no provider calls)
         env:
           SAFEPAY_WEBHOOK_SECRET: p0-only-synthetic-safepay-callback-key-2026
+          SAFEPAY_PUBLIC_KEY: sec_sand_synthetic_test_key_2026
         run: cd backend && node tests/p0_safepay_signed_http_acceptance.js
       # The B6 Package E2 foundation tests assert EXACT historical 16-spec data.
       # B5 integration gates create additional synthetic supplier specifications.
@@ -167,6 +168,8 @@ jobs:
         if: ${{ always() }}
         timeout-minutes: 8
         run: cd backend && node tests/part5_flash_pool_gate.js
+      - name: PR54 bounded Flash recovery and lease release acceptance
+        run: cd backend && node tests/ucp_flash_recovery_gate.js
       - name: B4 Regular pool publication and tier acceptance
         if: ${{ always() }}
         timeout-minutes: 8
@@ -268,3 +271,9 @@ jobs:
       - name: Real Chromium separate buyer/supplier acceptance
         timeout-minutes: 10
         run: cd backend && node tests/p0_real_browser_journey.js
+      - name: PR61 supplier unified opportunities Chromium tabs and API acceptance
+        timeout-minutes: 5
+        run: cd backend && node tests/pr61_part1_chromium_gate.js
+      - name: PR61 real buyer organizer, second buyer and invited supplier Chromium acceptance
+        timeout-minutes: 8
+        run: cd backend && node tests/pr61_part1_seeded_browser_gate.js

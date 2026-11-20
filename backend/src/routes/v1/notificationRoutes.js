@@ -35,7 +35,11 @@ router.get('/unread-count', async (req, res) => {
 
 router.patch('/:id/read', async (req, res) => {
   try {
-    const updated = await notificationService.markAsRead(req.params.id, req.user.id);
+    const notificationId=Number(req.params.id);
+    if(!Number.isSafeInteger(notificationId)||notificationId<1){
+      return res.status(400).json({success:false,error:{code:'INVALID_NOTIFICATION_ID',message:'Invalid notification'}});
+    }
+    const updated = await notificationService.markAsRead(req.user.id, notificationId);
     return res.status(200).json({ success: true, data: { updated } });
   } catch (err) {
     return res.status(500).json({ success: false, error: { message: err.message } });
@@ -49,6 +53,19 @@ router.patch('/mark-all-read', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ success: false, error: { message: err.message } });
   }
+});
+
+// Notification preferences are owned by the authenticated recipient only.
+router.get('/preferences', async (req,res)=>{
+  try { return res.json({success:true,data:await notificationService.getPreferences(req.user.id)}); }
+  catch { return res.status(500).json({success:false,error:{code:'PREFERENCES_UNAVAILABLE',message:'Unable to load notification preferences'}}); }
+});
+router.put('/preferences', async (req,res)=>{
+  try { return res.json({success:true,data:await notificationService.setPreferences(req.user.id,req.body)}); }
+  catch(e){ return res.status(e.statusCode||500).json({success:false,error:{
+    code:e.statusCode===400?'INVALID_NOTIFICATION_PREFERENCES':'PREFERENCES_UNAVAILABLE',
+    message:e.statusCode===400?e.message:'Unable to save notification preferences'
+  }}); }
 });
 
 module.exports = router;

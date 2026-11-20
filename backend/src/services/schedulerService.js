@@ -23,12 +23,34 @@ function startScheduler() {
     console.log(`[Scheduler] Running pool expiry check at ${new Date().toISOString()}`);
     try {
       await poolClosureService.processExpiredPools();
-      await poolClosureService.processExpiredFlashPools();
+      if (process.env.UCP_FLASH_RECOVERY_ENABLED === 'true' &&
+          process.env.UCP_FLASH_RECOVERY_RUNTIME_APPROVED === 'true') {
+        await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
+      } else {
+        await poolClosureService.processExpiredFlashPools();
+      }
     } catch (err) {
       console.error('[Scheduler] Pool expiry job failed:', err.message);
     }
   });
   activeTasks.push(expiryTask);
+
+  // Collective per-buyer stock leases expire independently of group quote
+  // deadlines. Provider-started attempts are retained for reconciliation.
+  let collectiveHoldTickRunning = false;
+  const collectiveHoldTask = cron.schedule('*/5 * * * *', async () => {
+    if (collectiveHoldTickRunning) return;
+    collectiveHoldTickRunning = true;
+    try {
+      const result = await require('./collectivePaymentHoldService').processExpiredBatch(100);
+      if (result.checked) console.log('[Scheduler] Collective payment holds:', result);
+    } catch (err) {
+      console.error('[Scheduler] Collective payment hold expiry failed:', err.code || err.message);
+    } finally {
+      collectiveHoldTickRunning = false;
+    }
+  });
+  activeTasks.push(collectiveHoldTask);
 
   // ---------------------------------------------------------------------------
   // Every hour: Clean old idempotency records (older than 24h)
@@ -41,6 +63,22 @@ function startScheduler() {
     }
   });
   activeTasks.push(cleanupTask);
+
+  // Paid subscriptions explicitly cancelled by suppliers return to STARTER at
+  // the end of the verified paid period. No automatic charge or renewal occurs.
+  let subscriptionTickRunning = false;
+  const subscriptionTask = cron.schedule('*/5 * * * *', async () => {
+    if (subscriptionTickRunning) return;
+    subscriptionTickRunning = true;
+    try {
+      await require('./subscriptionEntitlementService').processScheduledStarterChanges(50);
+    } catch (error) {
+      console.error('[Scheduler] Subscription period-end transition failed:', error.code || error.message);
+    } finally {
+      subscriptionTickRunning = false;
+    }
+  });
+  activeTasks.push(subscriptionTask);
 
   // B6-M recurring procurement draft worker, opt-in only.
   // Does NOT create orders, trigger Safepay or authorize standing charges.
@@ -70,7 +108,7 @@ function startScheduler() {
     console.log('[Scheduler] B6 recurring draft worker enabled (no automatic payments)');
   }
 
-  console.log('✅ Scheduler active: Pool expiry every 10 min | Cleanup every hour');
+  console.log('✅ Scheduler active: Pool expiry every 10 min | Collective payment holds every 5 min | Cleanup every hour');
 }
 
 function stopScheduler() {

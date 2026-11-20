@@ -190,6 +190,26 @@ async function runSuite() {
     assert.strictEqual(tempOrderCheck1[0].order_status, 'AWAITING_PAYMENT');
     recordPass('Uncaptured provider state (TRACKER_STARTED) safely acknowledged without order mutation');
 
+    const mockFailedButEnded={
+      fetchTracker:async()=>({data:{token:'track_mock_defense_123',
+        state:'TRACKER_ENDED',amount:24330,currency:'PKR',
+        transaction:{token:'trans_fake',status:'FAILED',amount:24330,currency:'PKR'}}})
+    };
+    const failedButEnded=await safepayCheckoutService.reconcilePaymentWithProvider({
+      orderId:tempOrderId,actor:{id:5,role:'BUYER'},mockClient:mockFailedButEnded
+    });
+    assert.equal(failedButEnded.reconciled,false);
+    assert.equal(failedButEnded.transaction_state,'FAILED');
+    const mockUnknownButEnded={
+      fetchTracker:async()=>({data:{token:'track_mock_defense_123',
+        state:'TRACKER_ENDED',amount:24330,currency:'PKR',
+        transaction:{token:'trans_fake',status:'UNKNOWN',amount:24330,currency:'PKR'}}})
+    };
+    assert.equal((await safepayCheckoutService.reconcilePaymentWithProvider({
+      orderId:tempOrderId,actor:{id:5,role:'BUYER'},mockClient:mockUnknownButEnded
+    })).reconciled,false);
+    recordPass('Completed tracker with FAILED/UNKNOWN nested payment cannot mark buyer order paid');
+
     // Test 8: Currency mismatch fails closed
     const mockCurrencyMismatch = {
       fetchTracker: async () => ({
@@ -198,7 +218,7 @@ async function runSuite() {
           state: 'TRACKER_ENDED',
           amount: 24330,
           currency: 'USD',
-          transaction: { token: 'trans_fake', amount: 24330, currency: 'USD' }
+          transaction: { token: 'trans_fake', status: 'SUCCESS', amount: 24330, currency: 'USD' }
         }
       })
     };
@@ -223,7 +243,7 @@ async function runSuite() {
           state: 'TRACKER_ENDED',
           amount: 24329.00, // 1-rupee shortfall tampering
           currency: 'PKR',
-          transaction: { token: 'trans_fake', amount: 24329.00, currency: 'PKR' }
+          transaction: { token: 'trans_fake', status: 'SUCCESS', amount: 24329.00, currency: 'PKR' }
         }
       })
     };
@@ -250,6 +270,7 @@ async function runSuite() {
           currency: 'PKR',
           transaction: {
             token: 'trans_fake',
+            status: 'SUCCESS',
             amount: 24330.00,
             currency: 'PKR',
             signature: '0000000000000000000000000000000000000000000000000000000000000000'

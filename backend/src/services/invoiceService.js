@@ -198,10 +198,21 @@ class InvoiceService {
          JOIN procurement_award_orders ao ON ao.id = al.award_order_id
          WHERE ao.order_id = ? ORDER BY al.id`, [numericOrderId]
       );
+      const [groupLines] = await conn.query(
+        `SELECT gl.request_item_id,gl.supplier_sku_id,gl.quantity,gl.purchasing_unit,
+          gl.unit_price,gl.subtotal,gl.physical_snapshot AS immutable_sku_snapshot
+         FROM procurement_collective_order_lines gl
+         JOIN procurement_collective_buyer_orders co ON co.id=gl.collective_order_id
+         WHERE co.order_id=? ORDER BY gl.id`,[numericOrderId]);
+      if(groupLines.length&&awardLines.length) {
+        const error=new Error('Conflicting single-award and group invoice sources');
+        error.code='INVOICE_SOURCE_CONFLICT';error.statusCode=409;throw error;
+      }
+      const acceptedLines=groupLines.length?groupLines:awardLines;
       // Each supplier-awarded line must itself match quantity x accepted
       // unit price. Matching only aggregate subtotal allows compensating
       // mispriced lines to produce a deceptively balanced invoice.
-      for (const line of awardLines) {
+      for (const line of acceptedLines) {
         const calculated = exactDecimal.exactMultiplyRound(
           String(line.quantity), String(line.unit_price), 2
         );
@@ -212,15 +223,15 @@ class InvoiceService {
           throw err;
         }
       }
-      if (awardLines.length && !exactDecimal.exactDecimalEquals(
-        exactDecimal.exactDecimalSum(awardLines.map(line => line.subtotal), 2), subtotalStr, 2
+      if (acceptedLines.length && !exactDecimal.exactDecimalEquals(
+        exactDecimal.exactDecimalSum(acceptedLines.map(line => line.subtotal), 2), subtotalStr, 2
       )) {
         const error = new Error('Procurement invoice line total does not match order subtotal');
         error.code = 'INVOICE_AMOUNT_MISMATCH';
         error.statusCode = 409;
         throw error;
       }
-      const invoiceItems = awardLines.length ? awardLines.map(line => {
+      const invoiceItems = acceptedLines.length ? acceptedLines.map(line => {
         const sku = typeof line.immutable_sku_snapshot === 'string'
           ? JSON.parse(line.immutable_sku_snapshot) : line.immutable_sku_snapshot;
         return {

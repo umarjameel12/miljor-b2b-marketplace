@@ -40,6 +40,8 @@ export const AdminVerificationPage = () => {
 
   // Modal states
   const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [selectedDocuments,setSelectedDocuments] = useState([]);
+  const [reviewHistory,setReviewHistory] = useState([]);
   const [modalMode, setModalMode] = useState(null); // 'approve' | 'reject' | null
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,6 +62,19 @@ export const AdminVerificationPage = () => {
 
   // Rejection form state
   const [rejectionReason, setRejectionReason] = useState('');
+  const [correctionFields,setCorrectionFields] = useState([]);
+  const correctionFieldOptions = [
+    ['business_name','Business name'],['business_type','Business type'],
+    ['business_description','Description'],['contact_person_name','Contact person'],
+    ['contact_person_phone','Contact phone'],['warehouse_address','Warehouse address'],
+    ['lahore_service_area','Service area'],['tax_ntn','NTN'],
+    ['food_license_no','Food license number'],['food_license_type','Food license type'],
+    ['bank_name','Bank name'],['bank_account_title','Account title'],['bank_iban','IBAN'],
+    ['document:BUSINESS_LICENSE','Business license document'],
+    ['document:TAX_CERTIFICATE','Tax certificate document'],
+    ['document:WAREHOUSE_PROOF','Warehouse proof document'],
+    ['document:BANK_PROOF','Bank proof document']
+  ];
 
   const isAuthorizedAdmin =
     user && ['SUPER_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'].includes(user.role);
@@ -88,7 +103,17 @@ export const AdminVerificationPage = () => {
     }
   }, [isAuthenticated, isAuthorizedAdmin]);
 
+  const loadReviewHistory=async(supplier)=>{
+    try{const res=await adminApi.getSupplierReviewHistory(supplier.supplier_id);setReviewHistory(res.data?.revisions||[]);}
+    catch{setReviewHistory([]);toast.error('Could not retrieve immutable submission history');}
+  };
+  const loadDocuments=async(supplier)=>{
+    try{const res=await adminApi.getSupplierDocuments(supplier.supplier_id);setSelectedDocuments(res.data?.documents||[]);}
+    catch{setSelectedDocuments([]);toast.error('Could not retrieve supplier evidence');}
+  };
   const handleOpenApprove = (supplier) => {
+    loadDocuments(supplier);
+    loadReviewHistory(supplier);
     setSelectedSupplier(supplier);
     const plan = supplier.subscription_plan || 'GROWTH';
     setApprovalForm({
@@ -109,15 +134,21 @@ export const AdminVerificationPage = () => {
   };
 
   const handleOpenReject = (supplier, mode = 'reject') => {
+    loadDocuments(supplier);
+    loadReviewHistory(supplier);
     setSelectedSupplier(supplier);
     setRejectionReason('');
+    setCorrectionFields([]);
     setModalMode(mode);
   };
 
   const handleCloseModal = () => {
     setSelectedSupplier(null);
+    setSelectedDocuments([]);
+    setReviewHistory([]);
     setModalMode(null);
     setRejectionReason('');
+    setCorrectionFields([]);
   };
 
   const handleSubmitApproval = async (e) => {
@@ -129,9 +160,8 @@ export const AdminVerificationPage = () => {
       await adminApi.verifySupplier(selectedSupplier.supplier_id, {
         verification_status: 'VERIFIED',
         verification_level: approvalForm.verification_level,
-        subscription_plan: approvalForm.subscription_plan,
-        max_active_listings: parseInt(approvalForm.max_active_listings, 10),
-        transaction_fee_percent: parseFloat(approvalForm.transaction_fee_percent)
+        expected_revision: selectedSupplier.submitted_revision || 0,
+        expected_status: selectedSupplier.verification_status
       });
 
       toast.success(
@@ -162,9 +192,19 @@ export const AdminVerificationPage = () => {
 
     try {
       setSubmitting(true);
+      if(modalMode === 'request-info' && correctionFields.length===0){
+        toast.error('Select the exact fields needing correction.');
+        return;
+      }
       await adminApi.verifySupplier(selectedSupplier.supplier_id, {
         verification_status: modalMode === 'request-info' ? 'MORE_INFORMATION_REQUIRED' : 'REJECTED',
-        rejection_reason: rejectionReason.trim()
+        rejection_reason: rejectionReason.trim(),
+        expected_revision: selectedSupplier.submitted_revision || 0,
+        expected_status: selectedSupplier.verification_status,
+        ...(modalMode === 'request-info' ? {
+          correction_fields: correctionFields,
+          correction_notes: Object.fromEntries(correctionFields.map(field=>[field,rejectionReason.trim()]))
+        } : {})
       });
 
       toast.info(modalMode === 'request-info' ? 'More information requested. Supplier can see the guidance.' : 'Application rejected and reason recorded.');
@@ -443,6 +483,51 @@ export const AdminVerificationPage = () => {
             </p>
 
             <form onSubmit={handleSubmitApproval} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Immutable submission & review history</h4>
+                {reviewHistory.length===0 ? <p>No submitted revision history is available.</p> :
+                  reviewHistory.map(revision=><details key={revision.revision} className="border-t border-[var(--border-subtle)] pt-2">
+                    <summary className="cursor-pointer font-semibold">Revision {revision.revision} · {revision.review_action.replaceAll('_',' ')} · {revision.submitted_at?new Date(revision.submitted_at).toLocaleString():'Unknown date'}</summary>
+                    <div className="mt-2 grid gap-1 text-[var(--text-secondary)]">
+                      {Object.entries(revision.snapshot||{}).filter(([key])=>key!=='documents').map(([key,value])=>
+                        <p key={key}><span className="font-medium">{key.replaceAll('_',' ')}:</span> {value===null||value===undefined?'—':String(value)}</p>)}
+                      {(revision.snapshot?.documents||[]).map(doc=><p key={doc.id}>Document: {doc.kind} · v{doc.version} · {doc.filename} · SHA-256 {doc.sha256}</p>)}
+                      {revision.review_reason&&<p>Reviewer note: {revision.review_reason}</p>}
+                    </div>
+                  </details>)}
+              </div>
+
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Immutable submission & review history</h4>
+                {reviewHistory.length===0 ? <p>No submitted revision history is available.</p> :
+                  reviewHistory.map(revision=><details key={revision.revision} className="border-t border-[var(--border-subtle)] pt-2">
+                    <summary className="cursor-pointer font-semibold">Revision {revision.revision} · {revision.review_action.replaceAll('_',' ')} · {revision.submitted_at?new Date(revision.submitted_at).toLocaleString():'Unknown date'}</summary>
+                    <div className="mt-2 grid gap-1 text-[var(--text-secondary)]">
+                      {Object.entries(revision.snapshot||{}).filter(([key])=>key!=='documents').map(([key,value])=>
+                        <p key={key}><span className="font-medium">{key.replaceAll('_',' ')}:</span> {value===null||value===undefined?'—':String(value)}</p>)}
+                      {(revision.snapshot?.documents||[]).map(doc=><p key={doc.id}>Document: {doc.kind} · v{doc.version} · {doc.filename} · SHA-256 {doc.sha256}</p>)}
+                      {revision.review_reason&&<p>Reviewer note: {revision.review_reason}</p>}
+                    </div>
+                  </details>)}
+              </div>
+
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Supplier evidence versions</h4>
+                {selectedDocuments.length===0 ? <p>No uploaded documents</p> :
+                  selectedDocuments.map(doc=><div key={doc.id} className="flex justify-between gap-2">
+                    <span>{doc.kind.replaceAll('_',' ')} · v{doc.version} · {doc.filename}</span>
+                    <button type="button" className="underline text-[var(--brand-accent)]"
+                      onClick={async()=>{
+                        try{
+                          const blob=await adminApi.downloadSupplierDocument(selectedSupplier.supplier_id,doc.id);
+                          const url=URL.createObjectURL(blob);
+                          const link=document.createElement('a');link.href=url;link.download=doc.filename;
+                          link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                        }catch{toast.error('Unable to download evidence');}
+                      }}>Download</button>
+                  </div>)}
+              </div>
+
               <div>
                 <label className="font-semibold block mb-1">Verification Level</label>
                 <select
@@ -458,54 +543,10 @@ export const AdminVerificationPage = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="font-semibold block mb-1">Subscription Plan</label>
-                <select
-                  value={approvalForm.subscription_plan}
-                  onChange={(e) => handlePlanChange(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
-                >
-                  <option value="STARTER">Starter Tier (Up to 4 active listings — Free)</option>
-                  <option value="GROWTH">Growth Tier (Up to 13 active listings)</option>
-                  <option value="BUSINESS">Business Tier (Up to 25 active listings — Pro)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold block mb-1">Max Active Listings</label>
-                  <input
-                    type="number"
-                    value={approvalForm.max_active_listings}
-                    onChange={(e) =>
-                      setApprovalForm({ ...approvalForm, max_active_listings: e.target.value })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
-                    min="1"
-                    max={PLAN_LISTING_CAPS[approvalForm.subscription_plan] || 4}
-                  />
-                  <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
-                    Authorized cap: {PLAN_LISTING_CAPS[approvalForm.subscription_plan] || 4}
-                  </span>
-                </div>
-                <div>
-                  <label className="font-semibold block mb-1">Transaction Fee %</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={approvalForm.transaction_fee_percent}
-                    onChange={(e) =>
-                      setApprovalForm({
-                        ...approvalForm,
-                        transaction_fee_percent: e.target.value
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-input)]"
-                    min="0"
-                    max="10"
-                  />
-                </div>
-              </div>
+              <p className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-[var(--text-secondary)]">
+                Business verification does not activate or change a paid subscription. The supplier manages
+                plans separately through the verified Safepay subscription checkout.
+              </p>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-[var(--border-subtle)]">
                 <Button type="button" variant="outline" onClick={handleCloseModal} disabled={submitting}>
@@ -552,6 +593,35 @@ export const AdminVerificationPage = () => {
             </p>
 
             <form onSubmit={handleSubmitRejection} className="space-y-4 text-xs">
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2 text-xs">
+                <h4 className="font-semibold">Supplier evidence versions</h4>
+                {selectedDocuments.length===0 ? <p>No uploaded documents</p> :
+                  selectedDocuments.map(doc=><div key={doc.id} className="flex justify-between gap-2">
+                    <span>{doc.kind.replaceAll('_',' ')} · v{doc.version} · {doc.filename}</span>
+                    <button type="button" className="underline text-[var(--brand-accent)]"
+                      onClick={async()=>{
+                        try{
+                          const blob=await adminApi.downloadSupplierDocument(selectedSupplier.supplier_id,doc.id);
+                          const url=URL.createObjectURL(blob);
+                          const link=document.createElement('a');link.href=url;link.download=doc.filename;
+                          link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                        }catch{toast.error('Unable to download evidence');}
+                      }}>Download</button>
+                  </div>)}
+              </div>
+
+              {modalMode==='request-info' && <fieldset className="space-y-2">
+                <legend className="font-semibold">Select fields requiring correction</legend>
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--border-subtle)] p-3">
+                  {correctionFieldOptions.map(([field,label])=><label key={field} className="flex items-center gap-2">
+                    <input type="checkbox" checked={correctionFields.includes(field)}
+                      onChange={e=>setCorrectionFields(prev=>e.target.checked?[...prev,field]:prev.filter(v=>v!==field))} />
+                    <span>{label}</span>
+                  </label>)}
+                </div>
+                <p className="text-[var(--text-muted)]">Only checked fields will be editable by the supplier. Previously valid information remains saved.</p>
+              </fieldset>}
+
               <div>
                 <label className="font-semibold block mb-1">
                   Rejection Reason / Guidance <span className="text-red-500">*</span>

@@ -4,6 +4,7 @@ const db = require('../config/db');
 const money = require('./exactDecimal');
 const entitlement = require('./subscriptionEntitlementService');
 const feeService = require('./feeService');
+const notificationService = require('./notificationService');
 
 const fail = (code, message, statusCode = 400) => {
   const e = new Error(message); e.code = code; e.statusCode = statusCode; return e;
@@ -152,9 +153,10 @@ class FlashPoolService {
     const conn=await db.getConnection();
     try {
       await conn.beginTransaction();
-      await this._lockVerifiedSupplier(conn,supplierId);
+      if(!systemRecovery)await this._lockVerifiedSupplier(conn,supplierId);
       const [rows]=await conn.query(
-        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+        systemRecovery?'SELECT * FROM flash_pools WHERE id=? FOR UPDATE':
+          'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',systemRecovery?[id]:[id,supplierId]);
       const offer=rows[0];
       if(!offer)throw fail('FLASH_NOT_FOUND','Supplier Flash offer not found.',404);
       if(offer.status!=='DRAFT')throw fail('FLASH_TERMS_LOCKED','Published or cancelled Flash offers cannot be edited.',409);
@@ -240,6 +242,8 @@ class FlashPoolService {
          WHERE allocation_type='FLASH_POOL' AND reference_id=? AND status='COMMITTED'`,[id]);
       await conn.query(
         "UPDATE flash_pools SET status='CANCELLED',version_number=version_number+1 WHERE id=?",[id]);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:Number(id),type:'UCP.POOL_CANCELLED',
+        transitionId:'flash-cancel:'+id+':'+(Number(offer.version_number||0)+1)});
       await conn.commit();
       return {id,status:'CANCELLED'};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -299,6 +303,8 @@ class FlashPoolService {
              '$.expiry_time',DATE_FORMAT(DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE),'%Y-%m-%dT%H:%i:%sZ')),
            version_number=version_number+1 WHERE id=?`,
         [durationMinutes,durationMinutes,durationMinutes,id]);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:Number(id),type:'UCP.POOL_PUBLISHED',
+        transitionId:'flash-publish:'+id+':'+(Number(offer.version_number||0)+1)});
       await conn.commit();
       return this.getSupplierOffer(supplierId,id);
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -538,7 +544,7 @@ class FlashPoolService {
       if(!money.exactDecimalGte(offer.max_quantity_per_buyer,cumulative,2))
         throw fail('BUYER_FLASH_MAX_EXCEEDED','This buyer has reached the supplier-defined total purchase limit.',409);
       const subtotal = money.exactMultiplyRound(quantity,offer.discounted_unit_price,2);
-      const buyerFeeModel = await feeService.calculateBuyerFee(subtotal);
+      const buyerFeeModel = await feeService.calculateBuyerFee(subtotal,conn);
       const buyerFee = dec(buyerFeeModel.buyer_fee,{positive:false});
       // Recompute inside the stock-lock transaction, never trust a client fee
       // or the supplier's offer-wide fee for a cluster-specific destination.
@@ -601,6 +607,8 @@ class FlashPoolService {
       const [[holdClock]]=await conn.query(
         "SELECT DATE_FORMAT(expires_at,'%Y-%m-%dT%H:%i:%sZ') AS hold_expires_at FROM flash_purchase_holds WHERE id=?",
         [h.insertId]);
+      await notificationService.enqueueEvent(conn,{userId:Number(buyerId),role:'BUYER',eventType:'PAYMENT_PENDING',
+        eventKey:'flash-order:'+order.insertId+':payment-pending',entityId:Number(order.insertId)});
       await conn.commit();
       return {id:h.insertId,order_id:order.insertId,order_code:orderCode,
         hold_expires_at:holdClock.hold_expires_at,
@@ -682,13 +690,13 @@ class FlashPoolService {
          ORDER BY h.id ASC FOR UPDATE`,[flashId]);
       let released=0;
       for(const hold of expired){
-        const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=? FOR UPDATE',[hold.order_id]);
+        const [orders]=await conn.query('SELECT buyer_id,payment_status,order_status FROM orders WHERE id=? FOR UPDATE',[hold.order_id]);
         if(!orders.length || orders[0].payment_status!=='AWAITING_PAYMENT' ||
           orders[0].order_status!=='AWAITING_PAYMENT')continue;
         const [paidPayments]=await conn.query("SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[hold.order_id]);
         if(paidPayments.length)continue;
         const [activeAttempts]=await conn.query(
-          "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE) LIMIT 1",
+          "SELECT id FROM payment_attempts WHERE order_id=? AND status='INITIATED' LIMIT 1",
           [hold.order_id]);
         if(activeAttempts.length)continue;
         await conn.query(
@@ -702,6 +710,8 @@ class FlashPoolService {
            version_number=version_number+1
            WHERE id=? AND held_stock>=?`,[hold.quantity,hold.quantity,flashId,hold.quantity]);
         if(updated.affectedRows!==1)throw fail('FLASH_STOCK_DRIFT','Expired hold exceeds authoritative held stock.',409);
+        await notificationService.enqueueEvent(conn,{userId:Number(orders[0].buyer_id),role:'BUYER',eventType:'PAYMENT_FAILED',
+          eventKey:'flash-order:'+hold.order_id+':hold-expired',entityId:Number(hold.order_id)});
         released++;
       }
       if(owns)await conn.commit();
@@ -724,7 +734,7 @@ class FlashPoolService {
       const [holds]=await conn.query(
         'SELECT * FROM flash_purchase_holds WHERE order_id=? FOR UPDATE',[orderId]);
       const hold=holds[0];
-      const [orders]=await conn.query('SELECT payment_status,order_status FROM orders WHERE id=?',[orderId]);
+      const [orders]=await conn.query('SELECT buyer_id,supplier_id,payment_status,order_status FROM orders WHERE id=?',[orderId]);
       const [payments]=await conn.query(
         "SELECT id FROM payments WHERE order_id=? AND status='PAID' LIMIT 1",[orderId]);
       if(!orders.length || orders[0].payment_status!=='PAID' ||
@@ -743,6 +753,10 @@ class FlashPoolService {
           [hold.quantity,hold.quantity,flashId,hold.quantity]);
         if(updated.affectedRows!==1)throw fail('FLASH_STOCK_DRIFT','Paid hold exceeds authoritative held stock.',409);
       }
+      await notificationService.enqueueEvent(conn,{userId:Number(orders[0].buyer_id),role:'BUYER',eventType:'PAYMENT_VERIFIED',
+        eventKey:'flash-order:'+orderId+':payment-verified',entityId:Number(orderId)});
+      await notificationService.enqueueEvent(conn,{userId:Number(orders[0].supplier_id),role:'SUPPLIER',eventType:'PAYMENT_VERIFIED',
+        eventKey:'flash-order:'+orderId+':supplier-payment-verified',entityId:Number(orderId)});
       await conn.commit();
       return {flash_order:true,hold_status:'PAID',flash_pool_id:flashId};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -782,12 +796,25 @@ class FlashPoolService {
   }
 
   async closeExpiredOffer(supplierId,id) {
+    return this._closeExpiredOffer(supplierId,id,false);
+  }
+
+  // System-only recovery: expired pools close regardless of supplier verification changes.
+  async expireOfferForRecovery(id) {
+    return this._closeExpiredOffer(null,id,true);
+  }
+
+  async _closeExpiredOffer(supplierId,id,systemRecovery) {
     const conn=await db.getConnection();
     try {
       await conn.beginTransaction();
-      await this._lockVerifiedSupplier(conn,supplierId);
-      const [rows]=await conn.query(
-        'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',[id,supplierId]);
+      // Recovery is a system-owned expiry transition and must not depend on a supplier
+      // remaining verified after publication. Manual supplier expiry remains owner-gated.
+      if(!systemRecovery)await this._lockVerifiedSupplier(conn,supplierId);
+      const [rows]=await conn.query(systemRecovery
+        ? 'SELECT * FROM flash_pools WHERE id=? FOR UPDATE'
+        : 'SELECT * FROM flash_pools WHERE id=? AND supplier_id=? FOR UPDATE',
+        systemRecovery?[id]:[id,supplierId]);
       let pool=rows[0];
       if(!pool)throw fail('FLASH_NOT_FOUND','Flash Pool not found.',404);
       await this.reclaimExpiredUninitiatedHolds(id,conn);
@@ -812,6 +839,8 @@ class FlashPoolService {
       }
       await conn.query(
         "UPDATE flash_pools SET status='EXPIRED',version_number=version_number+1 WHERE id=?",[id]);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:Number(id),type:'UCP.POOL_EXPIRED',
+        transitionId:'flash-expire:'+id+':'+(Number(pool.version_number||0)+1)});
       await conn.commit();
       return {id,status:'EXPIRED',preserved_unsettled_quantity:outstanding};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}

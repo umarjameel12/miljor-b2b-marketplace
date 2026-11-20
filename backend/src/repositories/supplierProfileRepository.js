@@ -42,6 +42,14 @@ class SupplierProfileRepository {
         sp.bank_account_title,
         sp.bank_iban,
         sp.rejection_reason,
+        sp.submitted_revision,
+        sp.correction_fields,
+        sp.correction_notes,
+        sp.correction_requested_revision,
+        sp.correction_requested_at,
+        sp.last_correction_key,
+        sp.last_correction_hash,
+        sp.last_correction_revision,
         sp.submitted_at,
         sp.verified_at,
         sp.created_at,
@@ -451,16 +459,34 @@ class SupplierProfileRepository {
   /**
    * Revert verified supplier to pending review if material details are updated
    */
-  async triggerReReview(supplierId, materialChanges, connection) {
+  async triggerReReview(supplierId, materialChanges, connection, revision, snapshot) {
     const db = connection || defaultDb;
+    if (!Number.isSafeInteger(Number(revision)) || Number(revision) < 1 ||
+        !snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      const error = new Error('A versioned immutable review snapshot is required for material re-review.');
+      error.code = 'INVALID_REVIEW_REVISION';
+      throw error;
+    }
 
     await db.query(
       `UPDATE supplier_profiles
        SET verification_status = 'PENDING_REVIEW',
-           submitted_at = CURRENT_TIMESTAMP,
+           submitted_at = UTC_TIMESTAMP(),
+           submitted_revision = ?,
+           correction_fields = NULL,
+           correction_notes = NULL,
+           correction_requested_revision = NULL,
+           correction_requested_at = NULL,
            rejection_reason = NULL
-       WHERE supplier_id = ?`,
-      [supplierId]
+       WHERE supplier_id = ? AND verification_status = 'VERIFIED'`,
+      [Number(revision), supplierId]
+    );
+
+    await db.query(
+      `INSERT INTO supplier_verification_revisions
+         (supplier_id, revision, submitted_snapshot)
+       VALUES (?, ?, ?)`,
+      [supplierId, Number(revision), JSON.stringify(snapshot)]
     );
 
     await db.query(
@@ -473,7 +499,11 @@ class SupplierProfileRepository {
     await db.query(
       `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
        VALUES (?, 'SUPPLIER', 'VERIFIED_SUPPLIER_RE_REVIEW_TRIGGERED', 'supplier_profiles', ?, ?)`,
-      [supplierId, supplierId, JSON.stringify({ reason: 'Material profile changes by verified supplier', changes: materialChanges })]
+      [supplierId, supplierId, JSON.stringify({
+        reason: 'Material profile changes by verified supplier',
+        changes: materialChanges,
+        revision: Number(revision)
+      })]
     );
   }
 }

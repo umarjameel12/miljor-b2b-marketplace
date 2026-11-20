@@ -241,7 +241,8 @@ class ReservationEventService {
           );
 
           if (isAuthoritativelyIdentical) {
-            // Legitimate idempotent replay of the exact same committed operation: safe to reuse
+            // Reconcile a possibly interrupted projection on replay; the recipient/event key is idempotent.
+            await require('./ucpTransactionalNotifications').recordReservationEventOnConnection(conn,eventData);
             return;
           }
 
@@ -271,6 +272,9 @@ class ReservationEventService {
       // Propagate immediately so caller's transaction rolls back!
       throw err;
     }
+    // In-app/email projections share the reservation mutation transaction.
+    // If projection fails, the reservation and its durable event roll back together.
+    await require('./ucpTransactionalNotifications').recordReservationEventOnConnection(conn,eventData);
   }
 
   /**

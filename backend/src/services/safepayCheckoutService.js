@@ -21,6 +21,9 @@ const safepayAdapter = require('./safepayAdapter');
 const reservationEventService = require('./reservationEventService');
 const exactDecimal = require('./exactDecimal');
 const procurementAwardService = require('./procurementAwardService');
+const procurementCollectiveOrderService = require('./procurementCollectiveOrderService');
+const notificationService = require('./notificationService');
+const { SafepayV3SandboxClient } = require('./safepayV3SandboxClient');
 
 class SafepayCheckoutService {
 
@@ -125,6 +128,7 @@ class SafepayCheckoutService {
     // orders this is a no-op; B6's separate award hooks remain untouched.
     await require('./flashPoolService').claimCheckout(orderId,actor.id);
     await require('./regularPoolPaymentHoldService').claimCheckout(orderId,actor.id);
+    await require('./collectivePaymentHoldService').claimCheckout(orderId,actor.id);
 
     // Financial component check (OBS-79 fail-closed guard)
     const totalPayable = Number(order.total_amount);
@@ -173,15 +177,66 @@ class SafepayCheckoutService {
     // A NEW attempt cannot be created after the original 15-minute hold ends.
     try {
       await require('./regularPoolPaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
+      await require('./collectivePaymentHoldService').assertCanCreateFreshCheckout(orderId,actor.id);
     } catch (holdError) {
       // If the deadline elapsed between claim and provider call, do not strand
       // the order in PAYMENT_PENDING when no checkout was actually created.
       await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
         .catch(error => console.error('[B4] Could not unwind uninitiated checkout:',error));
+      await require('./collectivePaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[PR61] Could not unwind collective checkout:',error));
       throw holdError;
     }
 
-    // Step 2: Call Safepay API OUTSIDE transaction lock
+    // Explicit Payments v3 Sandbox migration path. Never silently fall back to
+    // legacy major-unit v1 when an operator selects v3.
+    if(process.env.SAFEPAY_TRACKER_CONTRACT==='payments-v3-minor'){
+      if(process.env.SAFEPAY_V3_SANDBOX_ENABLED!=='true'){
+        const err=new Error('Safepay v3 is selected but the isolated Sandbox feature flag is disabled');
+        err.code='SAFEPAY_V3_SANDBOX_DISABLED';err.statusCode=503;throw err;
+      }
+      let v3Checkout;
+      try{
+        const v3Client=mockClient&&typeof mockClient.createHostedCheckout==='function'
+          ? mockClient : new SafepayV3SandboxClient();
+        const frontendBase=process.env.FRONTEND_URL||'http://localhost:3000';
+        v3Checkout=await v3Client.createHostedCheckout({
+          amountPkr:exactDecimal.toCanonicalString(order.total_amount,2),
+          orderCode:order.order_code,
+          redirectUrl:redirectUrl||new URL('/payment/return?order_id='+order.id,frontendBase).toString(),
+          cancelUrl:cancelUrl||new URL('/payment/cancelled?order_id='+order.id,frontendBase).toString()
+        });
+      }catch(providerError){
+        await require('./flashPoolService').releaseCheckoutClaim(orderId,actor.id)
+          .catch(()=>{});
+        await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+          .catch(()=>{});
+        await require('./collectivePaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+          .catch(()=>{});
+        throw providerError;
+      }
+      const attemptCode=`ATT-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;
+      const [attemptInsert]=await db.query(
+        `INSERT INTO payment_attempts (
+          attempt_code,order_id,buyer_id,provider,environment,provider_contract,
+          provider_tracker_token,checkout_url,amount,currency,status,idempotency_key,created_at
+        ) VALUES (?, ?, ?, 'SAFEPAY', 'sandbox', 'payments-v3-minor', ?, ?, ?, ?, 'INITIATED', ?, NOW())`,
+        [attemptCode,order.id,order.buyer_id,v3Checkout.trackerToken,
+          v3Checkout.checkoutUrl,exactDecimal.toCanonicalString(order.total_amount,2),
+          order.currency||'PKR',trimmedKey]
+      );
+      await db.query(
+        `UPDATE orders SET payment_status='PAYMENT_INITIATED',updated_at=NOW() WHERE id=?`,
+        [order.id]
+      );
+      const [rows]=await db.query('SELECT * FROM payment_attempts WHERE id=?',[attemptInsert.insertId]);
+      return {
+        is_replay:false,
+        attempt:this._formatAttempt(rows[0],order)
+      };
+    }
+
+    // Step 2: Call Safepay legacy v1 API OUTSIDE transaction lock
     let trackerToken, rawResponse;
     try {
       const tracker = await safepayAdapter.createTracker({
@@ -199,6 +254,8 @@ class SafepayCheckoutService {
         });
       await require('./regularPoolPaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
         .catch(error => console.error('[B4] Regular pool payment claim recovery:', error));
+      await require('./collectivePaymentHoldService').releaseCheckoutClaim(orderId,actor.id)
+        .catch(error => console.error('[PR61] Collective payment claim recovery:', error));
       throw trackerError;
     }
 
@@ -301,8 +358,44 @@ class SafepayCheckoutService {
       throw err;
     }
 
-    const effectiveEventId = eventId || parsedPayload.token || parsedPayload.id || `evt_${Date.now()}`;
-    const effectiveEventType = eventType || parsedPayload.type || parsedPayload.event || parsedPayload.webhook_event_type || 'unknown';
+    // The event type driving a financial mutation MUST originate in the signed
+    // raw JSON, not in an unsigned HTTP header. A header/payload mismatch
+    // indicates spoofing or a broken provider integration and fails closed.
+    const signedEventType=parsedPayload.type||parsedPayload.event||parsedPayload.webhook_event_type;
+    if(typeof signedEventType!=='string'||!signedEventType.trim()||
+       (eventType && eventType!==signedEventType)){
+      const err=new Error('Webhook event type does not match signed payload');
+      err.code='WEBHOOK_EVENT_TYPE_MISMATCH';err.statusCode=422;throw err;
+    }
+    // HTTP event-id headers are not part of Safepay's signed JSON contract.
+    // Never let an unsigned header override signed event identity; doing so
+    // permits a different header on each retry to bypass event deduplication.
+    // When the provider omits an ID, hash the authenticated raw bytes instead
+    // of fabricating an unstable timestamp-based event ID.
+    // A signed token/id may identify a tracker rather than a unique event.
+    // Two DISTINCT authenticated payloads can share that identifier (e.g.
+    // payment.failed followed by payment.succeeded). Deduplicate exact raw
+    // payload retries, never distinct signed transitions with the same token.
+    // An unsigned HTTP event-id header is deliberately ignored.
+    const bodyHash=crypto.createHash('sha256').update(
+      Buffer.isBuffer(rawBody)?rawBody:Buffer.from(rawBody,'utf8')
+    ).digest('hex');
+    const effectiveEventId='evt_sha256_'+bodyHash;
+    const effectiveEventType = signedEventType;
+
+    // Supplier one-time plan invoices have a separate ledger and never belong
+    // to a buyer order/escrow. Route ONLY after verified raw HMAC and signed
+    // event-type comparison, with an immutable MILJOR-SUB-<attempt> reference.
+    // The supplier service validates ownership, tracker, merchant, PKR minor
+    // amount and capture state again under serialized MySQL locks.
+    const signedSubscriptionOrder=parsedPayload?.data?.metadata?.order_id;
+    if(effectiveEventType==='payment.succeeded'&&
+       typeof signedSubscriptionOrder==='string'&&
+       signedSubscriptionOrder.startsWith('MILJOR-SUB-')){
+      return require('./supplierSubscriptionCheckoutService').acceptSignedV3Capture({
+        payload:parsedPayload,eventType:effectiveEventType,eventId:effectiveEventId
+      });
+    }
 
     // 2. Check for duplicate webhook receipt (Idempotency)
     const [existingEvent] = await db.query(
@@ -333,11 +426,13 @@ class SafepayCheckoutService {
       trackerToken = parsedPayload.token;
     }
 
+    // Preserve the provider's original decimal/integer representation. Do not
+    // coerce v3 minor-unit integers through JS Number before exact conversion.
     const providerAmount = (data.tracker && typeof data.tracker === 'object' && data.tracker.amount !== undefined)
-      ? Number(data.tracker.amount)
+      ? data.tracker.amount
       : (data.amount !== undefined
-          ? Number(data.amount)
-          : (data.net !== undefined && data.net !== null ? Number(data.net) : null));
+          ? data.amount
+          : (data.net !== undefined && data.net !== null ? data.net : null));
     const providerCurrency = (data.tracker && typeof data.tracker === 'object' && data.tracker.currency)
       || data.currency
       || parsedPayload.currency
@@ -354,25 +449,58 @@ class SafepayCheckoutService {
     ].includes(effectiveEventType);
 
     if (!isSuccessEvent) {
-      // Record event but take no financial mutation
-      await db.query(
-        `INSERT INTO payment_webhook_events (
-          event_id, provider, event_type, provider_tracker_token,
-          signature, timestamp_header, raw_payload, processed_status
-        ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
-        [
-          effectiveEventId,
-          effectiveEventType,
-          trackerToken,
-          signature,
-          String(timestamp),
-          JSON.stringify(parsedPayload)
-        ]
-      );
+      // A signed provider failure is authoritative for that one attempt. For
+      // collective buyer orders, release/reopen only that buyer's own stock
+      // lease; never touch another participant's order or any refund ledger.
+      if (['payment.failed','payment:failed'].includes(effectiveEventType) && trackerToken) {
+        const connection=await db.getConnection();
+        try {
+          await connection.beginTransaction();
+          const [matched]=await connection.query(`SELECT pa.id,pa.order_id,pa.status,
+            o.payment_status,o.notes,o.buyer_id
+            FROM payment_attempts pa JOIN orders o ON o.id=pa.order_id
+            WHERE pa.provider='SAFEPAY' AND pa.provider_tracker_token=? FOR UPDATE`,[trackerToken]);
+          const attempt=matched[0];
+          if(attempt && attempt.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT' &&
+             attempt.status==='INITIATED' && attempt.payment_status!=='PAID'){
+            await connection.query(`UPDATE payment_attempts SET status='FAILED'
+              WHERE id=? AND status='INITIATED'`,[attempt.id]);
+            const holdResult=await require('./collectivePaymentHoldService').markFailed(connection,attempt.order_id);
+            if(holdResult.status!=='RECONCILIATION_REQUIRED'){
+              await connection.query(`UPDATE orders SET payment_status='AWAITING_PAYMENT',updated_at=UTC_TIMESTAMP()
+                WHERE id=? AND payment_status='PAYMENT_INITIATED'`,[attempt.order_id]);
+            }
+          }
+          await connection.query(
+            `INSERT INTO payment_webhook_events (
+              event_id, provider, event_type, order_id, attempt_id, provider_tracker_token,
+              signature, timestamp_header, raw_payload, processed_status
+            ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, ?, ?, 'PROCESSED')`,
+            [effectiveEventId,effectiveEventType,attempt?.order_id||null,attempt?.id||null,
+              trackerToken,signature,String(timestamp),JSON.stringify(parsedPayload)]
+          );
+          await connection.commit();
+        } catch(error) {
+          await connection.rollback();
+          if(error.code==='ER_DUP_ENTRY')return {success:true,is_duplicate:true,
+            message:'Duplicate provider failure event acknowledged'};
+          throw error;
+        } finally {connection.release();}
+      } else {
+        // Unknown/non-payment events are recorded without financial mutation.
+        await db.query(
+          `INSERT INTO payment_webhook_events (
+            event_id, provider, event_type, provider_tracker_token,
+            signature, timestamp_header, raw_payload, processed_status
+          ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, 'PROCESSED')`,
+          [effectiveEventId,effectiveEventType,trackerToken,signature,String(timestamp),
+            JSON.stringify(parsedPayload)]
+        );
+      }
       return {
         success: true,
         event_type: effectiveEventType,
-        message: 'Webhook event recorded; no state transition required'
+        message: 'Webhook event recorded; no payment success transition required'
       };
     }
 
@@ -446,6 +574,28 @@ class SafepayCheckoutService {
 
       const order = orders[0];
 
+      let normalizedProviderAmount=providerAmount;
+      const providerContract=attempt.provider_contract||'legacy-v1-major';
+      if(providerContract==='payments-v3-minor'){
+        const normalized=require('./safepayV3ContractService').normalizeSucceededWebhook({
+          eventType:effectiveEventType,
+          data,
+          merchantApiKey:parsedPayload.merchant_api_key,
+          expectedMerchantApiKey:process.env.SAFEPAY_PUBLIC_KEY,
+          expectedTrackerToken:trackerToken,
+          expectedOrderCode:order.order_code,
+          expectedAmountPkr:order.total_amount
+        });
+        if(normalized.trackerToken!==trackerToken){
+          const err=new Error('Signed Safepay v3 tracker identity mismatch');
+          err.code='V3_WEBHOOK_TRACKER_MISMATCH';err.statusCode=422;throw err;
+        }
+        normalizedProviderAmount=normalized.amountPkr;
+      }else if(providerContract!=='legacy-v1-major'){
+        const err=new Error('Unknown Safepay payment amount contract');
+        err.code='UNKNOWN_PAYMENT_PROVIDER_CONTRACT';err.statusCode=503;throw err;
+      }
+
       // Currency check
       if (providerCurrency !== (order.currency || 'PKR')) {
         const err = new Error(`Currency mismatch: Expected ${order.currency}, received ${providerCurrency}`);
@@ -455,17 +605,20 @@ class SafepayCheckoutService {
       }
 
       // Exact Amount check (fail-closed - Repair P0-C & B0.2 Fix 4)
-      if (providerAmount === null || providerAmount === undefined || isNaN(providerAmount) || providerAmount <= 0) {
+      if (normalizedProviderAmount === null || normalizedProviderAmount === undefined ||
+          !/^\d+(?:\.\d{1,2})?$/.test(String(normalizedProviderAmount)) ||
+          Number(normalizedProviderAmount) <= 0) {
         const err = new Error('Safepay webhook payment event must contain a valid positive amount');
         err.code = 'INVALID_PAYLOAD';
         err.statusCode = 422;
         throw err;
       }
 
-      // Safepay official contract: tracker amount is in major units (PKR decimal e.g. 192450.00).
-      // Speculative 100x subunit normalizations are strictly eliminated (B0.2 Fix 4).
+      // Contract is pinned on the durable payment attempt. Legacy v1 uses
+      // major units; Payments v3 is converted from minor units by the strict
+      // v3 webhook validator above. No heuristic 100x normalization is allowed.
       const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
-      const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
+      const receivedAmountStr = exactDecimal.toCanonicalString(normalizedProviderAmount, 2);
 
       if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
         const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
@@ -545,6 +698,18 @@ class SafepayCheckoutService {
       // For B6 supplier orders, atomically mark the shared ORDER_DIRECT
       // listing allocations COMMITTED only after verified provider payment.
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
+          await procurementCollectiveOrderService.reconcilePaidOrder(connection,order.id);
+      // Transactional, per-recipient receipt. A supplier notification never
+      // exposes buyers' contact details or a group's other buyers' orders.
+      if(order.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',order.buyer_id],['SUPPLIER',order.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'PAYMENT_VERIFIED',
+            eventKey:'collective:order:'+order.id+':provider-paid:'+role,
+            entityId:order.id
+          });
+        }
+      }
       await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
 
       // 8. Record Webhook Event as PROCESSED
@@ -704,6 +869,8 @@ class SafepayCheckoutService {
 
     const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
       .readForOrder(order.id,order.buyer_id);
+    const collectivePaymentHold = await require('./collectivePaymentHoldService')
+      .readForOrder(order.id,order.buyer_id);
 
     return {
       order_id: order.id,
@@ -715,6 +882,7 @@ class SafepayCheckoutService {
       currency: order.currency,
       lifecycle_phase: lifecyclePhase,
       regular_pool_payment_hold: regularPoolPaymentHold,
+      collective_payment_hold: collectivePaymentHold,
       latest_attempt: latestAttempt ? {
         attempt_code: latestAttempt.attempt_code,
         status: latestAttempt.status,
@@ -816,6 +984,17 @@ class SafepayCheckoutService {
     }
 
     const attempt = attempts[0];
+    // Payments v3 uses integer-minor amounts and signed payment.succeeded
+    // capture. The legacy direct reporter below interprets major-unit v1
+    // shapes and MUST NOT be permitted to settle a v3 attempt.
+    if(attempt.provider_contract==='payments-v3-minor'){
+      const err=new Error('Safepay v3 capture requires the signed webhook verification flow');
+      err.code='V3_SIGNED_WEBHOOK_REQUIRED';err.statusCode=409;throw err;
+    }
+    if(attempt.provider_contract&&attempt.provider_contract!=='legacy-v1-major'){
+      const err=new Error('Unknown persisted Safepay payment contract');
+      err.code='UNKNOWN_PAYMENT_PROVIDER_CONTRACT';err.statusCode=503;throw err;
+    }
     const trackerToken = attempt.provider_tracker_token;
 
     // Step 2: Fetch authoritative tracker status from Safepay OUTSIDE transaction lock
@@ -852,6 +1031,16 @@ class SafepayCheckoutService {
     }
 
     const transaction = trackerData.transaction;
+    // The tracker may have ENDED due to failure, reversal or cancellation.
+    // A nested transaction object is not by itself proof of captured funds.
+    const transactionState=String(transaction.status||transaction.state||'').toUpperCase();
+    if(!['SUCCESS','SUCCEEDED','PAID','CAPTURED','COMPLETED'].includes(transactionState)){
+      return {success:true,reconciled:false,
+        order_status:order.order_status,payment_status:order.payment_status,
+        provider_state:trackerData.state,
+        transaction_state:transactionState||'UNVERIFIED_TRANSACTION',
+        message:'Provider has not positively verified a captured payment'};
+    }
 
     // Verify currency
     const providerCurrency = trackerData.currency || transaction.currency || 'PKR';
@@ -981,6 +1170,18 @@ class SafepayCheckoutService {
       );
 
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
+          await procurementCollectiveOrderService.reconcilePaidOrder(connection,order.id);
+      // Transactional, per-recipient receipt. A supplier notification never
+      // exposes buyers' contact details or a group's other buyers' orders.
+      if(order.notes==='COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        for(const [role,userId] of [['BUYER',order.buyer_id],['SUPPLIER',order.supplier_id]]){
+          await notificationService.enqueueEvent(connection,{
+            userId,role,eventType:'PAYMENT_VERIFIED',
+            eventKey:'collective:order:'+order.id+':provider-paid:'+role,
+            entityId:order.id
+          });
+        }
+      }
 
       // B4 pool outbox: only valid for actual pool-backed orders.
       // B5/B6 poolless orders use verified payment rows and their own lifecycle events.
@@ -1068,6 +1269,7 @@ class SafepayCheckoutService {
       currency: attempt.currency,
       provider: attempt.provider,
       environment: attempt.environment,
+      provider_contract: attempt.provider_contract || 'legacy-v1-major',
       status: attempt.status,
       provider_tracker_token: attempt.provider_tracker_token,
       checkout_url: attempt.checkout_url,

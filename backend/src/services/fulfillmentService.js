@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const db = require('../config/db');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const ALLOWED_SUPPLIER_TRANSITIONS = {
   'AWAITING_SUPPLIER_ACKNOWLEDGEMENT': ['PREPARING'],
@@ -369,6 +370,12 @@ class FulfillmentService {
         throw err;
       }
 
+      // A qualified collective cannot dispatch on the supplier's assertion
+      // alone: all independently paid buyers must accept the proposed run.
+      if (toStatus === 'DISPATCHED' && order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT') {
+        await require('./procurementCollectiveDeliveryService').assertDispatchReady(connection,orderId);
+      }
+
       // Stage-specific validations
       if (toStatus === 'DISPATCHED') {
         if (!deliveryMethod || !VALID_DELIVERY_METHODS.includes(deliveryMethod)) {
@@ -412,6 +419,10 @@ class FulfillmentService {
       updateParams.push(orderId);
 
       await connection.query(updateSql, updateParams);
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,toStatus);
+      }
 
       // Rule P10: Track actual_dispatched_at and actual_delivered_at on parent pool without mutating promised_delivery_at
       if (order.pool_id && (toStatus === 'DISPATCHED' || toStatus === 'SUPPLIER_DELIVERED')) {
@@ -487,6 +498,12 @@ class FulfillmentService {
       );
       }
 
+      // Recipient-owned buyer notice is committed atomically with the fulfillment milestone.
+      const buyerMilestoneEvent={READY_FOR_DISPATCH:'DISPATCH_SCHEDULED',DISPATCHED:'OUT_FOR_DELIVERY',SUPPLIER_DELIVERED:'DELIVERY_REPORTED'}[toStatus];
+      if(buyerMilestoneEvent){
+        await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',
+          eventType:buyerMilestoneEvent,eventKey:'order:'+order.id+':fulfillment:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
+      }
       await connection.commit();
 
       return {
@@ -625,6 +642,10 @@ class FulfillmentService {
         [reason, description.trim(), orderId]
       );
 
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,'EXCEPTION');
+      }
       // Record milestone event
       const eventCode = this._generateEventCode(orderId, 'SUPPLIER_EXCEPTION', trimmedKey);
       await connection.query(
@@ -680,6 +701,10 @@ class FulfillmentService {
       );
       }
 
+      await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',
+        eventType:'DELIVERY_DELAYED',eventKey:'order:'+order.id+':supplier-exception:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
+      await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',
+        eventType:'DISPUTE_OPENED',eventKey:'order:'+order.id+':buyer-discrepancy:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       await connection.commit();
 
       return {
@@ -977,6 +1002,10 @@ class FulfillmentService {
         [orderId]
       );
 
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,'BUYER_CONFIRMED');
+      }
       // Record milestone event
       const eventCode = this._generateEventCode(orderId, 'BUYER_CONFIRMED', trimmedKey);
       await connection.query(
@@ -1030,6 +1059,8 @@ class FulfillmentService {
       );
       }
 
+      await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',
+        eventType:'RECEIPT_CONFIRMED',eventKey:'order:'+order.id+':buyer-confirmed:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       await connection.commit();
 
       return {
@@ -1155,7 +1186,12 @@ class FulfillmentService {
            WHERE ao.order_id = ?`,
           [orderId]
         );
-        if (Number(awardItems[0]?.line_count || 0) > 0) {
+        const [groupItems]=await connection.query(
+          `SELECT COUNT(*) AS line_count FROM procurement_collective_order_lines gl
+           JOIN procurement_collective_buyer_orders co ON co.id=gl.collective_order_id
+           WHERE co.order_id=?`,[orderId]);
+        if (Number(awardItems[0]?.line_count || 0) > 0 ||
+            Number(groupItems[0]?.line_count || 0) > 0) {
           const err = new Error('Procurement award deliveries require line-specific discrepancy evidence; aggregate shortage cannot be calculated safely');
           err.code = 'LINE_ITEM_RECEIPT_REQUIRED';
           err.statusCode = 409;
@@ -1206,6 +1242,10 @@ class FulfillmentService {
         [reason, description.trim(), orderId]
       );
 
+      if(order.notes === 'COLLECTIVE_INDIVIDUAL_PAYMENT'){
+        await require('./procurementCollectiveDeliveryService').syncFulfillment(
+          connection,orderId,'EXCEPTION');
+      }
       // Record milestone event
       const eventCode = this._generateEventCode(orderId, 'BUYER_DISCREPANCY', trimmedKey);
       await connection.query(

@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('../../controllers/procurementController');
+const supplierOpportunities = require('../../services/supplierProcurementOpportunitiesService');
 const { protect, authorize, authorizeStrict } = require('../../middlewares/authGuard');
 
 // Flash Pools
@@ -28,6 +29,19 @@ router.get('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)
 router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.getSmartRequest(req,res));
 router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
 router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));
+
+// One supplier-owned opportunities read endpoint; writes remain in canonical quote/group services.
+router.get('/procurement/supplier/opportunities',protect,authorizeStrict('SUPPLIER'),async(req,res)=>{
+  try {
+    const data = await supplierOpportunities.list(req.user, { type:req.query.type, search:req.query.search, page:req.query.page, limit:req.query.limit });
+    return res.json({success:true,data});
+  } catch(error) {
+    return res.status(error.statusCode||500).json({
+      success:false,error:{code:error.statusCode?error.code:'OPPORTUNITIES_UNAVAILABLE',
+        message:error.statusCode?error.message:'Could not load procurement opportunities'}
+    });
+  }
+});
 
 // B6-D supplier matching; buyer-only discovery and invitations.
 // Never expose procurement request addresses or identities to suppliers.
@@ -67,6 +81,72 @@ router.get('/procurement/supplier/collectives/invitations',protect,authorizeStri
 router.post('/procurement/supplier/collectives/:groupId/bids',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.submitCollectiveBid(req,res));
 router.get('/procurement/collectives/:groupId/bids',protect,authorizeStrict('BUYER'),(req,res)=>controller.listCollectiveBids(req,res));
 router.post('/procurement/collectives/:groupId/qualify',protect,authorizeStrict('BUYER'),(req,res)=>controller.qualifyCollectiveGroup(req,res));
+// PR61 Part 2: buyer-specific payment authorization after qualified group.
+const collectiveOrders=require('../../services/procurementCollectiveOrderService');
+const collectiveRouteError=(res,error)=>res.status(error.statusCode||500).json({
+  success:false,error:{code:error.statusCode?error.code:'COLLECTIVE_ORDER_UNAVAILABLE',
+    message:error.statusCode?error.message:'Collective order unavailable'}
+});
+router.post('/procurement/collectives/:groupId/orders',protect,authorizeStrict('BUYER'),async(req,res)=>{
+  try{
+    const result=await collectiveOrders.prepare(req.user.id,req.params.groupId,req.body,
+      req.get('X-Idempotency-Key'));
+    return res.status(result.is_replay?200:201).json({success:true,data:result});
+  }catch(error){return collectiveRouteError(res,error);}
+});
+router.get('/procurement/collectives/:groupId/order',protect,authorizeStrict('BUYER'),async(req,res)=>{
+  try{return res.json({success:true,data:await collectiveOrders.getMine(req.user.id,req.params.groupId)});}
+  catch(error){return collectiveRouteError(res,error);}
+});
+router.get('/procurement/supplier/collectives/orders',protect,
+  authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try{return res.json({success:true,data:{groups:await collectiveOrders.listSupplierGroups(req.user.id)}});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.get('/procurement/supplier/collectives/:groupId/orders',protect,
+  authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveOrders.supplierGroup(req.user.id,req.params.groupId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+
+// PR61 Part 2: one supplier-operated route, each paid buyer confirms own schedule.
+const collectiveDelivery=require('../../services/procurementCollectiveDeliveryService');
+router.post('/procurement/supplier/collectives/:groupId/delivery-route',
+  protect,authorizeStrict('SUPPLIER'),async(req,res)=>{
+    try{return res.status(201).json({success:true,data:await collectiveDelivery.propose(
+      req.user.id,req.params.groupId,req.body,req.get('X-Idempotency-Key'))});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.get('/procurement/collectives/:groupId/delivery-route',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveDelivery.getBuyer(req.user.id,req.params.groupId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.post('/procurement/collectives/:groupId/delivery-route/decision',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveDelivery.decide(req.user.id,req.params.groupId,req.body)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+
+// Line-specific buyer receipt evidence. No automatic refunds or payouts.
+const collectiveReceipts=require('../../services/procurementCollectiveReceiptService');
+router.post('/procurement/collectives/orders/:orderId/receipt',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.status(201).json({success:true,data:await collectiveReceipts.submit(
+      req.user.id,req.params.orderId,req.body,req.get('X-Idempotency-Key'))});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.get('/procurement/collectives/orders/:orderId/lines',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveReceipts.getContract(req.user.id,req.params.orderId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+router.get('/procurement/collectives/orders/:orderId/receipt',
+  protect,authorizeStrict('BUYER'),async(req,res)=>{
+    try{return res.json({success:true,data:await collectiveReceipts.get(req.user.id,req.params.orderId)});}
+    catch(error){return collectiveRouteError(res,error);}
+  });
+
 // B6-K: individual buyer consent only, not an order or checkout.
 router.get('/procurement/collectives/:groupId/bids/:bidId/approval-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewCollectiveApproval(req,res));
 router.post('/procurement/collectives/:groupId/bids/:bidId/consent',protect,authorizeStrict('BUYER'),(req,res)=>controller.consentCollectiveApproval(req,res));
@@ -88,6 +168,16 @@ router.get('/procurement/recurring/:contractId/cycles',protect,authorizeStrict('
 router.post('/procurement/recurring/:contractId/cycles/:cycleId/prepare',protect,authorizeStrict('BUYER'),(req,res)=>controller.prepareRecurringCycle(req,res));
 
 // B6-G/H — Fee-inclusive preview and server-gated real order acceptance.
+// PR53 numeric-only counteroffers and delivery intent; no direct checkout or payment.
+router.post('/procurement/requests/:id/quotes/:quoteId/delivery-choice',protect,authorizeStrict('BUYER'),(req,res)=>controller.chooseDelivery(req,res));
+router.get('/procurement/supplier/requests/:id/delivery-choices',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.supplierDeliveryChoices(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitProductCounteroffers(req,res));
+router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerProductCounteroffers(req,res));
+router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierProductCounteroffers(req,res));
+router.post('/procurement/supplier/counteroffers/:offerId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondProductCounteroffer(req,res));
+router.get('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.getRecurringCycleInputs(req,res));
+router.put('/procurement/recurring/:contractId/cycles/:cycleId/inputs',protect,authorizeStrict('BUYER'),(req,res)=>controller.updateRecurringCycleInputs(req,res));
+
 router.post('/procurement/requests/:id/checkout-preview',protect,authorizeStrict('BUYER'),(req,res)=>controller.previewSmartPayable(req,res));
 router.post('/procurement/requests/:id/award',protect,authorizeStrict('BUYER'),(req,res)=>controller.acceptSmartAward(req,res));
 router.get('/procurement/awards/:awardId',protect,authorizeStrict('BUYER'),(req,res)=>controller.getSmartAward(req,res));
