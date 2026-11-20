@@ -8,30 +8,34 @@ require('dotenv').config({path:path.resolve(__dirname,'../.env')});
 const {scanMigrations,checkAppliedHistory}=require('./migrationManifest');
 const mysql=require('mysql2/promise');
 function fail(code,message){throw Object.assign(new Error(message),{code});}
+function isDisposableTestDb(name){
+  return /^(?:miljor_test_db|miljor_[a-z0-9_]+_test_db)$/.test(String(name||''));
+}
 function assertTestTarget(argv=process.argv,env=process.env){
   if(!argv.includes('--test-only')||env.NODE_ENV!=='test'||
-      env.MILJOR_TEST_ONLY_MIGRATIONS!=='1'||env.DB_NAME!=='miljor_test_db'||
-      (env.TEST_DB_NAME&&env.TEST_DB_NAME!=='miljor_test_db'))
+      env.MILJOR_TEST_ONLY_MIGRATIONS!=='1'||!isDisposableTestDb(env.DB_NAME)||
+      (env.TEST_DB_NAME&&env.TEST_DB_NAME!==env.DB_NAME))
     fail('READ_ONLY_AUDIT_TEST_TARGET_REQUIRED',
-      'Explicit --test-only, NODE_ENV=test, MILJOR_TEST_ONLY_MIGRATIONS=1, DB_NAME=miljor_test_db required');
+      'Explicit --test-only, NODE_ENV=test, MILJOR_TEST_ONLY_MIGRATIONS=1, DB_NAME=miljor_test_db (or *_test_db) required');
 }
 async function audit({connect=mysql.createConnection,argv=process.argv,env=process.env}={}){
   assertTestTarget(argv,env);
+  const targetDb=env.DB_NAME;
   const manifest=scanMigrations(); // Pure no-DB verification FIRST.
   const connection=await connect({
     host:env.DB_HOST||'127.0.0.1',port:Number(env.DB_PORT)||3306,
     user:env.DB_USER||'root',password:env.DB_PASSWORD||'',
-    database:'miljor_test_db',multipleStatements:false
+    database:targetDb,multipleStatements:false
   });
   try{
     // Only information_schema and migration audit SELECTs, no schema creation.
     const [existing]=await connection.execute(
       "SELECT table_name FROM information_schema.tables WHERE table_schema=? AND table_name IN ('schema_migrations','schema_migration_attempts')",
-      ['miljor_test_db']
+      [targetDb]
     );
     const names=new Set(existing.map(x=>String(x.TABLE_NAME||x.table_name)));
     if(names.size===0){
-      return {status:'EMPTY_HISTORY',database:'miljor_test_db',planned:manifest.length,
+      return {status:'EMPTY_HISTORY',database:targetDb,planned:manifest.length,
         note:'No migration ledger yet; dry preflight only, no migrations applied.'};
     }
     if(!names.has('schema_migrations')||!names.has('schema_migration_attempts'))
@@ -41,7 +45,7 @@ async function audit({connect=mysql.createConnection,argv=process.argv,env=proce
     const checked=checkAppliedHistory(manifest,rows,attempts);
     if(rows.length>0&&attempts.length!==rows.length)
       fail('UNVERIFIED_MIGRATION_LEDGER','Every applied migration requires an exact, matching checksum journal.');
-    return {status:'VERIFIED_HISTORY',database:'miljor_test_db',...checked,
+    return {status:'VERIFIED_HISTORY',database:targetDb,...checked,
       note:'Read-only manifest and journal integrity checked. No schema changes performed.'};
   }finally{await connection.end()}
 }

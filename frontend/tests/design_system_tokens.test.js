@@ -106,11 +106,16 @@ async function runDesignSystemVerification() {
   const landingPath = path.join(frontendDir, 'src', 'pages', 'LandingPage.jsx');
   assert.ok(fs.existsSync(landingPath), 'LandingPage.jsx must exist');
   const landingContent = fs.readFileSync(landingPath, 'utf8');
-  assert.ok(landingContent.includes('Buy Better,') && landingContent.includes('Together'), 'Landing page must feature "Buy Better," and "Together" headline without period');
+  assert.ok(landingContent.includes('Buy Better') && landingContent.includes('Together'), 'Landing page must feature "Buy Better" and "Together" headline without period');
   assert.ok(!landingContent.includes('Together.') && !landingContent.includes('Together .'), 'Landing page must STRICTLY NOT have a period after "Together"');
-  assert.ok(landingContent.includes('Milkar Khareedo, Behtar Pao'), 'Brand tagline must be present in proper context');
-  assert.ok(landingContent.toLowerCase().includes('verified suppliers'), 'Value pillars must be present');
-  pass('Landing Page: Editorial luxury hero, fresh food imagery showcase, and value pillars verified');
+  assert.ok(landingContent.includes('Mil Kar Khareedo, Behtar Pao'), 'Approved brand tagline "Mil Kar Khareedo, Behtar Pao" must be present on LandingPage');
+  assert.ok(landingContent.includes('For buyers and suppliers') && landingContent.includes('Buy collectively') && landingContent.includes('Purchase clearly') && landingContent.includes('Stay informed'), 'Approved buyer/supplier audience and value pillars must be present');
+
+  for (const authFile of ['LoginPage.jsx', 'RegisterPage.jsx']) {
+    const authContent = fs.readFileSync(path.join(frontendDir, 'src', 'pages', authFile), 'utf8');
+    assert.ok(authContent.includes('Mil Kar Khareedo, Behtar Pao'), `${authFile} must preserve approved tagline "Mil Kar Khareedo, Behtar Pao"`);
+  }
+  pass('Landing Page: Approved headline, "Mil Kar Khareedo, Behtar Pao" tagline, and buyer/supplier value pillars verified');
 
   console.log('\n================================================================================');
   console.log(`🎉 ALL ${passedAssertions} DESIGN SYSTEM INTEGRITY ASSERTIONS PASSED!`);

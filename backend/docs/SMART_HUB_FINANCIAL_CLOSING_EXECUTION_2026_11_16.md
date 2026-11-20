@@ -294,6 +294,14 @@ Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three s
 - **Tax Classification Draft (`MILJOR_PAKISTAN_TAX_CLASSIFICATION_DRAFT.md`):** Expanded to cover all 8 charge categories (merchandise, marketplace commission, delivery/logistics, supplemental delivery/reattempt, processing/buyer platform fees, withholding obligations, refunds/credit notes/partial acceptance, and scope variations) with all 10 required fields per category, an application tax-readiness inspection (`B6_TAX_POLICY_APPROVED`, `tax_calculated: false`, `invoiceService`, `procurementLineReceiptService`), a concise review package for a qualified Pakistan tax professional, and 3 simple factual business questions for the owner. Status remains **`DRAFT / AWAITING QUALIFIED TAX REVIEW & OWNER BUSINESS FACTS`**.
 - **Code Inspection Result:** Existing services already enforce fail-closed tax gating (`503 B6_FINANCIAL_GATE_BLOCKED`), explicit `tax_calculated: false` visibility, exact decimal separation, and immutable snapshots; no speculative tax engine or code change was introduced.
 - **Protected Databases & Safety:** `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`), `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `SAFEPAY_ENV=sandbox`.
+
+---
+
+# 2026-11-20 — Prompt 2: Mergeability, Remaining MySQL Gates & Safepay Provenance
+
+- **Mergeability:** `origin/main` (`9fb07cf`) is an ancestor of PR #53 (`git merge-tree --write-tree` exit `0`), yet GitHub API reports `mergeable: false, mergeable_state: dirty`.
+- **Gates Executed:** Recurring (`17/17`, `11/11`, `9/9`, `20/20` MySQL PASS), Counteroffer MySQL on disposable `miljor_counteroffer_test_db` (PASS), Delivery Options (PASS after `db.end()` fix), Delivery Run Policy (`2/2` PASS), `b6_release_gate.js` (8 sub-gates PASS; `package_e2_catalog_foundation_gate.js` hit `84 !== 5` accumulated rice variants in populated `miljor_test_db`).
+- **Safepay Provenance:** Orders `231` & `234` verified in `miljor_test_db` (`DELIVERED / BUYER_CONFIRMED`, `payments` `171` & `170` `HELD_IN_ESCROW`, `invoices` `110` & `109` `ISSUED`, `payables` `39` & `38` `ACCRUED` PKR `317.50`, `disbursed=0.00`). Note: genuine Safepay sandbox *refund* (G) remains external/unexecuted (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).
 - **Conditional Merge & Local Integration:** **BLOCKED (PR #53 retained as DRAFT)** — cannot merge to `main` or integrate into `MilJor Project` (`feature/frontend-redesign-20261112` @ `83565c4e`, 12 dirty frontend files preserved) until factual business confirmation and qualified Pakistan tax sign-off complete. `CAN START NEXT PHASE: NO`.
 
 ---
@@ -376,3 +384,20 @@ Completed the previously partial notification rehearsal on baseline7f1baee. Exis
 Initial operational failures are preserved: health response assertion corrected to actual environment field; missing trusted frontend origin caused12 queue errors and was corrected process-only, honoring five-minute retry; unauthenticated harness API request401 corrected to real frontend authenticated client. No application source change or gate bypass. Local ignored helpers `artifacts/pr53-demo-notifications.cjs` and `artifacts/demo-notification-worker.cjs` pass node --check. Bounded scoped worker left running PID16588/session9443 for60minutes with mock email; no sender or payment job. Frontend3100/backend5517 retained; PR54/original frontend untouched. Detailed commands/results/artifact paths and recovery instructions saved in existing demo guide.
 
 CI connector independently observed11/11 PR-triggered workflows SUCCESS at7f1baee; no claim to freshly verify14/16 through its filtered response. Applied using-superpowers, systematic-debugging and verification-before-completion. Documentation-only closure; no full application/build rerun necessary. Tax review/market launch/main merge/local integration deferred. CAN START NEXT PHASE: NO.
+
+## 2026-11-20 - PR #53 Prompt 3 of 4: Main Merge Resolution, Package E2 Fix, Fresh DB Migrations, Chromium Acceptance & Regression
+
+- **Branch & Merge Resolution:** Merged `origin/main` (`9c0a81979b852198c04c00de42ba763a1aa09c2f`) into `feature/smart-procurement-hub-unified-entry` (`d761b65be71ae38af7d2d6043c5803ba814d87b2`), resolving conflicts in `frontend/src/App.jsx` and `frontend/src/pages/LandingPage.jsx`.
+- **Package E2 & Fresh DB:** `package_e2_catalog_foundation_gate.js` **9/9 PASS** on populated `miljor_test_db` and **9/9 PASS** (x2) on disposable `miljor_fresh_20261120_test_db` (`65/65` migrations applied, `0` on replay, `readOnlyMigrationAudit.js` `VERIFIED_HISTORY`, DB dropped after evidence).
+- **Chromium Synthetic Paid Browser Acceptance:** `smart_hub_paid_browser_journey.js` (+ `extra_fee` + `partial_review`) **PASS** (exit 0) on `miljor_test_db` (synthetic signed sandbox callback only; genuine live Safepay I/O NOT claimed). `smart_hub_paid_browser_provider_readiness.test.js` + `smart_hub_paid_browser_safety.test.js`: **12/12 PASS**.
+- **Regression & Frontend:** `b6_release_gate.js` **23/23 PASS**; `test:hardening`, `test:buyer:source` (18/18), `test:p0:commission:source`, `test:ucp`, `test:ucp:reconciliation` (14/14) **PASS**; `master_regression_runner.js` blocked at setup line 171 (`ER_ROW_IS_REFERENCED_2` on `buyer_delivery_addresses`) and not run destructively on `miljor_test_db`. Frontend `oxlint` **0 errors** (160 warnings), `vite build` **PASS (1.94s)**, `parse_deadline.test.js` **14/14 PASS**, `design_system_tokens.test.js` **FAIL (pre-existing `origin/main` landing copy mismatch)**.
+- **Protected DBs:** `miljor_db` (`orders: 0, payments: 0`), `miljor_sandbox_db` (`orders: 0, payments: 0`). `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `B6_TAX_POLICY_APPROVED=false`, PR #53 stays `DRAFT`. `CAN START NEXT PHASE: NO`.
+
+## 2026-11-20 - PR #53 Prompt 4 of 4: Final Closure Audit & Release Readiness
+
+- **Prior Head `9ad1c8f` CI & Mergeability:** **14/14** GitHub Actions workflows `completed / success`; `mergeable: True`, `mergeable_state: clean` (`draft: True`).
+- **Prompt 4 Fixes:**
+  1. `frontend/tests/design_system_tokens.test.js`: aligned landing copy/tagline assertions with `origin/main` (`Buy Better` + `Together`, `Mil Kar Khareedo, Behtar Pao`, `For buyers and suppliers`) — **10/10 PASS**, `parse_deadline.test.js` **14/14 PASS**, `oxlint` **0 errors**, `vite build` **PASS (3.92s)**.
+  2. `backend/tests/master_regression_runner.js`: added FK-safe PR #53 cleanup order + populated-DB safety guard (`ALLOW_DESTRUCTIVE_TEST_DB_WIPE=1` required on disposable CI DBs), preserving `miljor_test_db` retained Orders `231`/`234`.
+- **Additional Suites Run:** `test:canonical:preflight` **PASS**, `collective_commitment_*` **14/14 PASS**, `procurement_delivery_binding_*` **PASS**, `delivery_evidence/recovery/pricing` **26/26 PASS**, `line_receipt_*` + `notification_events_verification` **32/32 PASS**.
+- **External Approvals Pending (Unchanged):** `B6_TAX_POLICY_APPROVED=false`, `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, live SMTP, PR #53 owner review/merge. `CAN START NEXT PHASE: NO`.

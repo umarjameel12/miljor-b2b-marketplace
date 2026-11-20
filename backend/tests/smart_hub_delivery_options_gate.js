@@ -32,4 +32,4 @@ const rejected=async(fn,code)=>assert.rejects(fn,e=>e.code===code);
     query:async()=>[[{...row,valid_until:new Date(Date.now()-3600000).toISOString()}]]},eligible);
   await rejected(()=>expired.forBuyer(100,10,20,5),'QUOTE_EXPIRED');
   console.log('SMART_HUB_DELIVERY_OPTIONS_POLICY_PASS');
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>require('../src/config/db').end().catch(()=>{}));

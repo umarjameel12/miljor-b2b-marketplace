@@ -2,8 +2,10 @@
 // Isolated real-MySQL acceptance for the Smart Hub product counteroffer service.
 // Only an ephemeral miljor_test_db on CI; never reaches the protected miljor_db.
 process.env.NODE_ENV='test';
-process.env.TEST_DB_NAME='miljor_test_db';
 const assert=require('node:assert/strict');
+const dbName=(process.env.COUNTEROFFER_TEST_DB||'miljor_test_db').trim();
+assert.ok(/^[a-z0-9_]+_test_db$/i.test(dbName)&&dbName!=='miljor_db'&&dbName!=='miljor_sandbox_db','FAIL CLOSED: isolated *_test_db required');
+process.env.TEST_DB_NAME=dbName;
 const fs=require('node:fs');
 const path=require('node:path');
 const mysql=require('mysql2/promise');
@@ -14,11 +16,11 @@ async function run(){
   const options={host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),
     user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||''};
   const admin=await mysql.createConnection({...options,multipleStatements:false});
-  // A hard-coded disposable name, not a user-provided target.
-  await admin.query('CREATE DATABASE IF NOT EXISTS miljor_test_db');
-  const [[identity]]=await admin.query("SELECT 'miljor_test_db' AS db");
-  assert.equal(identity.db,'miljor_test_db');
-  const database=mysql.createPool({...options,database:'miljor_test_db',connectionLimit:4,timezone:'Z'});
+  // A hard-coded/validated disposable *_test_db name, not a protected target.
+  await admin.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+  const [[identity]]=await admin.query(`SELECT ? AS db`,[dbName]);
+  assert.equal(identity.db,dbName);
+  const database=mysql.createPool({...options,database:dbName,connectionLimit:4,timezone:'Z'});
   const queries=[
     'CREATE TABLE users (id INT NOT NULL PRIMARY KEY,role VARCHAR(20) NOT NULL,email VARCHAR(100)) ENGINE=InnoDB',
     'CREATE TABLE procurement_requests (id BIGINT NOT NULL PRIMARY KEY,buyer_id INT NOT NULL,status VARCHAR(20) NOT NULL,quote_deadline DATETIME NOT NULL) ENGINE=InnoDB',
@@ -28,7 +30,7 @@ async function run(){
   ];
   try{
     const [[current]]=await database.query('SELECT DATABASE() AS name');
-    assert.equal(current.name,'miljor_test_db','FAIL CLOSED: cannot run outside isolated test database');
+    assert.equal(current.name,dbName,'FAIL CLOSED: cannot run outside isolated test database');
     // Fresh disposable schema: refuse to overwrite any pre-existing tables.
     const [preexisting]=await database.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE()");
