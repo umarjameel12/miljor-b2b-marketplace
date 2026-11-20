@@ -44,6 +44,14 @@ test('all catalog events have English/Urdu safe projections and unique event nam
     assert.equal(eventProjection({eventType,entityId:12,locale:'unsupported'}).locale,'en');
   }
 });
+test('supplier verification lifecycle actions are mandatory and email-enabled',()=>{
+  for(const eventType of ['VERIFICATION_SUBMITTED','VERIFICATION_CORRECTED','VERIFICATION_UNDER_REVIEW',
+    'VERIFICATION_APPROVED','VERIFICATION_INFO_REQUESTED','VERIFICATION_REJECTED']){
+    const projection=eventProjection({eventType,entityId:12});
+    assert.equal(projection.mandatory,true,eventType+' must be mandatory');
+    assert.equal(projection.email,true,eventType+' must queue critical email');
+  }
+});
 test('mandatory payment ignores optional-email opt-out; projection does not assert provider delivery',async()=>{
   const state=fixture();
   assert.deepEqual(await state.service.processPending({limit:1,emailService:state.emailService}),{processed:1,projected:1,failed:0});
