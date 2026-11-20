@@ -143,6 +143,14 @@ function AppContent() {
               <Link to="/" className="hover:underline">
                 Home
               </Link>
+              <span>•</span>
+              <Link to="/rfqs" className="hover:underline">
+                Request a Quote
+              </Link>
+              <span>•</span>
+              <Link to="/procurement" className="hover:underline">
+                Smart Procurement Hub
+              </Link>
             </div>
 
             <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>

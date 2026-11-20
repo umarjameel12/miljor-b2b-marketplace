@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..', '..');
-const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const auth = read('backend/src/controllers/authController.js');
 const request = read('backend/src/services/procurementRequestService.js');

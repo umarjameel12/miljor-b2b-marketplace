@@ -68,6 +68,8 @@ export const RfqPage = () => {
 
   const [familyChoices, setFamilyChoices] = useState([]);
   const [savedRequests, setSavedRequests] = useState([]);
+  const [legacyRequests, setLegacyRequests] = useState([]);
+  const [convertingLegacy, setConvertingLegacy] = useState(null);
   const [activeRequest, setActiveRequest] = useState(null);
   const [shoppingBusy, setShoppingBusy] = useState(false);
   const [shoppingError, setShoppingError] = useState('');
@@ -130,6 +132,7 @@ export const RfqPage = () => {
         if (alive) {
           setFamilyChoices((catalog.data?.families || []).filter(x => x.is_active && x.approval_status === 'APPROVED'));
           setSavedRequests(requests.data?.requests || []);
+          setLegacyRequests((requests.data?.legacy_requests || []).filter(x => !x.already_converted));
         }
       } catch (error) {
         if (alive) setShoppingError(error.message);
@@ -146,6 +149,66 @@ export const RfqPage = () => {
     const body = await response.json();
     if (!response.ok) throw Error(body.error?.message || 'Could not refresh requests');
     setSavedRequests(body.data?.requests || []);
+    setLegacyRequests((body.data?.legacy_requests || []).filter(x => !x.already_converted));
+  };
+
+  const reviewLegacyRequest = legacy => {
+    setActiveRequest(null);
+    setConvertingLegacy(legacy);
+    setShoppingError('');
+    if (legacy.cluster_name && !deliveryArea) setDeliveryArea(`${legacy.cluster_name}, Lahore`);
+    else if (!deliveryArea) setDeliveryArea('Lahore');
+    if (legacy.needed_by_date) setQuoteDeadline(toLocalInput(legacy.needed_by_date));
+    else if (!quoteDeadline) setQuoteDeadline(toLocalInput(new Date(Date.now() + 5 * 86400000)));
+    setShoppingList([{
+      family_id: legacy.family_id ? String(legacy.family_id) : '',
+      quantity: legacy.target_quantity ? String(legacy.target_quantity) : '1',
+      unit: (legacy.target_unit || 'kg').toLowerCase(),
+      requirements: legacy.desired_specs || legacy.commodity_name || ''
+    }]);
+  };
+
+  const convertLegacyToDraft = async () => {
+    if (!convertingLegacy) return;
+    setShoppingBusy(true);
+    setShoppingError('');
+    try {
+      const item = shoppingList[0] || {};
+      const quoteDate = quoteDeadline ? new Date(quoteDeadline).toISOString() : null;
+      const joinDate = buyerMode === 'COLLECTIVE' && joinDeadline
+        ? new Date(joinDeadline).toISOString()
+        : null;
+      const res = await fetch(`/api/v1/procurement/legacy-requests/${convertingLegacy.id}/convert`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `legacy-convert-${convertingLegacy.id}-${crypto.randomUUID()}`
+        },
+        body: JSON.stringify({
+          confirm_conversion: true,
+          ownership: buyerMode,
+          frequency: purchaseCadence,
+          delivery_area: deliveryArea,
+          quote_deadline: quoteDate,
+          ...(joinDate ? { join_deadline: joinDate } : {}),
+          family_id: item.family_id ? Number(item.family_id) : null,
+          quantity: item.quantity,
+          unit: item.unit,
+          requirements: item.requirements,
+          notes: convertingLegacy.notes || undefined
+        })
+      });
+      const body = await res.json();
+      if (!res.ok) throw Error(body.error?.message || 'Could not convert legacy request');
+      setConvertingLegacy(null);
+      await refreshRequests();
+      toast.success(`Converted ${convertingLegacy.request_code} to Smart Hub draft ${body.data?.request?.request_code || ''}`);
+    } catch (err) {
+      setShoppingError(err.message);
+    } finally {
+      setShoppingBusy(false);
+    }
   };
 
   const loadShoppingDraft = async requestId => {
@@ -982,6 +1045,21 @@ export const RfqPage = () => {
                 className="text-sm px-3 py-2 underline">Start New</button>}
             </div>
             <p className="text-xs text-[var(--text-muted)]">No payment or inventory reservation happens when you publish or create a schedule/group. Solo one-time requests can receive supplier quotes now. Group bids and recurring payment remain gated until their completion tests.</p>
+            {convertingLegacy && (
+              <div className="rounded-xl border border-[var(--brand-accent)]/40 bg-[var(--bg-surface)] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span>
+                  Reviewing legacy request <strong>{convertingLegacy.request_code}</strong> ({convertingLegacy.commodity_name} · {convertingLegacy.target_quantity} {convertingLegacy.target_unit}). Confirm delivery area &amp; deadline above, then click Convert to Draft.
+                </span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={shoppingBusy} onClick={convertLegacyToDraft} className="rounded-lg px-3 py-1.5 font-semibold text-white bg-[var(--brand-accent)]">
+                    Confirm &amp; Convert to Draft
+                  </button>
+                  <button type="button" disabled={shoppingBusy} onClick={() => setConvertingLegacy(null)} className="underline text-[var(--text-muted)]">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {savedRequests.length>0 && (
               <div className="border-t border-[var(--border-subtle)] pt-3">
                 <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
@@ -1009,6 +1087,23 @@ export const RfqPage = () => {
                           <button type="button" disabled={quoteBusy} onClick={()=>viewSmartComparison(request.id)}
                             className="text-[var(--brand-accent)] underline text-xs">Compare offers</button>}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {legacyRequests.length>0 && (
+              <div className="border-t border-[var(--border-subtle)] pt-3">
+                <p className="text-sm font-semibold mb-2">Legacy Demand Requests (Unconverted)</p>
+                <div className="space-y-2">
+                  {legacyRequests.map(legacy=>(
+                    <div key={`legacy-${legacy.id}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span>
+                        <span className="inline-block rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-1.5 py-0.5 text-[10px] font-semibold mr-2">LEGACY</span>
+                        {legacy.request_code} · {legacy.commodity_name} · {legacy.target_quantity} {legacy.target_unit} · {legacy.status}
+                      </span>
+                      <button type="button" disabled={shoppingBusy} onClick={()=>reviewLegacyRequest(legacy)}
+                        className="text-[var(--brand-accent)] underline text-xs">Review &amp; Convert to Draft</button>
                     </div>
                   ))}
                 </div>

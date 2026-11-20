@@ -295,6 +295,22 @@ Real Safepay sandbox `payment:created 1.0.0` webhook deliveries revealed three s
 - **Code Inspection Result:** Existing services already enforce fail-closed tax gating (`503 B6_FINANCIAL_GATE_BLOCKED`), explicit `tax_calculated: false` visibility, exact decimal separation, and immutable snapshots; no speculative tax engine or code change was introduced.
 - **Protected Databases & Safety:** `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`), `ALLOW_EXTERNAL_MONEY_MOVEMENT=false`, `SAFEPAY_ENV=sandbox`.
 - **Conditional Merge & Local Integration:** **BLOCKED (PR #53 retained as DRAFT)** — cannot merge to `main` or integrate into `MilJor Project` (`feature/frontend-redesign-20261112` @ `83565c4e`, 12 dirty frontend files preserved) until factual business confirmation and qualified Pakistan tax sign-off complete. `CAN START NEXT PHASE: NO`.
+
+---
+
+# 2026-11-17 — Unified Buyer Requested-Pool & Legacy Demand Request Consolidation
+
+- **Unified Navigation & Dead-Page Removal:** Removed unused `DemandRequestsPage.jsx`; updated `LandingPage.jsx`, `App.jsx` footer, and `SupplierSubscriptionPage.jsx` copy/links to point directly to `/procurement` (`Smart Procurement Hub`), while keeping `/demand-requests` and `/rfqs` `<Navigate to="/procurement" replace />` routes for bookmark/back-forward compatibility.
+- **Legacy Visibility, Privacy & Safe Idempotent Conversion:**
+  - `procurementRequestService.listLegacyMine(buyerId)` exposes buyer-owned `demand_pool_requests` inside `GET /api/v1/procurement/requests` (`legacy_requests`) and `GET /api/v1/procurement/legacy-requests`, deduplicated via `legacy-dpr:<id>:buyer:<buyerId>`.
+  - `procurementRequestService.convertLegacyDemandRequest` (`POST /api/v1/procurement/legacy-requests/:id/convert`) enforces buyer ownership (`403`), explicit confirmation (`confirm_conversion: true`), required canonical fields (`422 LEGACY_CONVERSION_VALIDATION_REQUIRED`, no fabricated defaults), and concurrent idempotency via `(buyer_id, idempotency_key)` without auto-publishing or charging.
+  - `GET /api/v1/demand-requests` preserves its anonymized public projection (no buyer identity/notes/desired_specs).
+  - `RfqPage.jsx` displays unconverted buyer-owned legacy requests with `Review & Convert to Draft`.
+- **Verification:**
+  - `node --test tests/smart_hub_unified_legacy_requests.test.js tests/safepay_payment_created_webhook.test.js tests/spec_code_collision_retry.test.js`: **22/22 PASS**.
+  - `frontend` `npm run build`: **PASS** (`2,237` modules, `0` errors, `1.23s`).
+  - Live Chromium verification (`http://127.0.0.1:3100/` → `5517`, `miljor_test_db`): **PASS** (desktop/mobile nav, `/demand-requests` & `/rfqs` redirects, back/forward, Buyer 1 legacy visibility & UI conversion to `DRAFT` + dedup, Buyer 2 isolation).
+  - Protected DBs: `miljor_db` (`orders=0, payments=0`), `miljor_sandbox_db` (`orders=0, payments=0`).
 # 2026-11-17 — Review correction: authenticate the financial field boundary
 
 Reviewed Antigravity commit `34bca7909cd6a2e4640dc486135be9ecf07976d0`; independently observed all eleven PR workflows SUCCESS, including genuine-envelope-compatible synthetic Chromium (44111766523), P0 (44111766497) and UCP (44111766592). Genuine provider capture/callback evidence recorded for this commit remains historical evidence of the observed sandbox operation, not a new post-correction charge or delivery.
@@ -352,3 +368,11 @@ Documentation-only change from baseline b92a6889029cd721a13ae581fe14dd031f27aad6
 Owner confirmed initial delivery is Lahore only, directed use of the existing website product catalog rather than recalling it manually, and explicitly requested preparation/storage only: no implementation now, platform demonstration rather than market launch. Updated the existing tax draft with a reusable demonstration introduction, source-linked inventory of all 25 seeded canonical product families, and restart checklist. Frontend catalog API paths and three preview spotlights were inspected. The source catalog includes Milk Powder despite the stated dairy exclusion: recorded the conflict without deleting a record or inventing approval. Source inventory is not a live database/API or stock-availability verification.
 
 Verification: documentation/source consistency script PASS (25/25 seeded family names present, Lahore-only and no-implementation instruction present); git diff --check PASS. Source baseline 9f06d256b622dd6fea14528edef74daa560962d1. Documentation only; no application build/test rerun, database connection/mutation, migration execution, provider transaction, environment change, PR54 action or original frontend integration performed. Historical protected-DB and CI results are not claimed as fresh checks. Qualified tax review and implementation deferred for commercial-launch preparation; PR53 stays unmerged. Applied using-superpowers instruction-selection workflow; no new feature planning needed. CAN START NEXT PHASE: NO.
+
+## 2026-11-17 - Demo notification delivery and browser closure
+
+Completed the previously partial notification rehearsal on baseline7f1baee. Existing dispatcher projected27 original demo events (buyers724/725 and supplier726); correct-recipient counts22/2/3, unread21/2/3 after buyer mark-read. Seven labelled SQL/service/real-Chromium checks PASS, final exit0, including duplicate prevention, cross-buyer read rejection, authenticated API isolation, badge/content, mark-read/deep-link and protected counts unchanged (miljor_db0orders/0payments; miljor_sandbox_db0/0). Actual email delivery NOT performed;12 email rows QUEUED. Temporary canonical test sessions revoked, credentials unchanged.
+
+Initial operational failures are preserved: health response assertion corrected to actual environment field; missing trusted frontend origin caused12 queue errors and was corrected process-only, honoring five-minute retry; unauthenticated harness API request401 corrected to real frontend authenticated client. No application source change or gate bypass. Local ignored helpers `artifacts/pr53-demo-notifications.cjs` and `artifacts/demo-notification-worker.cjs` pass node --check. Bounded scoped worker left running PID16588/session9443 for60minutes with mock email; no sender or payment job. Frontend3100/backend5517 retained; PR54/original frontend untouched. Detailed commands/results/artifact paths and recovery instructions saved in existing demo guide.
+
+CI connector independently observed11/11 PR-triggered workflows SUCCESS at7f1baee; no claim to freshly verify14/16 through its filtered response. Applied using-superpowers, systematic-debugging and verification-before-completion. Documentation-only closure; no full application/build rerun necessary. Tax review/market launch/main merge/local integration deferred. CAN START NEXT PHASE: NO.
