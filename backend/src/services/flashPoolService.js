@@ -242,6 +242,8 @@ class FlashPoolService {
          WHERE allocation_type='FLASH_POOL' AND reference_id=? AND status='COMMITTED'`,[id]);
       await conn.query(
         "UPDATE flash_pools SET status='CANCELLED',version_number=version_number+1 WHERE id=?",[id]);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:Number(id),type:'UCP.POOL_CANCELLED',
+        transitionId:'flash-cancel:'+id+':'+(Number(offer.version_number||0)+1)});
       await conn.commit();
       return {id,status:'CANCELLED'};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -301,6 +303,8 @@ class FlashPoolService {
              '$.expiry_time',DATE_FORMAT(DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? MINUTE),'%Y-%m-%dT%H:%i:%sZ')),
            version_number=version_number+1 WHERE id=?`,
         [durationMinutes,durationMinutes,durationMinutes,id]);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:Number(id),type:'UCP.POOL_PUBLISHED',
+        transitionId:'flash-publish:'+id+':'+(Number(offer.version_number||0)+1)});
       await conn.commit();
       return this.getSupplierOffer(supplierId,id);
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
@@ -831,6 +835,8 @@ class FlashPoolService {
       }
       await conn.query(
         "UPDATE flash_pools SET status='EXPIRED',version_number=version_number+1 WHERE id=?",[id]);
+      await require('./ucpTransactionalNotifications').recordFlashOnConnection(conn,{flashId:Number(id),type:'UCP.POOL_EXPIRED',
+        transitionId:'flash-expire:'+id+':'+(Number(pool.version_number||0)+1)});
       await conn.commit();
       return {id,status:'EXPIRED',preserved_unsettled_quantity:outstanding};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
