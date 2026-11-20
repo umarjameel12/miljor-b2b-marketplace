@@ -502,7 +502,7 @@ class FulfillmentService {
       const buyerMilestoneEvent={READY_FOR_DISPATCH:'DISPATCH_SCHEDULED',DISPATCHED:'OUT_FOR_DELIVERY',SUPPLIER_DELIVERED:'DELIVERY_REPORTED'}[toStatus];
       if(buyerMilestoneEvent){
         await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',
-          eventType:buyerMilestoneEvent,eventKey:'order:'+order.id+':fulfillment:'+toStatus+':'+trimmedKey,entityId:Number(order.id)});
+          eventType:buyerMilestoneEvent,eventKey:'order:'+order.id+':fulfillment:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       }
       await connection.commit();
 
@@ -702,9 +702,9 @@ class FulfillmentService {
       }
 
       await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',
-        eventType:'DELIVERY_DELAYED',eventKey:'order:'+order.id+':supplier-exception:'+trimmedKey,entityId:Number(order.id)});
+        eventType:'DELIVERY_DELAYED',eventKey:'order:'+order.id+':supplier-exception:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',
-        eventType:'DISPUTE_OPENED',eventKey:'order:'+order.id+':buyer-discrepancy:'+trimmedKey,entityId:Number(order.id)});
+        eventType:'DISPUTE_OPENED',eventKey:'order:'+order.id+':buyer-discrepancy:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       await connection.commit();
 
       return {
@@ -1060,7 +1060,7 @@ class FulfillmentService {
       }
 
       await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',
-        eventType:'RECEIPT_CONFIRMED',eventKey:'order:'+order.id+':buyer-confirmed:'+trimmedKey,entityId:Number(order.id)});
+        eventType:'RECEIPT_CONFIRMED',eventKey:'order:'+order.id+':buyer-confirmed:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       await connection.commit();
 
       return {
