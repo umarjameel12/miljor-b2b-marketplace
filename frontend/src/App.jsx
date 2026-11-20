@@ -140,12 +140,8 @@ function AppContent() {
                 Explore Active Pools
               </Link>
               <span>•</span>
-              <Link to="/rfqs" className="hover:underline">
-                Request a Quote
-              </Link>
-              <span>•</span>
-              <Link to="/demand-requests" className="hover:underline">
-                Demand Requests
+              <Link to="/" className="hover:underline">
+                Home
               </Link>
             </div>
 

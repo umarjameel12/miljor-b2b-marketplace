@@ -218,7 +218,7 @@ export const RegisterPage = () => {
         )}
 
         {preferences.showBrandHeading && (
-          <h1 className="auth-heading text-xl sm:text-[26px] leading-tight" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="auth-heading text-xl sm:text-[26px] leading-tight" style={{ color: 'var(--auth-heading-color)' }}>
             Create your MilJor account
           </h1>
         )}
@@ -227,7 +227,7 @@ export const RegisterPage = () => {
 
       {/* Segmented Quick-Switch Tabs [Sign In | Create Account] */}
       <div
-        className="auth-auth-tabs grid grid-cols-2 p-1 rounded-xl border text-xs font-semibold"
+        className="auth-auth-tabs auth-tabs-premium grid grid-cols-2 gap-1 p-1 rounded-xl border text-xs font-semibold"
         style={{
           backgroundColor: 'var(--bg-input)',
           borderColor: 'var(--border-subtle)',
@@ -235,13 +235,13 @@ export const RegisterPage = () => {
       >
         <Link
           to="/login"
-          className="py-1 text-center rounded-lg transition-all hover:text-[var(--text-primary)]"
-          style={{ color: 'var(--text-muted)' }}
+          className="auth-tab-inactive py-1.5 text-center rounded-lg transition-all"
+          style={{ color: 'var(--text-secondary)' }}
         >
           Sign In
         </Link>
         <span
-          className="auth-segment-active py-1 text-center rounded-lg transition-all cursor-default"
+          className="auth-segment-active py-1.5 text-center rounded-lg transition-all cursor-default"
           style={{
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--auth-nav-selected-text)',

@@ -378,7 +378,7 @@ export const ForgotPasswordPage = () => {
 
         <h1
           className="auth-heading text-2xl sm:text-[29px] leading-tight"
-          style={{ color: 'var(--text-primary)' }}
+          style={{ color: 'var(--auth-heading-color)' }}
         >
           {step === 1 && 'Reset your password'}
           {step === 2 && 'Enter verification code'}

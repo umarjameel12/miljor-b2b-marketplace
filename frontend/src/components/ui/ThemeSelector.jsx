@@ -36,24 +36,25 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
         <button
           onClick={() => setDropdownOpen(!dropdownOpen)}
           aria-label={`Theme setting: currently ${currentOption.label}`}
-          aria-haspopup="true"
+          aria-haspopup="menu"
           aria-expanded={dropdownOpen}
-          className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:border-[var(--brand-gold)] active:scale-95"
+          className="miljor-theme-trigger w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] active:scale-95"
           style={{
             backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-default)',
+            borderColor: dropdownOpen ? 'var(--brand-accent)' : 'var(--border-default)',
             color: 'var(--text-primary)',
+            boxShadow: dropdownOpen ? '0 0 0 2px var(--brand-accent-soft)' : 'none',
           }}
         >
-          <CurrentIcon className="w-4 h-4 text-[#c89528] dark:text-[#dfcca9]" />
+          <CurrentIcon className="w-4 h-4" style={{ color: isDark ? '#e4c78c' : '#4e4330' }} />
         </button>
 
         {dropdownOpen && (
           <div
-            className="absolute right-0 mt-2 w-40 rounded-2xl border p-1.5 shadow-xl z-50 animate-fade-in space-y-1"
+            className="miljor-theme-menu absolute right-0 mt-2 w-40 rounded-2xl border p-1.5 shadow-xl z-50 animate-fade-in space-y-1"
             style={{
-              backgroundColor: isDark ? '#072a21' : '#fcfbf7',
-              borderColor: isDark ? 'rgba(200, 178, 118, 0.28)' : 'rgba(169, 133, 67, 0.25)',
+              backgroundColor: 'var(--theme-menu-bg, var(--bg-surface))',
+              borderColor: 'var(--theme-menu-border, var(--border-default))',
               boxShadow: isDark
                 ? '0 12px 30px -4px rgba(0, 0, 0, 0.70)'
                 : '0 12px 30px -4px rgba(12, 43, 36, 0.12)',
@@ -63,16 +64,6 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
           >
             {options.map(({ mode, label, icon: Icon }) => {
               const isSelected = theme === mode;
-              const activeBg = isDark ? 'rgba(200, 178, 118, 0.16)' : 'rgba(200, 178, 118, 0.18)';
-              const activeBorder = isDark
-                ? '1px solid rgba(200, 178, 118, 0.35)'
-                : '1px solid rgba(169, 133, 67, 0.35)';
-              const activeText = isDark ? '#f7f3e8' : '#0c2b24';
-              const activeIcon = isDark ? '#dfcca9' : '#967434';
-
-              const inactiveText = isDark ? '#c8d3cf' : '#2e3d36';
-              const inactiveIcon = isDark ? '#8a9e97' : '#57635a';
-
               return (
                 <button
                   key={mode}
@@ -80,23 +71,13 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
                     setTheme(mode);
                     setDropdownOpen(false);
                   }}
-                  role="menuitem"
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl transition-all duration-150 cursor-pointer ${
-                    isSelected
-                      ? 'font-semibold shadow-xs'
-                      : isDark
-                      ? 'font-medium hover:bg-white/5'
-                      : 'font-medium hover:bg-[rgba(169,133,67,0.08)]'
-                  }`}
-                  style={{
-                    backgroundColor: isSelected ? activeBg : 'transparent',
-                    color: isSelected ? activeText : inactiveText,
-                    border: isSelected ? activeBorder : '1px solid transparent',
-                  }}
+                  role="menuitemradio"
+                  aria-checked={isSelected}
+                  className={`miljor-theme-choice w-full flex items-center gap-2.5 px-3 py-2 text-xs font-sans rounded-xl border transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${isSelected ? 'miljor-theme-choice-selected font-semibold shadow-xs' : 'font-medium'}`}
                 >
                   <Icon
                     className="w-3.5 h-3.5 shrink-0 transition-colors"
-                    style={{ color: isSelected ? activeIcon : inactiveIcon }}
+                    aria-hidden="true"
                   />
                   <span>{label}</span>
                 </button>
@@ -129,16 +110,14 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
               role="radio"
               aria-checked={isActive}
               aria-label={`${label} theme`}
-              className={`p-1.5 rounded-full transition-all duration-150 ${
-                isActive
-                  ? 'shadow-xs font-medium text-emerald-950 dark:text-champagne-light'
-                  : 'text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
-              }`}
+              className={`p-1.5 rounded-full border transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${isActive ? 'shadow-xs font-semibold' : 'hover:opacity-80'}`}
               style={{
-                backgroundColor: isActive ? 'var(--bg-surface)' : 'transparent',
+                backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
+                borderColor: isActive ? 'var(--brand-accent)' : 'transparent',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
               }}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5" style={{ color: isActive ? (isDark ? '#dfbf85' : '#6c501e') : 'var(--text-secondary)' }} />
             </button>
           );
         })}
@@ -165,17 +144,18 @@ export const ThemeSelector = ({ compact = false, minimal = false, className = ''
             onClick={() => setTheme(mode)}
             role="radio"
             aria-checked={isActive}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all duration-150 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] transition-all duration-150 ${
               isActive
                 ? 'shadow-xs font-semibold'
                 : 'font-medium hover:opacity-80'
             }`}
             style={{
-              backgroundColor: isActive ? 'var(--bg-surface)' : 'transparent',
-              color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
+              backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
+              borderColor: isActive ? 'var(--brand-accent)' : 'transparent',
+              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
-            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: isActive ? (isDark ? "#dfbf85" : "#6c501e") : "var(--text-secondary)" }} />
             <span>{label}</span>
           </button>
         );

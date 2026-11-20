@@ -1,0 +1,47 @@
+name: Buyer OTP MySQL Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/services/emailService.js'
+      - 'backend/src/controllers/authController.js'
+      - 'backend/tests/buyer_otp_mysql_acceptance.test.js'
+      - 'backend/tests/email_otp_template_branding.test.js'
+      - '.github/workflows/buyer-otp-mysql-acceptance.yml'
+  workflow_dispatch:
+
+jobs:
+  buyer-otp-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_otp_only_password
+          MYSQL_DATABASE: miljor_otp_acceptance_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci_otp_only_password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      TEST_DB_NAME: miljor_otp_acceptance_test
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: ci_otp_only_password
+      JWT_SECRET: ci-only-otp-acceptance-secret
+      TRANSACTIONAL_EMAIL_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Test email templates
+        run: node --test backend/tests/email_otp_template_branding.test.js
+      - name: Buyer OTP lifecycle against disposable MySQL
+        run: node --test backend/tests/buyer_otp_mysql_acceptance.test.js
