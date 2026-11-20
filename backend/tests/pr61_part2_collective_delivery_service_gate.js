@@ -186,4 +186,9 @@ async function main(){
  });
  console.log('PR61 PART 2 COLLECTIVE DELIVERY SERVICE: '+tests.length+'/'+tests.length+' PASS (real service, deterministic transactional SQL adapter; no money movement)');
 }
-main().catch(error=>{console.error('FAIL PR61 PART2 COLLECTIVE DELIVERY',error.stack||error);process.exit(1);});
+const databasePool=require('../src/config/db');
+main().then(async()=>{await databasePool.end();process.exit(0);}).catch(async error=>{
+ console.error('FAIL PR61 PART2 COLLECTIVE DELIVERY',error.stack||error);
+ try{await databasePool.end();}catch{}
+ process.exit(1);
+});
