@@ -33,6 +33,7 @@ const db = require('../config/db');
 const exactDecimal = require('./exactDecimal');
 const reservationEventService = require('./reservationEventService');
 const supplierEligibilityPolicy = require('./supplierEligibilityPolicy');
+const notificationService = require('./notificationService');
 
 const DISPUTE_CATEGORIES = [
   'SHORT_QUANTITY',
@@ -500,6 +501,9 @@ class DisputeService {
         ]
       );
 
+      await notificationService.enqueueEvent(connection,{userId:Number(order.supplier_id),role:'SUPPLIER',eventType:'DISPUTE_OPENED',
+        eventKey:'order-dispute:'+disputeId+':buyer-filed:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
+
       // Audit log
       await connection.query(
         `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
@@ -731,6 +735,8 @@ class DisputeService {
         ]
       );
 
+      await notificationService.enqueueEvent(connection,{userId:Number(order.buyer_id),role:'BUYER',eventType:'DISPUTE_OPENED',
+        eventKey:'order-dispute:'+disputeId+':supplier-shortage:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(order.id)});
       await connection.commit();
 
       return {
@@ -948,6 +954,8 @@ class DisputeService {
         ]
       );
 
+      await notificationService.enqueueEvent(connection,{userId:Number(dispute.buyer_id),role:'BUYER',eventType:'DISPUTE_RESPONSE_RECEIVED',
+        eventKey:'order-dispute:'+dispute.id+':supplier-response:'+crypto.createHash('sha256').update(trimmedKey).digest('hex').slice(0,24),entityId:Number(dispute.order_id)});
       await connection.commit();
 
       return {
