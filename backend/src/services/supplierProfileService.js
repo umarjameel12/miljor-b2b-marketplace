@@ -185,13 +185,20 @@ class SupplierProfileService {
         }
       }
 
-      // Update details
+      // Update details and retain the authoritative post-update snapshot inside this transaction.
       const updated = await supplierProfileRepo.updateProfileDetails(supplierId, validation.sanitized, connection);
 
-      // Trigger re-review if verified supplier changed material business identity or payout details
+      // A verified supplier's material identity/payout change starts a NEW immutable
+      // review revision. Without this revision, the admin's expected_revision guard
+      // would correctly reject every decision because the old approved revision is stale.
       let reReviewTriggered = false;
       if (currentProfile.verification_status === 'VERIFIED' && changedMaterialFields.length > 0) {
-        await supplierProfileRepo.triggerReReview(supplierId, changedMaterialFields, connection);
+        const revision = Number(currentProfile.submitted_revision || 0) + 1;
+        const snapshot = this._reviewSnapshot(updated);
+        snapshot.documents = await supplierEvidence.latest(supplierId, connection);
+        await supplierProfileRepo.triggerReReview(
+          supplierId, changedMaterialFields, connection, revision, snapshot
+        );
         reReviewTriggered = true;
       }
 
