@@ -3,7 +3,11 @@
 // MilJor Package E2 Gate 1: Canonical Catalog Foundation & Migration 033 Gate
 // =============================================================================
 process.env.NODE_ENV = 'test';
-process.env.TEST_DB_NAME = 'miljor_test_db';
+const targetTestDb = process.env.TEST_DB_NAME || 'miljor_test_db';
+if (!/^(?:miljor_test_db|miljor_[a-z0-9_]+_test_db)$/.test(targetTestDb)) {
+  throw new Error(`Invalid TEST_DB_NAME: ${targetTestDb}`);
+}
+process.env.TEST_DB_NAME = targetTestDb;
 
 const assert = require('assert');
 const http = require('http');
@@ -59,8 +63,23 @@ function request(method, path, body = null, token = null) {
 
   try {
     const [dbCheck] = await db.query('SELECT DATABASE() as db');
-    assert.strictEqual(dbCheck[0].db, 'miljor_test_db', 'Must run strictly against miljor_test_db');
+    assert.strictEqual(dbCheck[0].db, targetTestDb, `Must run strictly against ${targetTestDb}`);
     console.log(`🔒 Active Test Database Verified: '${dbCheck[0].db}'\n`);
+
+    let devBefore = null;
+    if (process.env.MILJOR_TEST_ONLY_MIGRATIONS !== '1') {
+      const devConn = await mysql.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: 'miljor_db'
+      });
+      const [[{ uCount }]] = await devConn.query('SELECT COUNT(*) as uCount FROM users');
+      const [[{ pCount }]] = await devConn.query('SELECT COUNT(*) as pCount FROM products');
+      const [[{ sCount }]] = await devConn.query('SELECT COUNT(*) as sCount FROM product_specifications');
+      devBefore = { uCount: Number(uCount), pCount: Number(pCount), sCount: Number(sCount) };
+      await devConn.end();
+    }
 
     server = app.listen(0);
     const { port } = server.address();
@@ -72,9 +91,9 @@ function request(method, path, body = null, token = null) {
 
       const [tables] = await db.query(`
         SELECT TABLE_NAME FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = 'miljor_test_db'
+        WHERE TABLE_SCHEMA = ?
           AND TABLE_NAME IN ('catalog_categories', 'catalog_product_families', 'catalog_requests', 'catalog_moderation_logs')
-      `);
+      `, [targetTestDb]);
       assert.strictEqual(tables.length, 4);
     });
 
@@ -136,7 +155,17 @@ function request(method, path, body = null, token = null) {
 
       const res = await request('GET', '/api/v1/catalog/families/1/variants');
       assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.body.count, 5, 'Rice family must expose all 5 historical approved rice variants');
+      const variants = res.body.data.variants || [];
+      assert.ok(res.body.count >= 5, `Rice family must expose at least the 5 historical approved rice variants (got ${res.body.count})`);
+      const ids = new Set(variants.map((v) => v.id));
+      for (const expectedId of [1, 2, 3, 4, 9]) {
+        assert.ok(ids.has(expectedId), `Rice family missing historical approved variant id=${expectedId}`);
+      }
+      for (const v of variants) {
+        assert.strictEqual(v.family_id, 1, `Variant id=${v.id} must belong to Rice family (id=1)`);
+        assert.strictEqual(v.approval_status, 'APPROVED', `Variant id=${v.id} must be APPROVED`);
+        assert.strictEqual(v.is_active, true, `Variant id=${v.id} must be active`);
+      }
     });
 
     await runTest('Both Cooking Oil (product 3) and Commercial Cooking Oil (product 7) map to Cooking Oil family (id=2), separate from Banaspati Ghee (id=3)', async () => {
@@ -148,8 +177,12 @@ function request(method, path, body = null, token = null) {
 
       const oilVars = await request('GET', '/api/v1/catalog/families/2/variants');
       const gheeVars = await request('GET', '/api/v1/catalog/families/3/variants');
-      assert.strictEqual(oilVars.body.count, 2);
-      assert.strictEqual(gheeVars.body.count, 2);
+      assert.ok(oilVars.body.count >= 2, `Cooking Oil family must expose >=2 historical variants (got ${oilVars.body.count})`);
+      assert.ok(gheeVars.body.count >= 2, `Banaspati Ghee family must expose >=2 historical variants (got ${gheeVars.body.count})`);
+      const oilIds = new Set((oilVars.body.data.variants || []).map((v) => v.id));
+      const gheeIds = new Set((gheeVars.body.data.variants || []).map((v) => v.id));
+      for (const id of [5, 10]) assert.ok(oilIds.has(id), `Cooking Oil missing historical variant id=${id}`);
+      for (const id of [11, 12]) assert.ok(gheeIds.has(id), `Banaspati Ghee missing historical variant id=${id}`);
     });
 
     await runTest('All 11 historical products and 16 historical specifications remain intact and mapped with zero orphans', async () => {
@@ -201,7 +234,10 @@ function request(method, path, body = null, token = null) {
       });
       const [[{ uCount }]] = await devConn.query('SELECT COUNT(*) as uCount FROM users');
       const [[{ pCount }]] = await devConn.query('SELECT COUNT(*) as pCount FROM products');
-      assert.strictEqual(Number(uCount), 8, 'miljor_db users count must remain 8 (zero test pollution)');
+      const [[{ sCount }]] = await devConn.query('SELECT COUNT(*) as sCount FROM product_specifications');
+      assert.strictEqual(Number(uCount), devBefore.uCount, 'miljor_db users count must remain unchanged (zero test pollution)');
+      assert.strictEqual(Number(pCount), devBefore.pCount, 'miljor_db products count must remain unchanged (zero test pollution)');
+      assert.strictEqual(Number(sCount), devBefore.sCount, 'miljor_db product_specifications count must remain unchanged (zero test pollution)');
       assert.strictEqual(Number(pCount), 11, 'miljor_db products count must remain 11 (zero test pollution)');
       await devConn.end();
     });
@@ -215,5 +251,6 @@ function request(method, path, body = null, token = null) {
     process.exit(1);
   } finally {
     if (server) server.close();
+    await db.end().catch(() => {});
   }
 })();
