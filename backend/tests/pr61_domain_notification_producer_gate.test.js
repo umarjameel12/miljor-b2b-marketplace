@@ -51,6 +51,15 @@ test('dispute creation, supplier shortage and supplier response notify the corre
   assert.ok(body.indexOf('notificationService.enqueueEvent')<body.indexOf('await connection.commit()'));
  }
 });
+test('Flash offer publish, cancel and expiry are projected into the UCP event stream',()=>{
+ const cancel=method(flash,'async cancelOffer(','async getSupplierOffer(');
+ const publish=method(flash,'async publish(','async getActive(');
+ const expiry=method(flash,'async _closeExpiredOffer(','\n}\nmodule.exports');
+ for(const [body,type] of [[cancel,'UCP.POOL_CANCELLED'],[publish,'UCP.POOL_PUBLISHED'],[expiry,'UCP.POOL_EXPIRED']]){
+  assert.ok(body.includes("type:'"+type+"'"));
+  assert.ok(body.indexOf('recordFlashOnConnection')<body.indexOf('await conn.commit()'));
+ }
+});
 test('Flash hold, verified payment and expiry have recipient-owned transactional events',()=>{
  const hold=method(flash,'async requestHold(','async claimCheckout(');
  const paid=method(flash,'async reconcilePaidOrder(','async listHoldsForBuyer(');
