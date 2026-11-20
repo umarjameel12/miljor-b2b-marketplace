@@ -1,0 +1,157 @@
+{
+  "date": "2026-11-15",
+  "database": "miljor_test_db",
+  "isolatedPort": 33317,
+  "externalMoneyMovement": false,
+  "providerEvidence": "SYNTHETIC_ONLY",
+  "initialFailure": {
+    "gate": "flash-delivery-stock-50",
+    "durationMs": 180044,
+    "error": "ETIMEDOUT",
+    "rootCause": "Fee lookup acquired another pool connection while holding the Flash parent-row lock; saturated pool starved the lock owner.",
+    "resolution": "Pass the active transaction connection through feeService for Regular and Flash order creation."
+  },
+  "results": [
+    {
+      "name": "migration-audit",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 679,
+      "log": "logs/ucp-affected-gate/migration-audit.log",
+      "error": null,
+      "logSha256": "b46335854a092db0d09ab37d0342e945b10bdc9683727fd3f1406f0c7131a1cd",
+      "excerpt": [
+        "MIGRATION_READ_ONLY_AUDIT_PASS {\"status\":\"VERIFIED_HISTORY\",\"database\":\"miljor_test_db\",\"applied\":56,\"planned\":56,\"note\":\"Read-only manifest and journal integrity checked. No schema changes performed.\"}",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "source",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 6882,
+      "log": "logs/ucp-affected-gate/source.log",
+      "error": null,
+      "logSha256": "c810afb8d1561767324625c399c92ace080eb6ac57db322ca857e74cee3e14cf",
+      "excerpt": [
+        "ℹ suites 0",
+        "ℹ pass 3",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 410.3977",
+        "npm notice run backend@1.0.0 test:ucp:audit",
+        "npm notice run node tests/ucp_independent_audit_source_gate.js",
+        "npm notice run backend@1.0.0 test:ucp:notifications",
+        "npm notice run node tests/ucp_notification_catalog_gate.js && node tests/ucp_transactional_notifications_gate.js && node tests/ucp_domain_notifications_gate.js && node tests/ucp_email_claim_gate.js && node tests/ucp_flash_recovery_gate.js && node tests/ucp_payment_expiry_race_gate.js && node tests/ucp_fee_connection_gate.js && node --test tests/ucp_recovery_review_gate.js",
+        "[UCP recovery] Flash transition requires review { flashId: 2, code: 'RECOVERY_TRANSITION_FAILED' }"
+      ]
+    },
+    {
+      "name": "notification-mysql",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 771,
+      "log": "logs/ucp-affected-gate/notification-mysql.log",
+      "error": null,
+      "logSha256": "f4d212ab5d957f00928bb34c63dd05a8ef5d05e78d0dbe28753d9064e86f9196",
+      "excerpt": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS: real MySQL UCP ownership, replay dedupe, in-app/email atomic rollback, zero money movement",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "flash-delivery-stock-50",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 4846,
+      "log": "logs/ucp-affected-gate/flash-delivery-stock-50.log",
+      "error": null,
+      "logSha256": "395ad3c66677b090ed37ff0120cc94b5821a083a68f01d49b5e5d45e63af7883",
+      "excerpt": [
+        "  ✓ PASS 44: E04 Countdown parseDeadline handles MySQL strings as UTC, ISO, offsets, and invalid inputs",
+        "  ✓ PASS 45: F01 Flash supplier pickup is selected, priced and snapshot-locked in real MySQL",
+        "  ✓ PASS 46: F02 Flash Express buyer area/rate is snapshot-locked; injected fee ignored",
+        "  ✓ PASS 47: F03 Flash idempotency replays cannot switch pickup to Express",
+        "",
+        "=================================================================",
+        "🎉 ALL PART 5 FLASH POOL GATE TESTS PASSED (47/47)",
+        "=================================================================",
+        "",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "payment-fulfillment-settlement",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 2384,
+      "log": "logs/ucp-affected-gate/payment-fulfillment-settlement.log",
+      "error": null,
+      "logSha256": "3df9cc3ecc9f52336b78a68a36cb55fbb9d7d21a20152b611fca9bf6c0476fc2",
+      "excerpt": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS G1 unpaid order blocks fulfillment and supplier accrual",
+        "PASS G2 invalid Safepay signature denied",
+        "PASS G3 synthetic signed HTTP callback creates ONE PAID order/payment, replay safe",
+        "PASS G4 exact commission, delivery, supplier payable conservation",
+        "PASS G5 no settlement or buyer receipt before supplier delivery",
+        "PASS G6 four verified supplier milestones, delivery NOT buyer confirmation",
+        "PASS G7 independent buyer-only receipt and idempotency",
+        "PASS G8 settlement prepared only after receipt: one payable, one instruction, external execution DISABLED",
+        "PASS REAL HTTP+MYSQL E2E with synthetic signed Safepay event; real provider and bank settlement NOT VERIFIED",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "payment-refund-concurrency",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 2668,
+      "log": "logs/ucp-affected-gate/payment-refund-concurrency.log",
+      "error": null,
+      "logSha256": "26f615e10c866f5f9e0318654b2eb9177c089854e7a12ff88130ddff0dbee0e9",
+      "excerpt": [
+        "✅ MySQL Database connected successfully to miljor_test_db!",
+        "PASS S01 invalid signature and mismatched amount cannot mark PAID",
+        "PASS S02 30 concurrent valid sandbox-signed webhook events give 1 payment / 1 event / 1 invoice",
+        "PASS S03 50 webhook retries do not create duplicate money",
+        "PASS S04 cannot prepare supplier payout before buyer receipt",
+        "PASS S05A 20 concurrent identical refund requests create exactly one refund obligation",
+        "PASS S05 synthetic full refund assessed and approved once; provider money return NOT fabricated",
+        "PASS S06 full refund is capped; duplicate and privilege-escalation attempts rejected",
+        "PASS ALL SAFEPAY SYNTHETIC PAYMENT + REFUND + CONCURRENCY ACCEPTANCE TESTS",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    },
+    {
+      "name": "regular-flash-shared-stock",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 14610,
+      "log": "logs/ucp-affected-gate/regular-flash-shared-stock.log",
+      "error": null,
+      "logSha256": "f4754bee3712f28d2612e889cdc1b017cfa75618eed0e3f39098aa35198a412f",
+      "excerpt": [
+        "DRAFTS READY 10 10",
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":10,\"quantity_per_pool\":25,\"success\":8,\"rejected\":2,\"allocated\":200,\"stock\":200}",
+        "START SAME-SKU PUBLICATION WAVE 50 clients",
+        "DRAFTS READY 50 50",
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":50,\"quantity_per_pool\":5,\"success\":40,\"rejected\":10,\"allocated\":200,\"stock\":200}",
+        "START SAME-SKU PUBLICATION WAVE 100 clients",
+        "DRAFTS READY 100 100",
+        "PASS SAME-SKU API RACE {\"concurrent_publications\":100,\"quantity_per_pool\":3,\"success\":66,\"rejected\":34,\"allocated\":198,\"stock\":200}",
+        "PASS: 2/10/50/100 real simultaneous mixed-mode publication HTTP+InnoDB stress",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env",
+        "◇ injected env (0) from .env"
+      ]
+    }
+  ]
+}

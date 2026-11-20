@@ -1,0 +1,218 @@
+{
+  "observedDate": "2026-11-17",
+  "sourceCommit": "1e3bc6c54b38112730da8e1e5e014d4b22683477",
+  "runId": 43973636310,
+  "url": "https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43973636310",
+  "event": "push",
+  "status": "completed",
+  "conclusion": "success",
+  "mandatoryContractStep": {
+    "name": "Verify prospective metadata and owned Flash SQL-clock reminders without skips",
+    "conclusion": "success"
+  },
+  "jobs": [
+    {
+      "id": 133671924008,
+      "name": "Disposable MySQL 8.0 migration installation",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install backend dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate canonical SQL and finance compatibility without DB mutation",
+          "conclusion": "success"
+        },
+        {
+          "name": "Reconstruct historical pre-004 reference data in empty disposable DB ONLY",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify existing disposable migration history read-only BEFORE applying",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install through 053 with guarded test-only stop boundary",
+          "conclusion": "success"
+        },
+        {
+          "name": "Capture actual pre054 historical order fingerprint",
+          "conclusion": "success"
+        },
+        {
+          "name": "Apply canonical migration 054 to existing historical order",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify historical order fingerprint and NULL contractual rate survived migration",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify UCP notifications and email outbox in actual MySQL transactions",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify prospective metadata and owned Flash SQL-clock reminders without skips",
+          "conclusion": "success"
+        },
+        {
+          "name": "Confirm B6 046-048 and UCP 051-053 are recorded as applied",
+          "conclusion": "success"
+        },
+        {
+          "name": "Confirm second migration run is idempotent (same isolated DB)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify installed journal integrity read-only",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify finance 054 installed schema and exact checksum (read only)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Synthetic signed Safepay HTTP/escrow/replay acceptance (no provider calls)",
+          "conclusion": "success"
+        },
+        {
+          "name": "B6 procurement independent release suite (clean historical fixture)",
+          "conclusion": "success"
+        },
+        {
+          "name": "B5 Flash + shared inventory concurrency acceptance",
+          "conclusion": "success"
+        },
+        {
+          "name": "B4 Regular pool publication and tier acceptance",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real Express order ownership and payment boundary against disposable MySQL",
+          "conclusion": "success"
+        },
+        {
+          "name": "B4 and B5 same-SKU simultaneous publication 2/10/50/100 clients",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real MySQL paid supplier to 100-80-20 buyer dispute, refund hold and invoice",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real MySQL B6 request award to synthetic PAID supplier fulfillment and invoice",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real JWT admin supplier verification, denial and audit on disposable MySQL",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 133671924480,
+      "name": "Source gates and production frontend build",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install backend dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install frontend dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Canonical migration manifest and integrity assertions (no DB)",
+          "conclusion": "success"
+        },
+        {
+          "name": "New commission migration and Regular order/settlement source contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Unified pool UX, B7 boundary and finance F4 read-only integration gates",
+          "conclusion": "success"
+        },
+        {
+          "name": "All order origins and ownership source contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build actual frontend Vite bundle",
+          "conclusion": "success"
+        },
+        {
+          "name": "Existing UCP and B4/B5/B6 source checks",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 133671925024,
+      "name": "Real Chromium buyer/supplier auth, retry and offline journey",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install backend and frontend",
+          "conclusion": "success"
+        },
+        {
+          "name": "Migrate disposable MySQL only",
+          "conclusion": "success"
+        },
+        {
+          "name": "Seed isolated buyer and supplier",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Chromium automation only inside CI",
+          "conclusion": "success"
+        },
+        {
+          "name": "Launch real Express and Vite",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real Chromium separate buyer/supplier acceptance",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "scope": "Prospective v2 metadata, Flash reminder generation and named regression/browser gates. Not full master-plan/provider acceptance.",
+  "fullRelease": "PARTIAL_BLOCKED"
+}

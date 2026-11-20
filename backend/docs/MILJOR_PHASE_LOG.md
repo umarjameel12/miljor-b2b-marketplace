@@ -1707,6 +1707,17 @@ This document tracks phase-by-phase execution, gates, and verification status fo
   - Database Safety: `miljor_db` confirmed 100% PRISTINE (`orders: 0`, `payments: 0`).
 - **Verdict: PASS (SAFEPAY SANDBOX PAYMENT & RETURN WORKFLOW 100% VERIFIED). CAN START NEXT PHASE: NO.**
 
+## 2026-11-15 — PR #54 UCP resilience / transactional notification implementation
+
+- **Implementation SHA:** `188c989f09f974bc24cfa2a491508c063d3c5677`; approved branch `plan/ucp-resilience-notification-coverage`. No merge to main.
+- **IMPLEMENTED:** Transactional domain inbox/critical-email receipts; persisted owner routing; webhook/reconciliation receipt dedupe; Flash leased/fair recovery and suspended-owner expiry; stale initiated payments retain stock; email claim/crash recovery; Regular/Flash fee queries reuse the active transaction connection.
+- **TESTED:** Stabilized `node tests/ucp_final_affected_gate.js`: seven gates PASS, exit 0 each, on an independent MySQL 8.0.45 instance with `miljor_test_db` at localhost:33317. Flash API gate 47/47; 50 distinct stock buyers yielded two successes and 48 safe conflicts. Mixed Regular/Flash publication races included 50 and 100 clients. Synthetic signed payment/refund concurrency and buyer-receipt-before-settlement checks passed. Three reviewer regressions passed; 100/80/20 pure quantity policy 14/14.
+- **FAILURE PRESERVED / FIXED:** Initial 50-buyer gate timed out at 180,044 ms due to a fee lookup requesting another connection while holding the parent stock lock. Narrow regression and affected Flash rerun passed after fixing connection reuse; the final complete affected gate then passed.
+- **DATABASE:** New migrations092/093 installed only on the isolated test instance; 56-entry journal passed. Shared test migration090 remains absent from this branch and unresolved; original shared schema was not migrated. Six protected `miljor_db` table checksums matched before/after. Backup completeness checked, restoration NOT_TESTED. Isolated server stopped. Zero external money movement.
+- **EVIDENCE:** [Implementation report](MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md), [gate results](evidence/ucp-resilience-2026-11-15.json), [protected checksums](evidence/ucp-protected-database-2026-11-15.json). Historical accepted evidence above remains unchanged; this increment's provider events were synthetic and do not re-certify actual provider settlement.
+- **RESULT:** PARTIAL implementation; full master-plan release BLOCKED. Remaining catalog/admin notification coverage, preference/localization/digest controls, Regular timer recovery, provider/real-email acceptance, clustered/partial delivery recovery and frontend/browser release gates are incomplete. **CAN START NEXT PHASE: NO.**
+- **CI FOLLOW-UP:** At `80d0ca1`, production frontend build and the named real Chromium auth/retry/offline journey passed, as did P0, Buyer B6 Auth, Admin Approval and OTP workflows. Two failures were isolated: old VM test allowlist omitted the new transaction notification boundary; an extra early Flash gate polluted the strict clean historical rice fixture before B6. The adapter now checks notification connection/order/rollback (targeted pure suites 5/5, 11/11, 9/9, 4/4, 3/3 PASS), and the duplicate early Flash invocation was removed while retaining the existing later 50-buyer gate. CI re-run required; full master-plan remains BLOCKED.
+- **FINAL CI OBSERVED:** Corrected source/test commit `62fd793a1d46cd2baf789ea35165b9976aec55a7`: all six GitHub workflows completed SUCCESS. Canonical jobs for production build, disposable MySQL and real Chromium all succeeded, including the previously blocked B6 historical fixture and real SQL/API 100/80/20 dispute/refund-hold/invoice checks. Exact run/job IDs are saved in [CI evidence](evidence/ucp-ci-2026-11-15.json). Final evidence-only documentation is committed with a CI-skip marker; source/tests/workflows are unchanged from the qualified commit, avoiding redundant full builds merely to record results. Full master-plan implementation remains PARTIAL / release BLOCKED for the outstanding items in the report. **CAN START NEXT PHASE: NO.**
 # 2026-11-15 Smart Procurement Hub continuation
 
 2026-11-16 R3–R5 continued execution: implementation9602bd1bb5773920abfb39a6a438ad8d1753445c, 40 files committed/pushed; all10 exact implementation-head PR workflows SUCCESS. Actual Chromium supplier delivery workspace/report, original cycle/group/gated-checkout/auth journeys PASS; full paid route/POD browser journey not claimed. Owned vehicle/routes/windows/ETA, actual private proof, consented failed reattempt, immutable per-product receipt, accepted-merchandise commission, linked existing dispute/refund/fee holds and owned reliability UI implemented. Focused132/132, real rollback-only MySQL17/17 scenarios locally and fresh CI, manifest12/12, UCP source and frontend build PASS. Backup then only096/097 applied; audit62/62. Protected orders/payments0/0 in both databases; owned fixture users0. Partial financial release, additional-fee contract, distinct individual pre-checkout pricing and genuine provider/full paid browser/channel matrix remain BLOCKED/NOT_IMPLEMENTED/NOT_TESTED as itemized in SMART_HUB_DELIVERY_RECEIPTS_REPORTING_EXECUTION_2026_11_16.md. Full release PARTIAL; PR53 confirmed draft; no main merge. CAN START NEXT PHASE: NO.
@@ -1730,6 +1741,130 @@ Execution update: SMART_HUB_NOTIFICATION_EXECUTION_2026_11_15.md supersedes earl
 Mandatory notification plan amendment: notifications are required in all eight phases. SMART_HUB_NOTIFICATION_ACCEPTANCE.md records existing infrastructure, complete event/recipient/channel matrix, transactional reliability/privacy/localization requirements and action-driven tests. Planning coverage PASS; runtime notification/channel/integration gates BLOCKED pending implementation and isolated test access. No application code, provider delivery or database change in this amendment.
 
 PARTIAL: biweekly schedule/request/UI and forward migration 091 implemented; calendar validation hardened. Full phased plan: SMART_HUB_IMPLEMENTATION_PLAN.md. Execution evidence and blockers: SMART_HUB_EXECUTION_2026_11_15.md. No protected database mutation or main merge. PR #53 remains draft pending critical integration gates.
+
+## 2026-11-16 — PR54 approved Smart Hub integration / UCP reliability continuation
+
+- Approved source integration:08a9d87809a1c3683074500d20f6a14fb5c41781 into UCP starting7df58aaccec63645c7fbdaf8bcc23db26d0402d7; WIP stash33322b2cffe91286d12e13189e3f4041c51f54c9 retained. Main not merged.
+- Implemented shared event projection and preferences/quiet/digest/budgets/retention/critical overrides, admin delivery recovery, actual action hooks, inbox/settings UI, Regular deadline/reminder/admin recovery and durable serialized checkout initialization.
+- Local final affected gate13/13 PASS; real SQL checkout9 scenarios, Regular9 scenarios, Flash47/47 including50 distinct buyers, shared inventory and synthetic financial race/conservation checks. Ordinary locked frontend installation/build PASS. Four review findings fixed and verified. Actual log evidence: evidence/ucp-completion-2026-11-16.json.
+- Final migration names096/097/098 avoid concurrently committed Smart Hub095. Fresh33321 installs62/replay0; backup upgrade33320 installs3/replay0; final histories PASS and105 table DDLs equivalent to runtime-tested33319. Six restored commercial checksums preserved. No journal rewritten. Initial backup restore101/101 PASS; later comparison98/101 reflects changed mutable source and remains separately reported.
+- Actual Safepay sandbox initiation/readback PASS, provider state STARTED; payment/refund NOT_TESTED. SMTP auth PASS, real email receipt NOT_TESTED. Full browser/provider acceptance unproven.
+- Protected check FAIL: users checksum drift, one unrecognized SUPER_ADMIN supplier-verification update at06:06:47 Pakistan time; other5 protected tables unchanged. Read-only investigation proves account/action/status/time but not person/process. No protected changes/reverts or baseline reset performed by this task. Sanitized evidence: evidence/ucp-protected-drift-investigation-2026-11-16.json.
+- Overall PARTIAL / release BLOCKED: protected drift unresolved; full notification matrix, complete clustered/rerouting/cost/re-contracting rules, real provider/mail/browser acceptance and new-head CI remain open. Existing historical PASS evidence preserved. Detailed report: MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md.
+- Applied skills and actual command/results/file inventory recorded in that report and evidence JSON. Code SHA is recorded in the final commit/CI addendum after source commit creation.
+
+CAN START NEXT PHASE: NO
+
+### PR54 CI correction — 2026-11-16
+
+Source commit00987fc pushed; direct branch-CI triggerf0bb9a3 preserves main merge boundaries. Initial remote run43788333296 passed source/build and Chromium but failed MySQL due to missing notification fixture teardown and ownership/configuration error ordering. Narrow fixes verified on isolated33321: E2 33/33, E3 18/18, checkout33/33, real Express tenant/financial-negative gate PASS. Failed CI evidence retained; corrected remote CI pending. Overall PARTIAL / RELEASE BLOCKED remains.
+
+### Final CI evidence — PR54 continuation
+
+Qualified source/test SHA:b264cc62cc4df42c46b39fc43891e1b9ae982f50. Canonical Actions run43957629752 completed SUCCESS,3/3 jobs PASS (source/build, disposable MySQL, real Chromium buyer/supplier auth/retry/offline). Earlier failed run43788333296 retained; targeted fixes now independently pass remote CI. Evidence: evidence/ucp-ci-final-2026-11-16.json. Final evidence-only commit changes no tested application/test/workflow files. PR remains draft/unmerged with main conflicts; unrecognized protected-user update and remaining master-plan/provider/mail/delivery gates keep overall PARTIAL / RELEASE BLOCKED. CAN START NEXT PHASE: NO.
+
+### Phase A/B Continuation & Requirements-to-Code Matrix — 2026-11-16
+
+- **Implemented:** Prospective `schemaVersion: 2` notification metadata (`eventId`, `aggregateId`, `aggregateVersion`, `actorId`, `actorRole`, `occurredAt`, `causationId`, `correlationId`) in `notificationService.js` and `ucpTransactionalNotifications.js` (preserving `schemaVersion: 1` compatibility); Flash SQL-clock threshold reminders (`UCP.POOL_CLOSING`, `UCP.HOLD_EXPIRING`) with audit-log deduplication in `ucpRecoveryService.js`; requirements-to-code matrix added to `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md`.
+- **Verified on isolated MySQL 8.0.45 (`127.0.0.1:33321`):** `ucp_phase_ab_contract_gate.js` PASS (Flash SQL-clock step skipped due to empty `flash_pools` in fresh schema); `ucp_final_affected_gate.js` **13/13 groups PASS**.
+- **Protected DB (`miljor_db`, read-only):** `users: 567617374`, `pools: 2265355547`, `reservations/orders/payments/platform_ledger: 0`; attribution remains **UNRESOLVED**.
+- **Overall:** **PARTIAL / RELEASE BLOCKED** (Phase C delivery manifests/rerouting, Phase D replacement re-contracting business rule, Phase E live Safepay payment/refund proof, Phase F actual SMTP receipt & mobile/Urdu RTL browser E2E, Phase G main merge reconciliation). **CAN START NEXT PHASE: NO.**
+
+## 2026-11-16 — Phase A/B no-skip hardening from c570a7b
+
+- Audited actual code; reproduced exact15-minute exclusion and stale statement-clock after real lock wait against c570a7b. Replaced arbitrary/optional Flash fixture with owned mandatory acceptance.
+- Hardened prospective v2 IDs, actor/role, causation/correlation and SQL timestamp validation while preserving v1 and first-write replay evidence. Flash uses fresh post-lock clocks, eligible unpaid hold ownership, unresolved-payment protection, persisted pool version and bounded fair100-hold batches.
+- Final isolated33321 affected gate14/14 PASS; metadata56/56 and mandatory SQL10/10 with0 skips. Real concurrency/lock-wait/lease/rollback/replay/negative checks and owned cleanup pass. New fixture enum failure corrected narrowly; original expected-red evidence retained.
+- Read-only contemporaneous protected comparison6/6 unchanged; historical drift attribution remains unresolved. No original DB mutations/migrations, provider calls, email dispatch or real funds movement.
+- Report: MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md; machine evidence:evidence/ucp-phase-ab-hardening-2026-11-16.json. Exact corrected source/remote CI is added after qualification. Full master-plan release remains PARTIAL/BLOCKED; no PhaseC/main merge. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — Phase A/B correction exact-source acceptance
+
+Source/test/workflow SHA1e3bc6c54b38112730da8e1e5e014d4b22683477 qualified by canonical run43973636310 SUCCESS,3/3 jobs. Dedicated mandatory owned Flash SQL-clock step PASS on fresh CI schema. Local14/14 groups,56 metadata tests and10 owned SQL scenario groups had0 skips. Evidence: evidence/ucp-phase-ab-ci-2026-11-17.json and evidence/ucp-phase-ab-hardening-2026-11-16.json. Scoped PhaseA/B correction PASS; full master plan PARTIAL/RELEASE BLOCKED. Evidence-only follow-up changes no qualified application/tests/workflows. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — remaining delivery/replacement cost policy selected
+
+User delegated selection of the most feasible rule. Recorded the conservative fresh-quote/versioned-buyer-acceptance policy in MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md and referenced it from the master plan. Buyer-requested extra cost requires exact-quote acceptance; supplier/carrier remediation cannot impose compulsory extra buyer charges. No silent repricing, automatic penalty/subsidy/supplier debit, implied consent or external money movement. This resolves the policy-choice blocker only; PhaseC/D implementation and testing remain outstanding. Documentation-only change; no application/DB behavior altered and no test suite needed. CAN START NEXT PHASE: NO
+
+### 2026-11-17 — Phase C delivery reliability implementation and verification (PR #54)
+
+- **Branch:** `plan/ucp-resilience-notification-coverage` (baseline `5ba4116`, preserving `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md`).
+- **IMPLEMENTED:** Forward-only migration `099_ucp_phase_c_delivery_reliability.sql` (+ rollback) adding `delivery_runs`, `delivery_run_stops`, `delivery_attempts`, `delivery_amendments`; `deliveryRunService.js` + `deliveryRunRoutes.js` mounted at `/api/v1/delivery-runs`; frontend `deliveryRuns.js`, `BuyerDeliveryStopPanel.jsx`, `SupplierDeliveryManifestPanel.jsx`, `AdminDeliveryRecoveryPanel.jsx` wired into `OrdersPage.jsx`, `SupplierFulfillmentPanel.jsx`, `AdminDashboardPage.jsx`. Enforces mode/cluster/handling/capacity compatibility, post-lock SQL-clock cutoffs, unique active stop per order, encrypted/hashed pickup claim codes without event/email secret leakage, 100/80/20 partial receipt + dispute + premature-settlement hold, bounded reattempts, 2026-11-17 cost/consent amendment policy, and same-TX `schemaVersion: 2` notifications.
+- **TESTED (isolated MySQL 8.0.45 `127.0.0.1:33322`, `miljor_test_db`):** Migration fresh install (63), idempotent replay (0), `099` rollback + re-apply + `readOnlyMigrationAudit --test-only` PASS; `ucp_phase_c_delivery_gate.js` PASS; `npm run test:ucp` PASS; `npm run test:ucp:phaseab` PASS; `demo_delivery_quantity_policy_gate.js` 14/14 PASS; `p0_payment_fulfillment_settlement_http_e2e.js` PASS; `part5_flash_pool_gate.js` 47/47 PASS; `npm --prefix frontend run build` PASS (2,237 modules, 3.70s). Local browser E2E `NOT_TESTED` (Playwright not installed locally).
+- **DATABASE:** Protected `miljor_db` before/after checksums identical (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
+- **RESULT:** **Phase C PASS (backend/API/SQL/build); overall master-plan PARTIAL / RELEASE BLOCKED** (Phases D–G remain open). **CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Completion Phase 1: Delivery Acceptance & Supplier Replacement Re-Contracting (PR #54)
+
+- **Branch:** `plan/ucp-resilience-notification-coverage` (baseline `bf4155bba7694ed451b9143bec4e125987782bb3`, preserving `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md`).
+- **IMPLEMENTED:** Independent Phase C review fixes (`pool_delivery_clusters` check + superseding stale `PENDING` amendments); forward migration `100_ucp_supplier_replacement_recontracting.sql` (+ rollback) adding `supplier_replacement_quotes` and `order_replacement_links`; `supplierReplacementService.js` + `/api/v1/delivery-runs/replacements*` routes enforcing verified supplier eligibility, exact/equivalent SKU disclosure, 2026-11-17 cost/consent policy, post-lock revalidation, stock reservation (`available_stock`), and `AWAITING_PAYMENT` linked replacement order creation; `BuyerDeliveryStopPanel.jsx` replacement quote UI; `vite.config.js` configurable `VITE_API_PROXY_TARGET`; CI workflow `.github/workflows/ucp-canonical-acceptance.yml` updated with Phase C, replacement, and real Chromium delivery browser gates.
+- **TESTED (isolated MySQL 8.0.45 `127.0.0.1:33322`, `miljor_test_db`):** `100` rollback/re-apply + `readOnlyMigrationAudit --test-only` (`64/64`) PASS; `ucp_phase_c_delivery_gate.js` PASS; `ucp_phase1_replacement_gate.js` PASS; `ucp_phase1_delivery_browser_gate.js` (real Chromium on `3199`/`5199`) PASS; `npm run test:ucp` PASS (81/81); `ucp_notification_metadata.test.js` 56/56 PASS; `npm --prefix frontend run build` PASS (2,237 modules, 3.60s).
+- **DATABASE:** Protected `miljor_db` before/after checksums identical (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`); `33322` shut down cleanly.
+- **RESULT:** **Completion Phase 1 PASS; overall master-plan PARTIAL / RELEASE BLOCKED** (Completion Phases 2 & 3 remain). **CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Completion Phase 1 Hardening (CI 44110125022 Failure & Replacement/Browser Fixes)
+
+- **Historical CI Failure Preserved:** `9a5af5b` failed CI run `44110125022` (browser port collision on `3000`/`5000` + Windows-only Chromium path).
+- **IMPLEMENTED:** Separated CI browser gate ports (`35100`/`35101`) & Linux/Windows Chromium discovery; migration `101_ucp_replacement_supplier_offer_and_qty_binding.sql` (+ rollback); mandatory `replacement_listing_id` + SKU/spec check; 100/80/20 partial-obligation quantity cap (`20` max, preventing duplicate 100-unit orders/allocations); authorized replacement supplier acceptance (`POST /replacements/:quoteId/supplier-accept`, `SUPPLIER_ACCEPTED` + `supplier_offer_hash`) revalidated on buyer consent & execution.
+- **TESTED (`miljor_test_db` on `127.0.0.1:33322`):** `101` rollback/re-apply + `readOnlyMigrationAudit` (`65/65`) PASS; `ucp_phase1_replacement_gate.js` PASS; `ucp_phase_c_delivery_gate.js` PASS; `phase1_browser_server_guard.test.js` 3/3 PASS; `ucp_phase1_delivery_browser_gate.js` (`35100`/`35101`) PASS; `npm run test:ucp` PASS (81/81); `npm --prefix frontend run build` PASS (2,237 modules, 2.75s).
+- **DATABASE:** Protected `miljor_db` unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
+- **CI CLOSEOUT:** Exact-source SHA `9fad8089b9ffaed5e5d297b6a92feadb9c90b583` passed CI run [44113045308](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44113045308) (**3/3 jobs PASS**). Completion Phase 1 is **PASS / CLOSED**.
+- **RESULT:** **Completion Phase 1 PASS; overall master-plan PARTIAL / RELEASE BLOCKED** (Completion Phases 2 & 3 remain). **CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Completion Phase 2: Provider, Finance, Email & Full UI Proof (PR #54)
+
+- **Branch:** `plan/ucp-resilience-notification-coverage`.
+- **IMPLEMENTED:** Added `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, and `ucp_phase2_full_ui_browser_gate.js`, and wired them into `.github/workflows/ucp-canonical-acceptance.yml`.
+- **TESTED (`miljor_test_db` on `127.0.0.1:33322`):**
+  - `ucp_phase2_finance_integrity_gate.js`: **PASS** (live Safepay sandbox initiation + `fetchTracker` `TRACKER_STARTED` readback, synthetic signed webhook/replay/`PAID` non-downgrade, exact-decimal math, premature `SUPPLIER_DELIVERED` disbursement block, partial refund obligation).
+  - `ucp_phase2_email_gate.js`: **PASS** (capture-transport, critical override, routine mute, EN/UR projections, zero-secret payload).
+  - `ucp_phase2_full_ui_browser_gate.js` (Real Chromium `35104`/`35105`): **PASS** (mobile `390x844`, keyboard focus, `/payment/return` pending/reload recovery, notification bell/Escape, Urdu locale preference).
+- **BLOCKED / NOT_TESTED:** Completed Safepay sandbox card payment (**BLOCKED**: PCI iframe requires human card entry); programmatic REST refund (**BLOCKED / UNSUPPORTED** on Safepay sandbox); external payouts (**DISABLED**); actual external SMTP inbox receipt (**NOT_TESTED / BLOCKED**: no authorized test mailbox).
+- **DATABASE:** Protected `miljor_db` unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`); `33322` shut down cleanly.
+- **RESULT:** **Completion Phase 2 PARTIAL (local finance/capture-email/browser PASS; external card payment, REST refund & real inbox BLOCKED); Completion Phase 3 not started. CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Completion Phase 3: Source/Migration Reconciliation & Final Readiness Audit (PR #54)
+
+- **Baseline:** `fb16b649111ce7ce0702f3daf50c3e5908e7cea3` (CI run [44123502063](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44123502063) **SUCCESS**, 3/3 jobs PASS).
+- **RECONCILIATION (read-only, zero branch merge executed):**
+  - `origin/main` (`9c0a81979b852198c04c00de42ba763a1aa09c2f`): 1 content conflict in `backend/src/services/emailService.js`; zero `090`–`101` migrations on `main`.
+  - `origin/feature/smart-procurement-hub-unified-entry` (`b92a6889029cd721a13ae581fe14dd031f27aad6`): 9 content conflicts (`MILJOR_PHASE_LOG.md`, `notificationService.js`, `safepayCheckoutService.js`, `schedulerService.js`, `supplierDeliveryService.js`, `email_outbox_queue_gate.js`, `AdminDashboardPage.jsx`, `OrdersPage.jsx`, `vite.config.js`) + branch-only migration prefix collision on `096`–`100` (plus Smart Hub `095`).
+- **AUDIT & RECOVERY:** Mapped all master-plan requirements to actual source/tests/SHAs in `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md` and logged `OBS-83` in `MILJOR_OBSERVATIONS_REGISTER.md`. Verified existing bounded/audited operational recovery surfaces (`notificationOperationsService`, `ucpRegularRecoveryService`, `deliveryRunService`, `ucpRecoveryService`, `financialSettlementService`).
+- **DATABASE:** Protected `miljor_db` read-only checksums unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`); historical `users` drift attribution remains unresolved.
+- **RESULT:** **Completion Phase 3 audit/reconciliation COMPLETE; overall master-plan PARTIAL / RELEASE BLOCKED** (external Safepay card payment/fee/refund, real SMTP inbox receipt, and authorized main/Smart Hub merge remain open). **CAN START NEXT PHASE: NO.**.
+
+### 2026-11-17 — Completion Phase 1 browser-runner bounded correction
+
+- Diagnosed HTTP401 alongside Vite3000->3002 fallback and browser still targeting3000. Corrected restricted-process visibility using elevated inspection; stopped only three stale gate trees and worktree Vite leftovers, preserving original servers/MySQL.
+- Added strict port preflight, configurable explicit test proxy, direct Vite process ownership, child-start/exit checks, persistent progress and awaited teardown/early pool cleanup. Changed browser gate plus new `tests/helpers/phase1BrowserServerGuard.js` and `tests/phase1_browser_server_guard.test.js`.
+- `node --test tests/phase1_browser_server_guard.test.js`: PASS3/3,0 skipped, exit0,2379.7066ms, including actual Vite collision. Syntax check exit0. Real browser run on verified isolated33322 with dedicated35100/35101 servers passed dispatch/ETA, own-stop/reload, full and100/80/20 partial receipt, then exited1 at incorrect replacement-message assertion.
+- Concurrent Antigravity edits/rerun detected; its assertion/locator corrections and later results are separate evidence. Existing implementation work remains uncommitted; no broad commit/push performed by this correction. Detailed command/configuration and limitations appended to the existing implementation report.
+- No protected DB queries/mutations or new checksum claim. RESULT: focused runner checks PASS; Completion Phase1 PARTIAL, final browser/phase/CI acceptance pending. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — Integration Approval Package, Migration Provenance & Mobile/Urdu Browser Gate (PR #54)
+
+- **Refreshed SHAs (read-only `git fetch` & `git merge-tree --write-tree`, zero branch merge executed):**
+  - `origin/main`: `9fb07cf9274509c1686b68b5bf8bdd91bd26718f` (merge-base `0f108fe`; **0 conflicts** with `HEAD`).
+  - `origin/feature/smart-procurement-hub-unified-entry`: `a0b6ea3fdd8f0ab76d581977cca5ec6c16f12183` (merge-base `08a9d87`; 9 behavioral conflicts + `096`–`100` migration prefix overlap; `090`–`094` identical; `095` Smart Hub-only).
+- **Protected `miljor_db` Provenance & Drift Check (read-only):**
+  - `schema_migrations` stops at `054_order_supplier_commission_snapshot.sql` (53 rows); zero `090`–`101` applied.
+  - Checksums unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`); read-only `users` timestamp inspection identified `BUYER` `id=52` (`2026-11-17T10:35:32Z`–`10:36:12Z`) as a separate non-blocking operational investigation.
+- **Browser Gate Enhanced & Verified (`miljor_test_db` on `127.0.0.1:33322`, owned `35112`/`35113`, 65 migrations `001`–`101`):**
+  - `node tests/ucp_phase2_full_ui_browser_gate.js`: **PASS** (Mobile `390x844` login/focus, `/payment/return` pending/reload recovery, Urdu `'ur'` locale UI save/reload persistence, `[dir="auto"]` Urdu rendering, and Mark read).
+- **Approval Package & Remaining-Work Matrix:** Recorded 8-point Concrete Integration Approval Package in `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md` and 11-row Remaining-Work Matrix in `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md`.
+- **RESULT:** **PARTIAL / NOT RELEASE-READY** (awaiting explicit merge authorization for `origin/main` & Smart Hub, human Safepay sandbox card/3DS checkout + fee/refund proof, and authorized SMTP test-mailbox receipt). **CAN START NEXT PHASE: NO.**
+
+### 2026-11-17 — Integration Preview Patch, Frozen Migration Mapping & Sandbox/SMTP Prep (PR #54)
+
+- **Baseline:** `174e71b7e2e64bfb281fb13289a789a1caf39f63` (exact-source CI [`44143100844`](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44143100844) `SUCCESS`).
+- **Detached Integration Preview Verified (`origin/main` `9fb07cf` + Smart Hub `a0b6ea3`, zero branch mutation):**
+  - Exported resolved 9-file patch to `backend/docs/patches/ucp_main_smarthub_integration_preview.patch`.
+  - Frozen `090`–`106` migration mapping (`095` kept at `095`; `096`–`101` immutable; Smart Hub `096`–`100` -> `102`–`106`).
+  - `node database/migrationManifest.js`: **PASS** (`71` migrations); `node -c` on 5 resolved backend JS files: **PASS**; `node tests/email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped, including `STALE_REMINDER_SUPPRESSED`).
+- **Safepay & SMTP Prep:**
+  - Created isolated `miljor_test_db` (`33322`) checkout `UCP-SBX-346827a7b8ed` (`PKR 100.00`, `TRACKER_STARTED`) with hosted sandbox checkout URL ready for human PCI/3DS completion.
+  - Verified SMTP env capabilities (`smtp.gmail.com:587`, `EMAIL_MODE=smtp`); awaiting 1 authorized non-business test mailbox.
+- **RESULT:** **PARTIAL / NOT RELEASE-READY** (awaiting Approvals A & B, human Safepay sandbox card completion, and authorized SMTP test mailbox). **CAN START NEXT PHASE: NO.**
 
 # 2026-11-16 — Smart Hub financial closing
 
@@ -1772,6 +1907,65 @@ Owner confirmed initial delivery is Lahore only, directed use of the existing we
 
 Verification: documentation/source consistency script PASS (25/25 seeded family names present, Lahore-only and no-implementation instruction present); git diff --check PASS. Source baseline 9f06d256b622dd6fea14528edef74daa560962d1. Documentation only; no application build/test rerun, database connection/mutation, migration execution, provider transaction, environment change, PR54 action or original frontend integration performed. Historical protected-DB and CI results are not claimed as fresh checks. Qualified tax review and implementation deferred for commercial-launch preparation; PR53 stays unmerged. Applied using-superpowers instruction-selection workflow; no new feature planning needed. CAN START NEXT PHASE: NO.
 
+
+### 2026-11-17 — Approved UCP integration and actual inbox proof
+
+- User approved reviewed main9fb07cf/Smart Huba0b6ea3 integration into the UCP feature branch and exactly2 verification emails. Main merged asd9394c7; Smart Hub9 conflicts resolved;095 retained, incoming096–100 mapped102–106; UCP096–101 unchanged. PR54 remains unmerged into main.
+- Independent review regressions fixed: legacy bulk Flash expiry could strand recovery backlog; tracker identity could suppress later payment events. Expected red2/17 -> green17/17. Adapted affected VM allowlists, historical test DB_PORT, migration test path and exact browser quantity locator.
+- Fresh71/replay, restored101->106 and historical054->106 PASS with original-column commercial-data fingerprints preserved. Consolidated UCP14/14 plus PhaseC/replacement/finance/capture-email PASS. Smart Hub collective/operations/closing20/20, recurring20/20, delivery binding PASS. Both actual Chromium journeys exit0; final build2243 modules/8.68s exit0. Detailed report/evidence updated.
+- Exactly2 SMTP messages accepted; user confirmed both inbox receipts and correct Urdu. Recipient/message IDs private. New owned checkout remains TRACKER_STARTED/no transaction; manual sandbox card/3DS and actual fee/refund proof remain blocked. Prior reported order absent from the preserved backup; cause unassigned.
+- Protected DB read-only comparison matches prior reported6-table baseline; no task mutations or new contemporaneous pre/post claim. Historical attribution unresolved. Newer remote source and Smart-Hub-applied divergent history remain explicit limitations, not silently merged/rejournaled.
+- Final integration commit/push/exact-source CI pending at this entry. RESULT: local authorized integration PASS; overall PARTIAL / RELEASE BLOCKED. CAN START NEXT PHASE: NO.
+
+
+### Authorized integration exact-source closeout — 2026-11-17
+
+Approved source snapshots are now actually integrated and pushed as `a6df2446f4c8ffe48bb688ff681cdc5f7135ec8b` (parents `d9394c730556d4e2dcb586efbc01de15cb991039` and `a0b6ea3fdd8f0ab76d581977cca5ec6c16f12183`). Exact-source canonical CI [44151658700](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44151658700) completed all3 jobs SUCCESS: source/production build, disposable MySQL acceptance, real Chromium journeys. Targeted independent rereview found no remaining P1/P2 issue in the two corrections; runtime evidence was collected by the implementer. Detailed evidence: `evidence/ucp-authorized-integration-2026-11-17.json`.
+
+Actual receipt of both authorized SMTP verification messages and correct Urdu text were user-confirmed. All task-owned MySQL servers33321/33324/33325 shut down cleanly; backups/datadirs and the private pending-checkout link remain preserved. PR54 remains draft/unmerged and no deployment occurred. Actual sandbox card/3DS payment, fee/refund capability, newer remote-source deltas and divergent Smart-Hub-applied migration-history bridge remain unverified/outside this pinned integration; historical attribution remains unresolved. RESULT: approved pinned integration and representative inbox proof PASS; full master-plan release PARTIAL/BLOCKED. This evidence-only closeout does not change application source. CAN START NEXT PHASE: NO.
+
+
+### 2026-11-17 — Actual user-completed sandbox payment and return-page diagnosis
+
+User completed the owned hosted test checkout and reported a return-page screenshot saying order253 not found. The checkout redirected to localhost3000, whose running frontend belongs to the original MilJor checkout; the owned order exists only in isolated miljor_test_db on33321 with a synthetic owning buyer. No test order was copied into the protected database and no ownership guard was bypassed. The original return page therefore was not evidence of payment failure; do not pay again based on that screenshot.
+
+Actual authenticated Safepay API readback: TRACKER_ENDED, exact tracker match, PKR100.00, transaction present. Provider transaction reports fees6.34/net93.66; integer-minor-unit conservation634+9366=10000 verified. Existing application reconcilePaymentWithProvider validated the provider transaction and changed only the owning isolated order to PAID; exactly1 payment row for100.00. Five concurrent replay checks returned already_paid and created0 duplicate payments. This is actual provider reconciliation evidence, not a seeded PAID row or synthetic callback. Direct provider-signed webhook delivery and the actual-paid return browser journey were not separately proven. No external refund/payout was executed; fees are observed provider metadata, not a newly authorized fee/settlement formula.
+
+Application source unchanged at qualifieda6df244; no application-suite rerun was necessary. Sanitized evidence: evidence/ucp-actual-sandbox-payment-2026-11-17.json. Raw response, tokens, card/contact fields and private checkout link remain ignored/local. Only the preserved test database was reopened/mutated, then backed up and shut down cleanly; protected database was not queried/mutated in this verification step. Prior integration limitations/newer-ref/divergent-history review and historical attribution remain unresolved. RESULT: actual sandbox payment/readback/reconciliation and replay PASS; overall release PARTIAL. CAN START NEXT PHASE: NO.
+
+### 2026-11-17 — PAID Return-Browser Acceptance, Wording Fix & Final Blocker Audit (PR #54)
+
+- **PAID Return-Browser Gate (`backend/tests/ucp_paid_return_browser_gate.js`, restored `miljor_test_db:33326`, owned `35152`/`35153`):** **PASS** (order `253` / `UCP-SBX-9f07a5d171`, `PKR 100.00`, owning buyer `376` sees `Payment Confirmed` & `Order Payment Recorded`, reload + `/reconcile` retry preserves `payment_count=1`, non-owner buyer blocked `403`/`404`).
+- **Wording Fix (`frontend/src/pages/PaymentReturnPage.jsx`) & Affected Checks:** Removed unsupported escrow custody / settlement wording; `ucp_phase2_full_ui_browser_gate.js` (`35144`/`35145`) **PASS**; `npm --prefix frontend run build` (`2,243` modules, `2.63s`) **PASS**.
+- **Webhook, Refund & Newer-Delta Audit:** Confirmed `order_id=253` webhook row `id=31` is `payment.reconciled` (internal reconciliation, not external Safepay HTTP webhook); Safepay refunds are Dashboard-enabled (`sandbox.getsafepay.com`) / public REST API unavailable (`support@getsafepay.com` private-gated); `origin/main` unchanged (`9fb07cf`); Smart Hub `a0b6ea3 -> aee8b89` has 0 code conflicts / 1 doc conflict (`MILJOR_PHASE_LOG.md`). Protected `miljor_db` checksums unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
+- **RESULT:** **PARTIAL / NOT RELEASE-READY** (direct Safepay webhook delivery, sandbox refund execution if required, newer Smart Hub `aee8b89` merge if desired, and PR #54 -> `main` merge remain unexecuted). **CAN START NEXT PHASE: NO.**
+
+
+### 2026-11-17 — PAID-return exact-source CI and audit corrections
+
+Verified source `d3ea95e13fe9ef13c3a2e5320d1e4973977873fe`: canonical CI [44169319582](https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/44169319582) completed3/3 jobs SUCCESS. The new `ucp_paid_return_browser_gate.js` has reported local restored actual-paid acceptance; it is not explicitly invoked by this canonical workflow, so local actual-paid gate evidence remains separate from CI scope. No application code change or redundant suite rerun in this correction.
+
+Fresh `git ls-remote` differs from cached refs in the previous audit: main=`9c0a81979b852198c04c00de42ba763a1aa09c2f`, Smart Hub=`2e179e62baa30eaae1fe0d7d873c69b8e0395c73`, feature=`d3ea95e13fe9ef13c3a2e5320d1e4973977873fe`. The previous statement that main9fb07cf has no newer commits is superseded. Use explicit refspec fetch/actual remote SHAs for subsequent delta review; do not silently merge newer source.
+
+Correct implemented callback routes are `POST /api/v1/webhooks/safepay` and `POST /api/v1/payments/webhook/safepay`. The previously proposed `/api/v1/payments/webhooks/safepay` (plural webhook segment under payments) is not mounted. Any future endpoint proposal must use a real route, preserve signature/raw-body verification and receive explicit exposure/dashboard approval.
+
+The previous refund statement “documented & account-enabled” is not established by account-level observation in this closeout. Documentation availability and absence of a method in safepayAdapter do not prove account enablement or public-API unavailability. Classify account-specific refund capability and execution as UNVERIFIED / NOT_EXECUTED until direct account/current authoritative evidence exists; do not execute refund/reversal/payout without the required authorization.
+
+Evidence: `evidence/ucp-paid-return-ci-review-2026-11-17.json`. No database connection/mutation, provider action, branch merge, public exposure or deployment performed. RESULT: exact-source canonical CI PASS; master-plan PARTIAL on direct webhook/refund evidence and actual latest-source review. Historical supplier-verification attribution remains separate from newer buyer metadata. CAN START NEXT PHASE: NO.
+
+### 2026-11-20 — Prompt 1/4: UCP Reliability, Flash Recovery, Transactional Notifications & Webhook Identity Hardening (PR #54)
+
+- **Baseline:** `7b9a51604f8f5346dc77fa3087a48a3f93dfe040` (`plan/ucp-resilience-notification-coverage`).
+- **Fixes:**
+  - `backend/src/services/poolClosureService.js`: Delegated `processExpiredFlashPools()` to `ucpRecoveryService.runFlashRecoveryBatch({ limit: 50 })` so bulk Flash expiry never bypasses row locks, payment-hold preservation, stock release, or `UCP.POOL_EXPIRED` notifications.
+  - `backend/src/services/safepayCheckoutService.js`: Added idempotent `ER_DUP_ENTRY` handling on concurrent non-success and unknown-tracker `payment_webhook_events` inserts, preserving tracker-vs-event identity separation (`!value.startsWith('track_')`).
+- **Tests Added & Executed (`miljor_test_db:33321`):**
+  - `ucp_prompt1_hardening_gate.js`: **PASS** (exit `0`).
+  - `ucp_final_affected_gate.js`: **PASS** (`14/14` groups, exit `0`, incl. `56/56` metadata tests).
+  - `ucp_phase2_finance_integrity_gate.js`: **PASS**; `ucp_phase2_email_gate.js`: **PASS**; `email_outbox_queue_gate.js`: **PASS** (`31/31`, `0` skipped); `npm --prefix frontend run build`: **PASS** (`2,243` modules, `7.75s`).
+- **Protected DB (`miljor_db`, `3306`):** Unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
+- **RESULT:** **Prompt 1 COMPLETE (PASS)**; Prompts 2–4 & external provider/merge blockers remain separate. **CAN START NEXT PHASE: NO.**
+
 ## 2026-11-17 - Demo notification delivery and browser closure
 
 Completed the previously partial notification rehearsal on baseline7f1baee. Existing dispatcher projected27 original demo events (buyers724/725 and supplier726); correct-recipient counts22/2/3, unread21/2/3 after buyer mark-read. Seven labelled SQL/service/real-Chromium checks PASS, final exit0, including duplicate prevention, cross-buyer read rejection, authenticated API isolation, badge/content, mark-read/deep-link and protected counts unchanged (miljor_db0orders/0payments; miljor_sandbox_db0/0). Actual email delivery NOT performed;12 email rows QUEUED. Temporary canonical test sessions revoked, credentials unchanged.
@@ -1779,6 +1973,14 @@ Completed the previously partial notification rehearsal on baseline7f1baee. Exis
 Initial operational failures are preserved: health response assertion corrected to actual environment field; missing trusted frontend origin caused12 queue errors and was corrected process-only, honoring five-minute retry; unauthenticated harness API request401 corrected to real frontend authenticated client. No application source change or gate bypass. Local ignored helpers `artifacts/pr53-demo-notifications.cjs` and `artifacts/demo-notification-worker.cjs` pass node --check. Bounded scoped worker left running PID16588/session9443 for60minutes with mock email; no sender or payment job. Frontend3100/backend5517 retained; PR54/original frontend untouched. Detailed commands/results/artifact paths and recovery instructions saved in existing demo guide.
 
 CI connector independently observed11/11 PR-triggered workflows SUCCESS at7f1baee; no claim to freshly verify14/16 through its filtered response. Applied using-superpowers, systematic-debugging and verification-before-completion. Documentation-only closure; no full application/build rerun necessary. Tax review/market launch/main merge/local integration deferred. CAN START NEXT PHASE: NO.
+
+### 2026-11-20 — Prompt 2/4: Main (9c0a8197) + Smart Hub (fd11489) Integration & Full Regression (PR #54)
+
+- **Integrated Parents:** `origin/main` (`9c0a81979b852198c04c00de42ba763a1aa09c2f`, merge `fdec229`) + `origin/feature/smart-procurement-hub-unified-entry` (`fd11489bcc7981b103cd216ab5931464cfece346`, merge `707103b` + resolution `78b7290`).
+- **Conflict Resolutions & Fixes:** Resolved `emailService.js` OTP supersession (`template_name IN (?)`, `next_attempt_at = NULL`, `status IN ('QUEUED','FAILED')`), `App.jsx` & `LandingPage.jsx` unified Smart Hub + `main` landing design, `buyer_otp_mysql_acceptance.test.js` inline DDL, `smart_hub_unified_legacy_requests.test.js` isolated-port MySQL determinism (`isIsolatedPort` + `information_schema.SCHEMATA`), `buyer_procurement_auth_alignment_gate.js` SQL regex alignment, and added OTP supersession test to `ucp_prompt1_hardening_gate.js`.
+- **Verification (`miljor_test_db` & `miljor_otp_acceptance_test` on `127.0.0.1:33321`):** `migrationManifest.js` (`71`), `runMigrations.js` replay (`0` new), `readOnlyMigrationAudit.js --test-only` (`71/71`), `ucp_prompt1_hardening_gate.js` (`5/5`), `buyer_otp_mysql_acceptance.test.js` (`1/1`), `email_outbox_queue_gate.js` + `email_otp_template_branding.test.js` + `smart_hub_unified_legacy_requests.test.js` (`38/38`), `buyer_procurement_auth_alignment_gate.js` (`18/18`), `ucp_phase_c_delivery_gate.js`, `ucp_phase1_replacement_gate.js`, `ucp_final_affected_gate.js` (`14/14`), `ucp_phase2_finance_integrity_gate.js`, `ucp_phase2_email_gate.js`, `ucp_phase2_full_ui_browser_gate.js` (`35162`/`35163`), and `npm --prefix frontend run build` (`2,243` modules) — all **PASS**.
+- **Protected DB (`miljor_db`, `3306`):** Unchanged (`users: 2302417835, pools: 2265355547, reservations/orders/payments/platform_ledger: 0`).
+- **RESULT:** **Prompt 2 COMPLETE (Integration & Regression PASS)**; external Safepay webhook/refund & final PR #54 -> `main` merge remain separate. **CAN START NEXT PHASE: NO.**
 
 ## 2026-11-20 - PR #53 Prompt 3 of 4: Main Merge Resolution, Package E2 Fix, Fresh DB Migrations, Chromium Acceptance & Regression
 

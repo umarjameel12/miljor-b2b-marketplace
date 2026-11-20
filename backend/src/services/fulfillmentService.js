@@ -509,6 +509,16 @@ class FulfillmentService {
       );
       }
 
+      // PREPARING persists both acknowledgement and processing timestamps.
+      // These canonical notices share that actual milestone, not invented states.
+      if (toStatus === 'PREPARING') {
+        for (const type of ['FULFILLMENT.ACCEPTED', 'FULFILLMENT.PACKING']) {
+          await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection, {
+            orderId: order.id, type, transitionId: eventCode
+          });
+        }
+      }
+
       const notificationType = {
         READY_FOR_DISPATCH: 'DISPATCH_SCHEDULED',
         DISPATCHED: 'OUT_FOR_DELIVERY',

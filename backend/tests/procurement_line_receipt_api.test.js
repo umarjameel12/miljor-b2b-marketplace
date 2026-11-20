@@ -48,7 +48,7 @@ test('source retains legacy fail-closed guards and migration uniqueness/bounds',
  const root=path.join(__dirname,'..');
  for(const [file,guard] of [['disputeService.js','LINE_ITEM_DISPUTE_REQUIRED'],['financialSettlementService.js','LINE_ITEM_REFUND_ALLOCATION_REQUIRED'],['fulfillmentService.js','LINE_ITEM_RECEIPT_REQUIRED']])
   assert.ok(fs.readFileSync(path.join(root,'src/services',file),'utf8').includes(guard));
- const migration=fs.readFileSync(path.join(root,'database/migrations/097_procurement_line_receipts.sql'),'utf8');
+ const migration=fs.readFileSync(path.join(root,'database/migrations/103_procurement_line_receipts.sql'),'utf8');
  assert.match(migration,/UNIQUE KEY uq_final_award_line_receipt\(award_line_id\)/);
  assert.match(migration,/disputed_quantity=ordered_quantity-accepted_quantity/);
  assert.match(migration,/refund_assessment_amount<=subtotal/);

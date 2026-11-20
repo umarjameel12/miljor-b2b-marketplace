@@ -15,10 +15,14 @@ process.env.B6_FINANCIAL_GATE_ENABLED = 'false';
 process.env.B6_B5_INVENTORY_RECONCILED = 'false';
 process.env.B6_TAX_POLICY_APPROVED = 'false';
 process.env.SAFEPAY_ENV = 'sandbox';
-if (!process.env.DB_PASSWORD) {
+// On isolated disposable ports (e.g. 33321), never inject external .env credentials.
+const isIsolatedPort = process.env.DB_PORT && String(process.env.DB_PORT) !== '3306';
+if (!isIsolatedPort && process.env.DB_PASSWORD === undefined) {
   const fs = require('node:fs');
   const origEnv = 'C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/backend/.env';
   if (fs.existsSync(origEnv)) require('dotenv').config({ path: origEnv, quiet: true });
+} else if (isIsolatedPort && process.env.DB_PASSWORD === undefined) {
+  process.env.DB_PASSWORD = '';
 }
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   process.env.JWT_SECRET = 'miljor-test-jwt-secret-placeholder-32-chars-min';
@@ -28,8 +32,9 @@ const db = require('../src/config/db');
 const app = require('../server');
 
 test('Unified Smart Procurement Hub: canonical modes, legacy visibility, dedup, privacy, validation, and concurrent conversion on miljor_test_db', async () => {
-  const [[dbRow]] = await db.query('SELECT DATABASE() AS db');
+  const [[dbRow]] = await db.query('SELECT DATABASE() AS db, @@port AS port');
   assert.equal(dbRow.db, 'miljor_test_db');
+  if (process.env.DB_PORT) assert.equal(String(dbRow.port), String(process.env.DB_PORT));
 
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve, reject) => {
@@ -184,11 +189,19 @@ test('Unified Smart Procurement Hub: canonical modes, legacy visibility, dedup, 
     assert.equal(convertedLegacy.already_converted, true);
     assert.equal(Number(convertedLegacy.converted_request_id), Number(c1.json.data.request.id));
 
-    // 10. Protected DBs untouched
-    const [[p1]] = await db.query('SELECT (SELECT COUNT(*) FROM miljor_db.orders) AS orders, (SELECT COUNT(*) FROM miljor_db.payments) AS payments');
-    const [[p2]] = await db.query('SELECT (SELECT COUNT(*) FROM miljor_sandbox_db.orders) AS orders, (SELECT COUNT(*) FROM miljor_sandbox_db.payments) AS payments');
-    assert.deepEqual(p1, { orders: 0, payments: 0 });
-    assert.deepEqual(p2, { orders: 0, payments: 0 });
+    // 10. Protected DBs untouched (when present on the connected instance)
+    const [schemas] = await db.query(
+      "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME IN ('miljor_db', 'miljor_sandbox_db')"
+    );
+    const present = new Set(schemas.map(s => s.SCHEMA_NAME));
+    if (present.has('miljor_db')) {
+      const [[p1]] = await db.query('SELECT (SELECT COUNT(*) FROM miljor_db.orders) AS orders, (SELECT COUNT(*) FROM miljor_db.payments) AS payments');
+      assert.deepEqual(p1, { orders: 0, payments: 0 });
+    }
+    if (present.has('miljor_sandbox_db')) {
+      const [[p2]] = await db.query('SELECT (SELECT COUNT(*) FROM miljor_sandbox_db.orders) AS orders, (SELECT COUNT(*) FROM miljor_sandbox_db.payments) AS payments');
+      assert.deepEqual(p2, { orders: 0, payments: 0 });
+    }
   } finally {
     for (const rid of createdReqIds) {
       await db.query('DELETE FROM procurement_request_items WHERE request_id = ?', [rid]).catch(() => {});

@@ -1,0 +1,517 @@
+{
+  "task": "UCP frontend production build provenance and ordinary build blocker",
+  "evidenceDate": "2026-11-16",
+  "recordedAtUtc": "2026-11-15T20:20:48.721Z",
+  "repositoryRoot": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor",
+  "nodeVersion": "v24.20.0",
+  "standardBuild": {
+    "status": "BLOCKED",
+    "command": "npm.cmd run build",
+    "equivalentRequestedCommand": "npm run build",
+    "cwd": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\frontend",
+    "packageScript": "vite build",
+    "exitCode": 1,
+    "output": "npm notice run frontend@0.0.0 build\nnpm notice run vite build\n'vite' is not recognized as an internal or external command,\noperable program or batch file.\n",
+    "observedDurationSeconds": 9.5311156,
+    "frontendNodeModulesPresent": false,
+    "blocker": "This checkout has no frontend/node_modules; the npm build script cannot resolve the Vite executable.",
+    "isStandardBuildVerified": false
+  },
+  "nonstandardBuild": {
+    "status": "PASS",
+    "isStandardNpmBuild": false,
+    "source": "Observed earlier in this same session; not rerun while recording this evidence.",
+    "cwd": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor",
+    "shell": "PowerShell",
+    "exactCommand": "@'\nimport fs from 'node:fs';\nimport path from 'node:path';\nimport { createRequire } from 'node:module';\nimport { pathToFileURL } from 'node:url';\nconst external = createRequire('C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/package.json');\nconst installed = path.dirname(external.resolve('vite/package.json')) + '/..';\nconst root = path.resolve('frontend');\nlet configText = fs.readFileSync(path.join(root, 'vite.config.js'), 'utf8');\nfor (const name of ['vite', '@vitejs/plugin-react', '@tailwindcss/vite']) {\n  configText = configText.replaceAll(\"'\" + name + \"'\", JSON.stringify(pathToFileURL(external.resolve(name)).href));\n}\nconst { default: config } = await import('data:text/javascript;base64,' + Buffer.from(configText).toString('base64'));\nconst { build, mergeConfig } = await import(pathToFileURL(external.resolve('vite')).href);\nconst manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));\nconst aliases = Object.keys(manifest.dependencies).map(name => ({ find: name, replacement: path.join(installed, name).replaceAll('\\\\', '/') }));\nawait build(mergeConfig(config, { root, configFile: false, resolve: { alias: aliases } }));\n'@ | node --input-type=module -",
+    "configuration": {
+      "configSource": "frontend/vite.config.js",
+      "configLoadedViaDataUrl": true,
+      "rewrittenConfigImports": [
+        "vite",
+        "@vitejs/plugin-react",
+        "@tailwindcss/vite"
+      ],
+      "importResolution": "createRequire from external frontend/package.json, then pathToFileURL(external.resolve(name))",
+      "pluginsPreserved": [
+        "@vitejs/plugin-react",
+        "@tailwindcss/vite"
+      ],
+      "configFile": false,
+      "root": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\frontend",
+      "aliasRule": "Every package in frontend/package.json dependencies maps to its absolute directory in the external node_modules. No manifest/config source was edited.",
+      "aliases": [
+        {
+          "find": "@tailwindcss/vite",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/@tailwindcss/vite"
+        },
+        {
+          "find": "axios",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/axios"
+        },
+        {
+          "find": "leaflet",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/leaflet"
+        },
+        {
+          "find": "lucide-react",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/lucide-react"
+        },
+        {
+          "find": "react",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/react"
+        },
+        {
+          "find": "react-dom",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/react-dom"
+        },
+        {
+          "find": "react-leaflet",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/react-leaflet"
+        },
+        {
+          "find": "react-router-dom",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/react-router-dom"
+        },
+        {
+          "find": "react-toastify",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/react-toastify"
+        },
+        {
+          "find": "tailwindcss",
+          "replacement": "C:/Users/Umar Jameel/OneDrive - Higher Education Commission/Documents/MilJor Project/frontend/node_modules/tailwindcss"
+        }
+      ]
+    },
+    "exitCode": 0,
+    "viteVersion": "8.3.4",
+    "transformedModules": 2233,
+    "reportedBuildDurationSeconds": 4.16,
+    "outputSummary": [
+      "vite v8.3.4 building client environment for production...",
+      "2233 modules transformed.",
+      "rendering chunks...",
+      "computing gzip size...",
+      "built in 4.16s"
+    ],
+    "outputDirectory": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\frontend\\dist",
+    "representativeArtifacts": [
+      {
+        "file": "index.html",
+        "sizeKB": 1.91,
+        "gzipKB": 0.94
+      },
+      {
+        "file": "assets/index-V77lxXQF.js",
+        "sizeKB": 441.79,
+        "gzipKB": 119.35
+      },
+      {
+        "file": "assets/index-ew3e-Dcu.css",
+        "sizeKB": 102.82,
+        "gzipKB": 18.05
+      }
+    ],
+    "limitations": [
+      "Used external installed packages rather than a clean installation from this checkout lockfile.",
+      "Build is compilation/bundling evidence only; not browser, backend or provider-delivery verification."
+    ]
+  },
+  "preparatoryAttempt": {
+    "action": "Temporary frontend/node_modules junction to existing dependencies",
+    "status": "BLOCKED",
+    "errorCode": "EPERM",
+    "note": "Junction creation failed before build/tests started; no dependency junction was created."
+  },
+  "dependencyVerification": {
+    "manifest": "frontend/package.json",
+    "lockfile": "frontend/package-lock.json",
+    "lockfileVersion": 3,
+    "manifestSha256": "264151f56d522ba4010d294621657ec1f137c0bbe3f7e34830b3e0578b485d7c",
+    "lockfileSha256": "3899e7384d2d18a89cf6b8dcdae5f9078e5fcf32425433d3743f320c0862eae3",
+    "directDependencyCount": 15,
+    "manifestLockCoherent": true,
+    "directDependencies": [
+      {
+        "name": "@tailwindcss/vite",
+        "section": "dependencies",
+        "declared": "^4.3.3",
+        "lockRootMatches": true,
+        "lockedVersion": "4.3.4",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "4.3.4",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "axios",
+        "section": "dependencies",
+        "declared": "^1.20.0",
+        "lockRootMatches": true,
+        "lockedVersion": "1.21.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "1.21.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "leaflet",
+        "section": "dependencies",
+        "declared": "^1.9.4",
+        "lockRootMatches": true,
+        "lockedVersion": "1.9.4",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "1.9.4",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "lucide-react",
+        "section": "dependencies",
+        "declared": "^1.60.0",
+        "lockRootMatches": true,
+        "lockedVersion": "1.68.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "1.68.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "react",
+        "section": "dependencies",
+        "declared": "^19.3.1",
+        "lockRootMatches": true,
+        "lockedVersion": "19.3.1",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "19.3.1",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "react-dom",
+        "section": "dependencies",
+        "declared": "^19.3.1",
+        "lockRootMatches": true,
+        "lockedVersion": "19.3.1",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "19.3.1",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "react-leaflet",
+        "section": "dependencies",
+        "declared": "^5.0.0",
+        "lockRootMatches": true,
+        "lockedVersion": "5.0.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "5.0.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "react-router-dom",
+        "section": "dependencies",
+        "declared": "^7.18.4",
+        "lockRootMatches": true,
+        "lockedVersion": "7.18.5",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "7.18.5",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "react-toastify",
+        "section": "dependencies",
+        "declared": "^11.1.0",
+        "lockRootMatches": true,
+        "lockedVersion": "11.2.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "11.2.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "tailwindcss",
+        "section": "dependencies",
+        "declared": "^4.3.3",
+        "lockRootMatches": true,
+        "lockedVersion": "4.3.4",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "4.3.4",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "@types/react",
+        "section": "devDependencies",
+        "declared": "^19.3.0",
+        "lockRootMatches": true,
+        "lockedVersion": "19.3.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "19.3.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "@types/react-dom",
+        "section": "devDependencies",
+        "declared": "^19.3.0",
+        "lockRootMatches": true,
+        "lockedVersion": "19.3.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "19.3.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "@vitejs/plugin-react",
+        "section": "devDependencies",
+        "declared": "^6.1.2",
+        "lockRootMatches": true,
+        "lockedVersion": "6.1.2",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "6.1.2",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "oxlint",
+        "section": "devDependencies",
+        "declared": "^1.88.0",
+        "lockRootMatches": true,
+        "lockedVersion": "1.89.0",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "1.89.0",
+        "externalVersionMatchesLock": true
+      },
+      {
+        "name": "vite",
+        "section": "devDependencies",
+        "declared": "^8.3.4",
+        "lockRootMatches": true,
+        "lockedVersion": "8.3.4",
+        "lockedVersionSatisfiesDeclaredCaretRange": true,
+        "hasResolvedArtifactAndIntegrity": true,
+        "registryHost": "registry.npmjs.org",
+        "externalInstalledVersion": "8.3.4",
+        "externalVersionMatchesLock": true
+      }
+    ],
+    "conclusion": "Manifest and v3 lockfile statically declare all required direct production/build dependencies with matching ranges and resolved artifacts/integrities.",
+    "limitation": "Static direct-dependency checks do not prove registry availability, full transitive installability, lifecycle script success, or a standard build."
+  },
+  "recommendedResolution": {
+    "requiresSeparateInstallAuthorization": true,
+    "steps": [
+      "After explicit install/network approval, use the project-approved npm registry and run npm ci in frontend with devDependencies included. Do not regenerate the lockfile as a workaround.",
+      "Then run npm run build, node tests/notifications.test.js and node tests/supplier_fulfillment.test.js using the local installation without aliases.",
+      "Record actual clean-install and ordinary-build results separately; do not relabel the alias-assisted build as a standard build."
+    ]
+  },
+  "safety": {
+    "installsPerformed": false,
+    "networkAccessPerformed": false,
+    "databaseAccessPerformed": false,
+    "gitCommandsPerformed": false,
+    "credentialFilesRead": false,
+    "manifestOrLockfileModified": false
+  },
+  "canonicalBuildVerifications": [
+    {
+      "recordedAtUtc": "2026-11-15T20:25:09.310Z",
+      "evidenceLocalDate": "2026-11-16",
+      "timezone": "Asia/Karachi",
+      "authorization": "Routine locked dependency installation was necessary for the user's authorized implementation and build request; the parent agent explicitly instructed this installation without changing dependencies.",
+      "dependencyInstallation": {
+        "command": "npm.cmd ci --no-audit --no-fund --registry=https://registry.npmjs.org",
+        "cwd": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\frontend",
+        "registry": "https://registry.npmjs.org",
+        "status": "PASS",
+        "exitCode": 0,
+        "output": "\nadded 77 packages in 46s\n",
+        "installedPackageCountReportedByNpm": 77,
+        "durationSecondsReportedByNpm": 46,
+        "usedApprovedEscalation": true,
+        "initialAttempt": {
+          "status": "INTERRUPTED",
+          "exitCode": 1,
+          "output": "",
+          "reason": "Initial restricted attempt produced no output and was interrupted before the approved escalated attempt. No install-success claim was made for it."
+        }
+      },
+      "ordinaryProductionBuild": {
+        "command": "npm.cmd run build",
+        "equivalentCommand": "npm run build",
+        "cwd": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\frontend",
+        "packageScript": "vite build",
+        "status": "PASS",
+        "exitCode": 0,
+        "standardBuildVerified": true,
+        "viteVersion": "8.3.4",
+        "transformedModules": 2233,
+        "durationSecondsReportedByVite": 4.75,
+        "successfulBuildInvocationsAfterInstall": 1,
+        "dependencySource": "This worktree frontend/node_modules installed from its existing package-lock.json by npm ci.",
+        "specialAliasesUsed": false,
+        "externalDependencyResolutionHooksUsed": false,
+        "temporaryDependencyJunctionUsed": false,
+        "configSource": "frontend/vite.config.js",
+        "configOrPackageChangesForBuild": false,
+        "outputSummary": [
+          "npm notice run frontend@0.0.0 build",
+          "npm notice run vite build",
+          "vite v8.3.4 building client environment for production...",
+          "transforming...",
+          "2233 modules transformed.",
+          "rendering chunks...",
+          "computing gzip size...",
+          "built in 4.75s"
+        ],
+        "outputDirectory": "C:\\Users\\Umar Jameel\\.codex\\worktrees\\ucp-resilience\\MilJor\\frontend\\dist",
+        "representativeArtifacts": [
+          {
+            "file": "dist/index.html",
+            "sizeKB": 1.91,
+            "gzipKB": 0.94
+          },
+          {
+            "file": "dist/assets/index-V77lxXQF.js",
+            "sizeKB": 441.79,
+            "gzipKB": 119.35
+          },
+          {
+            "file": "dist/assets/index-ew3e-Dcu.css",
+            "sizeKB": 102.82,
+            "gzipKB": 18.05
+          }
+        ],
+        "limitation": "Production compilation/bundling evidence only. Does not establish live backend, browser interaction, financial execution or provider acceptance."
+      },
+      "dependencyIntegrity": {
+        "packageJsonUnchanged": true,
+        "packageLockUnchanged": true,
+        "packageJsonSha256": "264151f56d522ba4010d294621657ec1f137c0bbe3f7e34830b3e0578b485d7c",
+        "packageLockSha256": "3899e7384d2d18a89cf6b8dcdae5f9078e5fcf32425433d3743f320c0862eae3",
+        "installedDirectDependencies": [
+          {
+            "name": "@tailwindcss/vite",
+            "installedVersion": "4.3.4",
+            "lockedVersion": "4.3.4",
+            "matchesLockfile": true
+          },
+          {
+            "name": "axios",
+            "installedVersion": "1.21.0",
+            "lockedVersion": "1.21.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "leaflet",
+            "installedVersion": "1.9.4",
+            "lockedVersion": "1.9.4",
+            "matchesLockfile": true
+          },
+          {
+            "name": "lucide-react",
+            "installedVersion": "1.68.0",
+            "lockedVersion": "1.68.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "react",
+            "installedVersion": "19.3.1",
+            "lockedVersion": "19.3.1",
+            "matchesLockfile": true
+          },
+          {
+            "name": "react-dom",
+            "installedVersion": "19.3.1",
+            "lockedVersion": "19.3.1",
+            "matchesLockfile": true
+          },
+          {
+            "name": "react-leaflet",
+            "installedVersion": "5.0.0",
+            "lockedVersion": "5.0.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "react-router-dom",
+            "installedVersion": "7.18.5",
+            "lockedVersion": "7.18.5",
+            "matchesLockfile": true
+          },
+          {
+            "name": "react-toastify",
+            "installedVersion": "11.2.0",
+            "lockedVersion": "11.2.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "tailwindcss",
+            "installedVersion": "4.3.4",
+            "lockedVersion": "4.3.4",
+            "matchesLockfile": true
+          },
+          {
+            "name": "@types/react",
+            "installedVersion": "19.3.0",
+            "lockedVersion": "19.3.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "@types/react-dom",
+            "installedVersion": "19.3.0",
+            "lockedVersion": "19.3.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "@vitejs/plugin-react",
+            "installedVersion": "6.1.2",
+            "lockedVersion": "6.1.2",
+            "matchesLockfile": true
+          },
+          {
+            "name": "oxlint",
+            "installedVersion": "1.89.0",
+            "lockedVersion": "1.89.0",
+            "matchesLockfile": true
+          },
+          {
+            "name": "vite",
+            "installedVersion": "8.3.4",
+            "lockedVersion": "8.3.4",
+            "matchesLockfile": true
+          }
+        ],
+        "all15DirectDependenciesMatchLockfile": true
+      },
+      "historicalQualification": "Existing standardBuild BLOCKED and nonstandardBuild PASS entries describe the earlier observations and remain unchanged. This appendix separately proves the later ordinary build after the authorized local installation. Existing safety and recommendedResolution fields describe the earlier evidence-recording step.",
+      "safety": {
+        "authorizedInstallPerformed": true,
+        "officialRegistryNetworkUsedForInstall": true,
+        "unrelatedPackageUpdates": false,
+        "databaseAccessPerformed": false,
+        "gitCommandsPerformed": false,
+        "credentialsRecorded": false,
+        "additionalInstallsPerformed": false
+      }
+    }
+  ]
+}

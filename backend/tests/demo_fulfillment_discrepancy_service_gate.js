@@ -13,25 +13,58 @@ function instantiate(options={}){
     payment_status:'PAID', fulfillment_status:'SUPPLIER_DELIVERED',
     exception_reason:null,total_qty:'100.00',pool_id:17,reservation_id:18
   };
-  const tx={commit:0,rollback:0,release:0};
+  const tx={commit:0,rollback:0,release:0,active:false};
+  let snapshot;
   const connection={
     async query(sql,params){
       if(sql.includes('SELECT * FROM orders WHERE id = ? FOR UPDATE'))return [[order]];
       if(sql.includes('COUNT(*) AS line_count') && sql.includes('procurement_award_lines'))
         return [[{line_count:options.awardLines||0}]];
-      if(sql.includes('UPDATE orders')){updates.push(params);return [{affectedRows:1}]}
+      if(sql==='SELECT id,role FROM users WHERE id=?')return [[{id:params[0],role:params[0]===11?'BUYER':'SUPPLIER'}]];
+      if(sql.includes('INSERT INTO procurement_notifications')){
+        assert.equal(tx.active,true);assert.equal(tx.commit,0);
+        assert.equal(updates.length,1,'discrepancy must be mutated before enqueue');
+        assert.equal(events.length,1,'milestone evidence must precede enqueue');
+        assert.equal(businessEvents.length,1,'legacy outbox evidence must precede enqueue');
+        const [userId,role,eventKey,eventType,json]=params;
+        assert.deepEqual(JSON.parse(json),{entityId:70,schemaVersion:1});
+        const event={userId,role,eventType,eventKey,entityId:70};
+        enqueueAttempts.push(event);
+        if(options.failNotificationAt===enqueueAttempts.length)throw Error('Notification enqueue failed');
+        notifications.push(event);return [{affectedRows:1}];
+      }
+      if(sql.includes('UPDATE orders')){updates.push(params);order.fulfillment_status='EXCEPTION';return [{affectedRows:1}]}
       if(sql.includes('INSERT INTO order_fulfillment_events')){events.push(params);return [{insertId:1}]}
       if(sql.includes('INSERT INTO reservation_business_events')){businessEvents.push(params);return [{insertId:1}]}
       if(sql.includes('SET TRANSACTION'))return [[]];
       throw Error('Unexpected SQL: '+sql);
     },
-    async beginTransaction(){},
-    async commit(){tx.commit++},
-    async rollback(){tx.rollback++;notifications.length=0},
+    async beginTransaction(){snapshot={...order};tx.active=true;},
+    async commit(){tx.commit++;tx.active=false;},
+    async rollback(){
+      tx.rollback++;tx.active=false;Object.assign(order,snapshot);
+      notifications.length=0;updates.length=0;events.length=0;businessEvents.length=0;
+    },
     release(){tx.release++}
   };
   const moduleRef={exports:{}};
   const policy=require('../src/services/deliveryQuantityPolicy');
+  // Allowlist the real canonical adapter and writer without importing DB config.
+  const writers={};
+  function loadWriter(name){
+    if(writers[name])return writers[name];
+    const ref={exports:{}};
+    const filename=path.join(__dirname,'../src/services',name+'.js');
+    vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module:ref,require(id){
+      if(id==='../config/db')return {};
+      if(id==='node:crypto')return require(id);
+      if(id==='./notificationService')return loadWriter('notificationService');
+      if(['./ucpNotificationEventCatalog','./notificationEventPolicy','./notificationDeliveryPolicy'].includes(id))
+        return require(path.join(__dirname,'../src/services',id));
+      throw Error('Unexpected writer dependency: '+id);
+    }},{filename});
+    return writers[name]=ref.exports;
+  }
   vm.runInNewContext(source,{
     module:moduleRef,exports:moduleRef.exports,process,
     require(name){
@@ -40,20 +73,12 @@ function instantiate(options={}){
       if(name==='./reservationEventService')return {generateEventId:()=> 'TEST-EVENT-70'};
       if(name==='./supplierEligibilityPolicy')return {evaluateSupplierEligibility:()=>({eligible:true})};
       if(name==='./deliveryQuantityPolicy')return policy;
-      if(name==='./notificationService')return {async enqueueEvent(conn,event){
-        assert.equal(conn,connection);
-        assert.equal(tx.commit,0,'notification must be enqueued before commit');
-        assert.equal(updates.length,1,'discrepancy must be mutated before enqueue');
-        assert.equal(events.length,1,'milestone evidence must precede enqueue');
-        assert.equal(businessEvents.length,1,'legacy outbox evidence must precede enqueue');
-        enqueueAttempts.push({...event});
-        if(options.failNotificationAt===enqueueAttempts.length)throw Error('Notification enqueue failed');
-        notifications.push({...event});
-      }};
+      if(name==='./notificationService')return loadWriter('notificationService');
+      if(name==='./ucpTransactionalNotifications')return loadWriter('ucpTransactionalNotifications');
       throw Error('Unexpected dependency: '+name);
     }
   },{filename:'fulfillmentService.js'});
-  return {service:moduleRef.exports,events,updates,businessEvents,notifications,enqueueAttempts,tx};
+  return {service:moduleRef.exports,events,updates,businessEvents,notifications,enqueueAttempts,tx,order};
 }
 async function execute(){
   let passed=0;
@@ -123,6 +148,8 @@ async function execute(){
     await assert.rejects(x.service.reportBuyerDiscrepancy(payload),/Notification enqueue failed/);
     assert.equal(x.enqueueAttempts.length,2);
     assert.equal(x.notifications.length,0);
+    assert.equal(x.order.fulfillment_status,'SUPPLIER_DELIVERED');
+    assert.equal(x.updates.length,0);assert.equal(x.events.length,0);assert.equal(x.businessEvents.length,0);
     assert.equal(x.tx.commit,0);
     assert.equal(x.tx.rollback,1);
     assert.equal(x.tx.release,1);

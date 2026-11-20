@@ -25,59 +25,70 @@ function calculateRequestHash(req) {
  * @returns {Promise<Object|null>} - Returns cached response object if found, or null
  */
 async function reconcileCommittedBusinessOperation(record, req) {
-  if (record.idempotency_key) {
-    // Check payment_attempts for initiated checkout sessions
+  const requestPath = `${req.method}:${req.originalUrl || req.url}`;
+  if (!req.user?.id || Number(record.user_id) !== Number(req.user.id) ||
+      (record.request_path && record.request_path !== requestPath)) return null;
+
+  const pathname = (req.originalUrl || req.url || '').split('?')[0];
+  const checkout = req.method === 'POST' && pathname.match(/^\/api\/v1\/orders\/([1-9]\d*)\/checkout\/?$/);
+  if (checkout) {
+    // Checkout recovery must never fall through to unrelated reservation/audit
+    // recovery, nor discover a session by a globally reused key alone.
+    if (req.user.role !== 'BUYER' || req.user.buyer_trust_status === 'SUSPENDED') return null;
     const [attRows] = await db.query(
       `SELECT pa.*, o.order_code FROM payment_attempts pa
        JOIN orders o ON pa.order_id = o.id
-       WHERE pa.idempotency_key = ? ORDER BY pa.id DESC LIMIT 1`,
-      [record.idempotency_key]
+       JOIN users u ON u.id = o.buyer_id
+       WHERE pa.idempotency_key = ? AND pa.order_id = ? AND pa.buyer_id = ?
+         AND o.buyer_id = ? AND u.role = 'BUYER'
+         AND (u.buyer_trust_status IS NULL OR u.buyer_trust_status <> 'SUSPENDED')
+       ORDER BY pa.id DESC LIMIT 1`,
+      [String(record.idempotency_key).trim(), checkout[1], req.user.id, req.user.id]
     );
-    if (attRows.length > 0) {
-      const att = attRows[0];
-      return {
-        status: 200,
-        body: {
-          success: true,
-          message: 'Checkout session retrieved (idempotent replay)',
-          data: {
-            attempt_code: att.attempt_code,
-            order_id: att.order_id,
-            order_code: att.order_code,
-            amount: Number(att.amount),
-            currency: att.currency,
-            provider: att.provider,
-            environment: att.environment,
-            status: att.status,
-            provider_tracker_token: att.provider_tracker_token,
-            checkout_url: att.checkout_url,
-            created_at: att.created_at
-          }
-        }
-      };
+    if (!attRows.length) return null;
+    const att = attRows[0];
+    if (att.status === 'RECONCILIATION_REQUIRED' || !att.provider_tracker_token || !att.checkout_url) {
+      return { status: 409, body: { success: false, error: {
+        code: 'CHECKOUT_RECONCILIATION_REQUIRED',
+        message: 'Checkout initiation is pending reconciliation. Do not create another payment session.'
+      } } };
     }
+    return {
+      status: 200,
+      body: {
+        success: true,
+        message: 'Checkout session retrieved (idempotent replay)',
+        data: {
+          attempt_code: att.attempt_code, order_id: att.order_id, order_code: att.order_code,
+          amount: Number(att.amount), currency: att.currency, provider: att.provider,
+          environment: att.environment, status: att.status,
+          provider_tracker_token: att.provider_tracker_token, checkout_url: att.checkout_url, created_at: att.created_at
+        }
+      }
+    };
+  }
 
+  const reservationPath = pathname.match(/^\/api\/v1\/reservations(?:\/([1-9]\d*)(?:\/[^/]+)?)?\/?$/);
+  if (record.idempotency_key && req.user.role === 'BUYER' && reservationPath) {
     const [mutRows] = await db.query(
-      `SELECT response_payload, mutation_type FROM reservation_mutation_history 
-       WHERE idempotency_key = ? ORDER BY id DESC LIMIT 1`,
-      [record.idempotency_key]
+      `SELECT response_payload, mutation_type FROM reservation_mutation_history
+       WHERE idempotency_key = ? AND buyer_id = ?
+         AND (? IS NULL OR reservation_id = ?)
+       ORDER BY id DESC LIMIT 1`,
+      [record.idempotency_key, req.user.id, reservationPath[1] || null, reservationPath[1] || null]
     );
     if (mutRows.length > 0) {
-      const payload = typeof mutRows[0].response_payload === 'string' 
-        ? JSON.parse(mutRows[0].response_payload) 
-        : mutRows[0].response_payload;
-      return {
-        status: 200,
-        body: payload
-      };
+      const payload = typeof mutRows[0].response_payload === 'string'
+        ? JSON.parse(mutRows[0].response_payload) : mutRows[0].response_payload;
+      return { status: 200, body: payload };
     }
   }
 
     // If record already has linked resource_id and resource_type
   if (record.resource_type === 'orders' && record.resource_id) {
     const [orderRows] = await db.query(
-      `SELECT * FROM orders WHERE id = ?`,
-      [record.resource_id]
+      `SELECT * FROM orders WHERE id = ? AND buyer_id = ?`,
+      [record.resource_id, req.user.id]
     );
     if (orderRows.length > 0) {
       const order = orderRows[0];
@@ -140,16 +151,16 @@ async function reconcileCommittedBusinessOperation(record, req) {
        JOIN products pr ON p.product_id = pr.id
        LEFT JOIN product_specifications ps ON p.product_spec_id = ps.id
        JOIN users u ON p.supplier_id = u.id
-       WHERE r.id = ?`,
-      [record.resource_id]
+       WHERE r.id = ? AND r.buyer_id = ?`,
+      [record.resource_id, req.user.id]
     );
 
     if (resRows.length > 0) {
       const reservation = resRows[0];
       if (req.originalUrl && req.originalUrl.includes('/order')) {
         const [orders] = await db.query(
-          `SELECT * FROM orders WHERE reservation_id = ? ORDER BY id DESC LIMIT 1`,
-          [reservation.id]
+          `SELECT * FROM orders WHERE reservation_id = ? AND buyer_id = ? ORDER BY id DESC LIMIT 1`,
+          [reservation.id, req.user.id]
         );
         if (orders.length > 0) {
           const order = orders[0];
@@ -506,6 +517,15 @@ function createIdempotencyGuard(options = { required: false }) {
       return next();
     }
 
+    const checkoutPath = (req.originalUrl || req.url || '').split('?')[0];
+    const isCheckoutRequest = req.method === 'POST' && /^\/api\/v1\/orders\/[1-9]\d*\/checkout\/?$/.test(checkoutPath);
+    if (isCheckoutRequest &&
+        (typeof idempotencyKey !== 'string' || !idempotencyKey.trim() || idempotencyKey.trim().length > 100)) {
+      return res.status(400).json({ success: false, error: {
+        code: 'INVALID_IDEMPOTENCY_KEY', message: 'Checkout idempotency key must contain 1 to 100 characters'
+      } });
+    }
+
     const userId = req.user ? req.user.id : null;
     const requestPath = `${req.method}:${req.originalUrl || req.url}`;
     const requestHash = calculateRequestHash(req);
@@ -523,7 +543,8 @@ function createIdempotencyGuard(options = { required: false }) {
         const record = existing[0];
 
         // Actor scoping: Key cannot be shared or stolen across different users
-        if (record.user_id !== null && userId !== null && Number(record.user_id) !== Number(userId)) {
+        if ((record.user_id !== null && userId !== null && Number(record.user_id) !== Number(userId)) ||
+            (isCheckoutRequest && (!userId || Number(record.user_id) !== Number(userId)))) {
           return res.status(403).json({
             success: false,
             error: {
@@ -531,6 +552,14 @@ function createIdempotencyGuard(options = { required: false }) {
               message: 'This idempotency key belongs to another authenticated user'
             }
           });
+        }
+
+        if ((record.request_path && record.request_path !== requestPath) ||
+            (record.request_hash && record.request_hash !== requestHash)) {
+          return res.status(409).json({ success: false, error: {
+            code: 'IDEMPOTENCY_PAYLOAD_CONFLICT',
+            message: 'This idempotency key has already been used with a different request payload or endpoint'
+          } });
         }
 
         // If COMPLETED, check payload conflict and return cached response directly
@@ -638,6 +667,18 @@ function createIdempotencyGuard(options = { required: false }) {
             `SELECT * FROM idempotency_records WHERE idempotency_key = ?`,
             [idempotencyKey]
           );
+          const concurrent = concurrentRecord[0];
+          if (concurrent && Number(concurrent.user_id) !== Number(userId)) {
+            return res.status(403).json({ success: false, error: {
+              code: 'IDEMPOTENCY_ACTOR_MISMATCH', message: 'This idempotency key belongs to another authenticated user'
+            } });
+          }
+          if (concurrent && ((concurrent.request_path && concurrent.request_path !== requestPath) ||
+              (concurrent.request_hash && concurrent.request_hash !== requestHash))) {
+            return res.status(409).json({ success: false, error: {
+              code: 'IDEMPOTENCY_PAYLOAD_CONFLICT', message: 'This idempotency key has already been used with a different request payload or endpoint'
+            } });
+          }
           if (concurrentRecord[0] && concurrentRecord[0].status === 'COMPLETED' && concurrentRecord[0].response_status > 0) {
             return res.status(concurrentRecord[0].response_status).json(JSON.parse(concurrentRecord[0].response_body));
           }

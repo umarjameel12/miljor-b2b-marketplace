@@ -14,7 +14,7 @@ function load(name, dependencies) {
   const localRequire = id => {
     if (Object.hasOwn(dependencies, id)) return dependencies[id];
     if (id === 'crypto' || id === 'node:crypto') return require(id);
-    if (['./exactDecimal', './notificationEventPolicy', './supplierEligibilityPolicy'].includes(id)) {
+    if (['./exactDecimal', './notificationEventPolicy', './notificationDeliveryPolicy', './ucpNotificationEventCatalog', './supplierEligibilityPolicy'].includes(id)) {
       return require(path.join(services, id));
     }
     throw Error('Unmocked dependency: ' + id);
@@ -96,6 +96,7 @@ function fixture(options = {}) {
     './safepayAdapter': adapter, './procurementAwardService': lifecycle,
     './regularPoolPaymentHoldService': lifecycle, './flashPoolService': lifecycle,
     './invoiceService': { generateInvoiceForOrder: async () => {} } };
+  dependencies['./ucpTransactionalNotifications']=load('ucpTransactionalNotifications',dependencies);
   return { checkout: load('safepayCheckoutService', dependencies), disputes: load('disputeService', dependencies),
     finance: load('financialSettlementService', dependencies), notices: () => notices,
     order: () => order, dispute: () => dispute, trace, commits: () => commits, rollbacks: () => rollbacks };
@@ -174,7 +175,7 @@ test('admin decision still requiring resolution never announces resolved', async
 });
 test('refund obligation initiation notifies buyer only, replay keeps identity and never announces completion', async () => {
   const s = fixture(); await assess(s);
-  expectEvents(s, 'REFUND_INITIATED', 'refund:51:initiated', [[7, 'BUYER']]);
+  expectEvents(s, 'PAYMENT.REFUND_REQUESTED', 'refund:51:requested', [[7, 'BUYER']]);
   await assess(s); assert.equal(s.notices().length, 1);
 });
 test('prepared payout notifies actual order supplier as pending only and replay does not duplicate', async () => {
@@ -188,8 +189,13 @@ test('active hold blocks preparation and produces no settlement notification', a
 });
 test('internal refund and disbursement approval cannot announce completed money movement', async () => {
   const refund = fixture(); await assess(refund);
+  expectEvents(refund, 'PAYMENT.REFUND_REQUESTED', 'refund:51:requested', [[7, 'BUYER']]);
   await refund.finance.approveRefundObligation({ refundId: 51, actor: admin });
-  expectEvents(refund, 'REFUND_INITIATED', 'refund:51:initiated', [[7, 'BUYER']]);
+  assert.equal(refund.notices().length,3);
+  const approvals=refund.notices().slice(1);
+  assert.deepEqual(approvals.map(n=>[n[0],n[1],n[3]]),[[7,'BUYER','PAYMENT.REFUND_APPROVED'],[8,'SUPPLIER','PAYMENT.REFUND_APPROVED']]);
+  assert.equal(approvals[0][2],approvals[1][2],'both owners share the approved transition identity');
+  assert.ok(refund.notices().every(n=>!['REFUND_COMPLETED','PAYMENT.REFUND_SUCCEEDED'].includes(n[3])));
   const payout = fixture(); await prepare(payout);
   await payout.finance.approveSupplierDisbursement({ disbursementId: 61, actor: admin });
   expectEvents(payout, 'SETTLEMENT_PENDING', 'disbursement:61:pending', [[8, 'SUPPLIER']]);

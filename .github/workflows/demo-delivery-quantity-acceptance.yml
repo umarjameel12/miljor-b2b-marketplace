@@ -26,7 +26,7 @@ jobs:
           node-version: '22'
       - name: Exact quantity arithmetic (14 cases)
         run: node backend/tests/demo_delivery_quantity_policy_gate.js
-      - name: Fulfillment service transaction and role behavior (4 cases)
+      - name: Fulfillment service transaction, role and notification rollback behavior (5 cases)
         run: node backend/tests/demo_fulfillment_discrepancy_service_gate.js
       - name: B6 paid fulfillment and immutable invoice source contract (9 cases)
         run: node backend/tests/demo_b6_fulfillment_invoice_source_gate.js

@@ -1005,6 +1005,8 @@ class DisputeService {
         ]
       );
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:dispute.order_id,type:'DISPUTE.RESPONSE_SUBMITTED',transitionId:trimmedKey});
       await connection.commit();
 
       return {

@@ -18,6 +18,7 @@ function harness(overrides = {}, options = {}) {
   const connection = {
     async query(sql, args) {
       calls.push({sql, args});
+      if (sql === 'SELECT id,role FROM users WHERE id=?') return [[{id:args[0], role:args[0] === 7 ? 'BUYER' : 'SUPPLIER'}]];
       if (sql.includes('FROM users u')) return [[{id:19, role:'SUPPLIER', is_verified:1,
         verification_status:'VERIFIED', profile_verification_status:'VERIFIED'}]];
       if (sql.includes('FROM orders WHERE')) return [[order]];
@@ -50,8 +51,17 @@ function harness(overrides = {}, options = {}) {
       calls.push({sql:'ENQUEUE', event});
       if (options.failNotice === calls.filter(c => c.sql === 'ENQUEUE').length) throw Error('outbox failed');
       notices.push({...event});
+      return [{affectedRows:1}];
     }}
   };
+  const adapterFile = path.join(__dirname, '../src/services/ucpTransactionalNotifications.js');
+  const adapterContext = {module:{exports:{}}, require(name) {
+    if (name === './notificationService') return deps[name];
+    if (name === './ucpNotificationEventCatalog') return require('../src/services/ucpNotificationEventCatalog');
+    throw Error('Unexpected adapter dependency: ' + name);
+  }};
+  vm.runInNewContext(fs.readFileSync(adapterFile, 'utf8'), adapterContext, {filename:adapterFile});
+  deps['./ucpTransactionalNotifications'] = adapterContext.module.exports;
   const filename = path.join(__dirname, '../src/services/fulfillmentService.js');
   const context = {module:{exports:{}}, require(name) {
     if (!Object.hasOwn(deps, name)) throw Error('Unexpected dependency: ' + name);
@@ -154,7 +164,6 @@ for (const [name, order, options, invoke, code] of [
   });
 }
 for (const [name, order, invoke] of [
-  ['preparing', {fulfillment_status:'AWAITING_SUPPLIER_ACKNOWLEDGEMENT'}, h => transition(h,'PREPARING')],
   ['inventory shortage', {}, h => exception(h,'SUPPLIER_INVENTORY_SHORTAGE')],
   ['damaged goods', {fulfillment_status:'DISPATCHED'}, h => discrepancy(h,'DAMAGED_GOODS')],
   ['wrong product', {fulfillment_status:'DISPATCHED'}, h => discrepancy(h,'WRONG_PRODUCT')],
@@ -198,3 +207,35 @@ test('failed milestone insert emits nothing', async () => {
   await assert.rejects(() => transition(h,'READY_FOR_DISPATCH'), /milestone failed/);
   assert.equal(h.calls.some(c => c.sql === 'ENQUEUE'), false);
 });
+
+test('PREPARING records acceptance and packing for persisted participants in the same transaction', async () => {
+  const h = harness({fulfillment_status:'AWAITING_SUPPLIER_ACKNOWLEDGEMENT'});
+  await transition(h, 'PREPARING', {metadata:{buyer_id:999,supplier_id:998}});
+  assert.deepEqual(h.notices.map(n => [n.userId,n.role,n.eventType,n.entityId]), [
+    [7,'BUYER','FULFILLMENT.ACCEPTED',41], [19,'SUPPLIER','FULFILLMENT.ACCEPTED',41],
+    [7,'BUYER','FULFILLMENT.PACKING',41], [19,'SUPPLIER','FULFILLMENT.PACKING',41]
+  ]);
+  assert.equal(h.notices[0].eventKey, h.notices[1].eventKey);
+  assert.match(h.notices[0].eventKey, /^FULFILLMENT\.ACCEPTED:[a-f0-9]{64}$/);
+  assert.match(h.notices[2].eventKey, /^FULFILLMENT\.PACKING:[a-f0-9]{64}$/);
+  assert.equal(h.calls.at(-2).sql, 'COMMIT');
+});
+test('PREPARING replay emits neither acceptance nor packing', async () => {
+  const h = harness({fulfillment_status:'PREPARING'}, {replay:true});
+  assert.equal((await transition(h,'PREPARING')).is_replay, true);
+  assert.equal(h.notices.length,0);
+});
+test('another supplier cannot emit acceptance or packing', async () => {
+  const h = harness({fulfillment_status:'AWAITING_SUPPLIER_ACKNOWLEDGEMENT'});
+  await assert.rejects(() => transition(h,'PREPARING',{actor:{id:20,role:'SUPPLIER'}}), {code:'FORBIDDEN'});
+  assert.equal(h.notices.length,0);
+});
+for (const failNotice of [1,2,3,4]) {
+  test(`PREPARING recipient write ${failNotice} failure rolls back both canonical events`, async () => {
+    const h = harness({fulfillment_status:'AWAITING_SUPPLIER_ACKNOWLEDGEMENT'}, {failNotice});
+    await assert.rejects(() => transition(h,'PREPARING'), /outbox failed/);
+    assert.equal(h.notices.length,0);
+    assert.equal(h.calls.some(c => c.sql === 'COMMIT'),false);
+    assert.equal(h.calls.at(-2).sql,'ROLLBACK');
+  });
+}

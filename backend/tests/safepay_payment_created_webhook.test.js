@@ -118,6 +118,18 @@ function signedNotification(state = 'PAID') {
   return { token:'SIGNED-EVENT', type:'payment:created', notification:{tracker:'track_69b331f2-5ef0-4dd5-bcb4-d288fbdac0ef',state,amount:'1000.00',currency:'PKR'} };
 }
 
+test('raw-signed tracker token is not reused as identity for pending and successful events', async () => {
+  const fx=makeFixture();
+  try {
+    const token='track_69b331f2-5ef0-4dd5-bcb4-d288fbdac0ef';
+    await safepayCheckoutService.processWebhookEvent({...sign({type:'payment.pending',data:{token,state:'PENDING',amount:'1000.00',currency:'PKR'}}),eventId:'PENDING-EVENT'});
+    await safepayCheckoutService.processWebhookEvent({...sign({type:'payment.succeeded',data:{token,state:'PAID',amount:'1000.00',currency:'PKR'}}),eventId:'SUCCESS-EVENT'});
+    const keys=fx.queries.filter(q=>q.sql.includes('INSERT INTO payment_webhook_events')).map(q=>q.params[0]);
+    assert.deepEqual(keys,['PENDING-EVENT','SUCCESS-EVENT']);
+    assert.equal(fx.queries.filter(q=>q.sql.includes('INSERT INTO payments')).length,1);
+  } finally {fx.restore();}
+});
+
 test('data-only authentication ignores unsigned outer event identity, type and notification', async () => {
   const fx=makeFixture();
   try {

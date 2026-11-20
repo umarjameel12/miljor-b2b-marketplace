@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "00987fc79a1bae8e0f6f1af7a0ae42c704fef3dd",
+  "workflowCommit": "f0bb9a3545d1200ee6d217692e5f7600b1113b90",
+  "runId": 43788333296,
+  "url": "https://github.com/umarjameel12/miljor-b2b-marketplace/actions/runs/43788333296",
+  "conclusion": "FAIL",
+  "jobs": [
+    {
+      "id": 133040879731,
+      "name": "Real Chromium buyer/supplier auth, retry and offline journey",
+      "status": "completed",
+      "conclusion": "success",
+      "failedSteps": []
+    },
+    {
+      "id": 133040879962,
+      "name": "Source gates and production frontend build",
+      "status": "completed",
+      "conclusion": "success",
+      "failedSteps": []
+    },
+    {
+      "id": 133040880036,
+      "name": "Disposable MySQL 8.0 migration installation",
+      "status": "completed",
+      "conclusion": "failure",
+      "failedSteps": [
+        "B6 procurement independent release suite (clean historical fixture)",
+        "Real Express order ownership and payment boundary against disposable MySQL"
+      ]
+    }
+  ],
+  "findings": [
+    "Legacy E2/E3 owned-user fixture cleanup omitted newly transactional notification dependents.",
+    "Foreign-buyer checkout exposed provider configuration failure before ownership rejection."
+  ],
+  "remediationStatus": "Focused repairs in progress; preserve failed run rather than relabel it."
+}

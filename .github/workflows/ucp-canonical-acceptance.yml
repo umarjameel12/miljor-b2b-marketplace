@@ -2,6 +2,7 @@ name: MilJor UCP Canonical Reconciliation Acceptance
 on:
   push:
     branches:
+      - plan/ucp-resilience-notification-coverage
       - feature/ucp-canonical-reconciliation-release
       - fix/ucp-final-reconciliation-thischat
       - fix/p0-provider-browser-stock-finance-acceptance
@@ -67,6 +68,11 @@ jobs:
         run: |
           cd backend
           npm run test:ucp
+          npm run test:ucp:completion
+          node --test tests/ucp_notification_metadata.test.js
+          node --test tests/ucp_scheduler_integration.test.js tests/safepay_payment_created_webhook.test.js tests/procurement_line_receipt_api.test.js
+          npm run test:ucp:reviewfixes
+          npm run test:ucp:nativeactions
           node tests/ucp_thischat_reconciliation_gate.js
 
   disposable-mysql-migrations:
@@ -126,6 +132,22 @@ jobs:
         run: cd backend && node database/runMigrations.js
       - name: Verify historical order fingerprint and NULL contractual rate survived migration
         run: cd backend && node tests/p0_finance_historical_upgrade_gate.js verify
+      - name: Verify UCP notifications and email outbox in actual MySQL transactions
+        run: cd backend && npm run test:ucp:notifications:mysql
+      - name: Verify prospective metadata and owned Flash SQL-clock reminders without skips
+        run: cd backend && node tests/ucp_phase_ab_contract_gate.js
+      - name: Verify Phase C delivery reliability and Phase 1 supplier replacement gates
+        run: |
+          cd backend
+          node tests/ucp_phase_c_delivery_gate.js
+          node tests/ucp_phase1_replacement_gate.js
+      - name: Verify Phase 2 finance integrity and capture-email gates
+        run: |
+          cd backend
+          node tests/ucp_phase2_finance_integrity_gate.js
+          node tests/ucp_phase2_email_gate.js
+      - name: Verify Prompt 1 UCP Flash recovery, webhook identity & notification isolation gate
+        run: cd backend && node tests/ucp_prompt1_hardening_gate.js
       - name: Confirm B6 046-048 and UCP 051-053 are recorded as applied
         run: |
           cd backend
@@ -270,4 +292,8 @@ jobs:
           exit 1
       - name: Real Chromium separate buyer/supplier acceptance
         timeout-minutes: 10
-        run: cd backend && node tests/p0_real_browser_journey.js
+        run: |
+          cd backend
+          node tests/p0_real_browser_journey.js
+          P0_BROWSER_BASE_URL=http://127.0.0.1:35100 PHASE1_BROWSER_API_PORT=35101 node tests/ucp_phase1_delivery_browser_gate.js
+          PHASE2_BROWSER_BASE_URL=http://127.0.0.1:35102 PHASE2_BROWSER_API_PORT=35103 node tests/ucp_phase2_full_ui_browser_gate.js

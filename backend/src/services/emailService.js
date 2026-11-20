@@ -13,6 +13,7 @@
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const db = require('../config/db');
+const { normalizePreferences, quietUntil } = require('./notificationDeliveryPolicy');
 
 class EmailService {
   constructor() {
@@ -411,6 +412,12 @@ class EmailService {
    */
   _renderTemplate(templateName, payload) {
     switch (templateName) {
+      case 'UCP_NOTIFICATION':
+        return {
+          subject: `MilJor | ${String(payload.title).replace(/[\r\n]/g, ' ')}`,
+          text: `${payload.title}\n\n${payload.message}\n\nOpen MilJor to review the record.`,
+          html: `<h2>${this._escapeHtml(payload.title)}</h2><p>${this._escapeHtml(payload.message)}</p><p>Open MilJor to review the record.</p>`
+        };
       case 'platform_notification': {
         const invalid = (message, code = 'INVALID_NOTIFICATION') => {
           const error = new Error(message);
@@ -581,6 +588,9 @@ class EmailService {
    * could not be saved; recovery is at-least-once and may send a duplicate.
    */
   async queueAndSendEmail({ recipientEmail, recipientUserId = null, templateName, payload, idempotencyKey = null }) {
+    if (!this.isConfigured && (process.env.NODE_ENV !== 'test' || process.env.FORCE_REAL_EMAIL)) {
+      throw Object.assign(Error('Email transport is not configured'), {code:'EMAIL_TRANSPORT_UNAVAILABLE'});
+    }
     if (!recipientEmail || !recipientEmail.includes('@')) {
       const err = new Error('Valid recipient email address is required');
       err.code = 'INVALID_RECIPIENT';
@@ -615,6 +625,9 @@ class EmailService {
 
     // 2. Dispatch via transporter (Outside long database transactions)
     try {
+      const deferred = await this._deferOptionalEmail({ id: outboxId, recipient_user_id: recipientUserId,
+        template_name: templateName }, payload, token);
+      if (deferred) return { outbox_id: outboxId, status: deferred, recipient: this._maskEmail(recipientEmail) };
       const sendResult = await this.transporter.sendMail({
         from: this.emailFrom,
         to: recipientEmail,
@@ -714,8 +727,8 @@ class EmailService {
       : ['REGISTRATION_OTP', 'EMAIL_VERIFICATION_OTP'];
     await db.query(
       `UPDATE transactional_email_outbox
-       SET status = 'FAILED', last_error = 'SUPERSEDED_BY_NEWER_REQUEST'
-       WHERE recipient_user_id = ? AND template_name IN (?) AND status = 'QUEUED'`,
+       SET status = 'FAILED', last_error = 'SUPERSEDED_BY_NEWER_REQUEST', next_attempt_at = NULL
+       WHERE recipient_user_id = ? AND template_name IN (?) AND status IN ('QUEUED','FAILED')`,
       [userId, supersededTemplates]
     );
 
@@ -740,7 +753,8 @@ class EmailService {
         templateName,
         payload: {
           name: userName,
-          otp: rawOtp
+          otp: rawOtp,
+          verificationId
         }
       });
 
@@ -816,7 +830,7 @@ class EmailService {
    * @param {string} [params.purpose='REGISTRATION_VERIFY']
    * @returns {Promise<boolean>} True if successfully verified
    */
-  async verifyAndConsumeOtp({ userId, otp, purpose = 'REGISTRATION_VERIFY' }) {
+  async verifyAndConsumeOtp({ userId, otp, purpose = 'REGISTRATION_VERIFY',connection=null }) {
     if (!otp || typeof otp !== 'string' || otp.trim().length !== 6) {
       const err = new Error('Valid 6-digit OTP is required');
       err.code = 'INVALID_OTP';
@@ -825,13 +839,14 @@ class EmailService {
     }
 
     const trimmedOtp = otp.trim();
+    const query=connection||db;
 
     // Fetch latest active unconsumed OTP for this user and purpose
-    const [rows] = await db.query(
+    const [rows] = await query.query(
       `SELECT id, email, otp_hash, expires_at, attempts_count, (expires_at <= NOW()) AS is_expired 
        FROM email_verifications
        WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL
-       ORDER BY id DESC LIMIT 1`,
+       ORDER BY id DESC LIMIT 1${connection?' FOR UPDATE':''}`,
       [userId, purpose]
     );
 
@@ -843,6 +858,10 @@ class EmailService {
     }
 
     const record = rows[0];
+    if(connection){
+      const [[fresh]]=await query.query('SELECT (? <= UTC_TIMESTAMP()) AS is_expired',[record.expires_at]);
+      record.is_expired=Number(fresh.is_expired);
+    }
 
     // Check expiration
     if (record.is_expired) {
@@ -855,15 +874,16 @@ class EmailService {
     // Check brute-force attempts limit (max 5)
     if (record.attempts_count >= 5) {
       // Mark consumed to burn the compromised challenge
-      await db.query('UPDATE email_verifications SET consumed_at = NOW() WHERE id = ?', [record.id]);
+      await query.query('UPDATE email_verifications SET consumed_at = NOW() WHERE id = ?', [record.id]);
       const err = new Error('Too many invalid attempts. Verification code invalidated. Please request a new code.');
       err.code = 'MAX_ATTEMPTS_EXCEEDED';
       err.statusCode = 429;
+      err.otpAttemptRecorded=Boolean(connection);
       throw err;
     }
 
     // Increment attempts
-    await db.query('UPDATE email_verifications SET attempts_count = attempts_count + 1 WHERE id = ?', [record.id]);
+    await query.query('UPDATE email_verifications SET attempts_count = attempts_count + 1 WHERE id = ?', [record.id]);
 
     // Dual-hash verification: v2 HMAC vs v1 legacy SHA-256
     const hashesMatch = this.verifyOtpHmac({
@@ -878,11 +898,12 @@ class EmailService {
       const err = new Error('Invalid verification code. Please check and try again.');
       err.code = 'INVALID_OTP';
       err.statusCode = 400;
+      err.otpAttemptRecorded=Boolean(connection);
       throw err;
     }
 
     // Atomic race-proof consumption: Only one concurrent execution can succeed
-    const [updateResult] = await db.query(
+    const [updateResult] = await query.query(
       'UPDATE email_verifications SET consumed_at = NOW() WHERE id = ? AND consumed_at IS NULL',
       [record.id]
     );
@@ -897,6 +918,46 @@ class EmailService {
     return true;
   }
 
+  /** Recheck optional delivery at dispatch, including backlog and retries. No locks span transport. */
+  async _deferOptionalEmail(msg, payload, token) {
+    // Legacy UCP_NOTIFICATION was CRITICAL-only and has no mandatory flag.
+    // Only the current platform projection opts into optional-delivery policy.
+    if (msg.template_name !== 'platform_notification' ||
+        payload.mandatory === true || !msg.recipient_user_id) return null;
+    const [rows] = await db.query(
+      `SELECT quiet_start, quiet_end, timezone_offset_minutes, UTC_TIMESTAMP() AS db_now
+       FROM notification_preferences WHERE user_id = ?`, [msg.recipient_user_id]
+    );
+    if (!rows.length) return null;
+    const notBefore = quietUntil(normalizePreferences(rows[0]), new Date(rows[0].db_now));
+    if (!notBefore) return null;
+    const [deferred] = await db.query(
+      `UPDATE transactional_email_outbox
+       SET status = 'QUEUED', next_attempt_at = ?, attempt_count = attempt_count - 1,
+           claim_token = NULL, claim_expires_at = NULL
+       WHERE id = ? AND status = 'SENDING' AND claim_token = ? AND claim_expires_at > NOW()`,
+      [notBefore, msg.id, token]
+    );
+    return deferred.affectedRows ? 'QUEUED' : 'DELIVERY_AMBIGUOUS';
+  }
+
+  /** The latest challenge must still authorize this exact OTP; legacy payloads have no ID. */
+  async _isOtpDispatchValid(msg, payload) {
+    if (!['REGISTRATION_OTP', 'PASSWORD_RESET_OTP'].includes(msg.template_name)) return true;
+    const purpose = msg.template_name === 'PASSWORD_RESET_OTP' ? 'PASSWORD_RESET' : 'REGISTRATION_VERIFY';
+    const [rows] = await db.query(
+      `SELECT id, email, otp_hash, consumed_at, attempts_count, (expires_at <= NOW()) AS is_expired
+       FROM email_verifications WHERE user_id = ? AND purpose = ? ORDER BY id DESC LIMIT 1`,
+      [msg.recipient_user_id, purpose]
+    );
+    const record = rows[0];
+    return Boolean(record && !record.consumed_at && !Number(record.is_expired) && record.attempts_count < 5 &&
+      (payload.verificationId == null || String(payload.verificationId) === String(record.id)) &&
+      String(record.email).toLowerCase().trim() === String(msg.recipient_email).toLowerCase().trim() &&
+      this.verifyOtpHmac({ otp: payload.otp, userId: msg.recipient_user_id, email: record.email,
+        purpose, storedHash: record.otp_hash }));
+  }
+
   /**
    * Process a batch of pending or retryable outbox messages.
    * Concurrency-safe: claims messages atomically before dispatching.
@@ -908,6 +969,8 @@ class EmailService {
    * @returns {Promise<Object>} { processed, succeeded, failed, ambiguous }
    */
   async processOutboxBatch({ limit = 10 } = {}) {
+    if(!(process.env.NODE_ENV==='test'&&!process.env.FORCE_REAL_EMAIL)&&!this.isConfigured)
+      throw Object.assign(Error('Email transport is not configured'),{code:'EMAIL_TRANSPORT_UNAVAILABLE'});
     const safeLimit = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
     // Requires migration 093. Recover a final crashed attempt as terminal;
     // never recycle an exhausted lease indefinitely.
@@ -917,8 +980,9 @@ class EmailService {
            claim_token = NULL, claim_expires_at = NULL, next_attempt_at = NULL
        WHERE status = 'SENDING' AND claim_expires_at <= NOW() AND attempt_count >= 3`
     );
-    const due = `attempt_count < 3 AND (
-      status = 'QUEUED'
+    const due = `attempt_count < 3
+      AND COALESCE(last_error, '') NOT IN ('SUPERSEDED_BY_NEWER_REQUEST', 'OTP_CHALLENGE_INVALID') AND (
+      (status = 'QUEUED' AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
       OR (status = 'FAILED' AND (
         next_attempt_at <= NOW()
         OR (next_attempt_at IS NULL AND (last_attempted_at IS NULL OR last_attempted_at <= NOW() - INTERVAL 5 MINUTE))
@@ -974,6 +1038,23 @@ class EmailService {
           continue;
         }
         const { text, html } = this._renderTemplate(msg.template_name, payload);
+        if (!await this._isOtpDispatchValid(msg, payload)) {
+          const [retired] = await db.query(
+            `UPDATE transactional_email_outbox
+             SET status = 'FAILED', last_error = ?, next_attempt_at = NULL,
+                 claim_token = NULL, claim_expires_at = NULL
+             WHERE id = ? AND status = 'SENDING' AND claim_token = ?`,
+            ['OTP_CHALLENGE_INVALID', msg.id, token]
+          );
+          if (retired.affectedRows) failed++;
+          else ambiguous++;
+          continue;
+        }
+        const deferred = await this._deferOptionalEmail(msg, payload, token);
+        if (deferred) {
+          if (deferred === 'DELIVERY_AMBIGUOUS') ambiguous++;
+          continue;
+        }
         const sendResult = await this.transporter.sendMail({
           from: this.emailFrom,
           to: msg.recipient_email,

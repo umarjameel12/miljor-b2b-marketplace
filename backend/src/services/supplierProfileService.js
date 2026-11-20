@@ -3,11 +3,47 @@
 // MilJor Package E1: Supplier Profile & Verification Service
 // Handles business logic for onboarding, validation, draft saves, and verification submissions
 // =============================================================================
+const crypto = require('node:crypto');
+const { recordInAppOnConnection } = require('./ucpTransactionalNotifications');
 const defaultDb = require('../config/db');
 const supplierProfileRepo = require('../repositories/supplierProfileRepository');
 const validationService = require('./supplierValidationService');
 
 class SupplierProfileService {
+  // Resolve recipients on the mutation's connection; only verification-authorized
+  // administrators receive verification escalations.
+  async recordIdentityEvent(connection, userId, type, { transitionId = crypto.randomUUID(), escalate = false } = {}) {
+    const [users] = await connection.query('SELECT id, role FROM users WHERE id = ?', [userId]);
+    if (!users[0]) throw new Error('NOTIFICATION_OWNER_NOT_FOUND');
+    const recipients = [{ userId: Number(users[0].id), role: users[0].role }];
+    if (escalate) {
+      const [admins] = await connection.query(
+        "SELECT id, role FROM users WHERE role IN ('SUPER_ADMIN', 'ADMIN', 'VERIFICATION_ADMIN') AND is_verified = 1 AND verification_status <> 'BLOCKED'", []);
+      recipients.push(...admins.filter(row => Number(row.id) !== Number(userId))
+        .map(row => ({ userId: Number(row.id), role: row.role })));
+    }
+    const content = {
+      'IDENTITY.EMAIL_VERIFIED': ['Email verified', 'Your email has been verified successfully.'],
+      'IDENTITY.REGISTERED': ['Welcome to MilJor', 'Your MilJor account has been created.'],
+      'IDENTITY.VERIFICATION_SUBMITTED': ['Verification submitted', 'A supplier verification submission has been recorded. Open MilJor to review its status.'],
+      'IDENTITY.VERIFICATION_APPROVED': ['Verification approved', 'Your account verification has been approved.'],
+      'IDENTITY.VERIFICATION_INFO_REQUESTED': ['Verification information required', 'Open your supplier profile to review the information requested by the verification team.'],
+      'IDENTITY.VERIFICATION_UNDER_REVIEW': ['Verification under review', 'Your supplier verification application is being reviewed.'],
+      'IDENTITY.VERIFICATION_SUSPENDED': ['Supplier verification suspended', 'Your supplier verification has been suspended. Open your supplier profile to review its status.'],
+      'IDENTITY.VERIFICATION_REJECTED': ['Verification rejected', 'Open your supplier profile to review the verification decision.'],
+      'IDENTITY.SECURITY_ALERT': ['Account security change', 'An authentication method on your account has changed. If you did not make this change, contact support.'],
+      'IDENTITY.ACCOUNT_LOCKED': ['Account suspended', 'Your account has been suspended. Contact support to review this decision.'],
+      'IDENTITY.ACCOUNT_UNLOCKED': ['Account reactivated', 'Your account has been reactivated.'],
+      'CATALOG.SERVICE_AREA_CHANGED': ['Service area updated', 'Your supplier service coverage has changed. Review your delivery settings in MilJor.']
+    }[type];
+    if (!content) throw new Error('UNSUPPORTED_IDENTITY_RECEIPT');
+    for (let offset = 0; offset < recipients.length; offset += 100) {
+      await recordInAppOnConnection(connection, { type, aggregateId: 'user-' + users[0].id,
+        aggregateVersion: 1, transitionId, recipients: recipients.slice(offset, offset + 100),
+        title: content[0], message: content[1], payload: { account_id: Number(users[0].id) } });
+    }
+  }
+
   /**
    * Evaluates mandatory fields and onboarding completion
    */
@@ -135,6 +171,7 @@ class SupplierProfileService {
     try {
       await connection.beginTransaction();
 
+      await supplierProfileRepo.lockForUpdate(supplierId, connection);
       const currentProfile = await supplierProfileRepo.findBySupplierId(supplierId, connection);
 
       // Material fields that trigger re-review if changed on a verified supplier
@@ -159,8 +196,13 @@ class SupplierProfileService {
       if (currentProfile.verification_status === 'VERIFIED' && changedMaterialFields.length > 0) {
         await supplierProfileRepo.triggerReReview(supplierId, changedMaterialFields, connection);
         reReviewTriggered = true;
+        await this.recordIdentityEvent(connection, currentProfile.supplier_id, 'IDENTITY.VERIFICATION_SUBMITTED', { escalate: true });
       }
 
+      if (validation.sanitized.lahore_service_area !== undefined &&
+          validation.sanitized.lahore_service_area !== currentProfile.lahore_service_area) {
+        await this.recordIdentityEvent(connection, updated.supplier_id, 'CATALOG.SERVICE_AREA_CHANGED');
+      }
       await connection.commit();
 
       const profile = await this.getProfile(supplierId);
@@ -240,7 +282,23 @@ class SupplierProfileService {
       await connection.beginTransaction();
 
       await supplierProfileRepo.lockForUpdate(supplierId, connection);
+      const locked = await supplierProfileRepo.findBySupplierId(supplierId, connection);
+      if (!locked) throw new Error('Supplier profile not found');
+      if (['PENDING_REVIEW', 'UNDER_REVIEW', 'VERIFIED'].includes(locked.verification_status)) {
+        await connection.commit();
+        return { success: true, alreadyPending: locked.verification_status !== 'VERIFIED',
+          alreadyVerified: locked.verification_status === 'VERIFIED',
+          message: locked.verification_status === 'VERIFIED' ? 'Your supplier account is already verified.' :
+            'Your verification application is already pending review with our verification team.',
+          verification_status: locked.verification_status, submitted_at: locked.submitted_at, verified_at: locked.verified_at };
+      }
+      const lockedValidation = validationService.validateProfileData(locked, true);
+      if (!lockedValidation.valid) {
+        const err = new Error(`Cannot submit incomplete profile: ${lockedValidation.errors.join('; ')}`);
+        err.code = 'INCOMPLETE_PROFILE'; err.details = lockedValidation.errors; throw err;
+      }
       const updated = await supplierProfileRepo.submitForReview(supplierId, connection);
+      await this.recordIdentityEvent(connection, updated.supplier_id, 'IDENTITY.VERIFICATION_SUBMITTED', { escalate: true });
 
       await connection.commit();
 

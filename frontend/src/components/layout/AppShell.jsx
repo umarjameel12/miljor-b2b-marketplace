@@ -6,7 +6,9 @@ import { Logo } from '../ui/Logo';
 import { Drawer } from '../ui/Drawer';
 import FLAGS from '../../config/featureFlags';
 import { unifiedPoolsApi } from '../../api/unifiedPools';
-import { startNotificationInbox, startNotificationPreferences, safeNotificationLink, NOTIFICATION_PAGE_SIZE } from '../../api/notifications';
+import { startNotificationInbox, startNotificationPreferences, safeNotificationLink, isNotificationRead, canManageNotificationOperations, NOTIFICATION_PAGE_SIZE } from '../../api/notifications';
+import { NotificationOperations } from '../notifications/NotificationOperations.jsx';
+import { bindNotificationPanel } from '../notifications/panelAccessibility.js';
 import { parseDeadline } from '../../utils/parseDeadline';
 import {
   Layers,
@@ -94,6 +96,7 @@ export const AppShell = ({ children }) => {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [operationsOpen, setOperationsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNotificationsOpen, setMobileNotificationsOpen] = useState(false);
   const accountKey = isAuthenticated && user?.id != null ? `${user.id}:${role}` : null;
@@ -114,6 +117,7 @@ export const AppShell = ({ children }) => {
     setInboxState(null);
     setLegacyState(null);
     setPreferencesState(null);
+    setOperationsOpen(false);
     if (!accountKey) return undefined;
     const session = startNotificationInbox({
       onChange: state => setInboxState({ ...state, owner: accountKey }),
@@ -171,7 +175,12 @@ export const AppShell = ({ children }) => {
   };
 
   const renderNotificationPanel = () => (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-xs" style={{ color: 'var(--text-primary)' }}>
+      <button type="button" data-notification-close className="underline min-h-9" onClick={() => {
+        const root = mobileNotificationsOpen ? mobileNotificationsRef.current : notificationsRef.current;
+        setNotificationsOpen(false); setMobileNotificationsOpen(false);
+        root?.querySelector('[data-notification-trigger]')?.focus();
+      }}>Close notifications</button>
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold">Notifications{unreadCount !== null ? ` (${unreadCount} unread)` : ''}</span>
         {unreadCount > 0 && (
@@ -184,12 +193,17 @@ export const AppShell = ({ children }) => {
           {inbox?.error && <p role="alert">{inbox.error} <button type="button" disabled={inbox.loading}
             className="underline" onClick={() => inboxRef.current?.refresh()}>Retry</button></p>}
           {(!inbox || inbox.loading) && <p role="status">Updating notifications…</p>}
+          <label className="flex items-center gap-2 min-h-9">
+            <input type="checkbox" checked={inbox?.unread ?? false} disabled={!inbox || inbox.loading}
+              onChange={event => inboxRef.current?.filterUnread(event.target.checked)} />
+            Unread only
+          </label>
           {inbox && !inbox.loading && !inbox.error && notifications.length === 0 && (
             <div className="py-4 text-center"><BellOff className="w-4 h-4 mx-auto mb-2" />No notifications on this page.</div>
           )}
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {notifications.map(n => {
-              const isRead = n.is_read === true || n.is_read === 1 || n.is_read === '1';
+              const isRead = isNotificationRead(n);
               const timestamp = parseDeadline(n.created_at);
               return (
                 <div key={n.id} className={`p-2.5 rounded-xl border ${isRead ? 'opacity-65' : ''}`}
@@ -199,9 +213,9 @@ export const AppShell = ({ children }) => {
                   {Number.isFinite(timestamp) && <time dateTime={new Date(timestamp).toISOString()}
                     className="block mt-1 text-[10px]">{new Date(timestamp).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' })}</time>}
                   <div className="flex gap-3 mt-2">
-                    {notificationLink(n) && <button type="button" className="underline" onClick={() => openNotification(n)}>View details</button>}
+                    {notificationLink(n) && <button type="button" className="underline" onClick={() => openNotification(n)}>View details<span className="sr-only">: {n.title || n.event_type || 'Notification'}</span></button>}
                     {!isRead && <button type="button" className="underline disabled:opacity-50" disabled={inbox.loading}
-                      onClick={() => inboxRef.current?.markRead(n.id)}>Mark read</button>}
+                      onClick={() => inboxRef.current?.markRead(n.id)}>Mark read<span className="sr-only">: {n.title || n.event_type || 'Notification'}</span></button>}
                   </div>
                 </div>
               );
@@ -225,6 +239,7 @@ export const AppShell = ({ children }) => {
               {preferences?.values && (
                 <form className="space-y-2" onSubmit={event => { event.preventDefault(); void preferencesRef.current?.save(); }}>
                   <fieldset className="space-y-2" disabled={preferences.loading || preferences.pending}>
+                    <legend className="sr-only">Notification delivery preferences</legend>
                     <label className="flex items-center justify-between gap-2">
                       <span>Notification language</span>
                       <select value={preferences.values.locale} onChange={event => preferencesRef.current?.edit({ locale: event.target.value })}
@@ -238,7 +253,39 @@ export const AppShell = ({ children }) => {
                         onChange={event => preferencesRef.current?.edit({ optional_email: event.target.checked })} />
                       Optional email notifications
                     </label>
-                    <p className="text-[10px]">SMS delivery is unavailable: no provider is configured. SMS preferences are deferred.</p>
+                    <label className="flex items-center gap-2 min-h-9">
+                      <input type="checkbox" checked={preferences.values.optional_sms}
+                        onChange={event => preferencesRef.current?.edit({ optional_sms: event.target.checked })} />
+                      Optional SMS notifications
+                    </label>
+                    <p className="text-[10px]">Email and SMS delivery depend on available delivery services.</p>
+                    <label className="flex items-center gap-2 min-h-9">
+                      <input type="checkbox" checked={preferences.values.muted_info}
+                        onChange={event => preferencesRef.current?.edit({ muted_info: event.target.checked })} />
+                      Mute routine information
+                    </label>
+                    <p className="text-[10px]">Quiet hours use 24-hour time and may cross midnight. Clear both times to disable them.</p>
+                    <label className="flex items-center justify-between gap-2">
+                      Quiet hours start
+                      <input type="time" step="60" value={preferences.values.quiet_start ?? ''}
+                        className="rounded border p-1 min-w-0" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                        onChange={event => preferencesRef.current?.edit({ quiet_start: event.target.value || null })} />
+                    </label>
+                    <label className="flex items-center justify-between gap-2">
+                      Quiet hours end
+                      <input type="time" step="60" value={preferences.values.quiet_end ?? ''}
+                        className="rounded border p-1 min-w-0" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                        onChange={event => preferencesRef.current?.edit({ quiet_end: event.target.value || null })} />
+                    </label>
+                    <button type="button" className="underline min-h-9"
+                      onClick={() => preferencesRef.current?.edit({ quiet_start: null, quiet_end: null })}>Clear quiet hours</button>
+                    <label className="block space-y-1">
+                      <span>Timezone offset from UTC (minutes)</span>
+                      <input type="number" required min="-840" max="840" step="1" value={preferences.values.timezone_offset_minutes}
+                        className="block w-full rounded border p-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                        onChange={event => preferencesRef.current?.edit({ timezone_offset_minutes: event.target.value === '' ? '' : Number(event.target.value) })} />
+                    </label>
+                    <p className="text-[10px]">For Pakistan, enter 300 (UTC+05:00). Negative values are west of UTC.</p>
                     <button type="submit" className="underline disabled:opacity-50">{preferences.pending ? 'Saving…' : 'Save preferences'}</button>
                   </fieldset>
                   {preferences.saved && <p role="status">Preferences saved.</p>}
@@ -246,6 +293,13 @@ export const AppShell = ({ children }) => {
               )}
             </div>
           </details>
+          {canManageNotificationOperations(role) && (
+            <details open={operationsOpen} className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}
+              onToggle={event => setOperationsOpen(event.currentTarget.open)}>
+              <summary className="font-semibold cursor-pointer">Notification operations</summary>
+              {operationsOpen && <NotificationOperations key={accountKey} role={role} />}
+            </details>
+          )}
           {role === 'SUPPLIER' && (
             <section className="border-t pt-3 space-y-2" style={{ borderColor: 'var(--border-subtle)' }}>
               <h3 className="font-semibold">Supplier operational alerts</h3>
@@ -264,6 +318,32 @@ export const AppShell = ({ children }) => {
       )}
     </div>
   );
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    return bindNotificationPanel(notificationsRef.current, () => setNotificationsOpen(false));
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (!mobileNotificationsOpen) return undefined;
+    return bindNotificationPanel(mobileNotificationsRef.current, () => setMobileNotificationsOpen(false));
+  }, [mobileNotificationsOpen]);
+
+  useEffect(() => {
+    const viewport = window.matchMedia('(min-width: 768px)');
+    const closeHiddenPanel = () => {
+      const previousRoot = viewport.matches ? mobileNotificationsRef.current : notificationsRef.current;
+      const restoreFocus = previousRoot?.contains(document.activeElement);
+      setNotificationsOpen(false);
+      setMobileNotificationsOpen(false);
+      if (restoreFocus) {
+        const visibleRoot = viewport.matches ? notificationsRef.current : mobileNotificationsRef.current;
+        visibleRoot?.querySelector('[data-notification-trigger]')?.focus();
+      }
+    };
+    viewport.addEventListener('change', closeHiddenPanel);
+    return () => viewport.removeEventListener('change', closeHiddenPanel);
+  }, []);
 
   // Outside click listener: Close notifications dropdown when clicking outside
   useEffect(() => {
@@ -468,7 +548,7 @@ export const AppShell = ({ children }) => {
             {/* Search Button */}
             <button
               type="button"
-              onClick={() => setMobileSearchOpen(true)}
+              onClick={() => { setMobileNotificationsOpen(false); setMobileSearchOpen(true); }}
               aria-label="Search commodities"
               title="Search Commodities"
               className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
@@ -485,7 +565,10 @@ export const AppShell = ({ children }) => {
             <div className="relative" ref={mobileNotificationsRef}>
               <button
                 type="button"
-                onClick={() => setMobileNotificationsOpen(!mobileNotificationsOpen)}
+                onClick={() => { setNotificationsOpen(false); setMobileNotificationsOpen(!mobileNotificationsOpen); }}
+                data-notification-trigger
+                aria-haspopup="dialog"
+                aria-controls={mobileNotificationsOpen ? 'mobile-notification-panel' : undefined}
                 aria-label={unreadCount === null ? 'Notifications' : `Notifications, ${unreadCount} unread`}
                 aria-expanded={mobileNotificationsOpen}
                 title="Notifications"
@@ -506,9 +589,10 @@ export const AppShell = ({ children }) => {
               </button>
 
               {/* Mobile Notifications Popover */}
-              {FLAGS.headerNotificationsPopover && mobileNotificationsOpen && (
+              {mobileNotificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-32px)] p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  id="mobile-notification-panel" role="dialog" aria-label="Notifications" tabIndex={-1}
+                  className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-32px)] max-h-[70dvh] overflow-y-auto p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
@@ -954,7 +1038,10 @@ export const AppShell = ({ children }) => {
             <div className="relative" ref={notificationsRef}>
               <button
                 type="button"
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                onClick={() => { setMobileNotificationsOpen(false); setNotificationsOpen(!notificationsOpen); }}
+                data-notification-trigger
+                aria-haspopup="dialog"
+                aria-controls={notificationsOpen ? 'desktop-notification-panel' : undefined}
                 aria-label={unreadCount === null ? 'Notifications' : `Notifications, ${unreadCount} unread`}
                 aria-expanded={notificationsOpen}
                 title="Notifications"
@@ -974,9 +1061,10 @@ export const AppShell = ({ children }) => {
                 )}
               </button>
 
-              {FLAGS.headerNotificationsPopover && notificationsOpen && (
+              {notificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-80 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  id="desktop-notification-panel" role="dialog" aria-label="Notifications" tabIndex={-1}
+                  className="absolute right-0 top-full mt-2 w-80 max-h-[70dvh] overflow-y-auto p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
