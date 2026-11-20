@@ -31,7 +31,7 @@ async function opportunities(){
   await assert.rejects(s.list({role:'SUPPLIER',id:'not-an-id'}),e=>e.statusCode===400);
 }
 function makeAdminHarness(currentStatus='PENDING_REVIEW'){
-  const writes=[],conn={
+  const writes=[],notifications=[],conn={
     beginTransaction:async()=>writes.push('BEGIN'),
     commit:async()=>writes.push('COMMIT'),
     rollback:async()=>writes.push('ROLLBACK'),
@@ -48,17 +48,18 @@ function makeAdminHarness(currentStatus='PENDING_REVIEW'){
   const database={getConnection:async()=>conn,query:async()=>{throw Error('Unexpected non-transactional query')}};
   const admin=load('backend/src/controllers/adminController.js',{
     '../config/db':database,'../services/encryptionService':{},
-    '../services/supplierValidationService':{}
+    '../services/supplierValidationService':{},
+    '../services/notificationService':{enqueueEvent:async(connection,event)=>{notifications.push(event);return {insertId:1};}}
   });
   const res={statusCode:200,status(code){this.statusCode=code;return this;},
     json(body){this.body=body;return this;}};
-  return {admin,res,writes};
+  return {admin,res,writes,notifications};
 }
 async function decision(status,body={}){
-  const {admin,res,writes}=makeAdminHarness();
+  const {admin,res,writes,notifications}=makeAdminHarness();
   await admin.verifySupplier({params:{id:'8'},user:{id:10,role:'SUPER_ADMIN'},
     body:{verification_status:status,...body}},res);
-  return {res,writes};
+  return {res,writes,notifications};
 }
 async function adminRegressions(){
   for(const status of ['MORE_INFORMATION_REQUIRED','REJECTED','UNDER_REVIEW']){
@@ -75,6 +76,9 @@ async function adminRegressions(){
     assert.ok(sql);
     assert.doesNotMatch(sql,/subscription_plan\s*=|max_active_listings\s*=|transaction_fee_percent\s*=/i);
     assert.ok(writes.includes('COMMIT'));
+    const expectedEvent={MORE_INFORMATION_REQUIRED:'VERIFICATION_INFO_REQUESTED',REJECTED:'VERIFICATION_REJECTED',UNDER_REVIEW:'VERIFICATION_UNDER_REVIEW'}[status];
+    assert.equal(notifications.length,1,status+' must notify the supplier inside the decision transaction');
+    assert.equal(notifications[0].eventType,expectedEvent);
   }
   for(const status of ['MORE_INFORMATION_REQUIRED','REJECTED','VERIFIED']){
     const {res,writes}=await decision(status,{rejection_reason:'Document required',subscription_plan:'GROWTH'});
@@ -83,6 +87,7 @@ async function adminRegressions(){
   }
   const approved=await decision('VERIFIED');
   assert.equal(approved.res.statusCode,200);
+  assert.equal(approved.notifications[0].eventType,'VERIFICATION_APPROVED');
   assert.equal(approved.writes.some(x=>x&&x.sql&&/UPDATE users SET role/i.test(x.sql)),true);
   const stale=makeAdminHarness('VERIFIED');
   await stale.admin.verifySupplier({params:{id:'8'},user:{id:10,role:'SUPER_ADMIN'},
