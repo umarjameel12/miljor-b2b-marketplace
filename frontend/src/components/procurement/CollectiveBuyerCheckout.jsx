@@ -64,8 +64,9 @@ export function CollectiveBuyerCheckout({groupId}){
   {!loading&&order&&<div className="space-y-2 text-sm">
    <p>Order #{order.order_id} · {order.payment_status}</p>
    <p>Total locked: PKR {order.total_amount}</p>
+   {order.payment_expires_at&&<p className="text-xs text-[var(--text-muted)]">Payment deadline: {new Date(order.payment_expires_at).toLocaleString()}</p>}
    <p className="text-xs text-[var(--text-muted)]">This is your independent payable order. Group consent did not charge you.</p>
-   <a href={`/orders`} className="inline-block underline text-[var(--brand-accent)]">Open your order to pay with Safepay</a>
+   <a href={`/checkout/${order.order_id}`} className="inline-block underline text-[var(--brand-accent)]">Open your order's Safepay checkout</a>
   </div>}
   {!loading&&order&&order.payment_status==='PAID'&&
    <CollectiveLineReceipt orderId={order.order_id}/>}
