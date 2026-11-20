@@ -30,6 +30,8 @@ const orderView=row=>({
   total_amount:money(row.total_amount),
   payment_status:row.payment_status,order_status:row.order_status,
   fulfillment_status:row.fulfillment_status,
+  payment_expires_at:row.payment_expires_at||null,
+  payment_hold_status:row.payment_hold_status||null,
   checkout_endpoint:'/api/v1/orders/'+row.order_id+'/checkout'
 });
 class ProcurementCollectiveOrderService {
@@ -202,13 +204,14 @@ class ProcurementCollectiveOrderService {
        [listingId,orderId,amount,sample.unit]);
    }
    // Bound each buyer's pending stock allocation to a 15-minute payment lease.
-   await require('./collectivePaymentHoldService').createForOrder(conn,{orderId,buyerId:buyer});
+   const paymentHold=await require('./collectivePaymentHoldService').createForOrder(conn,{orderId,buyerId:buyer});
    await notify.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'PAYMENT_PENDING',
      eventKey:'collective:'+gid+':order:'+orderId+':payment',entityId:orderId});
    await conn.commit();
    return {order:{group_id:gid,order_id:orderId,buyer_id:buyer,supplier_id:Number(bid.supplier_id),
      bid_version_id:version,total_amount:total,payment_status:'AWAITING_PAYMENT',
-     order_status:'AWAITING_PAYMENT',checkout_endpoint:'/api/v1/orders/'+orderId+'/checkout'},
+     order_status:'AWAITING_PAYMENT',payment_expires_at:paymentHold.payment_expires_at,
+     payment_hold_status:'ACTIVE',checkout_endpoint:'/api/v1/orders/'+orderId+'/checkout'},
      is_replay:false,payment_verified:false,stock_allocation:'PENDING'};
   }catch(error){
    await conn.rollback();
