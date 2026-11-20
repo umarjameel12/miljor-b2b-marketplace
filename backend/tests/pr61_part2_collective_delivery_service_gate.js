@@ -16,7 +16,7 @@ Module._load=function(request,parent,isMain){
 const {ProcurementCollectiveDeliveryService}=require('../src/services/procurementCollectiveDeliveryService');
 Module._load=originalLoad;
 
-const date='2026-11-25',window='10:00-12:00',supplier=22,group=10;
+const date=new Date(Date.now()+5*86400000).toISOString().slice(0,10),window='10:00-12:00',supplier=22,group=10;
 function fixture(overrides={}){
  const state={
   group:{id:group,status:'QUALIFIED',qualification_snapshot:JSON.stringify({supplier_id:supplier})},
@@ -157,7 +157,7 @@ async function main(){
   f.state.orders[0].payment_status='AWAITING_PAYMENT';
   await assert.rejects(f.service.decide(201,group,{run_id:501,decision:'ACCEPT'}),e=>e.code==='BUYER_PAYMENT_NOT_VERIFIED');
   f.state.orders[0].payment_status='PAID';
-  await assert.rejects(f.service.decide(201,group,{run_id:501,decision:'REJECT',reason:'No access at this time'}),e=>e.code==='REJECTION_REASON_REQUIRED');
+  await assert.rejects(f.service.decide(201,group,{run_id:501,decision:'REJECT',reason:'No'}),e=>e.code==='REJECTION_REASON_REQUIRED');
   const rejected=await f.service.decide(201,group,{run_id:501,decision:'REJECT',reason:'Delivery window does not work'});
   assert.equal(rejected.status,'EXCEPTION');assert.equal(f.state.run.status,'EXCEPTION');
   await assert.rejects(f.service.assertDispatchReady(f.conn,1001),e=>e.code==='COLLECTIVE_ROUTE_CONSENT_REQUIRED');
