@@ -45,7 +45,7 @@ module.exports=async({conn,db,orderIds,buyers,supplier,outsider,pass})=>{
  await denied(()=>delivery.transition(supplierActor,run.run_id,'CONFIRM',intent()),'DELIVERY_ADDRESS_REAPPROVAL_REQUIRED');
  await conn.query('UPDATE buyer_delivery_addresses SET revision=revision-1 WHERE id=?',[addresses[0]]);
  await delivery.transition(supplierActor,run.run_id,'CONFIRM',intent());
- const own=await delivery.buyerContext(buyerActors[0],orderIds[0]);assert.equal(own.delivery.status,'CONFIRMED');assert.equal(own.other_buyers_disclosed,false);assert.ok(!JSON.stringify(own).includes(String(addresses[1])+'"'));
+ const own=await delivery.buyerContext(buyerActors[0],orderIds[0]);assert.equal(own.delivery.status,'CONFIRMED');assert.equal(own.other_buyers_disclosed,false);const ownJson=JSON.stringify(own);assert.equal(own.choice.address_id,addresses[0]);assert.equal(own.choice.address.id,addresses[0]);assert.equal(own.delivery.snapshot.choice.address_id,addresses[0]);assert.equal(own.delivery.snapshot.choice.address.id,addresses[0]);assert.ok(!new RegExp(`"address_id":(?:"${addresses[1]}"|${addresses[1]}(?=[,}]))`).test(ownJson)&&!new RegExp(`"buyer_id":(?:"${buyers[1]}"|${buyers[1]}(?=[,}]))`).test(ownJson)&&!new RegExp(`"order_id":(?:"${orderIds[1]}"|${orderIds[1]}(?=[,}]))`).test(ownJson));
  await denied(()=>delivery.transition(supplierActor,run.run_id,'DISPATCH',intent()),'ORDER_DISPATCH_REQUIRED');
  await conn.query("UPDATE orders SET fulfillment_status='DISPATCHED' WHERE id IN (?,?)",orderIds);
  await delivery.transition(supplierActor,run.run_id,'DISPATCH',intent());
