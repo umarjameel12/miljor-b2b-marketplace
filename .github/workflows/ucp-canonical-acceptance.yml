@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - plan/ucp-resilience-notification-coverage
+      - integration/pr54-pr61-consolidation
       - feature/ucp-canonical-reconciliation-release
       - fix/ucp-final-reconciliation-thischat
       - fix/p0-provider-browser-stock-finance-acceptance
@@ -74,6 +75,8 @@ jobs:
           npm run test:ucp:reviewfixes
           npm run test:ucp:nativeactions
           node tests/ucp_thischat_reconciliation_gate.js
+      - name: PR #54 + PR #61 consolidation contract and hybrid failure policy gates
+        run: cd backend && node --test --test-force-exit tests/pr54_pr61_collective_hybrid_policy.test.js tests/pr61_safepay_v3_contract.test.js tests/pr61_safepay_v3_sandbox_client.test.js tests/pr61_financial_readiness_gate.test.js
 
   disposable-mysql-migrations:
     name: Disposable MySQL 8.0 migration installation

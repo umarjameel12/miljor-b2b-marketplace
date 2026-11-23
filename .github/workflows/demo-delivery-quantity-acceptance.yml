@@ -4,6 +4,7 @@ on:
     branches:
       - fix/demo-partial-delivery-quantity-20261112
       - integration/demo-five-track-verified-safety-20261112
+      - integration/pr54-pr61-consolidation
   pull_request:
     branches:
       - integration/demo-five-track-verified-safety-20261112

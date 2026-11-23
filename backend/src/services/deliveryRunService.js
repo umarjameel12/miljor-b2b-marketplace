@@ -319,6 +319,9 @@ class DeliveryRunService {
       if (orders.length !== sortedOrderIds.length) {
         throw fail('ORDER_NOT_FOUND', 'One or more requested orders do not exist.', 404);
       }
+      for (const order of orders) {
+        await require('./orderAdminApprovalService').assertOrderAdminApproved(conn, order.id);
+      }
 
       // Post-lock SQL clock revalidation for cutoff!
       const effectiveCutoff = run ? normalizeSqlDateTime(run.cutoff_at) : cutoffSql;

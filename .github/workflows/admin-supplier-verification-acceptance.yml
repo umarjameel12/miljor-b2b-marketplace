@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/admin-portal-supplier-approval-20261112
+      - integration/pr54-pr61-consolidation
   pull_request:
     branches:
       - main
