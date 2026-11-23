@@ -150,6 +150,24 @@ router.put(
   (req, res) => subscriptionController.adminUpdatePlan(req, res)
 );
 
+router.get(
+  '/subscriptions',
+  authorize('SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN', 'ADMIN'),
+  (req, res) => subscriptionController.adminListSubscriptions(req, res)
+);
+
+router.post(
+  '/subscriptions/:subscriptionId/approve',
+  authorize('SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN', 'ADMIN'),
+  (req, res) => subscriptionController.adminApproveSubscription(req, res)
+);
+
+router.post(
+  '/subscriptions/:subscriptionId/reject',
+  authorize('SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN', 'ADMIN'),
+  (req, res) => subscriptionController.adminRejectSubscription(req, res)
+);
+
 // ---------------------------------------------------------------------------
 // Mandatory Order Admin Approval Gate (UCP + Smart Procurement Hub)
 // ---------------------------------------------------------------------------

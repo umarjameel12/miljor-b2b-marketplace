@@ -91,32 +91,79 @@ class SubscriptionEntitlementService {
     );
     const activeListingsCount = listingCountRows[0].activeCount || 0;
 
-    // 4. Fetch subscription plan table configuration
+    // 4. Fetch subscription plan table configuration & latest lifecycle state
     const [planDbRows] = await conn.query(
       `SELECT * FROM subscription_plans WHERE plan_code = ?`,
       [planCode]
     );
     const planMeta = planDbRows[0] || null;
 
+    let latestSub = null;
+    let pendingCheckout = null;
+    try {
+      const [subRows] = await conn.query(
+        `SELECT id, plan_code, status, current_period_start, current_period_end, billing_cycle,
+                auto_renew, pending_plan_code, cancel_at_period_end, cancellation_requested_at,
+                grace_period_end, admin_approval_status, admin_reviewed_at, admin_review_notes,
+                last_payment_attempt_id, price_pkr
+         FROM supplier_subscriptions
+         WHERE supplier_id = ?
+         ORDER BY id DESC LIMIT 1`,
+        [supplierId]
+      );
+      latestSub = subRows[0] || null;
+
+      const [pendingRows] = await conn.query(
+        `SELECT id, target_plan_code, change_type, amount_pkr, currency, status, tracker_token, checkout_url, failure_reason, created_at
+         FROM supplier_subscription_checkout_attempts
+         WHERE supplier_id = ? AND status IN ('INITIATING','INITIATED','UNKNOWN')
+         ORDER BY id DESC LIMIT 1`,
+        [supplierId]
+      );
+      pendingCheckout = pendingRows[0] || null;
+    } catch (lifecycleErr) {
+      if (!['ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR'].includes(lifecycleErr.code)) throw lifecycleErr;
+    }
+
+    const effectiveStatus = profile.subscription_status || latestSub?.status || 'STARTER_ACTIVE';
+    const effectiveMaxFamilies = ['EXPIRED', 'SUSPENDED'].includes(effectiveStatus)
+      ? PLAN_LIMITS.STARTER.maxFamilies
+      : maxAllowedFamilies;
+    const effectiveRemaining = Math.max(0, effectiveMaxFamilies - activeFamiliesCount);
+    const effectiveOverLimit = activeFamiliesCount > effectiveMaxFamilies;
+
     return {
       supplier_id: supplierId,
       plan_code: planCode,
       current_plan: planCode,
       plan_name: planConfig.name,
-      subscription_status: profile.subscription_status || 'STARTER_ACTIVE',
+      subscription_status: effectiveStatus,
       verification_status: profile.verification_status,
-      max_allowed_families: maxAllowedFamilies,
-      max_families: maxAllowedFamilies,
+      max_allowed_families: effectiveMaxFamilies,
+      max_families: effectiveMaxFamilies,
       active_families_count: activeFamiliesCount,
       used_distinct_families: activeFamiliesCount,
-      remaining_family_slots: remainingFamilySlots,
-      remaining_slots: remainingFamilySlots,
+      remaining_family_slots: effectiveRemaining,
+      remaining_slots: effectiveRemaining,
       active_family_ids: activeFamilyIds,
-      is_over_limit: isOverLimit,
-      can_publish_new_family: !isOverLimit && activeFamiliesCount < maxAllowedFamilies,
-      max_active_listings: profile.max_active_listings || planConfig.maxListings,
+      is_over_limit: effectiveOverLimit,
+      can_publish_new_family: !effectiveOverLimit && !['EXPIRED', 'SUSPENDED'].includes(effectiveStatus) && activeFamiliesCount < effectiveMaxFamilies,
+      max_active_listings: ['EXPIRED', 'SUSPENDED'].includes(effectiveStatus)
+        ? PLAN_LIMITS.STARTER.maxListings
+        : (profile.max_active_listings || planConfig.maxListings),
       active_listings_count: activeListingsCount,
-      plan_details: planMeta
+      plan_details: planMeta,
+      active_subscription_id: latestSub?.id || null,
+      current_period_start: latestSub?.current_period_start || null,
+      current_period_end: latestSub?.current_period_end || null,
+      grace_period_end: latestSub?.grace_period_end || null,
+      auto_renew: latestSub ? Boolean(latestSub.auto_renew) : true,
+      cancel_at_period_end: latestSub ? Boolean(latestSub.cancel_at_period_end) : false,
+      cancellation_requested_at: latestSub?.cancellation_requested_at || null,
+      pending_plan_code: latestSub?.pending_plan_code || null,
+      admin_approval_status: latestSub?.admin_approval_status || 'NOT_REQUIRED',
+      admin_review_notes: latestSub?.admin_review_notes || null,
+      pending_checkout: pendingCheckout
     };
   }
 
@@ -164,7 +211,22 @@ class SubscriptionEntitlementService {
       return { allowed: true, reason: 'EXISTING_ACTIVE_FAMILY', entitlements };
     }
 
-    // New family requested: check if supplier has remaining family slots
+    // New family requested: block expired/suspended subscriptions first, then check family slots
+    if (['EXPIRED', 'SUSPENDED'].includes(entitlements.subscription_status)) {
+      const err = new Error(
+        `Supplier subscription is ${entitlements.subscription_status}. Renew or reactivate your subscription before publishing new product families.`
+      );
+      err.code = 'ENTITLEMENT_SUBSCRIPTION_INACTIVE';
+      err.subcode = `SUBSCRIPTION_${entitlements.subscription_status}`;
+      err.statusCode = 403;
+      err.details = {
+        plan_code: entitlements.plan_code,
+        subscription_status: entitlements.subscription_status,
+        target_family_id: Number(targetFamilyId)
+      };
+      throw err;
+    }
+
     if (entitlements.active_families_count >= entitlements.max_allowed_families) {
       const err = new Error(
         `Supplier plan ${entitlements.plan_code} allows up to ${entitlements.max_allowed_families} distinct active product families. ` +
