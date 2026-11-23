@@ -123,17 +123,37 @@ class SubscriptionController {
       });
     }
   }
+  // POST /api/v1/supplier/subscription/renewal-consent
+  async recordRenewalConsent(req, res) {
+    try {
+      const result = await supplierSubscriptionLifecycleService.recordRenewalConsent({
+        actor: req.user,
+        subscriptionId: req.body?.subscription_id,
+        expectedNewPricePkr: req.body?.expected_new_price_pkr
+      });
+      return res.status(201).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message, details: error.details }
+      });
+    }
+  }
+
   // POST /api/v1/supplier/subscription/checkout
   async initiateCheckout(req, res) {
     try {
       const planCode = req.body.plan_code || req.body.targetPlan;
       const idempotencyKey = req.body.idempotency_key || req.headers['idempotency-key'];
-      const confirmCataloguePrice = req.body?.confirm_catalogue_price === true;
+      const renewalConsentToken = req.body?.renewal_consent_token || null;
       const result = await supplierSubscriptionLifecycleService.initiateCheckout({
         actor: req.user,
         planCode,
         idempotencyKey,
-        confirmCataloguePrice
+        renewalConsentToken
       });
       return res.status(result.replay ? 200 : 201).json({
         success: true,

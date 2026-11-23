@@ -13,6 +13,7 @@ test('Frontend Supplier Subscription API & UI enforce server-backed pricing with
   for (const fn of [
     'getSubscription',
     'getSubscriptionPlans',
+    'recordRenewalConsent',
     'initiateSubscriptionCheckout',
     'reconcileSubscriptionCheckout',
     'scheduleSubscriptionDowngrade',
@@ -26,6 +27,8 @@ test('Frontend Supplier Subscription API & UI enforce server-backed pricing with
   assert.ok(!subPageSource.includes('8000.00'), 'Stale fallback price 8000.00 must be removed');
   assert.ok(subPageSource.includes('Pricing unavailable'), 'Must show Pricing unavailable when API fails');
   assert.ok(subPageSource.includes('Transaction Fee (separate)'), 'Must show transaction fee separately');
+  assert.ok(subPageSource.includes('Renewal Price Update Requires Your Explicit Consent'), 'Must show explicit renewal price consent');
+  assert.ok(subPageSource.includes('recordRenewalConsent'), 'Must record auditable renewal consent');
   assert.ok(!/early.?adopter|6.?month|six.?month|annual billing/i.test(subPageSource), 'Must not advertise unapproved discounts or annual billing');
   assert.ok(subPageSource.includes('reconcileSubscriptionCheckout'));
   assert.ok(subPageSource.includes('initiateSubscriptionCheckout'));

@@ -98,6 +98,7 @@ export const SupplierSubscriptionPage = () => {
   const entitlements = overview?.entitlements || null;
   const billingHistory = overview?.billing_history || [];
   const paymentAttempts = overview?.payment_attempts || [];
+  const renewalNotice = overview?.renewal_price_notice || null;
 
   const currentPlan = entitlements?.plan_code || entitlements?.current_plan || 'STARTER';
   const subStatus = entitlements?.subscription_status || 'STARTER_ACTIVE';
@@ -135,6 +136,35 @@ export const SupplierSubscriptionPage = () => {
       await fetchSubscriptionData();
     } catch (err) {
       const msg = err.response?.data?.error?.message || err.message || 'Unable to process subscription request';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAcceptRenewalAndCheckout = async () => {
+    if (!renewalNotice) return;
+    try {
+      setSubmitting(true);
+      setError('');
+      const consentRes = await supplierApi.recordRenewalConsent({
+        subscriptionId: renewalNotice.subscription_id,
+        expectedNewPricePkr: renewalNotice.current_catalogue_price_pkr
+      });
+      const consentToken = consentRes?.data?.consent_token;
+      const res = await supplierApi.initiateSubscriptionCheckout({
+        planCode: renewalNotice.plan_code,
+        idempotencyKey: makeIdempotencyKey(`${renewalNotice.plan_code}-renew`),
+        renewalConsentToken: consentToken
+      });
+      const attempt = res?.data?.attempt;
+      toast.info(
+        `Renewal price accepted and Safepay checkout created for ${renewalNotice.plan_code} (PKR ${Number(attempt?.amount_pkr || 0).toLocaleString()}).`
+      );
+      await fetchSubscriptionData();
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message || 'Unable to record renewal price consent';
       setError(msg);
       toast.error(msg);
     } finally {
@@ -282,6 +312,35 @@ export const SupplierSubscriptionPage = () => {
             </>
           )}
         </div>
+
+        {/* Renewal Price Change Consent Notice */}
+        {renewalNotice?.requires_consent && (
+          <div className="max-w-4xl mx-auto p-5 rounded-2xl border border-amber-500/40 bg-amber-500/10 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Renewal Price Update Requires Your Explicit Consent</span>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              Your previous agreed monthly price for {renewalNotice.plan_code} was{' '}
+              <strong>
+                {renewalNotice.previous_agreed_price_pkr
+                  ? `PKR ${Number(renewalNotice.previous_agreed_price_pkr).toLocaleString()}`
+                  : 'unavailable'}
+              </strong>
+              . The current monthly renewal price is{' '}
+              <strong>PKR {Number(renewalNotice.current_catalogue_price_pkr).toLocaleString()} / month</strong>.
+              Accepting updates your monthly renewal price for future billing cycles; existing historical payments are unchanged.
+            </p>
+            <button
+              type="button"
+              disabled={submitting || Boolean(pendingCheckout)}
+              onClick={handleAcceptRenewalAndCheckout}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--brand-accent)] text-stone-900 disabled:opacity-50"
+            >
+              Accept New Renewal Price &amp; Start Checkout
+            </button>
+          </div>
+        )}
 
         {/* Pending Safepay Checkout Banner */}
         {(pendingCheckout || returnedAttemptId) && (

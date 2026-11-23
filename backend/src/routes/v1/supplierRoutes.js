@@ -65,6 +65,7 @@ router.get('/verification/status', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN')
 // ---------------------------------------------------------------------------
 router.get('/subscription', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.getMySubscription(req, res));
 router.post('/subscription/upgrade', authorize('SUPPLIER', 'ADMIN', 'SUPER_ADMIN'), (req, res) => subscriptionController.changePlan(req, res));
+router.post('/subscription/renewal-consent', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.recordRenewalConsent(req, res));
 router.post('/subscription/checkout', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.initiateCheckout(req, res));
 router.post('/subscription/checkout/:attemptId/reconcile', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.reconcileCheckout(req, res));
 router.post('/subscription/downgrade', authorizeStrict('SUPPLIER'), (req, res) => subscriptionController.scheduleDowngrade(req, res));

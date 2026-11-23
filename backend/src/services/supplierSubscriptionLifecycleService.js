@@ -169,15 +169,130 @@ class SupplierSubscriptionLifecycleService {
       [supplierId]
     );
 
+    let renewalPriceNotice = null;
+    const currentSub = billingHistory.find((r) => ['ACTIVE', 'GRACE'].includes(r.status));
+    if (currentSub && ['GROWTH', 'BUSINESS'].includes(currentSub.plan_code)) {
+      const [planRows] = await this.db.query(
+        'SELECT monthly_price_pkr FROM subscription_plans WHERE plan_code = ?',
+        [currentSub.plan_code]
+      );
+      const cataloguePrice = planRows[0] ? exact.toCanonicalString(planRows[0].monthly_price_pkr, 2) : null;
+      const storedPrice = currentSub.price_pkr != null ? exact.toCanonicalString(currentSub.price_pkr, 2) : null;
+      if (cataloguePrice && (!storedPrice || storedPrice !== cataloguePrice)) {
+        renewalPriceNotice = {
+          requires_consent: true,
+          subscription_id: currentSub.id,
+          plan_code: currentSub.plan_code,
+          billing_cycle: 'MONTHLY',
+          previous_agreed_price_pkr: storedPrice,
+          current_catalogue_price_pkr: cataloguePrice
+        };
+      }
+    }
+
     return {
       entitlements,
       billing_history: billingHistory,
       payment_attempts: paymentAttempts.map(sanitizeAttempt),
-      audit_events: auditEvents
+      audit_events: auditEvents,
+      renewal_price_notice: renewalPriceNotice
     };
   }
 
-  async initiateCheckout({ actor, planCode, idempotencyKey, confirmCataloguePrice = false, v3Client = null }) {
+  async recordRenewalConsent({ actor, subscriptionId, expectedNewPricePkr }) {
+    const supplierId = assertSupplierActor(actor);
+    const subId = Number(subscriptionId);
+    if (!Number.isSafeInteger(subId) || subId <= 0) {
+      throw makeError('INVALID_SUBSCRIPTION_ID', 400, 'Valid subscription_id is required');
+    }
+    if (expectedNewPricePkr === undefined || expectedNewPricePkr === null || Number(expectedNewPricePkr) <= 0) {
+      throw makeError('INVALID_EXPECTED_PRICE', 400, 'expected_new_price_pkr must be explicitly provided');
+    }
+    const expectedPrice = exact.toCanonicalString(expectedNewPricePkr, 2);
+
+    const conn = await this.db.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [subs] = await conn.query(
+        `SELECT * FROM supplier_subscriptions WHERE id = ? FOR UPDATE`,
+        [subId]
+      );
+      if (!subs.length) {
+        throw makeError('SUBSCRIPTION_NOT_FOUND', 404, 'Subscription record not found');
+      }
+      const sub = subs[0];
+      if (Number(sub.supplier_id) !== supplierId) {
+        throw makeError('FORBIDDEN', 403, "You cannot accept renewal terms for another supplier's subscription");
+      }
+      if (!['ACTIVE', 'GRACE'].includes(sub.status) || !['GROWTH', 'BUSINESS'].includes(sub.plan_code)) {
+        throw makeError('INVALID_SUBSCRIPTION_STATE', 409, 'Only active or grace paid subscriptions can record renewal price consent');
+      }
+      if (sub.price_pkr === null || Number(sub.price_pkr) <= 0) {
+        throw makeError('RENEWAL_AGREED_PRICE_MISSING', 409, 'Subscription lacks a stored historical price');
+      }
+      const previousPrice = exact.toCanonicalString(sub.price_pkr, 2);
+
+      const [plans] = await conn.query(
+        'SELECT monthly_price_pkr, is_active FROM subscription_plans WHERE plan_code = ?',
+        [sub.plan_code]
+      );
+      if (!plans.length || Number(plans[0].is_active) !== 1) {
+        throw makeError('PLAN_NOT_AVAILABLE', 409, 'Plan is not active');
+      }
+      const cataloguePrice = parsePlanPrice(plans[0].monthly_price_pkr);
+      if (expectedPrice !== cataloguePrice) {
+        throw makeError(
+          'RENEWAL_PRICE_MISMATCH',
+          409,
+          `Accepted price (PKR ${expectedPrice}) does not match current catalogue price (PKR ${cataloguePrice})`
+        );
+      }
+
+      const consentToken = `rc_${crypto.randomBytes(24).toString('hex')}`;
+      const [ins] = await conn.query(
+        `INSERT INTO supplier_subscription_renewal_consents
+         (supplier_id, subscription_id, plan_code, billing_cycle, previous_agreed_price_pkr, accepted_price_pkr, consent_token, accepted_at)
+         VALUES (?, ?, ?, 'MONTHLY', ?, ?, ?, NOW())`,
+        [supplierId, sub.id, sub.plan_code, previousPrice, cataloguePrice, consentToken]
+      );
+
+      await this._recordAudit(conn, {
+        supplierId,
+        subscriptionId: sub.id,
+        eventType: 'RENEWAL_PRICE_CONSENT_ACCEPTED',
+        fromPlan: sub.plan_code,
+        toPlan: sub.plan_code,
+        fromStatus: sub.status,
+        toStatus: sub.status,
+        actorId: supplierId,
+        actorRole: 'SUPPLIER',
+        metadata: {
+          consent_id: ins.insertId,
+          billing_cycle: 'MONTHLY',
+          previous_agreed_price_pkr: previousPrice,
+          accepted_price_pkr: cataloguePrice
+        }
+      });
+
+      await conn.commit();
+      return {
+        consent_id: ins.insertId,
+        consent_token: consentToken,
+        subscription_id: sub.id,
+        plan_code: sub.plan_code,
+        billing_cycle: 'MONTHLY',
+        previous_agreed_price_pkr: previousPrice,
+        accepted_price_pkr: cataloguePrice
+      };
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  }
+
+  async initiateCheckout({ actor, planCode, idempotencyKey, renewalConsentToken = null, v3Client = null }) {
     const supplierId = assertSupplierActor(actor);
     const normalizedPlan = String(planCode || '').toUpperCase();
     if (!['GROWTH', 'BUSINESS'].includes(normalizedPlan)) {
@@ -261,8 +376,9 @@ class SupplierSubscriptionLifecycleService {
       }
       price = parsePlanPrice(plans[0].monthly_price_pkr);
 
-      // Existing subscriber repricing protection: never silently charge an existing
-      // paid subscriber a different catalogue price without explicit consent.
+      // Existing subscriber repricing protection: require an explicit, server-issued,
+      // auditable renewal consent record before charging a changed catalogue price.
+      let consumedConsentId = null;
       if (changeType === 'RENEWAL') {
         const [activeSubRows] = await conn.query(
           `SELECT id, price_pkr FROM supplier_subscriptions
@@ -279,13 +395,41 @@ class SupplierSubscriptionLifecycleService {
           );
         }
         const agreedPrice = exact.toCanonicalString(storedPriceRaw, 2);
-        if (agreedPrice !== price && confirmCataloguePrice !== true) {
-          throw makeError(
-            'RENEWAL_PRICE_CONSENT_REQUIRED',
-            409,
-            `Plan catalogue price (PKR ${price}) differs from your existing agreed price (PKR ${agreedPrice}). Explicit consent is required before initiating renewal checkout.`,
-            { agreed_price_pkr: agreedPrice, current_catalogue_price_pkr: price }
+        if (agreedPrice !== price) {
+          if (!renewalConsentToken || typeof renewalConsentToken !== 'string') {
+            throw makeError(
+              'RENEWAL_PRICE_CONSENT_REQUIRED',
+              409,
+              `Plan catalogue price (PKR ${price}) differs from your existing agreed price (PKR ${agreedPrice}). Explicit recorded renewal consent is required before checkout.`,
+              {
+                subscription_id: activeSubRows[0].id,
+                plan_code: normalizedPlan,
+                billing_cycle: 'MONTHLY',
+                agreed_price_pkr: agreedPrice,
+                current_catalogue_price_pkr: price
+              }
+            );
+          }
+          const [consents] = await conn.query(
+            `SELECT * FROM supplier_subscription_renewal_consents
+             WHERE consent_token = ? AND supplier_id = ? AND subscription_id = ? AND consumed_by_attempt_id IS NULL
+             FOR UPDATE`,
+            [renewalConsentToken, supplierId, activeSubRows[0].id]
           );
+          if (
+            !consents.length ||
+            consents[0].plan_code !== normalizedPlan ||
+            consents[0].billing_cycle !== 'MONTHLY' ||
+            exact.toCanonicalString(consents[0].accepted_price_pkr, 2) !== price ||
+            exact.toCanonicalString(consents[0].previous_agreed_price_pkr, 2) !== agreedPrice
+          ) {
+            throw makeError(
+              'RENEWAL_PRICE_CONSENT_INVALID',
+              409,
+              'Renewal consent token is invalid, already used, or does not match the current catalogue price'
+            );
+          }
+          consumedConsentId = consents[0].id;
         }
       }
 
@@ -296,6 +440,15 @@ class SupplierSubscriptionLifecycleService {
         [supplierId, normalizedPlan, changeType, price, key]
       );
       attemptId = ins.insertId;
+
+      if (consumedConsentId) {
+        await conn.query(
+          `UPDATE supplier_subscription_renewal_consents
+           SET consumed_by_attempt_id = ?, consumed_at = NOW()
+           WHERE id = ?`,
+          [attemptId, consumedConsentId]
+        );
+      }
 
       await this._recordAudit(conn, {
         supplierId,

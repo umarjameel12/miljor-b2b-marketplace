@@ -361,8 +361,9 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       conn5Ok.release();
     }
 
-    // 8. Existing Subscriber Repricing Protection: historical 3500.00 subscriber fails closed on 2999.00 renewal without consent
+    // 8. Existing Subscriber Repricing Protection: historical 3500.00 subscriber fails closed on 2999.00 renewal without auditable consent
     await db.query(`UPDATE supplier_subscriptions SET price_pkr = 3500.00 WHERE id = ?`, [subscriptionId]);
+    // Bare request without server-issued consent token is rejected
     await assert.rejects(
       () =>
         svc.initiateCheckout({
@@ -373,6 +374,30 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
         }),
       (err) => err.code === 'RENEWAL_PRICE_CONSENT_REQUIRED' && err.statusCode === 409
     );
+
+    // Mismatched expected price cannot create a renewal consent record
+    const badConsentRes = await api('/api/v1/supplier/subscription/renewal-consent', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${supplierToken}` },
+      body: { subscription_id: subscriptionId, expected_new_price_pkr: '3500.00' }
+    });
+    assert.equal(badConsentRes.status, 409);
+    assert.equal(badConsentRes.body.error.code, 'RENEWAL_PRICE_MISMATCH');
+
+    // Explicit supplier consent with exact current catalogue price creates auditable consent token
+    const goodConsentRes = await api('/api/v1/supplier/subscription/renewal-consent', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${supplierToken}` },
+      body: { subscription_id: subscriptionId, expected_new_price_pkr: '2999.00' }
+    });
+    assert.equal(goodConsentRes.status, 201);
+    assert.ok(goodConsentRes.body.data.consent_token.startsWith('rc_'));
+    assert.equal(goodConsentRes.body.data.previous_agreed_price_pkr, '3500.00');
+    assert.equal(goodConsentRes.body.data.accepted_price_pkr, '2999.00');
+
+    // Historical price remains unchanged
+    const [histCheck] = await db.query('SELECT price_pkr FROM supplier_subscriptions WHERE id = ?', [subscriptionId]);
+    assert.equal(histCheck[0].price_pkr, '3500.00');
     await db.query(`UPDATE supplier_subscriptions SET price_pkr = 2999.00 WHERE id = ?`, [subscriptionId]);
 
     // 9. Downgrade & Cancellation at Period End Preserve Paid Entitlements & Existing Products
@@ -448,6 +473,7 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
     server.close();
     if (supplierId) {
       await db.query('DELETE FROM platform_notifications WHERE user_id IN (?, ?, ?)', [supplierId, otherSupplierId || 0, adminId || 0]).catch(() => {});
+      await db.query('DELETE FROM supplier_subscription_renewal_consents WHERE supplier_id IN (?, ?)', [supplierId, otherSupplierId || 0]).catch(() => {});
       await db.query('DELETE FROM supplier_subscription_audit_events WHERE supplier_id IN (?, ?)', [supplierId, otherSupplierId || 0]).catch(() => {});
       await db.query('DELETE FROM supplier_subscription_capture_events WHERE supplier_id IN (?, ?)', [supplierId, otherSupplierId || 0]).catch(() => {});
       await db.query('DELETE FROM supplier_subscription_checkout_attempts WHERE supplier_id IN (?, ?)', [supplierId, otherSupplierId || 0]).catch(() => {});

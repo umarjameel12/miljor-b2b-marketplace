@@ -23,10 +23,19 @@ export const supplierApi = {
     return res.data;
   },
 
-  initiateSubscriptionCheckout: async ({ planCode, idempotencyKey }) => {
+  recordRenewalConsent: async ({ subscriptionId, expectedNewPricePkr }) => {
+    const res = await apiClient.post('/supplier/subscription/renewal-consent', {
+      subscription_id: subscriptionId,
+      expected_new_price_pkr: expectedNewPricePkr
+    });
+    return res.data;
+  },
+
+  initiateSubscriptionCheckout: async ({ planCode, idempotencyKey, renewalConsentToken = null }) => {
     const res = await apiClient.post('/supplier/subscription/checkout', {
       plan_code: planCode,
-      idempotency_key: idempotencyKey
+      idempotency_key: idempotencyKey,
+      ...(renewalConsentToken ? { renewal_consent_token: renewalConsentToken } : {})
     });
     return res.data;
   },
