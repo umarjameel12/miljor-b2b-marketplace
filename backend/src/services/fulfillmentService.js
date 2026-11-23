@@ -142,11 +142,11 @@ class FulfillmentService {
         params.push(status);
       }
 
-      // Count total matching orders
+      // Count total matching orders (only Admin-approved orders are actionable for suppliers)
       const [countRows] = await connection.query(
         `SELECT COUNT(*) AS total
          FROM orders o
-         WHERE o.supplier_id = ? AND o.payment_status = 'PAID' ${statusFilter}`,
+         WHERE o.supplier_id = ? AND o.payment_status = 'PAID' AND o.admin_approval_status = 'ADMIN_APPROVED' ${statusFilter}`,
         params
       );
       const totalOrders = Number(countRows[0]?.total || 0);
@@ -167,7 +167,7 @@ class FulfillmentService {
          FROM orders o
          LEFT JOIN pools p ON o.pool_id = p.id
          LEFT JOIN products pr ON p.product_id = pr.id
-         WHERE o.supplier_id = ? AND o.payment_status = 'PAID' ${statusFilter}
+         WHERE o.supplier_id = ? AND o.payment_status = 'PAID' AND o.admin_approval_status = 'ADMIN_APPROVED' ${statusFilter}
          ORDER BY o.id DESC
          LIMIT ? OFFSET ?`,
         queryParams
@@ -224,6 +224,19 @@ class FulfillmentService {
       if (Number(order.supplier_id) !== Number(actor.id)) {
         const err = new Error('Access denied. You are not the assigned supplier for this order.');
         err.code = 'FORBIDDEN';
+        err.statusCode = 403;
+        throw err;
+      }
+
+      if (order.admin_approval_status === 'ADMIN_REJECTED') {
+        const err = new Error('Order was rejected by Admin and cannot proceed to supplier fulfillment');
+        err.code = 'ADMIN_APPROVAL_REJECTED';
+        err.statusCode = 403;
+        throw err;
+      }
+      if (order.admin_approval_status !== 'ADMIN_APPROVED') {
+        const err = new Error('Order requires Admin Approval before supplier fulfillment access');
+        err.code = 'ADMIN_APPROVAL_REQUIRED';
         err.statusCode = 403;
         throw err;
       }
@@ -321,6 +334,19 @@ class FulfillmentService {
         throw err;
       }
 
+      if (order.admin_approval_status === 'ADMIN_REJECTED') {
+        const err = new Error('Order was rejected by Admin and cannot proceed to supplier fulfillment');
+        err.code = 'ADMIN_APPROVAL_REJECTED';
+        err.statusCode = 403;
+        throw err;
+      }
+      if (order.admin_approval_status !== 'ADMIN_APPROVED') {
+        const err = new Error('Order requires Admin Approval before supplier fulfillment access');
+        err.code = 'ADMIN_APPROVAL_REQUIRED';
+        err.statusCode = 403;
+        throw err;
+      }
+
       // Paid-only eligibility check
       if (order.payment_status !== 'PAID') {
         const err = new Error(`Order is in '${order.payment_status}' status and cannot be fulfilled`);
@@ -328,6 +354,9 @@ class FulfillmentService {
         err.statusCode = 422;
         throw err;
       }
+
+      // Mandatory Admin Approval Gate
+      await require('./orderAdminApprovalService').assertOrderAdminApproved(connection, order.id);
 
       const currentStatus = order.fulfillment_status || 'AWAITING_SUPPLIER_ACKNOWLEDGEMENT';
       if(order.notes==='SMART_PROCUREMENT_BASKET')await require('./procurementCollectiveCommitmentService').assertFunded(connection,order.id);

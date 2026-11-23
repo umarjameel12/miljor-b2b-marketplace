@@ -10,6 +10,7 @@ const identityNotifications = require('../services/supplierProfileService');
 const db = require('../config/db');
 const encryptionService = require('../services/encryptionService');
 const validationService = require('../services/supplierValidationService');
+const orderAdminApprovalService = require('../services/orderAdminApprovalService');
 
 class AdminController {
 
@@ -435,6 +436,44 @@ class AdminController {
     } catch (error) {
       console.error('Reactivate User Error:', error);
       return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+    }
+  }
+
+  // GET /api/v1/admin/orders/pending-approval
+  async getPendingApprovalOrders(req, res) {
+    try {
+      const orders = await orderAdminApprovalService.listPendingOrders(req.user);
+      return res.status(200).json({ success: true, data: { orders, count: orders.length } });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'SERVER_ERROR', message: error.message } });
+    }
+  }
+
+  // POST /api/v1/admin/orders/:id/approve
+  async approveOrder(req, res) {
+    try {
+      const result = await orderAdminApprovalService.approveOrder({
+        orderId: req.params.id,
+        actor: req.user,
+        notes: req.body?.notes || null
+      });
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'SERVER_ERROR', message: error.message } });
+    }
+  }
+
+  // POST /api/v1/admin/orders/:id/reject
+  async rejectOrder(req, res) {
+    try {
+      const result = await orderAdminApprovalService.rejectOrder({
+        orderId: req.params.id,
+        actor: req.user,
+        reason: req.body?.reason
+      });
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'SERVER_ERROR', message: error.message } });
     }
   }
 }

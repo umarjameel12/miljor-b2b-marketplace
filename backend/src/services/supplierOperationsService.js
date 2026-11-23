@@ -28,7 +28,7 @@ class SupplierOperationsService{
         (SELECT COUNT(*) FROM procurement_quotes q JOIN procurement_quote_versions v ON v.quote_id=q.id AND v.version_number=q.current_version
           JOIN procurement_requests r ON r.id=q.request_id WHERE q.supplier_id=? AND q.status='ACTIVE' AND r.status='OPEN'
           AND r.quote_deadline>UTC_TIMESTAMP() AND v.valid_until>UTC_TIMESTAMP() AND v.valid_until<=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 24 HOUR)) AS expiring_quotes,
-        (SELECT COUNT(*) FROM orders WHERE supplier_id=? AND payment_status='PAID'
+        (SELECT COUNT(*) FROM orders WHERE supplier_id=? AND payment_status='PAID' AND admin_approval_status='ADMIN_APPROVED'
           AND fulfillment_status IN ('AWAITING_SUPPLIER_ACKNOWLEDGEMENT','PREPARING','READY_FOR_DISPATCH','DISPATCHED')) AS paid_to_fulfill,
         (SELECT COUNT(*) FROM orders WHERE supplier_id=? AND payment_status='PAID' AND fulfillment_status='SUPPLIER_DELIVERED') AS awaiting_buyer_receipt,
         (SELECT COUNT(*) FROM orders WHERE supplier_id=? AND payment_status='PAID' AND fulfillment_status='EXCEPTION') AS fulfillment_exceptions,

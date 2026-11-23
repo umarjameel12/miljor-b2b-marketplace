@@ -113,12 +113,12 @@ test('Phase F.1: Four buyers, all paid -> GROUP_FULLY_FUNDED and dispatchable', 
   assert.equal(res.paid_total_qty, '100.0000');
 });
 
-test('Phase F.2 & F.5 & F.9: Three paid + one unpaid expiry releases ONLY unpaid PENDING allocation, keeps paid COMMITTED, is idempotent on duplicate run', async () => {
+test('Phase F.2: Three paid + one unpaid expiry releases ONLY unpaid PENDING allocation and keeps paid COMMITTED', async () => {
   const mock = createMockDb({
     holds: [
       { id: 1, order_id: 101, group_id: 10, buyer_id: 1, payment_hold_status: 'COMMITTED', payment_status: 'PAID', expired: false },
       { id: 2, order_id: 102, group_id: 10, buyer_id: 2, payment_hold_status: 'COMMITTED', payment_status: 'PAID', expired: false },
-      { id: 3, order_id: 103, group_id: 10, buyer_id: 3, payment_hold_status: 'ACTIVE', payment_status: 'PAID', expired: true },
+      { id: 3, order_id: 103, group_id: 10, buyer_id: 3, payment_hold_status: 'COMMITTED', payment_status: 'PAID', expired: false },
       { id: 4, order_id: 104, group_id: 10, buyer_id: 4, payment_hold_status: 'ACTIVE', payment_status: 'AWAITING_PAYMENT', expired: true }
     ],
     allocations: [
@@ -131,17 +131,48 @@ test('Phase F.2 & F.5 & F.9: Three paid + one unpaid expiry releases ONLY unpaid
   const svc = new CollectivePaymentHoldService(mock.db, mock.notifier);
 
   const first = await svc.processExpiredBatch(100);
-  assert.equal(first.checked, 2);
-  assert.equal(first.committed, 1); // Paid buyer #3 hold expiry attempt protected -> COMMITTED!
-  assert.equal(first.released, 1);  // Only unpaid buyer #4 released!
+  assert.equal(first.checked, 1);
+  assert.equal(first.released, 1);
   assert.equal(mock.state.allocations.find((a) => a.reference_id === 101).status, 'COMMITTED');
   assert.equal(mock.state.allocations.find((a) => a.reference_id === 103).status, 'COMMITTED');
   assert.equal(mock.state.allocations.find((a) => a.reference_id === 104).status, 'RELEASED');
   assert.equal(mock.state.notifications.length, 1);
   assert.equal(mock.state.notifications[0].eventType, 'PAYMENT_FAILED');
   assert.equal(mock.state.notifications[0].userId, 4);
+});
 
-  // Duplicate expiry worker execution -> no double release, no duplicate notification
+test('Phase F.5: Paid buyer hold expiry attempt is protected and marked COMMITTED rather than released', async () => {
+  const mock = createMockDb({
+    holds: [
+      { id: 3, order_id: 103, group_id: 10, buyer_id: 3, payment_hold_status: 'ACTIVE', payment_status: 'PAID', expired: true }
+    ],
+    allocations: [
+      { id: 13, allocation_type: 'ORDER_DIRECT', reference_id: 103, status: 'COMMITTED' }
+    ]
+  });
+  const svc = new CollectivePaymentHoldService(mock.db, mock.notifier);
+  const res = await svc.processExpiredBatch(100);
+  assert.equal(res.checked, 1);
+  assert.equal(res.committed, 1);
+  assert.equal(res.released, 0);
+  assert.equal(mock.state.holds[0].payment_hold_status, 'COMMITTED');
+  assert.equal(mock.state.allocations[0].status, 'COMMITTED');
+});
+
+test('Phase F.9: Duplicate expiry worker execution is idempotent with zero double release or duplicate notification', async () => {
+  const mock = createMockDb({
+    holds: [
+      { id: 4, order_id: 104, group_id: 10, buyer_id: 4, payment_hold_status: 'ACTIVE', payment_status: 'AWAITING_PAYMENT', expired: true }
+    ],
+    allocations: [
+      { id: 14, allocation_type: 'ORDER_DIRECT', reference_id: 104, status: 'PENDING' }
+    ]
+  });
+  const svc = new CollectivePaymentHoldService(mock.db, mock.notifier);
+  const first = await svc.processExpiredBatch(100);
+  assert.equal(first.released, 1);
+  assert.equal(mock.state.notifications.length, 1);
+
   const second = await svc.processExpiredBatch(100);
   assert.equal(second.checked, 0);
   assert.equal(second.released, 0);

@@ -671,6 +671,7 @@ class DeliveryRunService {
 
         const targetOrderStatus = stop.mode === 'PICKUP' ? 'READY_FOR_DISPATCH' : 'DISPATCHED';
         if (['AWAITING_SUPPLIER_ACKNOWLEDGEMENT', 'PREPARING', 'READY_FOR_DISPATCH'].includes(order.fulfillment_status)) {
+          await require('./orderAdminApprovalService').assertOrderAdminApproved(conn, order.id);
           await conn.query(
             `UPDATE orders
              SET fulfillment_status = ?,

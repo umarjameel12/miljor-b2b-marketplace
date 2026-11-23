@@ -104,6 +104,7 @@ class ProcurementDeliveryRunService{
    const choices=[],measures=[],orders=[];
    for(const oid of ids){
     const order=await this._order(conn,actor,oid);orders.push(order);
+    await require('./orderAdminApprovalService').assertOrderAdminApproved(conn,oid);
     if(!['AWAITING_SUPPLIER_ACKNOWLEDGEMENT','PREPARING','READY_FOR_DISPATCH'].includes(order.fulfillment_status))throw fail('ROUTE_ORDER_NOT_READY','Only unassigned pre-dispatch paid orders are eligible');
     await require('./procurementCollectiveCommitmentService').assertFunded(conn,oid);
     const [assigned]=await conn.query('SELECT id FROM procurement_delivery_stops WHERE order_id=? AND is_current=1 FOR UPDATE',[oid]);if(assigned.length)throw fail('ORDER_ALREADY_ROUTED','Order already has a durable route assignment');
@@ -150,6 +151,7 @@ class ProcurementDeliveryRunService{
     if(destinations.length!==orders.length||destinations.some(row=>Number(row.revision)!==Number(row.address_version)||row.geographic_match_status!=='VERIFIED'||Number(row.is_active)!==1))throw fail('DELIVERY_ADDRESS_REAPPROVAL_REQUIRED','Assigned destination changed before supplier confirmation');
    }
    for(const order of orders){
+    await require('./orderAdminApprovalService').assertOrderAdminApproved(conn,order.id);
     await require('./procurementCollectiveCommitmentService').assertFunded(conn,order.id);
     if(action==='CONFIRM'&&!['AWAITING_SUPPLIER_ACKNOWLEDGEMENT','PREPARING','READY_FOR_DISPATCH'].includes(order.fulfillment_status))throw fail('ORDER_STATE_CONFLICT','Only a paid predispatch order can be assigned');
     if(action==='CANCEL'&&!['AWAITING_SUPPLIER_ACKNOWLEDGEMENT','PREPARING','READY_FOR_DISPATCH'].includes(order.fulfillment_status))throw fail('ORDER_STATE_CONFLICT','A dispatched order requires an actual failure or delivery workflow');

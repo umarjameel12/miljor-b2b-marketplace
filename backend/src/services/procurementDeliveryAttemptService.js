@@ -78,6 +78,7 @@ class ProcurementDeliveryAttemptService{
    const [[receipts]]=await conn.query('SELECT COUNT(*) total FROM procurement_line_receipts WHERE order_id=?',[oid]);
    if(Number(disputes.total)||Number(holds.total)||Number(receipts.total))throw fail('REATTEMPT_FINANCIAL_REVIEW_REQUIRED','Existing dispute, hold or receipt must be resolved through its own workflow');
    const [stops]=await conn.query("SELECT r.status FROM procurement_delivery_stops s JOIN procurement_delivery_runs r ON r.id=s.run_id WHERE s.order_id=? AND s.is_current=1 FOR UPDATE",[oid]);if(stops.some(row=>!['EXCEPTION','CANCELLED'].includes(row.status)))throw fail('PREVIOUS_ROUTE_ACTIVE','Close the failed route with exception evidence before assigning a reattempt');
+   await require('./orderAdminApprovalService').assertOrderAdminApproved(conn,oid);
    await require('./procurementCollectiveCommitmentService').assertFunded(conn,oid);
    await conn.query("UPDATE orders SET fulfillment_status='READY_FOR_DISPATCH',exception_reason=NULL,exception_details=NULL,exception_recorded_at=NULL WHERE id=?",[oid]);
    await conn.query("INSERT INTO order_fulfillment_events(order_id,event_code,from_status,to_status,action,actor_id,actor_role,notes,metadata,idempotency_key) VALUES (?,?,'EXCEPTION','READY_FOR_DISPATCH','APPROVE_DELIVERY_REATTEMPT',?,'SUPPLIER','Buyer approved delivery reattempt',?,?)",[oid,'DR-'+crypto.randomUUID(),actor.id,JSON.stringify({attempt_id:aid,proposal:parse(attempt.proposal_snapshot),supplemental_contract_id:supplemental?.id||null}),'reattempt:'+hash(intent)]);
