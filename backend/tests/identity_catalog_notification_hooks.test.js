@@ -193,7 +193,7 @@ function response(){return {statusCode:200,status(code){this.statusCode=code;ret
 function controllerHarness(options={}) {
   const h=adapter(options);const identity=identityResolver(h);
   h.controller=load('controllers/adminController.js',{'../config/db':h.db,'../services/supplierProfileService':identity,
-    '../services/encryptionService':{},'../services/supplierValidationService':{}});
+    '../services/orderAdminApprovalService':{},'../services/encryptionService':{},'../services/supplierValidationService':{}});
   return h;
 }
 for(const [status,type] of [['VERIFIED','IDENTITY.VERIFICATION_APPROVED'],['REJECTED','IDENTITY.VERIFICATION_REJECTED'],['MORE_INFORMATION_REQUIRED','IDENTITY.VERIFICATION_INFO_REQUESTED'],['UNDER_REVIEW','IDENTITY.VERIFICATION_UNDER_REVIEW'],['SUSPENDED','IDENTITY.VERIFICATION_SUSPENDED']]) {

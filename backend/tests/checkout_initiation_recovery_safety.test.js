@@ -111,6 +111,7 @@ function fixture(options = {}) {
   const service = load('../src/services/safepayCheckoutService.js', {
     '../config/db': db, './safepayAdapter': adapter, './reservationEventService': {}, './procurementAwardService': {},
     './flashPoolService': hold, './regularPoolPaymentHoldService': hold,
+    './collectivePaymentHoldService': { claimCheckout: async () => ({ collective_order: false }), assertCanCreateFreshCheckout: async () => ({ collective_order: false }) },
     './notificationService': { async enqueueEvent(conn, event) {
       assert.equal(locked, 1); assert.equal(order.payment_status, 'PAYMENT_INITIATED');
       assert.equal(event.eventType, 'PAYMENT_INITIATED'); assert.equal(event.userId, 7);
