@@ -52,13 +52,25 @@ const definitions={
   PAYMENT_INITIATED:['Payment initiated','ادائیگی شروع ہو گئی','order'],
   PAYMENT_VERIFIED:['Payment verified','ادائیگی کی تصدیق ہو گئی','order'],
   PAYMENT_FAILED:['Payment failed','ادائیگی ناکام ہو گئی','order'],
+  REFUND_ASSESSED:['Refund request recorded for review','واپسی کی درخواست جائزے کے لیے درج ہو گئی','order'],
+  REFUND_APPROVED:['Refund obligation approved; provider execution pending','واپسی کی منظوری دی گئی، ادائیگی زیر التوا ہے','order'],
   REFUND_INITIATED:['Refund initiated','رقم کی واپسی شروع ہو گئی','order'],
   REFUND_COMPLETED:['Refund completed','رقم کی واپسی مکمل ہو گئی','order'],
   DISPUTE_OPENED:['Dispute opened','تنازع درج ہو گیا','order'],
+  DISPUTE_RESPONSE_RECEIVED:['Supplier responded to your dispute','سپلائر نے آپ کے تنازع کا جواب دیا','order'],
   DISPUTE_RESOLVED:['Dispute resolved','تنازع حل ہو گیا','order'],
   SETTLEMENT_PENDING:['Settlement pending','سپلائر کی ادائیگی زیر التوا ہے','order'],
   SETTLEMENT_COMPLETED:['Settlement completed','سپلائر کی ادائیگی مکمل ہو گئی','order'],
+  SUBSCRIPTION_ACTIVATED:['Paid subscription activated','ادا شدہ سبسکرپشن فعال ہو گئی','account'],
+  SUBSCRIPTION_DOWNGRADE_SCHEDULED:['Your plan will change at the end of its paid period','آپ کا پلان ادا شدہ مدت ختم ہونے پر تبدیل ہوگا','account'],
+  SUBSCRIPTION_DOWNGRADED:['Paid plan ended; Starter plan is now active','ادا شدہ پلان ختم ہو گیا؛ اسٹارٹر پلان فعال ہے','account'],
+  SUBSCRIPTION_PLAN_CHANGE_SCHEDULED:['Paid plan change scheduled','ادا شدہ پلان کی تبدیلی مقرر ہو گئی','account'],
+  SUBSCRIPTION_PLAN_CHANGE_PAYMENT_REQUIRED:['Payment required to activate your selected paid plan','منتخب ادا شدہ پلان فعال کرنے کے لیے ادائیگی درکار ہے','account'],
   SUPPLIER_VERIFIED:['Supplier verified','سپلائر کی تصدیق ہو گئی','account'],
+  VERIFICATION_SUBMITTED:['Supplier verification submitted','سپلائر کی تصدیق کے لیے درخواست جمع ہو گئی','account'],
+  VERIFICATION_APPROVED:['Supplier verification approved','سپلائر کی تصدیق منظور ہو گئی','account'],
+  VERIFICATION_MORE_INFO_REQUIRED:['More verification information requested','تصدیق کے لیے مزید معلومات درکار ہیں','account'],
+  VERIFICATION_REJECTED:['Supplier verification rejected','سپلائر کی تصدیق مسترد ہو گئی','account'],
   APPROVAL_GRANTED:['Approval granted','منظوری مل گئی','account'],
   APPROVAL_REJECTED:['Approval rejected','منظوری مسترد ہو گئی','account'],
   SUSPICIOUS_ACTIVITY:['Suspicious activity detected','مشکوک سرگرمی کی نشاندہی ہوئی','account'],
@@ -88,7 +100,7 @@ const urduActions={EMAIL_VERIFIED:'ای میل کی تصدیق ہو گئی',REGI
   SHORTAGE_RECORDED:'کم مقدار کی اطلاع درج ہو گئی',SLA_BREACHED:'طے شدہ مہلت پوری نہیں ہوئی',OPENED:'تنازع درج ہو گیا',RESPONSE_SUBMITTED:'جواب جمع ہو گیا',
   EVIDENCE_REQUESTED:'مزید ثبوت درکار ہیں',RESOLVED:'تنازع حل ہو گیا',SECURITY_HOLD:'حفاظتی پابندی لگ گئی',MANUAL_RECONCILIATION_RESULT:'انتظامی جانچ کا نتیجہ',
   SERVICE_INCIDENT:'سروس میں رکاوٹ',SERVICE_RESTORED:'سروس بحال ہو گئی'};
-const mandatory=type=>/^(PAYMENT[._]|REFUND_|DISPUTE[._]|SETTLEMENT_|SUSPICIOUS_|FINANCIAL_)/.test(type)||
+const mandatory=type=>/^(PAYMENT[._]|REFUND_|DISPUTE[._]|SETTLEMENT_|SUBSCRIPTION_|VERIFICATION_|SUSPICIOUS_|FINANCIAL_)/.test(type)||
   canonical.definitions[type]?.priority==='CRITICAL';
 function eventProjection({eventType,entityId,locale='en'}){
   let definition=definitions[eventType];

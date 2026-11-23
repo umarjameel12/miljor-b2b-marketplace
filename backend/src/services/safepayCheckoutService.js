@@ -98,6 +98,7 @@ class SafepayCheckoutService {
     // while holding the order lock (their transactions use other connections).
     await require('./flashPoolService').claimCheckout(orderId, actor.id);
     await require('./regularPoolPaymentHoldService').claimCheckout(orderId, actor.id);
+    await require('./collectivePaymentHoldService').claimCheckout(orderId, actor.id);
 
     let order, attemptId;
     const reservation = await db.getConnection();
@@ -134,12 +135,14 @@ class SafepayCheckoutService {
       // waiting for this order lock. The policy only depends on this.db.query.
       const regularHolds = require('./regularPoolPaymentHoldService');
       await regularHolds.assertCanCreateFreshCheckout.call({ db: reservation }, order.id, actor.id);
+      const collectiveHolds = require('./collectivePaymentHoldService');
+      await collectiveHolds.assertCanCreateFreshCheckout.call({ db: reservation }, order.id, actor.id);
       const attemptCode = `ATT-${crypto.randomBytes(16).toString('hex')}`;
       const [insert] = await reservation.query(
         `INSERT INTO payment_attempts (
-          attempt_code, order_id, buyer_id, provider, environment,
+          attempt_code, order_id, buyer_id, provider, environment, provider_contract,
           amount, currency, status, idempotency_key, created_at
-        ) VALUES (?, ?, ?, 'SAFEPAY', 'sandbox', ?, ?, 'RECONCILIATION_REQUIRED', ?, NOW())`,
+        ) VALUES (?, ?, ?, 'SAFEPAY', 'sandbox', 'legacy-v1-major', ?, ?, 'RECONCILIATION_REQUIRED', ?, NOW())`,
         [attemptCode, order.id, order.buyer_id, order.total_amount, order.currency, trimmedKey]
       );
       attemptId = insert.insertId;
@@ -384,16 +387,33 @@ class SafepayCheckoutService {
       'payment:settled'
     ].includes(effectiveEventType);
     const isCreatedPaidEvent = isCreatedEvent && normalizedProviderState === 'PAID';
-    const explicitStateAllowsSuccess = !normalizedProviderState || ['PAID', 'COMPLETED', 'SUCCEEDED', 'SETTLED'].includes(normalizedProviderState);
+    const explicitStateAllowsSuccess = !normalizedProviderState || ['PAID', 'COMPLETED', 'SUCCEEDED', 'SETTLED', 'TRACKER_ENDED'].includes(normalizedProviderState);
     const isSuccessEvent = (isExplicitSuccessType && explicitStateAllowsSuccess) || isCreatedPaidEvent;
 
     if (!isSuccessEvent) {
       const recordedEventType = (isCreatedEvent || (isExplicitSuccessType && normalizedProviderState))
         ? `${effectiveEventType}:${normalizedProviderState || 'UNKNOWN'}`.slice(0, 100)
         : effectiveEventType;
-      // Record event but take no financial mutation (idempotent under concurrent replay)
+      const isFailureEvent = ['payment.failed', 'payment:failed', 'payment.cancelled', 'payment:cancelled'].includes(effectiveEventType) ||
+        ['FAILED', 'CANCELLED', 'DECLINED'].includes(normalizedProviderState);
+      // Record event and handle explicit provider failure safely inside transaction
+      const failConn = await db.getConnection();
       try {
-        await db.query(
+        await failConn.beginTransaction();
+        if (isFailureEvent && trackerToken) {
+          const [failAttempts] = await failConn.query(
+            `SELECT id, order_id, status FROM payment_attempts WHERE provider_tracker_token = ? FOR UPDATE`,
+            [trackerToken]
+          );
+          if (failAttempts.length) {
+            const failAttempt = failAttempts[0];
+            if (failAttempt.status === 'INITIATED') {
+              await failConn.query(`UPDATE payment_attempts SET status = 'FAILED', updated_at = NOW() WHERE id = ?`, [failAttempt.id]);
+            }
+            await require('./collectivePaymentHoldService').markFailed(failConn, failAttempt.order_id);
+          }
+        }
+        await failConn.query(
           `INSERT INTO payment_webhook_events (
             event_id, provider, event_type, provider_tracker_token,
             signature, timestamp_header, raw_payload, processed_status
@@ -407,7 +427,9 @@ class SafepayCheckoutService {
             JSON.stringify(parsedPayload)
           ]
         );
+        await failConn.commit();
       } catch (insertErr) {
+        await failConn.rollback().catch(() => {});
         if (insertErr?.code === 'ER_DUP_ENTRY') {
           return {
             success: true,
@@ -416,6 +438,8 @@ class SafepayCheckoutService {
           };
         }
         throw insertErr;
+      } finally {
+        failConn.release();
       }
       return {
         success: true,
@@ -528,16 +552,33 @@ class SafepayCheckoutService {
         throw err;
       }
 
-      // Safepay official contract: tracker amount is in major units (PKR decimal e.g. 192450.00).
-      // Speculative 100x subunit normalizations are strictly eliminated (B0.2 Fix 4).
+      // Safepay official contract: legacy-v1-major uses PKR decimal; payments-v3-minor uses minor units.
+      const providerContract = attempt.provider_contract || 'legacy-v1-major';
       const expectedAmountStr = exactDecimal.toCanonicalString(order.total_amount, 2);
-      const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
-
-      if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
-        const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
-        err.code = 'AMOUNT_MISMATCH';
-        err.statusCode = 422;
-        throw err;
+      if (providerContract === 'payments-v3-minor') {
+        require('./safepayV3ContractService').normalizeSucceededWebhook({
+          eventType: effectiveEventType,
+          data: { ...data, state: normalizedProviderState },
+          merchantApiKey: data.client || data.merchant_api_key || process.env.SAFEPAY_PUBLIC_KEY,
+          expectedMerchantApiKey: process.env.SAFEPAY_PUBLIC_KEY,
+          expectedTrackerToken: trackerToken,
+          expectedOrderCode: order.order_code,
+          expectedAmountPkr: expectedAmountStr
+        });
+      } else {
+        if (normalizedProviderState === 'TRACKER_ENDED') {
+          const err = new Error('TRACKER_ENDED is only valid for payments-v3-minor attempts');
+          err.code = 'PROVIDER_CONTRACT_MISMATCH';
+          err.statusCode = 422;
+          throw err;
+        }
+        const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
+        if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
+          const err = new Error(`Amount mismatch: Expected ${expectedAmountStr}, received ${receivedAmountStr}`);
+          err.code = 'AMOUNT_MISMATCH';
+          err.statusCode = 422;
+          throw err;
+        }
       }
 
       // Check if order was already confirmed PAID
@@ -616,6 +657,7 @@ class SafepayCheckoutService {
       // listing allocations COMMITTED only after verified provider payment.
       await procurementAwardService.reconcilePaidOrder(connection,order.id);
       await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
+      await require('./collectivePaymentHoldService').markPaid(connection,order.id);
 
       // 8. Record Webhook Event as PROCESSED
       await connection.query(
@@ -782,6 +824,8 @@ class SafepayCheckoutService {
 
     const regularPoolPaymentHold = await require('./regularPoolPaymentHoldService')
       .readForOrder(order.id,order.buyer_id);
+    const collectivePaymentHold = await require('./collectivePaymentHoldService')
+      .readForOrder(order.id,order.buyer_id);
 
     return {
       order_id: order.id,
@@ -793,6 +837,7 @@ class SafepayCheckoutService {
       currency: order.currency,
       lifecycle_phase: lifecyclePhase,
       regular_pool_payment_hold: regularPoolPaymentHold,
+      collective_payment_hold: collectivePaymentHold,
       latest_attempt: latestAttempt ? {
         attempt_code: latestAttempt.attempt_code,
         status: latestAttempt.status,
@@ -1016,6 +1061,7 @@ class SafepayCheckoutService {
       );
 
       await require('./regularPoolPaymentHoldService').markPaid(connection,order.id);
+      await require('./collectivePaymentHoldService').markPaid(connection,order.id);
 
       // Insert into payments
       const paymentCode = `PAY-${order.order_code.slice(-8)}-${Date.now().toString().slice(-4)}`;

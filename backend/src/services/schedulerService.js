@@ -37,6 +37,23 @@ function startScheduler() {
   });
   activeTasks.push(expiryTask);
 
+  // Collective per-buyer stock leases expire independently of group quote deadlines.
+  // Provider-started attempts are retained for reconciliation (never released on timeout).
+  let collectiveHoldTickRunning = false;
+  const collectiveHoldTask = cron.schedule('*/5 * * * *', async () => {
+    if (collectiveHoldTickRunning) return;
+    collectiveHoldTickRunning = true;
+    try {
+      const result = await require('./collectivePaymentHoldService').processExpiredBatch(100);
+      if (result.checked) console.log('[Scheduler] Collective payment holds:', result);
+    } catch (err) {
+      console.error('[Scheduler] Collective payment hold expiry failed:', err.code || err.message);
+    } finally {
+      collectiveHoldTickRunning = false;
+    }
+  });
+  activeTasks.push(collectiveHoldTask);
+
   // ---------------------------------------------------------------------------
   // Every hour: Clean old idempotency records (older than 24h)
   // ---------------------------------------------------------------------------

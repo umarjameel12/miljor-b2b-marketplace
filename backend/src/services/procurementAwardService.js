@@ -416,6 +416,9 @@ class ProcurementAwardService{
       await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'TERMS_LOCKED',
         eventKey:'award:'+awardResult.insertId+':locked',entityId:rid});
       for(const order of orderSummary){
+        if(collectiveCommitment){
+          await require('./collectivePaymentHoldService').createForOrder(conn,{orderId:order.order_id,buyerId:buyer});
+        }
         await notifications.enqueueEvent(conn,{userId:buyer,role:'BUYER',eventType:'PAYMENT_PENDING',
           eventKey:'order:'+order.order_id+':payment_pending',entityId:order.order_id});
       }
