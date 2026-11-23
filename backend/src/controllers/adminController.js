@@ -6,9 +6,11 @@
 //   - Self-approval prohibition (Suppliers cannot approve their own verification)
 //   - Mandatory audit logging for every administrative state change
 // =============================================================================
+const identityNotifications = require('../services/supplierProfileService');
 const db = require('../config/db');
 const encryptionService = require('../services/encryptionService');
 const validationService = require('../services/supplierValidationService');
+const orderAdminApprovalService = require('../services/orderAdminApprovalService');
 
 class AdminController {
 
@@ -248,6 +250,9 @@ class AdminController {
       try {
         await connection.beginTransaction();
 
+        const [lockedProfiles] = await connection.query('SELECT * FROM supplier_profiles WHERE supplier_id = ? FOR UPDATE', [id]);
+        if (!lockedProfiles[0]) throw new Error('Supplier profile not found');
+        const previousStatus = lockedProfiles[0].verification_status;
         const isApproved = verification_status === 'VERIFIED';
         const effectiveRejectionReason = isApproved ? null : (rejection_reason || null);
 
@@ -283,11 +288,19 @@ class AdminController {
             adminId,
             req.user.role,
             id,
-            JSON.stringify({ status: profiles[0].verification_status }),
+            JSON.stringify({ status: previousStatus }),
             JSON.stringify({ verification_status, verification_level, subscription_plan })
           ]
         );
 
+        const notificationType = {
+          VERIFIED: 'IDENTITY.VERIFICATION_APPROVED', REJECTED: 'IDENTITY.VERIFICATION_REJECTED',
+          MORE_INFORMATION_REQUIRED: 'IDENTITY.VERIFICATION_INFO_REQUESTED',
+          UNDER_REVIEW: 'IDENTITY.VERIFICATION_UNDER_REVIEW', SUSPENDED: 'IDENTITY.VERIFICATION_SUSPENDED'
+        }[verification_status];
+        if (notificationType && previousStatus !== verification_status) {
+          await identityNotifications.recordIdentityEvent(connection, lockedProfiles[0].supplier_id, notificationType);
+        }
         await connection.commit();
         connection.release();
 
@@ -338,18 +351,30 @@ class AdminController {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
       }
 
-      await db.query(
-        `UPDATE users
-         SET verification_status = 'BLOCKED', buyer_trust_status = 'SUSPENDED'
-         WHERE id = ?`,
-        [id]
-      );
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        const [locked] = await connection.query('SELECT id, role, verification_status, buyer_trust_status FROM users WHERE id = ? FOR UPDATE', [id]);
+        if (!locked[0]) throw new Error('User not found');
+        await connection.query(
+          `UPDATE users
+           SET verification_status = 'BLOCKED', buyer_trust_status = 'SUSPENDED'
+           WHERE id = ?`,
+          [id]
+        );
 
-      await db.query(
-        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-         VALUES (?, ?, 'USER_SUSPENDED', 'users', ?, ?)`,
-        [adminId, req.user.role, id, JSON.stringify({ reason: reason || 'Administrative suspension' })]
-      );
+        await connection.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
+           VALUES (?, ?, 'USER_SUSPENDED', 'users', ?, ?)`,
+          [adminId, req.user.role, id, JSON.stringify({ reason: reason || 'Administrative suspension' })]
+        );
+
+        if (locked[0].verification_status !== 'BLOCKED' || locked[0].buyer_trust_status !== 'SUSPENDED') {
+          await identityNotifications.recordIdentityEvent(connection, locked[0].id, 'IDENTITY.ACCOUNT_LOCKED');
+        }
+        await connection.commit();
+      } catch (error) { await connection.rollback(); throw error; }
+      finally { connection.release(); }
 
       return res.status(200).json({
         success: true,
@@ -377,18 +402,30 @@ class AdminController {
         return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
       }
 
-      await db.query(
-        `UPDATE users
-         SET verification_status = 'VERIFIED', buyer_trust_status = 'TRUSTED_BUYER'
-         WHERE id = ?`,
-        [id]
-      );
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        const [locked] = await connection.query('SELECT id, role, verification_status, buyer_trust_status FROM users WHERE id = ? FOR UPDATE', [id]);
+        if (!locked[0]) throw new Error('User not found');
+        await connection.query(
+          `UPDATE users
+           SET verification_status = 'VERIFIED', buyer_trust_status = 'TRUSTED_BUYER'
+           WHERE id = ?`,
+          [id]
+        );
 
-      await db.query(
-        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-         VALUES (?, ?, 'USER_REACTIVATED', 'users', ?, ?)`,
-        [adminId, req.user.role, id, JSON.stringify({ status: 'REACTIVATED' })]
-      );
+        await connection.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
+           VALUES (?, ?, 'USER_REACTIVATED', 'users', ?, ?)`,
+          [adminId, req.user.role, id, JSON.stringify({ status: 'REACTIVATED' })]
+        );
+
+        if (locked[0].verification_status === 'BLOCKED' || locked[0].buyer_trust_status === 'SUSPENDED') {
+          await identityNotifications.recordIdentityEvent(connection, locked[0].id, 'IDENTITY.ACCOUNT_UNLOCKED');
+        }
+        await connection.commit();
+      } catch (error) { await connection.rollback(); throw error; }
+      finally { connection.release(); }
 
       return res.status(200).json({
         success: true,
@@ -399,6 +436,44 @@ class AdminController {
     } catch (error) {
       console.error('Reactivate User Error:', error);
       return res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+    }
+  }
+
+  // GET /api/v1/admin/orders/pending-approval
+  async getPendingApprovalOrders(req, res) {
+    try {
+      const orders = await orderAdminApprovalService.listPendingOrders(req.user);
+      return res.status(200).json({ success: true, data: { orders, count: orders.length } });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'SERVER_ERROR', message: error.message } });
+    }
+  }
+
+  // POST /api/v1/admin/orders/:id/approve
+  async approveOrder(req, res) {
+    try {
+      const result = await orderAdminApprovalService.approveOrder({
+        orderId: req.params.id,
+        actor: req.user,
+        notes: req.body?.notes || null
+      });
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'SERVER_ERROR', message: error.message } });
+    }
+  }
+
+  // POST /api/v1/admin/orders/:id/reject
+  async rejectOrder(req, res) {
+    try {
+      const result = await orderAdminApprovalService.rejectOrder({
+        orderId: req.params.id,
+        actor: req.user,
+        reason: req.body?.reason
+      });
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, error: { code: error.code || 'SERVER_ERROR', message: error.message } });
     }
   }
 }

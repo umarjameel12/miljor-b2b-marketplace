@@ -23,6 +23,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const db = require('../src/config/db');
+const {assertTestDatabase, cleanupOwnedNotificationFixtures} = require('./cleanupOwnedNotificationFixtures');
 const app = require('../server');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'miljor_dev_jwt_secret_key_2026';
@@ -57,7 +58,8 @@ async function runE3Gate() {
   console.log('================================================================================\n');
 
   assert.strictEqual(process.env.TEST_DB_NAME, 'miljor_test_db');
-  console.log('✅ Active Test Database Verified: miljor_test_db\n');
+  const identity = await assertTestDatabase(db);
+  console.log(`Verified fixture database: ${identity.database_name}, MySQL port ${identity.server_port}`);
 
   server = app.listen(0);
   serverPort = server.address().port;
@@ -612,6 +614,7 @@ async function runE3Gate() {
 
   } finally {
     // Teardown test fixtures
+    await cleanupOwnedNotificationFixtures(db, [supplierId, adminId].filter(id => id !== undefined));
     if (createdListingIds.length > 0) {
       await db.query(`DELETE FROM supplier_listings WHERE id IN (${createdListingIds.join(',')})`);
     }

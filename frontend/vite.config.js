@@ -16,7 +16,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: apiTarget,
+        target: process.env.VITE_API_PROXY_TARGET || apiTarget,
         changeOrigin: true,
       },
     },

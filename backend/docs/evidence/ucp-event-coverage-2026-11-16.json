@@ -1,0 +1,707 @@
+{
+  "timestamp": "2026-11-16T01:42:03.506Z",
+  "catalogEvents": 94,
+  "sourceReferenced": 57,
+  "unreferenced": 37,
+  "qualification": "Dynamic emission may need manual review. No literal emitter is an outstanding coverage finding, not a passing acceptance assertion. Full event/actor/version/causation and recipient matrix remains a release gate.",
+  "events": [
+    {
+      "type": "IDENTITY.REGISTERED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/googleAuthService.js",
+        "src/services/supplierProfileService.js",
+        "src/controllers/authController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.VERIFICATION_SUBMITTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/authController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.VERIFICATION_APPROVED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.VERIFICATION_INFO_REQUESTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.VERIFICATION_REJECTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.SECURITY_ALERT",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/googleAuthService.js",
+        "src/services/supplierProfileService.js",
+        "src/controllers/authController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.ACCOUNT_LOCKED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.ACCOUNT_UNLOCKED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.EMAIL_VERIFIED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/authController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.VERIFICATION_UNDER_REVIEW",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "IDENTITY.VERIFICATION_SUSPENDED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierProfileService.js",
+        "src/controllers/adminController.js"
+      ]
+    },
+    {
+      "type": "CATALOG.SKU_SUBMITTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "CATALOG.SKU_PUBLISHED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.SKU_REJECTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "CATALOG.SKU_PAUSED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "CATALOG.SPEC_CHANGE_REQUESTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "CATALOG.SPEC_CHANGE_APPROVED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "CATALOG.STOCK_SHORTAGE",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "CATALOG.SERVICE_AREA_CHANGED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/supplierDeliveryService.js",
+        "src/services/supplierProfileService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.FAMILY_REQUEST_SUBMITTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.FAMILY_REQUEST_REVIEWED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.FAMILY_REQUEST_APPROVED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.FAMILY_REQUEST_REJECTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.PRODUCT_PUBLISHED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.PRODUCT_ARCHIVED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "CATALOG.SKU_ARCHIVED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/catalogService.js"
+      ]
+    },
+    {
+      "type": "UCP.POOL_CREATED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js"
+      ]
+    },
+    {
+      "type": "UCP.POOL_PUBLISHED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js"
+      ]
+    },
+    {
+      "type": "UCP.RESERVATION_CREATED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.HOLD_CREATED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js"
+      ]
+    },
+    {
+      "type": "UCP.RESERVATION_UPDATED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.RESERVATION_CANCELLED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.PRICE_LOCKED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.TIER_CHANGED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.HOLD_EXPIRING",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpRegularRecoveryService.js"
+      ]
+    },
+    {
+      "type": "UCP.HOLD_EXPIRED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/commercialLifecycleService.js",
+        "src/services/flashPoolService.js",
+        "src/services/regularPoolPaymentHoldService.js"
+      ]
+    },
+    {
+      "type": "UCP.CONFIRMATION_REQUIRED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpRegularRecoveryService.js",
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.ORDER_CONFIRMED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/orderService.js"
+      ]
+    },
+    {
+      "type": "UCP.PROGRESS_MILESTONE",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "UCP.TIER_ACHIEVED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "UCP.TARGET_REACHED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.POOL_CLOSING",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpRegularRecoveryService.js"
+      ]
+    },
+    {
+      "type": "UCP.POOL_CLOSED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "UCP.POOL_EXPIRED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js"
+      ]
+    },
+    {
+      "type": "UCP.POOL_CANCELLED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js"
+      ]
+    },
+    {
+      "type": "UCP.POOL_FAILED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/commercialLifecycleService.js",
+        "src/services/ucpTransactionalNotifications.js"
+      ]
+    },
+    {
+      "type": "UCP.STOCK_ALLOCATION_FAILED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "UCP.POOL_REQUEST_ACCEPTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "UCP.POOL_REQUEST_REJECTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.CHECKOUT_CREATED",
+      "alias": "PAYMENT_INITIATED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/orderService.js",
+        "src/services/safepayCheckoutService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.CONFIRMED",
+      "alias": "PAYMENT_VERIFIED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/safepayCheckoutService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.FAILED",
+      "alias": "PAYMENT_FAILED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.RECONCILED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.INVOICE_ISSUED",
+      "alias": "INVOICE_ISSUED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/invoiceService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.REFUND_REQUESTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/financialSettlementService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.REFUND_APPROVED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/financialSettlementService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.REFUND_REJECTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.REFUND_INITIATED",
+      "alias": "REFUND_INITIATED",
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.REFUND_SUCCEEDED",
+      "alias": "REFUND_COMPLETED",
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.REFUND_FAILED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.SETTLEMENT_ELIGIBLE",
+      "alias": "SETTLEMENT_PENDING",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/financialSettlementService.js"
+      ]
+    },
+    {
+      "type": "PAYMENT.SETTLEMENT_INITIATED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.SETTLEMENT_SUCCEEDED",
+      "alias": "SETTLEMENT_COMPLETED",
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.SETTLEMENT_FAILED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "PAYMENT.RECONCILIATION_EXCEPTION",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/regularPoolPaymentHoldService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.ASSIGNED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.ACCEPTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.REJECTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.PACKING",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.READY_FOR_PICKUP",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.PICKUP_CODE_ISSUED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.READY_FOR_DISPATCH",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.PICKED_UP",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.DISPATCHED",
+      "alias": "OUT_FOR_DELIVERY",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/flashPoolService.js",
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.CLUSTER_FORMED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.CLUSTER_CUTOFF",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.CLUSTER_REROUTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.ETA_CHANGED",
+      "alias": "ETA_CHANGED",
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.DELIVERY_ATTEMPTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.DELIVERY_FAILED",
+      "alias": "DELIVERY_FAILED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.SUPPLIER_MARKED_DELIVERED",
+      "alias": "DELIVERY_REPORTED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.BUYER_CONFIRMATION_REQUIRED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.BUYER_ACCEPTED",
+      "alias": "RECEIPT_CONFIRMED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.PARTIAL_DELIVERY",
+      "alias": "PARTIAL_DELIVERY",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/fulfillmentService.js"
+      ]
+    },
+    {
+      "type": "FULFILLMENT.SHORTAGE_RECORDED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "FULFILLMENT.SLA_BREACHED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpRegularRecoveryService.js"
+      ]
+    },
+    {
+      "type": "DISPUTE.OPENED",
+      "alias": "DISPUTE_OPENED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/disputeService.js"
+      ]
+    },
+    {
+      "type": "DISPUTE.RESPONSE_SUBMITTED",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/disputeService.js"
+      ]
+    },
+    {
+      "type": "DISPUTE.EVIDENCE_REQUESTED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "DISPUTE.RESOLVED",
+      "alias": "DISPUTE_RESOLVED",
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/disputeService.js"
+      ]
+    },
+    {
+      "type": "ADMIN.SECURITY_HOLD",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "ADMIN.MANUAL_RECONCILIATION_RESULT",
+      "alias": null,
+      "status": "SOURCE_REFERENCE_REVIEW_REQUIRED",
+      "paths": [
+        "src/services/ucpRegularRecoveryService.js"
+      ]
+    },
+    {
+      "type": "ADMIN.SERVICE_INCIDENT",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    },
+    {
+      "type": "ADMIN.SERVICE_RESTORED",
+      "alias": null,
+      "status": "NO_LITERAL_EMITTER_FOUND",
+      "paths": []
+    }
+  ]
+}

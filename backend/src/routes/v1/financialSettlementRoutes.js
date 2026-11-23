@@ -73,6 +73,14 @@ router.post(
   (req, res) => financialSettlementController.approveRefund(req, res)
 );
 
+// Admin read-only external refund readiness. NOT payment/refund execution.
+router.get(
+  '/refunds/:id/provider-readiness',
+  protect,
+  authorizeStrict('ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'),
+  (req, res) => financialSettlementController.getRefundProviderReadiness(req, res)
+);
+
 // Admin confirms manual external refund
 router.post(
   '/refunds/:id/confirm-manual',

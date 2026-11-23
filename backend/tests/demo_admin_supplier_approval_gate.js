@@ -24,6 +24,7 @@ const db={
     return {
       async beginTransaction(){writes.push('BEGIN')},
       async query(sql,args){
+        if(sql.includes('FROM supplier_profiles WHERE supplier_id = ?'))return [[{supplier_id:Number(args[0]),verification_status:'PENDING_REVIEW'}]];
         if(sql.startsWith('UPDATE supplier_profiles')){writes.push({table:'supplier_profiles',args});return [{affectedRows:1}]}
         if(sql.startsWith('UPDATE users')){writes.push({table:'users',args});return [{affectedRows:1}]}
         if(sql.includes('INSERT INTO system_audit_logs')){writes.push({table:'system_audit_logs',args});return [{insertId:1}]}
@@ -48,6 +49,8 @@ const guard=load(guardSrc,id=>{
 });
 const controller=load(controllerSrc,id=>{
   if(id==='../config/db')return db;
+  if(id==='../services/supplierProfileService')return {recordIdentityEvent:async()=>{}};
+  if(id==='../services/orderAdminApprovalService')return {};
   if(id==='../services/encryptionService')return {isEncrypted:()=>false};
   if(id==='../services/supplierValidationService')return {maskIban:()=>{throw Error('Plaintext should never be decrypted')}};
   throw Error('Unexpected controller require: '+id);

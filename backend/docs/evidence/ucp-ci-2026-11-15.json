@@ -1,0 +1,18 @@
+{
+  "testedCommit": "62fd793a1d46cd2baf789ea35165b9976aec55a7",
+  "date": "2026-11-15",
+  "scope": "GitHub Actions checks for this source/test configuration; not full master-plan or actual Safepay settlement certification",
+  "workflows": [
+    {"name":"Demo Delivery Quantity Safety","runId":43725439046,"status":"completed","conclusion":"success"},
+    {"name":"Branded OTP Email Quality","runId":43725438952,"status":"completed","conclusion":"success"},
+    {"name":"Buyer B6 Auth and Frontend Acceptance","runId":43725438818,"status":"completed","conclusion":"success"},
+    {"name":"Admin Portal and Supplier Approval Acceptance","runId":43725438838,"status":"completed","conclusion":"success"},
+    {"name":"P0 Payment Fulfillment Settlement Combined E2E","runId":43725438825,"status":"completed","conclusion":"success"},
+    {"name":"UCP Canonical Reconciliation Acceptance","runId":43725438891,"status":"completed","conclusion":"success"}
+  ],
+  "canonicalJobs": {
+    "sourceAndProductionBuild": {"jobId":132846241831,"conclusion":"success"},
+    "disposableMysqlMigrationsAndLifecycle": {"jobId":132846241887,"conclusion":"success"},
+    "realChromiumBuyerSupplierRetryOffline": {"jobId":132846241704,"conclusion":"success"}
+  }
+}

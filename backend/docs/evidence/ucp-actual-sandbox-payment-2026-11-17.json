@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-17",
+  "qualifiedApplicationSource": "a6df2446f4c8ffe48bb688ff681cdc5f7135ec8b",
+  "sourceChanges": false,
+  "environment": "Safepay sandbox / isolated miljor_test_db",
+  "userCompletedHostedTestCardFlow": true,
+  "authoritativeProviderReadback": {
+    "state": "TRACKER_ENDED",
+    "trackerIdentityMatches": true,
+    "currency": "PKR",
+    "gross": "100.00",
+    "fees": "6.34",
+    "net": "93.66",
+    "transactionPresent": true,
+    "transactionSignaturePresent": true
+  },
+  "applicationReconciliation": {
+    "method": "Existing reconcilePaymentWithProvider; no mock client or forged callback",
+    "orderStatus": "PAID",
+    "paymentStatus": "PAID",
+    "paymentRows": 1,
+    "amount": "100.00",
+    "concurrentReplayCount": 5,
+    "duplicatePayments": 0
+  },
+  "redirectObservation": {
+    "userScreenshot": "Verification Error / Order253 not found",
+    "checkoutRedirect": "localhost3000",
+    "isolatedOrderDatabasePort": 33321,
+    "originalFrontendProcessUsesAnotherCheckout": true,
+    "actualPaidReturnBrowserJourney": "NOT_TESTED for this transaction; prior synthetic/pending UI acceptance remains separate"
+  },
+  "feeScope": "Provider-reported transaction fees/net; not a general fee formula or proof of final supplier settlement",
+  "providerSignedWebhook": "NOT_VERIFIED; authoritative API reconciliation proven instead",
+  "refundAndPayoutExecution": "DISABLED / NOT_EXECUTED",
+  "protectedDatabase": "No queries/mutations in this verification step",
+  "privateEvidence": "Raw provider response, tokens, card/contact data and order/attempt identifiers stay in ignored local logs",
+  "result": "Actual sandbox payment and idempotent reconciliation PASS; full release remains PARTIAL"
+}

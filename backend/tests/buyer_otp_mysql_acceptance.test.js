@@ -26,6 +26,7 @@ test('real MySQL: buyer email OTP issue, verify, persistence, single-use, resend
     email VARCHAR(255) NOT NULL UNIQUE,
     role VARCHAR(30) NOT NULL,
     verification_status VARCHAR(40) NOT NULL DEFAULT 'UNVERIFIED',
+    buyer_trust_status VARCHAR(40) NULL DEFAULT NULL,
     is_verified TINYINT NOT NULL DEFAULT 0
   )`);
   await db.query(`CREATE TABLE IF NOT EXISTS email_verifications (
@@ -44,13 +45,48 @@ test('real MySQL: buyer email OTP issue, verify, persistence, single-use, resend
     recipient_user_id INT,
     template_name VARCHAR(64),
     status VARCHAR(32),
-    last_error TEXT
+    last_error TEXT,
+    next_attempt_at DATETIME NULL
   )`);
   await db.query(`CREATE TABLE IF NOT EXISTS system_audit_logs (
     id INT PRIMARY KEY AUTO_INCREMENT,
     actor_id INT, actor_role VARCHAR(32), action VARCHAR(70),
     entity_name VARCHAR(70), entity_id INT
   )`);
+  await db.query(`CREATE TABLE IF NOT EXISTS platform_notifications (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    role VARCHAR(32) NOT NULL,
+    event_type VARCHAR(80) NOT NULL,
+    event_key VARCHAR(120) NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    message TEXT NOT NULL,
+    payload JSON NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL,
+    visible_until DATETIME NULL,
+    UNIQUE KEY uq_platform_notifications_user_event_key (user_id, event_key)
+  )`);
+  await db.query(`CREATE TABLE IF NOT EXISTS procurement_notifications (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    recipient_id INT NOT NULL,
+    recipient_role VARCHAR(32) NOT NULL,
+    event_key VARCHAR(120) NOT NULL,
+    event_type VARCHAR(80) NOT NULL,
+    payload JSON NOT NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    attempt_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    next_attempt_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    delivered_at TIMESTAMP NULL,
+    last_error_code VARCHAR(80) NULL,
+    projected_locale VARCHAR(8) NULL,
+    UNIQUE KEY uq_procurement_notifications_recipient_event (recipient_id, event_key)
+  )`);
+  await db.query('DELETE FROM procurement_notifications');
+  await db.query('DELETE FROM platform_notifications');
   await db.query('DELETE FROM email_verifications');
   await db.query('DELETE FROM transactional_email_outbox');
   await db.query('DELETE FROM system_audit_logs');

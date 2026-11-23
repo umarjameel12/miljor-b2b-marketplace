@@ -1,1 +1,3 @@
+# Preserve original migration bytes and canonical LF for forward SQL.
 backend/database/migrations/** -text
+backend/database/migrations/*.sql text eol=lf

@@ -17,6 +17,7 @@ const jwt = require('jsonwebtoken');
 const { JWT_ISSUER, JWT_AUDIENCE } = require('../middlewares/authGuard');
 const googleAuthService = require('../services/googleAuthService');
 const emailService = require('../services/emailService');
+const identityNotifications = require('../services/supplierProfileService');
 const sessionService = require('../services/sessionService');
 
 if (!process.env.JWT_SECRET) {
@@ -470,6 +471,7 @@ class AuthController {
           [userId, userId, JSON.stringify({ email, phone: cleanPhone, role: assignedRole, city: 'Lahore', base_cluster_id: cluster ? cluster.id : null, has_address: hasCreatedAddress })]
         );
 
+        await identityNotifications.recordIdentityEvent(connection, userId, 'IDENTITY.REGISTERED', { transitionId: 'registered' });
         await connection.commit();
       } catch (txErr) {
         await connection.rollback();
@@ -734,30 +736,45 @@ class AuthController {
         });
       }
 
-      // Update user details
-      await db.query(
-        `UPDATE users
-         SET business_name = COALESCE(?, business_name),
-             area = COALESCE(?, area),
-             address = COALESCE(?, address),
-             verification_status = 'PENDING_SUPPLIER_VERIFICATION'
-         WHERE id = ?`,
-        [business_name || null, area || null, address || null, userId]
-      );
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+        const [owners] = await connection.query('SELECT id, role FROM users WHERE id = ? FOR UPDATE', [userId]);
+        const [applications] = await connection.query('SELECT supplier_id FROM supplier_profiles WHERE supplier_id = ?', [userId]);
+        if (!owners[0] || owners[0].role !== 'BUYER' || applications.length) {
+          await connection.rollback();
+          return res.status(409).json({ success: false, error: { code: 'APPLICATION_EXISTS', message: 'Supplier application is unavailable or already exists' } });
+        }
+        // Update user details
+        await connection.query(
+          `UPDATE users
+           SET business_name = COALESCE(?, business_name),
+               area = COALESCE(?, area),
+               address = COALESCE(?, address),
+               verification_status = 'PENDING_SUPPLIER_VERIFICATION'
+           WHERE id = ?`,
+          [business_name || null, area || null, address || null, userId]
+        );
 
-      // Create initial supplier profile
-      await db.query(
-        `INSERT INTO supplier_profiles
-          (supplier_id, verification_level, verification_status, subscription_plan, tax_ntn, food_license_no)
-         VALUES (?, 'LEVEL_1_CONTACT', 'PENDING_REVIEW', 'STARTER', ?, ?)`,
-        [userId, tax_ntn || null, food_license_no || null]
-      );
+        // Create initial supplier profile
+        await connection.query(
+          `INSERT INTO supplier_profiles
+            (supplier_id, verification_level, verification_status, subscription_plan, tax_ntn, food_license_no)
+           VALUES (?, 'LEVEL_1_CONTACT', 'PENDING_REVIEW', 'STARTER', ?, ?)`,
+          [userId, tax_ntn || null, food_license_no || null]
+        );
 
-      await db.query(
-        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id)
-         VALUES (?, 'BUYER', 'SUPPLIER_APPLICATION_SUBMITTED', 'supplier_profiles', ?)`,
-        [userId, userId]
-      );
+        await connection.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id)
+           VALUES (?, 'BUYER', 'SUPPLIER_APPLICATION_SUBMITTED', 'supplier_profiles', ?)`,
+          [userId, userId]
+        );
+
+        await identityNotifications.recordIdentityEvent(connection, owners[0].id, 'IDENTITY.VERIFICATION_SUBMITTED', { escalate: true });
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback(); throw error;
+      } finally { connection.release(); }
 
       return res.status(201).json({
         success: true,
@@ -1095,46 +1112,73 @@ class AuthController {
   async verifyEmail(req, res) {
     try {
       const { otp, email } = req.body || {};
-      let userId = req.user ? req.user.id : null;
-
-      if (!userId && email) {
-        const [users] = await db.query('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
-        if (users.length > 0) userId = users[0].id;
-      }
-
-      if (!userId) {
+      const userId = req.user ? req.user.id : null;
+      if (!userId && !email) {
         return res.status(400).json({
           success: false,
           error: { code: 'VALIDATION_ERROR', message: 'User identity or email is required' }
         });
       }
 
-      await emailService.verifyAndConsumeOtp({
-        userId,
-        otp,
-        purpose: 'REGISTRATION_VERIFY'
-      });
+      const connection = await db.getConnection();
+      let settled = false;
+      try {
+        await connection.beginTransaction();
+        const [users] = await connection.query(userId
+          ? 'SELECT id, role, verification_status, is_verified, buyer_trust_status FROM users WHERE id = ? FOR UPDATE'
+          : 'SELECT id, role, verification_status, is_verified, buyer_trust_status FROM users WHERE email = ? FOR UPDATE',
+          [userId || email.toLowerCase().trim()]);
+        const user = users[0];
+        if (!user) {
+          const error = new Error('User identity or email is required');
+          error.code = 'VALIDATION_ERROR'; error.statusCode = 400; throw error;
+        }
 
-      // Update user verification status
-      await db.query(
-        `UPDATE users
-         SET verification_status = CASE
-               WHEN role = 'BUYER' AND verification_status NOT IN ('BLOCKED', 'VERIFIED')
-                 THEN 'EMAIL_VERIFIED'
-               ELSE verification_status END,
-             is_verified = CASE
-               WHEN role = 'BUYER' AND verification_status <> 'BLOCKED'
-                 THEN 1 ELSE is_verified END
-         WHERE id = ?`,
-        [userId]
-      );
+        // No user/profile mutation precedes this call. Only OTP failures can
+        // request an attempt-only commit; later failures always roll back.
+        try {
+          await emailService.verifyAndConsumeOtp({
+            userId: user.id, otp, purpose: 'REGISTRATION_VERIFY', connection
+          });
+        } catch (error) {
+          if (error.otpAttemptRecorded === true) {
+            await connection.commit();
+            settled = true;
+          }
+          throw error;
+        }
 
-      // Audit log
-      await db.query(
-        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id)
-         VALUES (?, 'BUYER', 'EMAIL_VERIFIED', 'users', ?)`,
-        [userId, userId]
-      );
+        // Email proof never approves a supplier or removes an account hold.
+        if (user.role === 'BUYER' && user.verification_status !== 'BLOCKED' && user.buyer_trust_status !== 'SUSPENDED') {
+          await connection.query(
+            `UPDATE users
+             SET verification_status = CASE WHEN verification_status = 'VERIFIED'
+                   THEN verification_status ELSE 'EMAIL_VERIFIED' END,
+                 is_verified = 1
+             WHERE id = ? AND role = 'BUYER' AND verification_status <> 'BLOCKED'
+               AND (buyer_trust_status IS NULL OR buyer_trust_status <> 'SUSPENDED')`,
+            [user.id]
+          );
+        }
+
+        const [audit] = await connection.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id)
+           VALUES (?, ?, 'EMAIL_VERIFIED', 'users', ?)`,
+          [user.id, user.role, user.id]
+        );
+        // Successful OTP consumption plus the audit records email proof even
+        // when supplier verification or an account restriction remains intact.
+        await identityNotifications.recordIdentityEvent(connection, user.id, 'IDENTITY.EMAIL_VERIFIED', {
+          transitionId: 'email-verification-' + audit.insertId
+        });
+        await connection.commit();
+        settled = true;
+      } catch (error) {
+        if (!settled) await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
 
       return res.status(200).json({
         success: true,
@@ -1460,6 +1504,7 @@ class AuthController {
           throw new Error('SIMULATED_TRANSACTION_FAILURE_BEFORE_COMMIT');
         }
 
+        await identityNotifications.recordIdentityEvent(connection, user.id, 'IDENTITY.SECURITY_ALERT', { transitionId: 'password-reset-' + challenge.id });
         // Commit atomic transaction
         await connection.commit();
       } catch (txErr) {

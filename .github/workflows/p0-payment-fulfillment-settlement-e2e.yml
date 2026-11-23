@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - test/payment-fulfillment-settlement-e2e-20261112
+      - integration/pr54-pr61-consolidation
   pull_request:
     branches:
       - main

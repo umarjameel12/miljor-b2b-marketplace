@@ -5,6 +5,7 @@
 
 const financialSettlementService = require('../services/financialSettlementService');
 const financialConservationService = require('../services/financialConservationService');
+const safepayRefundReadinessService = require('../services/safepayRefundReadinessService');
 
 class FinancialSettlementController {
 
@@ -143,6 +144,26 @@ class FinancialSettlementController {
       return res.status(status).json({
         success: false,
         error: { code: err.code || 'INTERNAL_ERROR', message: err.message }
+      });
+    }
+  }
+
+  // GET /api/v1/settlements/refunds/:id/provider-readiness
+  // Read-only diagnosis only: no external refund or supplier payout execution.
+  async getRefundProviderReadiness(req, res) {
+    try {
+      const data = await safepayRefundReadinessService.inspect({
+        actor: req.user, refundId: req.params.id
+      });
+      return res.status(200).json({ success: true, data });
+    } catch (err) {
+      return res.status(err.statusCode || 500).json({
+        success: false,
+        error: {
+          code: err.code || 'REFUND_READINESS_FAILED',
+          message: process.env.NODE_ENV === 'production' && (!err.statusCode || err.statusCode >= 500)
+            ? 'Unable to assess refund provider readiness' : err.message
+        }
       });
     }
   }

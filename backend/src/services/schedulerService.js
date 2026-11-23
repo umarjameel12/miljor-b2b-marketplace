@@ -19,17 +19,40 @@ function startScheduler() {
   // ---------------------------------------------------------------------------
   // Every 10 minutes: Process expired pools & flash pools
   // ---------------------------------------------------------------------------
+  let expiryRunning=false;
   const expiryTask = cron.schedule('*/10 * * * *', async () => {
+    if(expiryRunning)return;
+    expiryRunning=true;
     console.log(`[Scheduler] Running pool expiry check at ${new Date().toISOString()}`);
     try {
       await poolClosureService.processExpiredPools();
-      await poolClosureService.processExpiredFlashPools();
+      await require('./ucpRecoveryService').runFlashRecoveryBatch({limit:50});
+      await require('./ucpRegularRecoveryService').runRegularRecoveryBatch({limit:50});
+      // Flash expiry must remain inside leased transactional UCP recovery.
+      // A bulk status update would strand over-limit/failed recovery offers.
       await require('./procurementCollectiveCommitmentService').releaseExpiredBatch({limit:20});
     } catch (err) {
       console.error('[Scheduler] Pool expiry job failed:', err.message);
-    }
+    } finally { expiryRunning=false; }
   });
   activeTasks.push(expiryTask);
+
+  // Collective per-buyer stock leases expire independently of group quote deadlines.
+  // Provider-started attempts are retained for reconciliation (never released on timeout).
+  let collectiveHoldTickRunning = false;
+  const collectiveHoldTask = cron.schedule('*/5 * * * *', async () => {
+    if (collectiveHoldTickRunning) return;
+    collectiveHoldTickRunning = true;
+    try {
+      const result = await require('./collectivePaymentHoldService').processExpiredBatch(100);
+      if (result.checked) console.log('[Scheduler] Collective payment holds:', result);
+    } catch (err) {
+      console.error('[Scheduler] Collective payment hold expiry failed:', err.code || err.message);
+    } finally {
+      collectiveHoldTickRunning = false;
+    }
+  });
+  activeTasks.push(collectiveHoldTask);
 
   // ---------------------------------------------------------------------------
   // Every hour: Clean old idempotency records (older than 24h)
@@ -42,6 +65,18 @@ function startScheduler() {
     }
   });
   activeTasks.push(cleanupTask);
+
+  // Email remains opt-in until transport configuration and runtime acceptance.
+  if(process.env.UCP_NOTIFICATION_EMAIL_WORKER_ENABLED==='true' && process.env.NOTIFICATION_WORKER_ENABLED!=='true'){
+    let running=false;
+    activeTasks.push(cron.schedule('* * * * *',async()=>{
+      if(running)return;
+      running=true;
+      try{await require('./emailService').processOutboxBatch({limit:20});}
+      catch(error){console.error('[Scheduler] Notification email delivery requires review');}
+      finally{running=false;}
+    }));
+  }
 
   // B6-M recurring procurement draft worker, opt-in only.
   // Does NOT create orders, trigger Safepay or authorize standing charges.
@@ -77,10 +112,15 @@ function startScheduler() {
     const notificationTask=cron.schedule('* * * * *',async()=>{
       if(notificationRunning)return;
       notificationRunning=true;
+      const step=async work=>{try{await work();}catch(error){console.error('[Scheduler] Notification step failed:',error.code||'NOTIFICATION_WORKER_FAILED');}};
       try{
-        await require('./notificationService').processPending({limit:20});
-        if(process.env.NOTIFICATION_EMAIL_DELIVERY_ENABLED==='true')
-          await require('./emailService').processOutboxBatch({limit:20});
+        await step(()=>require('./notificationService').processPending({limit:20}));
+        await step(()=>require('./notificationOperationsService').alertExhaustedEvents({limit:20}));
+        if(process.env.NOTIFICATION_DIGEST_ENABLED==='true')await step(()=>require('./notificationService').processDigests({limit:20}));
+        if(process.env.NOTIFICATION_EMAIL_DELIVERY_ENABLED==='true'||process.env.UCP_NOTIFICATION_EMAIL_WORKER_ENABLED==='true'){
+          await step(()=>require('./emailService').processOutboxBatch({limit:20}));
+          await step(()=>require('./notificationOperationsService').alertExhaustedEmails({limit:20}));
+        }
       }catch(error){console.error('[Scheduler] Notification worker failed:',error.code||'NOTIFICATION_WORKER_FAILED');}
       finally{notificationRunning=false;}
     });

@@ -39,7 +39,7 @@ test('all catalog events have English/Urdu safe projections and unique event nam
     const urdu=eventProjection({eventType,entityId:12,locale:'ur'});
     assert.notEqual(english.title,urdu.title);
     assert.match(urdu.title,/[\u0600-\u06ff]/);
-    assert.match(english.deepLink,/^\/(procurement|orders|profile)\?/);
+    assert.match(english.deepLink,/^\/(procurement|orders|profile|pools|catalog)\?/);
     assert.equal(english.deepLink,urdu.deepLink);
     assert.equal(eventProjection({eventType,entityId:12,locale:'unsupported'}).locale,'en');
   }

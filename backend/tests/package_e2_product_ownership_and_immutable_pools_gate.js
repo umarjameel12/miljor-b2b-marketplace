@@ -19,6 +19,7 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const app = require('../server');
 const db = require('../src/config/db');
+const {assertTestDatabase, cleanupOwnedNotificationFixtures} = require('./cleanupOwnedNotificationFixtures');
 
 let server;
 let baseUrl;
@@ -86,6 +87,9 @@ async function runGate() {
   const createdPoolIds = [];
   const createdRequestIds = [];
   const createdFamilyIds = [];
+
+  const identity = await assertTestDatabase(db);
+  console.log(`Verified fixture database: ${identity.database_name}, MySQL port ${identity.server_port}`);
 
   // Record baseline counts on miljor_test_db
   const [[beforeProdCount]] = await db.query('SELECT COUNT(*) AS cnt FROM products WHERE id <= 11');
@@ -1052,6 +1056,7 @@ async function runGate() {
 
     // Clean up test fixtures in reverse dependency order
     try {
+      await cleanupOwnedNotificationFixtures(db, createdUserIds);
       if (createdPoolIds.length > 0) {
         await db.query('DELETE FROM supplier_inventory_allocations WHERE reference_id IN (?) AND allocation_type = "REGULAR_POOL"', [createdPoolIds]);
         await db.query('DELETE FROM pool_delivery_clusters WHERE pool_id IN (?)', [createdPoolIds]);
@@ -1086,7 +1091,7 @@ async function runGate() {
         await db.query('DELETE FROM users WHERE id IN (?)', [createdUserIds]);
       }
     } catch (cleanupErr) {
-      console.error('Cleanup error:', cleanupErr.message);
+      fail('Test fixture cleanup', cleanupErr);
     }
   }
 
@@ -1099,4 +1104,7 @@ async function runGate() {
   process.exit(0);
 }
 
-runGate();
+runGate().catch(err => {
+  console.error('Fatal E2 Gate Failure:', err);
+  process.exit(1);
+});

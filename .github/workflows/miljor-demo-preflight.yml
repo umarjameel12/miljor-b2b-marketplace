@@ -8,10 +8,7 @@ on:
   push:
     branches:
       - 'fix/morning-demo-readonly-preflight-20261112'
-    paths:
-      - 'backend/scripts/demo_preflight.js'
-      - 'backend/tests/demo_preflight_smoke.test.js'
-      - '.github/workflows/miljor-demo-preflight.yml'
+      - 'integration/pr54-pr61-consolidation'
 permissions:
   contents: read
 jobs:

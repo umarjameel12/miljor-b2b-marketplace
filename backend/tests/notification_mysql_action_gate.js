@@ -65,6 +65,8 @@ run().catch(error=>{console.error(error.code||'NOTIFICATION_MYSQL_ACTION_FAIL',e
     const [[identity]]=await db.query('SELECT DATABASE() AS name');assert.equal(identity.name,'miljor_test_db');
     for(const userId of ownedUsers){
       await db.query('DELETE FROM transactional_email_outbox WHERE recipient_user_id=?',[userId]);
+      await db.query('DELETE FROM notification_digest_events WHERE recipient_id=?',[userId]);
+      await db.query('DELETE FROM notification_email_budgets WHERE user_id=?',[userId]);
       await db.query('DELETE FROM platform_notifications WHERE user_id=?',[userId]);
       await db.query('DELETE FROM procurement_notifications WHERE recipient_id=?',[userId]);
       await db.query('DELETE FROM notification_preferences WHERE user_id=?',[userId]);

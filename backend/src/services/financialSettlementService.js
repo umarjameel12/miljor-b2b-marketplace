@@ -1006,10 +1006,10 @@ class FinancialSettlementService {
         notes: `Assessed refund obligation: PKR ${totalRefundAmount} (${refundType})`
       });
 
-      // Initiates the recorded refund obligation workflow, not external money movement.
+      // Record the requested obligation without implying a provider refund began.
       await notificationService.enqueueEvent(connection, {
-        userId: order.buyer_id, role: 'BUYER', eventType: 'REFUND_INITIATED',
-        eventKey: `refund:${refundId}:initiated`, entityId: order.id
+        userId: order.buyer_id, role: 'BUYER', eventType: 'PAYMENT.REFUND_REQUESTED',
+        eventKey: `refund:${refundId}:requested`, entityId: order.id
       });
       await connection.commit();
 
@@ -1146,6 +1146,8 @@ class FinancialSettlementService {
         notes: `Admin approved refund obligation of PKR ${refund.total_refund_amount}. External execution remains DISABLED.`
       });
 
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId:refund.order_id,type:'PAYMENT.REFUND_APPROVED',transitionId:'refund-'+refundId});
       await connection.commit();
 
       const [updatedRefund] = await connection.query('SELECT * FROM refund_obligations WHERE id = ?', [refundId]);

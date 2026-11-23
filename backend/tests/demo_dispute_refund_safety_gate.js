@@ -21,6 +21,8 @@ function service(name, sql) {
     if (id==='./feeService')return {};
     if (id==='./notificationService')return service('notificationService.js',sql);
     if (id==='./notificationEventPolicy')return require('../src/services/notificationEventPolicy');
+    if (id==='./notificationDeliveryPolicy')return require('../src/services/notificationDeliveryPolicy');
+    if (id==='./emailOutboxService')return require('../src/services/emailOutboxService');
     if (id==='./reservationEventService')return {generateEventId:()=> 'TEST-OUTBOX-EVENT'};
     if (id==='./supplierEligibilityPolicy')return {};
     return require(id);
@@ -133,7 +135,7 @@ async function run() {
     const fresh=fixture(),freshService=service('financialSettlementService.js',fresh.sql);
     await freshService.assessRefundObligation(refundParams);
     assert.deepEqual(fresh.trace.notifications.map(x=>x.slice(0,4)),[
-      [4,'BUYER','refund:100:initiated','REFUND_INITIATED']
+      [4,'BUYER','refund:100:requested','PAYMENT.REFUND_REQUESTED']
     ]);
     assert.deepEqual(JSON.parse(fresh.trace.notifications[0][4]),{entityId:31,schemaVersion:1});
     assert.equal(fresh.trace.commits,1);

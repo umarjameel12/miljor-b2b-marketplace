@@ -13,6 +13,7 @@
 // =============================================================================
 
 const { OAuth2Client } = require('google-auth-library');
+const identityNotifications = require('./supplierProfileService');
 const db = require('../config/db');
 
 class GoogleAuthService {
@@ -193,8 +194,10 @@ class GoogleAuthService {
     // 3. New User Onboarding via Google — Strictly creates BUYER accounts
     // Concurrency-Safe: Catches race condition duplicate inserts on unique google_id
     let newUserId;
+    const connection = await db.getConnection();
     try {
-      const [insertResult] = await db.query(
+      await connection.beginTransaction();
+      const [insertResult] = await connection.query(
         `INSERT INTO users
           (full_name, email, google_id, role, business_type, city, verification_status, is_verified, buyer_trust_status)
          VALUES (?, ?, ?, 'BUYER', 'General', 'Lahore', 'EMAIL_VERIFIED', 0, 'CONTACT_VERIFIED')`,
@@ -203,15 +206,18 @@ class GoogleAuthService {
       newUserId = insertResult.insertId;
 
       // Audit log
-      await db.query(
+      await connection.query(
         `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
          VALUES (?, 'SYSTEM', 'USER_REGISTERED_GOOGLE', 'users', ?, ?)`,
         [newUserId, newUserId, JSON.stringify({ email, google_sub: googleSub, role: 'BUYER' })]
       );
+      await identityNotifications.recordIdentityEvent(connection, newUserId, 'IDENTITY.REGISTERED', { transitionId: 'registered' });
+      await connection.commit();
     } catch (insertErr) {
+      await connection.rollback();
       if (insertErr.code === 'ER_DUP_ENTRY') {
         // Concurrent onboarding detected: Fetch and return the newly created user
-        const [racedUsers] = await db.query('SELECT * FROM users WHERE google_id = ?', [googleSub]);
+        const [racedUsers] = await connection.query('SELECT * FROM users WHERE google_id = ?', [googleSub]);
         if (racedUsers.length > 0) {
           return {
             user: racedUsers[0],
@@ -221,7 +227,7 @@ class GoogleAuthService {
         }
       }
       throw insertErr;
-    }
+    } finally { connection.release(); }
 
     const [newUsers] = await db.query('SELECT * FROM users WHERE id = ?', [newUserId]);
 
@@ -262,34 +268,48 @@ class GoogleAuthService {
     const verified = await this.verifyIdToken(idToken, options);
     const googleSub = verified.sub;
 
-    // Check if this Google sub is already linked to ANOTHER user
-    const [existing] = await db.query(
-      'SELECT id FROM users WHERE google_id = ? AND id != ?',
-      [googleSub, userId]
-    );
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [locked] = await connection.query('SELECT * FROM users WHERE id = ? FOR UPDATE', [userId]);
+      if (!locked[0] || locked[0].verification_status === 'BLOCKED' || locked[0].buyer_trust_status === 'SUSPENDED') {
+        const err = new Error('Suspended or blocked accounts cannot link Google credentials.');
+        err.code = 'ACCOUNT_SUSPENDED'; err.statusCode = 403; throw err;
+      }
+      // Check if this Google sub is already linked to ANOTHER user
+      const [existing] = await connection.query(
+        'SELECT id FROM users WHERE google_id = ? AND id != ?',
+        [googleSub, userId]
+      );
 
-    if (existing.length > 0) {
-      const err = new Error('This Google account is already linked to another MilJor user.');
-      err.code = 'GOOGLE_ACCOUNT_ALREADY_LINKED';
-      err.statusCode = 409;
-      throw err;
-    }
+      if (existing.length > 0) {
+        const err = new Error('This Google account is already linked to another MilJor user.');
+        err.code = 'GOOGLE_ACCOUNT_ALREADY_LINKED';
+        err.statusCode = 409;
+        throw err;
+      }
 
-    // Update user record transactionally
-    await db.query(
-      'UPDATE users SET google_id = ? WHERE id = ?',
-      [googleSub, userId]
-    );
+      // Update user record transactionally
+      await connection.query(
+        'UPDATE users SET google_id = ? WHERE id = ?',
+        [googleSub, userId]
+      );
 
-    // Audit log
-    await db.query(
-      `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
-       VALUES (?, 'BUYER', 'GOOGLE_ACCOUNT_LINKED', 'users', ?, ?)`,
-      [userId, userId, JSON.stringify({ google_sub: googleSub })]
-    );
+      // Audit log
+      await connection.query(
+        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
+         VALUES (?, 'BUYER', 'GOOGLE_ACCOUNT_LINKED', 'users', ?, ?)`,
+        [userId, userId, JSON.stringify({ google_sub: googleSub })]
+      );
 
-    const [updatedUsers] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
-    return updatedUsers[0];
+      const [updatedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [userId]);
+      if (locked[0].google_id !== googleSub) {
+        await identityNotifications.recordIdentityEvent(connection, locked[0].id, 'IDENTITY.SECURITY_ALERT');
+      }
+      await connection.commit();
+      return updatedUsers[0];
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
   }
 
   /**
@@ -301,40 +321,47 @@ class GoogleAuthService {
    * @returns {Promise<Object>} Updated user profile
    */
   async unlinkGoogleAccount({ userId }) {
-    const [users] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
-    if (users.length === 0) {
-      const err = new Error('User not found');
-      err.code = 'USER_NOT_FOUND';
-      err.statusCode = 404;
-      throw err;
-    }
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [users] = await connection.query('SELECT * FROM users WHERE id = ? FOR UPDATE', [userId]);
+      if (users.length === 0) {
+        const err = new Error('User not found');
+        err.code = 'USER_NOT_FOUND';
+        err.statusCode = 404;
+        throw err;
+      }
 
-    const user = users[0];
-    if (!user.google_id) {
-      const err = new Error('No Google account is currently linked.');
-      err.code = 'NO_LINKED_ACCOUNT';
-      err.statusCode = 400;
-      throw err;
-    }
+      const user = users[0];
+      if (!user.google_id) {
+        const err = new Error('No Google account is currently linked.');
+        err.code = 'NO_LINKED_ACCOUNT';
+        err.statusCode = 400;
+        throw err;
+      }
 
-    // Safety Invariant: Prevent locking user out of their account!
-    if (!user.password_hash) {
-      const err = new Error('Cannot unlink Google account without first setting a password.');
-      err.code = 'PASSWORD_REQUIRED_BEFORE_UNLINK';
-      err.statusCode = 400;
-      throw err;
-    }
+      // Safety Invariant: Prevent locking user out of their account!
+      if (!user.password_hash) {
+        const err = new Error('Cannot unlink Google account without first setting a password.');
+        err.code = 'PASSWORD_REQUIRED_BEFORE_UNLINK';
+        err.statusCode = 400;
+        throw err;
+      }
 
-    await db.query('UPDATE users SET google_id = NULL WHERE id = ?', [userId]);
+      await connection.query('UPDATE users SET google_id = NULL WHERE id = ?', [userId]);
 
-    await db.query(
-      `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id)
-       VALUES (?, ?, 'GOOGLE_ACCOUNT_UNLINKED', 'users', ?)`,
-      [userId, user.role, userId]
-    );
+      await connection.query(
+        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id)
+         VALUES (?, ?, 'GOOGLE_ACCOUNT_UNLINKED', 'users', ?)`,
+        [userId, user.role, userId]
+      );
 
-    const [updatedUsers] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
-    return updatedUsers[0];
+      const [updatedUsers] = await connection.query('SELECT * FROM users WHERE id = ?', [userId]);
+      await identityNotifications.recordIdentityEvent(connection, user.id, 'IDENTITY.SECURITY_ALERT');
+      await connection.commit();
+      return updatedUsers[0];
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
   }
 
   /**

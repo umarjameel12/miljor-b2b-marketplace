@@ -65,6 +65,9 @@ async function main(){
   assert.equal(Number(paymentBefore.amount),1145);
   pass('Isolated synthetic payment is PAID and funds remain HELD in internal escrow ledger');
 
+  await require('../src/services/orderAdminApprovalService').approveOrder({
+    orderId, actor: { id: 1, role: 'SUPER_ADMIN' }, notes: 'Approved for 100-80-20 postpurchase gate'
+  });
   const incoming=await fulfillment.listSupplierFulfillmentOrders({actor:supplier});
   assert.ok(incoming.orders.some(x=>Number(x.order_id)===orderId),'Verified supplier missing paid order');
   pass('Real database supplier queue lists paid test order');

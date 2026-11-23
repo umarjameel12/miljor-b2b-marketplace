@@ -13,6 +13,7 @@ function service(db, sendMail = async () => ({ messageId: 'mock-message' }), env
       if (id === '../config/db') return db;
       if (id === 'nodemailer') return { createTransport() { throw Error('Real transport forbidden'); } };
       if (id === 'crypto') return require('node:crypto');
+      if (id === './notificationDeliveryPolicy') return require('../src/services/notificationDeliveryPolicy');
       if (id === './recurringReminderPolicy') return require('../src/services/recurringReminderPolicy');
       throw Error('Unexpected dependency: ' + id);
     }, mod, mod.exports, { env: { NODE_ENV: 'test', APP_FRONTEND_URL: 'https://app.miljor.test', ...env } }
@@ -24,9 +25,11 @@ function service(db, sendMail = async () => ({ messageId: 'mock-message' }), env
 function memory() {
   const rows = [];
   const trace = [];
+  const challenges = [];
+  const preferences = new Map();
   let now = 1_000_000;
-  const due = row => row.attempt_count < 3 && (
-    row.status === 'QUEUED' ||
+  const due = row => row.attempt_count < 3 && !['SUPERSEDED_BY_NEWER_REQUEST', 'OTP_CHALLENGE_INVALID'].includes(row.last_error) && (
+    (row.status === 'QUEUED' && (row.next_attempt_at == null || row.next_attempt_at <= now)) ||
     (row.status === 'FAILED' && (row.next_attempt_at != null
       ? row.next_attempt_at <= now : row.last_attempted_at == null || row.last_attempted_at <= now - 300000)) ||
     (row.status === 'SENDING' && row.claim_expires_at <= now)
@@ -34,6 +37,37 @@ function memory() {
   const db = { async query(sql, args = []) {
     const q = sql.replace(/\s+/g, ' ').trim();
     trace.push({ q, args });
+    if (q.startsWith('INSERT INTO email_verifications')) {
+      const [user_id,email,otp_hash,purpose] = args;
+      const record = { id: challenges.length+1,user_id,email,otp_hash,purpose,created_at:now,
+        expires_at:now+600000,consumed_at:null,attempts_count:0 };
+      challenges.push(record);
+      return [{ insertId:record.id,affectedRows:1 }];
+    }
+    if (q.startsWith('UPDATE email_verifications SET consumed_at')) {
+      const matching = challenges.filter(r => q.includes('WHERE id = ?') ? r.id === args[0] :
+        r.user_id === args[0] && r.purpose === args[1] && r.consumed_at == null);
+      for (const record of matching) record.consumed_at = now;
+      return [{ affectedRows:matching.length }];
+    }
+    if (q.includes("last_error = 'SUPERSEDED_BY_NEWER_REQUEST'")) {
+      for (const row of rows) if (row.recipient_user_id === args[0] && row.template_name === args[1] &&
+        ['QUEUED','FAILED'].includes(row.status)) Object.assign(row, {status:'FAILED',last_error:'SUPERSEDED_BY_NEWER_REQUEST',next_attempt_at:null});
+      return [{ affectedRows:1 }];
+    }
+    if (q.includes('FROM notification_preferences')) {
+      assert.doesNotMatch(q, /FOR UPDATE/);
+      const preference = preferences.get(args[0]);
+      return [preference ? [{ ...preference, db_now: new Date(now) }] : []];
+    }
+    if (q.includes('FROM email_verifications')) {
+      assert.doesNotMatch(q, /FOR UPDATE/);
+      assert.match(q, /ORDER BY id DESC LIMIT 1/);
+      if (q.startsWith('SELECT created_at')) return [challenges.filter(r =>
+        r.user_id === args[0] && r.purpose === args[1] && r.created_at > now-60000).slice(-1)];
+      return [challenges.filter(r => r.user_id === args[0] && r.purpose === args[1])
+        .sort((a,b) => b.id-a.id).slice(0,1).map(r => ({ ...r, is_expired: r.expires_at <= now ? 1 : 0 }))];
+    }
     if (q.startsWith('INSERT INTO transactional_email_outbox')) {
       const [recipient_email, recipient_user_id, template_name, subject, payload_json, idempotency_key] = args;
       if (rows.some(r => r.idempotency_key === idempotency_key)) {
@@ -51,11 +85,15 @@ function memory() {
       assert.match(q, /FOR UPDATE/);
       return [rows.filter(r => r.idempotency_key === args[0]).map(r => ({ ...r }))];
     }
-    if (q.startsWith('SELECT')) return [rows.filter(due).slice(0, args[0]).map(r => ({ ...r }))];
+    if (q.startsWith('SELECT') && q.includes('FROM transactional_email_outbox')) {
+      assert.match(q, /COALESCE\(last_error, ''\) NOT IN \('SUPERSEDED_BY_NEWER_REQUEST', 'OTP_CHALLENGE_INVALID'\)/);
+      return [rows.filter(due).slice(0, args[0]).map(r => ({ ...r }))];
+    }
     if (q.includes("SET status = 'SENDING'")) {
       assert.match(q, /attempt_count < 3/);
       assert.match(q, /next_attempt_at <= NOW\(\)/);
       assert.match(q, /claim_expires_at <= NOW\(\)/);
+      assert.match(q, /COALESCE\(last_error, ''\) NOT IN/);
       const row = rows.find(r => r.id === args[1]);
       if (!row || !due(row)) return [{ affectedRows: 0 }];
       Object.assign(row, { status: 'SENDING', claim_token: args[0], claim_expires_at: now + 300000,
@@ -85,16 +123,22 @@ function memory() {
         (q.includes('claim_expires_at > NOW()') && row.claim_expires_at <= now)))) {
       return [{ affectedRows: 0 }];
     }
-    if (q.includes("SET status = 'PROVIDER_ACCEPTED'")) {
+    if (q.includes("SET status = 'QUEUED'")) {
+      assert.match(q, /attempt_count = attempt_count - 1/);
+      assert.match(q, /claim_expires_at > NOW\(\)/);
+      Object.assign(row, { status: 'QUEUED', next_attempt_at: new Date(args[0]).getTime(),
+        attempt_count: row.attempt_count - 1, claim_token: null, claim_expires_at: null });
+    } else if (q.includes("SET status = 'PROVIDER_ACCEPTED'")) {
       Object.assign(row, { status: 'PROVIDER_ACCEPTED', provider_message_id: args[0], claim_token: null, claim_expires_at: null });
     } else if (q.includes("SET status = 'FAILED'")) {
       Object.assign(row, { status: 'FAILED', last_error: args[0], claim_token: null, claim_expires_at: null,
-        next_attempt_at: now + 300000 * 2 ** (row.attempt_count - 1) });
-      assert.match(q, /POW\(2, attempt_count - 1\)/);
+        next_attempt_at: q.includes('next_attempt_at = NULL') ? null :
+          row.attempt_count < 3 ? now + 300000 * 2 ** (row.attempt_count - 1) : null });
+      if (args[0] !== 'OTP_CHALLENGE_INVALID') assert.match(q, /POW\(2, attempt_count - 1\)/);
     } else throw Error('Unexpected SQL: ' + q);
     return [{ affectedRows: 1 }];
   } };
-  return { db, rows, trace, advance(ms) { now += ms; } };
+  return { db, rows, trace, challenges, preferences, advance(ms) { now += ms; }, setNow(value) { now = new Date(value).getTime(); } };
 }
 const input = changes => ({ recipientEmail: 'buyer@example.test', recipientUserId: 5,
   templateName: 'platform_notification', payload: { title: 'Update', message: 'Ready', locale: 'en' },
@@ -173,6 +217,18 @@ test('reject external and obfuscated links and unsupported locales', () => {
     assert.throws(() => s._renderTemplate('platform_notification', { title: 'Hi', message: 'Ready', deepLink }), { code: 'INVALID_DEEP_LINK' });
   }
   assert.throws(() => s._renderTemplate('platform_notification', { title: 'Hi', message: 'Ready', locale: '<img>' }), { code: 'INVALID_NOTIFICATION' });
+});
+
+test('queued mail waits for its quiet-hour or rate-limit release time',async()=>{
+  const f=memory();let sends=0;
+  const s=service(f.db,async()=>{sends++;return {messageId:'released'};});
+  await s.enqueueEmail(f.db,input());
+  f.rows[0].next_attempt_at=1000000+60000;
+  await s.processOutboxBatch();
+  assert.equal(sends,0);
+  f.advance(60000);
+  await s.processOutboxBatch();
+  assert.equal(sends,1);
 });
 
 test('competing workers dispatch once while the winner is sending', async () => {
@@ -390,4 +446,184 @@ test('stale worker success cannot overwrite a newer live claim and reports ambig
   assert.equal(f.rows[0].claim_token, token);
   finishNew({ messageId: 'new-message' }); await fresh;
   assert.equal(f.rows[0].provider_message_id, 'new-message');
+});
+
+function otpChallenge(f, s, changes = {}) {
+  const record = { id: 1, user_id: 5, email: 'buyer@example.test', purpose: 'REGISTRATION_VERIFY',
+    otp_hash: s.computeOtpHmac({ otp: '123456', userId: 5, email: 'buyer@example.test', purpose: 'REGISTRATION_VERIFY' }),
+    consumed_at: null, attempts_count: 0, expires_at: 1600000, ...changes };
+  f.challenges.push(record);
+  return record;
+}
+
+test('superseded rows are terminal even with a due retry timestamp', async () => {
+  const f=memory(); let sends=0;
+  const s=service(f.db, async()=>{ sends++; });
+  await s.enqueueEmail(f.db,input({templateName:'REGISTRATION_OTP',payload:{otp:'123456'}}));
+  Object.assign(f.rows[0],{status:'FAILED',last_error:'SUPERSEDED_BY_NEWER_REQUEST',next_attempt_at:0});
+  assert.equal((await s.processOutboxBatch()).processed,0);
+  assert.equal(sends,0);
+});
+
+test('invalid OTP backlog and retries retire permanently without sending', async () => {
+  for (const status of ['QUEUED','FAILED','SENDING']) for (const invalid of ['missing','consumed','expired','exhausted','replaced','wrong-email','wrong-hash','wrong-id']) {
+    const f=memory(); let sends=0;
+    const s=service(f.db,async()=>{ sends++; return {messageId:'unexpected'}; });
+    if(invalid!=='missing') {
+      const record=otpChallenge(f,s);
+      if(invalid==='consumed') record.consumed_at=1;
+      if(invalid==='expired') record.expires_at=1000000;
+      if(invalid==='exhausted') record.attempts_count=5;
+      if(invalid==='wrong-email') record.email='other@example.test';
+      if(invalid==='wrong-hash') record.otp_hash=s.hashOtp('654321');
+      if(invalid==='replaced') otpChallenge(f,s,{id:2,consumed_at:1});
+    }
+    await s.enqueueEmail(f.db,input({templateName:'REGISTRATION_OTP',payload:{otp:'123456',verificationId:invalid==='wrong-id'?99:1}}));
+    Object.assign(f.rows[0],{status,attempt_count:status==='QUEUED'?0:1,next_attempt_at:0,claim_token:'crashed',claim_expires_at:0});
+    await s.processOutboxBatch();
+    assert.equal(sends,0,`${status}: ${invalid}`);
+    assert.equal(f.rows[0].last_error,'OTP_CHALLENGE_INVALID');
+    assert.equal(f.rows[0].next_attempt_at,null);
+    f.advance(9999999);
+    assert.equal((await s.processOutboxBatch()).processed,0);
+  }
+});
+
+test('valid current HMAC and legacy OTP retries still dispatch for both purposes', async () => {
+  for(const reset of [false,true]) for(const legacy of [false,true]) {
+    const f=memory();let sends=0;
+    const s=service(f.db,async()=>{sends++;return {messageId:'valid'};});
+    const purpose=reset?'PASSWORD_RESET':'REGISTRATION_VERIFY';
+    otpChallenge(f,s,{purpose,otp_hash:legacy?s.hashOtp('123456'):s.computeOtpHmac({otp:'123456',userId:5,email:'buyer@example.test',purpose})});
+    await s.enqueueEmail(f.db,input({templateName:reset?'PASSWORD_RESET_OTP':'REGISTRATION_OTP',payload:{otp:'123456'}}));
+    Object.assign(f.rows[0],{status:'FAILED',next_attempt_at:0,attempt_count:1});
+    assert.equal((await s.processOutboxBatch()).succeeded,1);
+    assert.equal(sends,1);
+  }
+});
+
+test('createAndSendOtp burns a failed immediate challenge and worker never resends it', async () => {
+  const f=memory();let sends=0;
+  const s=service(f.db,async()=>{sends++;throw Error('provider failure');});
+  await assert.rejects(s.createAndSendOtp({userId:5,email:'buyer@example.test'}),{code:'EMAIL_DELIVERY_FAILED'});
+  assert.ok(f.challenges[0].consumed_at);
+  f.advance(300000);await s.processOutboxBatch();
+  assert.equal(sends,1);
+  assert.equal(f.rows[0].last_error,'OTP_CHALLENGE_INVALID');
+});
+
+test('optional backlog, retries and immediate mail defer in quiet hours without spending attempts', async () => {
+  for (const mode of ['backlog','retry','immediate']) {
+    const f=memory(); f.setNow('2026-11-16T17:03:25Z'); // Lahore 22:03
+    f.preferences.set(5,{quiet_start:'22:00',quiet_end:'08:00',timezone_offset_minutes:300});
+    let sends=0; const s=service(f.db,async()=>{sends++;return {messageId:'awake'};});
+    if(mode==='immediate') assert.equal((await s.queueAndSendEmail(input())).status,'QUEUED');
+    else {
+      await s.enqueueEmail(f.db,input());
+      if(mode==='retry') Object.assign(f.rows[0],{status:'FAILED',attempt_count:1,next_attempt_at:0});
+      await s.processOutboxBatch();
+    }
+    assert.equal(sends,0);
+    assert.equal(f.rows[0].status,'QUEUED');
+    assert.equal(f.rows[0].attempt_count,mode==='retry'?1:0);
+    assert.equal(f.rows[0].claim_token,null);
+    assert.equal(f.rows[0].next_attempt_at,Date.parse('2026-11-17T03:00:00Z'));
+    await s.processOutboxBatch();assert.equal(sends,0);
+    f.setNow('2026-11-17T03:00:00Z');
+    await s.processOutboxBatch();assert.equal(sends,1);
+  }
+});
+
+test('mandatory notifications and OTPs bypass quiet hours for immediate and worker delivery', async () => {
+  for(const immediate of [false,true]) for(const otp of [false,true]) {
+    const f=memory();f.setNow('2026-11-16T17:03:00Z');
+    f.preferences.set(5,{quiet_start:'22:00',quiet_end:'08:00',timezone_offset_minutes:300});
+    let sends=0;const s=service(f.db,async()=>{sends++;return {messageId:'mandatory'};});
+    const args=otp?input({templateName:'REGISTRATION_OTP',payload:{otp:'123456'}}):input({payload:{title:'Required',message:'Ready',mandatory:true}});
+    if(otp) otpChallenge(f,s,{expires_at:Date.parse('2026-11-16T17:13:00Z')});
+    if(immediate) await s.queueAndSendEmail(args);
+    else {await s.enqueueEmail(f.db,args);await s.processOutboxBatch();}
+    assert.equal(sends,1);
+    assert.equal(f.rows[0].status,'PROVIDER_ACCEPTED');
+    assert.equal(f.trace.some(item=>item.q.includes('FROM notification_preferences')),false);
+  }
+});
+
+test('quiet-hours deferral and invalid OTP retirement cannot clear a newer claim', async () => {
+  for(const otp of [false,true]) {
+    const f=memory();f.setNow('2026-11-16T17:03:00Z');
+    f.preferences.set(5,{quiet_start:'22:00',quiet_end:'08:00',timezone_offset_minutes:300});
+    const db={query:async(q,args)=>{
+      if(q.includes(otp?'FROM email_verifications':'FROM notification_preferences')) f.rows[0].claim_token='peer';
+      return f.db.query(q,args);
+    }};
+    let sends=0;const s=service(db,async()=>{sends++;});
+    await s.enqueueEmail(f.db,otp?input({templateName:'REGISTRATION_OTP',payload:{otp:'123456'}}):input());
+    assert.equal((await s.processOutboxBatch()).ambiguous,1);
+    assert.equal(f.rows[0].claim_token,'peer');
+    assert.equal(f.rows[0].status,'SENDING');
+    assert.equal(sends,0);
+  }
+});
+
+test('provider failure before quiet hours defers its actual retry until morning', async () => {
+  const f=memory();f.setNow('2026-11-16T16:58:00Z'); // Lahore 21:58
+  f.preferences.set(5,{quiet_start:'22:00',quiet_end:'08:00',timezone_offset_minutes:300});
+  let sends=0;const s=service(f.db,async()=>{
+    if(++sends===1) throw Error('temporary provider failure');
+    return {messageId:'morning'};
+  });
+  await s.enqueueEmail(f.db,input());
+  await s.processOutboxBatch();
+  assert.equal(f.rows[0].status,'FAILED');
+  assert.equal(f.rows[0].next_attempt_at,Date.parse('2026-11-16T17:03:00Z'));
+  f.advance(300000);await s.processOutboxBatch();
+  assert.equal(sends,1);
+  assert.equal(f.rows[0].attempt_count,1);
+  assert.equal(f.rows[0].next_attempt_at,Date.parse('2026-11-17T03:00:00Z'));
+  // Preferences are re-read rather than retained from enqueue/previous dispatch.
+  f.preferences.set(5,{quiet_start:'08:00',quiet_end:'10:00',timezone_offset_minutes:300});
+  f.setNow('2026-11-17T03:00:00Z');await s.processOutboxBatch();
+  assert.equal(sends,1);
+  assert.equal(f.rows[0].next_attempt_at,Date.parse('2026-11-17T05:00:00Z'));
+  f.setNow('2026-11-17T05:00:00Z');await s.processOutboxBatch();
+  assert.equal(sends,2);
+  assert.equal(f.rows[0].status,'PROVIDER_ACCEPTED');
+  assert.equal(f.rows[0].attempt_count,2);
+});
+
+test('supersession after selection cannot be reclaimed from the stale worker snapshot', async () => {
+  const f=memory();let sends=0;
+  const db={query:async(q,args)=>{
+    const result=await f.db.query(q,args);
+    if(q.includes('SELECT id, recipient_email')) Object.assign(f.rows[0],
+      {status:'FAILED',last_error:'SUPERSEDED_BY_NEWER_REQUEST',next_attempt_at:null});
+    return result;
+  }};
+  const s=service(db,async()=>{sends++;});
+  await s.enqueueEmail(f.db,input({templateName:'REGISTRATION_OTP',payload:{otp:'123456'}}));
+  assert.equal((await s.processOutboxBatch()).processed,0);
+  assert.equal(sends,0);
+  assert.equal(f.rows[0].last_error,'SUPERSEDED_BY_NEWER_REQUEST');
+});
+
+test('legacy critical UCP mail without mandatory flag bypasses quiet hours; explicit optional platform mail waits', async () => {
+  for (const mode of ['backlog','retry','immediate']) for (const legacy of [true,false]) {
+    const f=memory();f.setNow('2026-11-16T17:03:00Z');
+    f.preferences.set(5,{quiet_start:'22:00',quiet_end:'08:00',timezone_offset_minutes:300});
+    let sends=0;const s=service(f.db,async()=>{sends++;return {messageId:'critical'};});
+    const args=input({templateName:legacy?'UCP_NOTIFICATION':'platform_notification',
+      payload:legacy?{title:'Payment confirmed',message:'Review your financial record.'}:
+        {title:'Optional update',message:'Ready',mandatory:false}});
+    if(mode==='immediate') await s.queueAndSendEmail(args);
+    else {
+      await s.enqueueEmail(f.db,args);
+      if(mode==='retry') Object.assign(f.rows[0],{status:'FAILED',attempt_count:1,next_attempt_at:0});
+      await s.processOutboxBatch();
+    }
+    assert.equal(sends,legacy?1:0,`${mode}: ${args.templateName}`);
+    assert.equal(f.rows[0].status,legacy?'PROVIDER_ACCEPTED':'QUEUED');
+    assert.equal(f.trace.some(item=>item.q.includes('FROM notification_preferences')),!legacy);
+    assert.equal(f.rows[0].next_attempt_at,legacy?null:Date.parse('2026-11-17T03:00:00Z'));
+  }
 });

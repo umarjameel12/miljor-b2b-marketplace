@@ -62,6 +62,7 @@ async function main(){
   if(name==='../config/db')return emailDb;if(name==='crypto')return crypto;
   if(name==='nodemailer')return {createTransport(){throw Error('Real transport forbidden');}};
   if(name==='./recurringReminderPolicy')return require('../src/services/recurringReminderPolicy');
+  if(name==='./notificationDeliveryPolicy')return require('../src/services/notificationDeliveryPolicy');
   throw Error('Unexpected email dependency '+name);
  },emailModule,emailModule.exports,{env:{NODE_ENV:'test',TRANSACTIONAL_EMAIL_MODE:'mock',APP_FRONTEND_URL:'https://app.miljor.test'}});
  const email=emailModule.exports;let entered,releaseDispatch;

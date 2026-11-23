@@ -16,6 +16,7 @@ module.exports=async function cleanup(db,ids){
  await run('UPDATE procurement_collective_commitments SET request_id=NULL,award_id=NULL WHERE buyer_id'+inside);
  await run('DELETE FROM procurement_award_lines WHERE award_id IN (SELECT id FROM procurement_awards WHERE buyer_id'+inside+')');
  await run('DELETE FROM procurement_award_orders WHERE award_id IN (SELECT id FROM procurement_awards WHERE buyer_id'+inside+')');
+ await run('DELETE FROM collective_payment_holds WHERE buyer_id'+inside);
  await run('DELETE FROM orders WHERE buyer_id'+inside);
  await run('DELETE FROM procurement_awards WHERE buyer_id'+inside);
  await run('DELETE FROM procurement_collective_capacity WHERE commitment_id IN (SELECT id FROM procurement_collective_commitments WHERE buyer_id'+inside+')');

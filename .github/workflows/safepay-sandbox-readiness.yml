@@ -1,5 +1,8 @@
 name: MilJor Safepay Sandbox Readiness (No Provider Traffic)
 on:
+  push:
+    branches:
+      - integration/pr54-pr61-consolidation
   pull_request:
     paths:
       - 'backend/scripts/safepaySandboxPreflight.js'

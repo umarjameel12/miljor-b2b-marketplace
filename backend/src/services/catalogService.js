@@ -2,6 +2,8 @@
 // src/services/catalogService.js
 // MilJor Canonical Catalog & Moderation Domain Service (Package E2)
 // =============================================================================
+const crypto = require('node:crypto');
+const { recordInAppOnConnection } = require('./ucpTransactionalNotifications');
 const db = require('../config/db');
 const catalogRepo = require('../repositories/catalogRepository');
 const productRepo = require('../repositories/productRepo');
@@ -9,6 +11,27 @@ const productSpecRepo = require('../repositories/productSpecificationRepo');
 const specificationService = require('./specificationService');
 
 class CatalogService {
+  async _withTransaction(action) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const result = await action(connection);
+      await connection.commit();
+      return result;
+    } catch (error) { await connection.rollback(); throw error; }
+    finally { connection.release(); }
+  }
+
+  async _recordCatalogEvent(connection, type, row, transitionId = crypto.randomUUID()) {
+    const [owners] = await connection.query('SELECT id, role FROM users WHERE id = ?', [row.supplier_id]);
+    if (!owners[0]) throw new Error('NOTIFICATION_OWNER_NOT_FOUND');
+    await recordInAppOnConnection(connection, { type, aggregateId: Number(row.id),
+      aggregateVersion: 1, transitionId,
+      recipients: [{ userId: Number(owners[0].id), role: owners[0].role }],
+      title: 'Catalog update recorded', message: 'A change to your catalog has been recorded. Open MilJor to review it.',
+      payload: { status: row.status } });
+  }
+
   // ---------------------------------------------------------------------------
   // Helper: Generate unique request code
   // ---------------------------------------------------------------------------
@@ -215,34 +238,38 @@ class CatalogService {
         allowed_purchasing_units: Array.isArray(payload.allowed_purchasing_units) ? payload.allowed_purchasing_units : ['bag', 'sack']
       };
 
-      const created = await catalogRepo.createCatalogRequest({
-        request_code: this._generateRequestCode('NEW_FAMILY'),
-        supplier_id: supplierId,
-        request_type: 'NEW_FAMILY',
-        category_id: category.id,
-        family_id: null,
-        proposed_family_name: cleanFamilyName,
-        proposed_family_slug: proposedSlug,
-        proposed_variant_title: null,
-        normalized_payload: normalizedPayload,
-        supporting_notes: supporting_notes ? specificationService.normalizeText(supporting_notes) : null,
-        dedup_hash: dedupHash,
-        status: targetStatus
-      });
+      return this._withTransaction(async connection => {
+        const created = await catalogRepo.createCatalogRequest({
+          request_code: this._generateRequestCode('NEW_FAMILY'),
+          supplier_id: supplierId,
+          request_type: 'NEW_FAMILY',
+          category_id: category.id,
+          family_id: null,
+          proposed_family_name: cleanFamilyName,
+          proposed_family_slug: proposedSlug,
+          proposed_variant_title: null,
+          normalized_payload: normalizedPayload,
+          supporting_notes: supporting_notes ? specificationService.normalizeText(supporting_notes) : null,
+          dedup_hash: dedupHash,
+          status: targetStatus
+        }, connection);
 
-      await catalogRepo.insertModerationLog({
-        request_id: created.id,
-        entity_type: 'CATALOG_REQUEST',
-        entity_id: created.id,
-        actor_id: supplierId,
-        actor_role: actorRole,
-        from_status: null,
-        to_status: targetStatus,
-        action: targetStatus === 'DRAFT' ? 'SAVE_DRAFT_FAMILY_REQUEST' : 'SUBMIT_FAMILY_REQUEST',
-        metadata: { request_code: created.request_code, proposed_family_name: cleanFamilyName }
+        await catalogRepo.insertModerationLog({
+          request_id: created.id,
+          entity_type: 'CATALOG_REQUEST',
+          entity_id: created.id,
+          actor_id: supplierId,
+          actor_role: actorRole,
+          from_status: null,
+          to_status: targetStatus,
+          action: targetStatus === 'DRAFT' ? 'SAVE_DRAFT_FAMILY_REQUEST' : 'SUBMIT_FAMILY_REQUEST',
+          metadata: { request_code: created.request_code, proposed_family_name: cleanFamilyName }
+        }, connection);
+        if (created.status === 'SUBMITTED') {
+          await this._recordCatalogEvent(connection, 'CATALOG.FAMILY_REQUEST_SUBMITTED', created);
+        }
+        return created;
       });
-
-      return created;
     }
 
     // Otherwise: NEW_VARIANT
@@ -426,8 +453,9 @@ class CatalogService {
   // ---------------------------------------------------------------------------
   // 3. SUPPLIER: Update / Resubmit Rejected or Draft Catalog Request
   // ---------------------------------------------------------------------------
-  async updateSupplierCatalogRequest(supplierId, requestId, payload, actorRole = 'SUPPLIER') {
-    const existing = await catalogRepo.findCatalogRequestById(Number(requestId));
+  async updateSupplierCatalogRequest(supplierId, requestId, payload, actorRole = 'SUPPLIER', connection = null) {
+    if (!connection) return this._withTransaction(tx => this.updateSupplierCatalogRequest(supplierId, requestId, payload, actorRole, tx));
+    const existing = await catalogRepo.findCatalogRequestById(Number(requestId), connection, true);
     if (!existing) {
       const err = new Error('Catalog request not found.');
       err.status = 404;
@@ -458,7 +486,7 @@ class CatalogService {
     }
 
     const categoryId = payload.category_id !== undefined ? Number(payload.category_id) : Number(existing.category_id);
-    const category = await catalogRepo.findCategoryById(categoryId);
+    const category = await catalogRepo.findCategoryById(categoryId, connection);
     if (!category || !category.is_active || category.approval_status !== 'APPROVED') {
       const err = new Error('Selected category does not exist or is inactive.');
       err.status = 400;
@@ -480,7 +508,7 @@ class CatalogService {
       }
 
       const proposedSlug = specificationService.slugify(cleanFamilyName);
-      const existingFamily = await catalogRepo.findFamilyBySlugOrName(proposedSlug, category.id, cleanFamilyName);
+      const existingFamily = await catalogRepo.findFamilyBySlugOrName(proposedSlug, category.id, cleanFamilyName, connection);
       if (existingFamily) {
         const err = new Error(`Product family '${existingFamily.name}' already exists in canonical catalog.`);
         err.status = 409;
@@ -495,7 +523,7 @@ class CatalogService {
       });
 
       if (targetStatus === 'SUBMITTED') {
-        const activeDup = await catalogRepo.findActiveDuplicateRequest(dedupHash, existing.id);
+        const activeDup = await catalogRepo.findActiveDuplicateRequest(dedupHash, existing.id, connection);
         if (activeDup) {
           const err = new Error('An identical product family request is already pending or approved.');
           err.status = 409;
@@ -514,7 +542,7 @@ class CatalogService {
         dedup_hash: dedupHash,
         status: targetStatus,
         submitted_at: targetStatus === 'SUBMITTED' ? new Date() : existing.submitted_at
-      });
+      }, connection);
 
       await catalogRepo.insertModerationLog({
         request_id: existing.id,
@@ -525,7 +553,10 @@ class CatalogService {
         from_status: existing.status,
         to_status: targetStatus,
         action: targetStatus === 'SUBMITTED' ? 'RESUBMIT_FAMILY_REQUEST' : 'UPDATE_DRAFT_FAMILY_REQUEST'
-      });
+      }, connection);
+      if (updated.status === 'SUBMITTED') {
+        await this._recordCatalogEvent(connection, 'CATALOG.FAMILY_REQUEST_SUBMITTED', updated);
+      }
 
       return updated;
     }
@@ -721,6 +752,9 @@ class CatalogService {
         connection
       );
 
+      if (reqRow.request_type === 'NEW_FAMILY' && reqRow.status !== 'UNDER_REVIEW') {
+        await this._recordCatalogEvent(connection, 'CATALOG.FAMILY_REQUEST_REVIEWED', updated);
+      }
       await connection.commit();
       return updated;
     } catch (err) {
@@ -843,6 +877,7 @@ class CatalogService {
           connection
         );
 
+        await this._recordCatalogEvent(connection, 'CATALOG.FAMILY_REQUEST_APPROVED', updatedRequest);
         await connection.commit();
         return { request: updatedRequest, approvedFamily, approvedSpec: null };
       }
@@ -1029,6 +1064,9 @@ class CatalogService {
         connection
       );
 
+      if (reqRow.request_type === 'NEW_FAMILY') {
+        await this._recordCatalogEvent(connection, 'CATALOG.FAMILY_REQUEST_REJECTED', updated);
+      }
       await connection.commit();
       return updated;
     } catch (err) {
@@ -1458,6 +1496,9 @@ class CatalogService {
       await subscriptionEntitlementService.assertCanPublishInFamily(supplierId, existing.family_id, connection);
 
       const updated = await catalogRepo.transitionSupplierProductStatus(existing.id, 'PUBLISHED', connection);
+      if (existing.status !== 'PUBLISHED') {
+        await this._recordCatalogEvent(connection, 'CATALOG.PRODUCT_PUBLISHED', updated, 'published');
+      }
       await connection.commit();
       return updated;
     } catch (err) {
@@ -1516,6 +1557,9 @@ class CatalogService {
       if (existing.status !== 'ARCHIVED') {
         await this._assertNoOpenPoolForArchive(supplierId, { productId: existing.id }, connection);
       }
+      const [childSkus] = await connection.query(
+        "SELECT id, supplier_id, status FROM supplier_skus WHERE supplier_product_id = ? AND supplier_id = ? AND status <> 'ARCHIVED' FOR UPDATE",
+        [existing.id, existing.supplier_id]);
       const updated = await catalogRepo.transitionSupplierProductStatus(existing.id, 'ARCHIVED', connection);
       // Also archive child SKUs and prevent legacy spec_id-only listings
       // from reactivating a now-archived supplier-owned physical product.
@@ -1536,6 +1580,12 @@ class CatalogService {
              (SELECT id FROM product_specifications WHERE supplier_product_id = ? AND supplier_id = ?))`,
         [Number(supplierId), existing.id, existing.id, Number(supplierId)]
       );
+      if (existing.status !== 'ARCHIVED') {
+        await this._recordCatalogEvent(connection, 'CATALOG.PRODUCT_ARCHIVED', updated, 'archived');
+      }
+      for (const child of childSkus) {
+        await this._recordCatalogEvent(connection, 'CATALOG.SKU_ARCHIVED', { ...child, status: 'ARCHIVED' }, 'archived');
+      }
       await connection.commit();
       return updated;
     } catch (err) {
@@ -1976,6 +2026,16 @@ class CatalogService {
       }
 
       const publishedSku = await catalogRepo.publishSupplierSku(sku.id, linkedSpecId, connection);
+      if (product.status !== 'PUBLISHED') {
+        await this._recordCatalogEvent(connection, 'CATALOG.PRODUCT_PUBLISHED', { ...product, status: 'PUBLISHED' }, 'published');
+      }
+      if (sku.status !== 'PUBLISHED') {
+        await recordInAppOnConnection(connection, { type: 'CATALOG.SKU_PUBLISHED',
+          aggregateId: 'sku-' + sku.id, aggregateVersion: 1, transitionId: 'published',
+          recipients: [{ userId: Number(sku.supplier_id), role: 'SUPPLIER' }],
+          title: 'SKU published', message: 'Your physical SKU has been published and is ready for use in your catalog.',
+          payload: { sku_id: Number(sku.id), status: 'PUBLISHED' } });
+      }
 
       await connection.commit();
       return publishedSku;
@@ -2024,6 +2084,9 @@ class CatalogService {
         [Number(supplierId), sku.id, sku.linked_spec_id || -1]
       );
 
+      if (sku.status !== 'ARCHIVED') {
+        await this._recordCatalogEvent(connection, 'CATALOG.SKU_ARCHIVED', archivedSku, 'archived');
+      }
       await connection.commit();
       return archivedSku;
     } catch (err) {

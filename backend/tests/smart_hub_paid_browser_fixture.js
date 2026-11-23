@@ -15,13 +15,13 @@ async function seed(db,{quantities=['1','2'],stock=10}={}){
   const tag=crypto.randomBytes(6).toString('hex');
   const bcrypt=require('bcryptjs');
   const password=crypto.randomBytes(24).toString('base64url'),hash=await bcrypt.hash(password,10),users=[];
-  for(const [index,role] of ['BUYER','SUPPLIER','BUYER','SUPPLIER','FINANCE_ADMIN'].entries()){
+  for(const [index,role] of ['BUYER','SUPPLIER','BUYER','SUPPLIER','FINANCE_ADMIN','OPERATIONS_ADMIN'].entries()){
     const email='smart-paid-'+tag+'-'+index+'@miljor.test';
     const [created]=await db.query("INSERT INTO users(full_name,email,password_hash,role,is_verified,verification_status,buyer_trust_status,city,area,address) VALUES (?,?,?,?,1,'VERIFIED','CONTACT_VERIFIED','Lahore','Gulberg','Synthetic paid-browser Lahore address')",['Synthetic browser '+role,email,hash,role]);
     users.push({id:created.insertId,email,role});
     if(role==='SUPPLIER')await db.query("INSERT INTO supplier_profiles(supplier_id,business_type,verification_status,subscription_plan,subscription_status,max_active_listings,transaction_fee_percent) VALUES (?,'WHOLESALER','VERIFIED','STARTER','STARTER_ACTIVE',10,2.50)",[created.insertId]);
   }
-  const [buyer,supplier,foreignBuyer,foreignSupplier,admin]=users;
+  const [buyer,supplier,foreignBuyer,foreignSupplier,admin,opsAdmin]=users;
   const [[family]]=await db.query("SELECT id FROM catalog_product_families WHERE is_active=1 AND approval_status='APPROVED' AND JSON_CONTAINS(allowed_purchasing_units,JSON_QUOTE('bag')) ORDER BY id LIMIT 1");
   assert.ok(family,'Approved bag family required');
   const [[cluster]]=await db.query('SELECT id FROM geographic_clusters WHERE is_active=1 ORDER BY id LIMIT 1');assert.ok(cluster,'Active Lahore cluster required');
@@ -39,7 +39,7 @@ async function seed(db,{quantities=['1','2'],stock=10}={}){
     const [[physical]]=await db.query('SELECT product_spec_id FROM supplier_listings WHERE id=?',[listing.id]);
     lines.push({listing:listing.id,sku:sku.id,spec:physical.product_spec_id,family:family.id});
   }
-  return {tag,password,buyer,supplier,foreignBuyer,foreignSupplier,admin,quantities,stock,lines,address,addressId:saved.insertId};
+  return {tag,password,buyer,supplier,foreignBuyer,foreignSupplier,admin,opsAdmin,quantities,stock,lines,address,addressId:saved.insertId};
 }
 async function award(api,db,fixture){
   const {buyer,supplier,lines,address,quantities}=fixture;

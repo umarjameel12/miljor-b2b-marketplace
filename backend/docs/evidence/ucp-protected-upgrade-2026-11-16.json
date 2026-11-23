@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-11-16T01:25:57.698Z",
+  "protectedDatabase": "miljor_db",
+  "originalPort": 3306,
+  "restoredPort": 33318,
+  "baseline": {
+    "users": 3366696221,
+    "pools": 2265355547,
+    "reservations": 0,
+    "orders": 0,
+    "payments": 0,
+    "platform_ledger": 0
+  },
+  "checksums": {
+    "users": 2879533563,
+    "pools": 2265355547,
+    "reservations": 0,
+    "orders": 0,
+    "payments": 0,
+    "platform_ledger": 0
+  },
+  "restoredCommercialTables": {
+    "users": {
+      "originalTest": 3903776369,
+      "restoredAfterUpgrade": 3903776369
+    },
+    "pools": {
+      "originalTest": 3967211801,
+      "restoredAfterUpgrade": 3967211801
+    },
+    "reservations": {
+      "originalTest": 2932238194,
+      "restoredAfterUpgrade": 2932238194
+    },
+    "orders": {
+      "originalTest": 953071171,
+      "restoredAfterUpgrade": 953071171
+    },
+    "payments": {
+      "originalTest": 1900603711,
+      "restoredAfterUpgrade": 1900603711
+    },
+    "platform_ledger": {
+      "originalTest": 0,
+      "restoredAfterUpgrade": 0
+    }
+  },
+  "protectedDifferences": [
+    "users"
+  ],
+  "restoredDifferences": [],
+  "result": "FAIL",
+  "restoredAppliedMigrations": 62
+}

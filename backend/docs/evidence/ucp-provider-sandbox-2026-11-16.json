@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-15T20:12:27.311Z",
+  "database": "miljor_test_db",
+  "port": 33319,
+  "environment": "sandbox",
+  "syntheticCallback": false,
+  "actualPayment": "NOT_TESTED",
+  "refund": "NOT_TESTED",
+  "orderId": 7,
+  "initiation": "PASS",
+  "trackerHash": "44a4221ec78c7abd6372721bbf90eb532a2b406efc4c53b457ecab3153bd5efd",
+  "independentReadback": "PASS",
+  "providerState": "TRACKER_STARTED",
+  "reconciled": false,
+  "status": "INITIATED_PAYMENT_NOT_COMPLETED"
+}

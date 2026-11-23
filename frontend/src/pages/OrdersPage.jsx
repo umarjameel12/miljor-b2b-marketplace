@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import { SupplierFulfillmentPanel } from '../components/supplier/SupplierFulfillmentPanel';
+import { BuyerDeliveryStopPanel } from '../components/buyer/BuyerDeliveryStopPanel';
 import { ProcurementReliabilityReport } from '../components/procurement/ProcurementReliabilityReport';
 import { ProcurementOrderOperations } from '../components/procurement/ProcurementOrderOperations';
 import { SupplierDeliveryRuns } from '../components/procurement/SupplierDeliveryRuns';
@@ -254,6 +255,9 @@ export const OrdersPage = () => {
                     </Link>
                   )}
                 </div>
+                {!isSupplier && (order.payment_status === 'PAID' || order.order_status === 'PAID') && (
+                  <BuyerDeliveryStopPanel orderId={order.id} orderedQty={order.total_qty} />
+                )}
                 {order.payment_status==='PAID'&&<ProcurementOrderOperations key={`${user?.id}:${order.id}`} orderId={order.id}/>}
               </article>
             ))}

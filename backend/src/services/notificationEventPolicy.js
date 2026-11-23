@@ -52,28 +52,73 @@ const definitions={
   PAYMENT_INITIATED:['Payment initiated','ادائیگی شروع ہو گئی','order'],
   PAYMENT_VERIFIED:['Payment verified','ادائیگی کی تصدیق ہو گئی','order'],
   PAYMENT_FAILED:['Payment failed','ادائیگی ناکام ہو گئی','order'],
+  REFUND_ASSESSED:['Refund request recorded for review','واپسی کی درخواست جائزے کے لیے درج ہو گئی','order'],
+  REFUND_APPROVED:['Refund obligation approved; provider execution pending','واپسی کی منظوری دی گئی، ادائیگی زیر التوا ہے','order'],
   REFUND_INITIATED:['Refund initiated','رقم کی واپسی شروع ہو گئی','order'],
   REFUND_COMPLETED:['Refund completed','رقم کی واپسی مکمل ہو گئی','order'],
   DISPUTE_OPENED:['Dispute opened','تنازع درج ہو گیا','order'],
+  DISPUTE_RESPONSE_RECEIVED:['Supplier responded to your dispute','سپلائر نے آپ کے تنازع کا جواب دیا','order'],
   DISPUTE_RESOLVED:['Dispute resolved','تنازع حل ہو گیا','order'],
   SETTLEMENT_PENDING:['Settlement pending','سپلائر کی ادائیگی زیر التوا ہے','order'],
   SETTLEMENT_COMPLETED:['Settlement completed','سپلائر کی ادائیگی مکمل ہو گئی','order'],
+  SUBSCRIPTION_ACTIVATED:['Paid subscription activated','ادا شدہ سبسکرپشن فعال ہو گئی','account'],
+  SUBSCRIPTION_DOWNGRADE_SCHEDULED:['Your plan will change at the end of its paid period','آپ کا پلان ادا شدہ مدت ختم ہونے پر تبدیل ہوگا','account'],
+  SUBSCRIPTION_DOWNGRADED:['Paid plan ended; Starter plan is now active','ادا شدہ پلان ختم ہو گیا؛ اسٹارٹر پلان فعال ہے','account'],
+  SUBSCRIPTION_PLAN_CHANGE_SCHEDULED:['Paid plan change scheduled','ادا شدہ پلان کی تبدیلی مقرر ہو گئی','account'],
+  SUBSCRIPTION_PLAN_CHANGE_PAYMENT_REQUIRED:['Payment required to activate your selected paid plan','منتخب ادا شدہ پلان فعال کرنے کے لیے ادائیگی درکار ہے','account'],
   SUPPLIER_VERIFIED:['Supplier verified','سپلائر کی تصدیق ہو گئی','account'],
+  VERIFICATION_SUBMITTED:['Supplier verification submitted','سپلائر کی تصدیق کے لیے درخواست جمع ہو گئی','account'],
+  VERIFICATION_APPROVED:['Supplier verification approved','سپلائر کی تصدیق منظور ہو گئی','account'],
+  VERIFICATION_MORE_INFO_REQUIRED:['More verification information requested','تصدیق کے لیے مزید معلومات درکار ہیں','account'],
+  VERIFICATION_REJECTED:['Supplier verification rejected','سپلائر کی تصدیق مسترد ہو گئی','account'],
   APPROVAL_GRANTED:['Approval granted','منظوری مل گئی','account'],
   APPROVAL_REJECTED:['Approval rejected','منظوری مسترد ہو گئی','account'],
   SUSPICIOUS_ACTIVITY:['Suspicious activity detected','مشکوک سرگرمی کی نشاندہی ہوئی','account'],
   FINANCIAL_INCONSISTENCY:['Financial inconsistency detected','مالی حساب میں فرق کی نشاندہی ہوئی','account']
 };
-const mandatory=type=>/^(PAYMENT_|REFUND_|DISPUTE_|SETTLEMENT_|SUSPICIOUS_|FINANCIAL_)/.test(type);
+const canonical=require('./ucpNotificationEventCatalog');
+const urduActions={EMAIL_VERIFIED:'ای میل کی تصدیق ہو گئی',REGISTERED:'اکاؤنٹ بن گیا',VERIFICATION_SUBMITTED:'تصدیق کی درخواست جمع ہو گئی',VERIFICATION_APPROVED:'تصدیق منظور ہو گئی',
+  VERIFICATION_INFO_REQUESTED:'مزید معلومات درکار ہیں',VERIFICATION_REJECTED:'تصدیق کی درخواست مسترد ہو گئی',SECURITY_ALERT:'اکاؤنٹ کی حفاظتی اطلاع',
+  ACCOUNT_LOCKED:'اکاؤنٹ بند کر دیا گیا',ACCOUNT_UNLOCKED:'اکاؤنٹ بحال ہو گیا',SKU_SUBMITTED:'پیک کی تفصیلات جمع ہو گئیں',SKU_PUBLISHED:'پیک شائع ہو گیا',
+  SKU_REJECTED:'پیک کی درخواست مسترد ہو گئی',SKU_PAUSED:'پیک کی فروخت روک دی گئی',SPEC_CHANGE_REQUESTED:'تفصیلات کی تبدیلی کی درخواست',SPEC_CHANGE_APPROVED:'تفصیلات کی تبدیلی منظور',
+  STOCK_SHORTAGE:'اسٹاک کی کمی',SERVICE_AREA_CHANGED:'ترسیل کا علاقہ تبدیل ہو گیا',POOL_CREATED:'پول بن گیا',POOL_PUBLISHED:'پول شائع ہو گیا',
+  RESERVATION_CREATED:'ریزرویشن بن گئی',RESERVATION_UPDATED:'ریزرویشن تبدیل ہو گئی',RESERVATION_CANCELLED:'ریزرویشن منسوخ ہو گئی',
+  HOLD_CREATED:'خریداری کی مہلت شروع ہو گئی',HOLD_EXPIRING:'خریداری کی مہلت ختم ہونے والی ہے',HOLD_EXPIRED:'خریداری کی مہلت ختم ہو گئی',
+  CONFIRMATION_REQUIRED:'آپ کی تصدیق درکار ہے',ORDER_CONFIRMED:'آرڈر کی تصدیق ہو گئی',PRICE_LOCKED:'طے شدہ قیمت محفوظ ہو گئی',
+  TIER_CHANGED:'قیمت کا درجہ تبدیل ہو گیا',TIER_ACHIEVED:'بہتر قیمت کا درجہ مل گیا',TARGET_REACHED:'پول کا ہدف پورا ہو گیا',PROGRESS_MILESTONE:'پول کی پیش رفت',
+  POOL_CLOSING:'پول بند ہونے والا ہے',POOL_CLOSED:'پول بند ہو گیا',POOL_EXPIRED:'پول کی مدت ختم ہو گئی',POOL_CANCELLED:'پول منسوخ ہو گیا',POOL_FAILED:'پول مکمل نہیں ہو سکا',
+  STOCK_ALLOCATION_FAILED:'اسٹاک مختص نہیں ہو سکا',POOL_REQUEST_ACCEPTED:'پول کی درخواست قبول ہو گئی',POOL_REQUEST_REJECTED:'پول کی درخواست مسترد ہو گئی',
+  CHECKOUT_CREATED:'ادائیگی کا مرحلہ شروع ہو گیا',CONFIRMED:'تصدیق ہو گئی',FAILED:'عمل مکمل نہیں ہو سکا',RECONCILED:'ادائیگی کی جانچ مکمل ہو گئی',
+  INVOICE_ISSUED:'انوائس جاری ہو گئی',REFUND_REQUESTED:'رقم کی واپسی کی درخواست',REFUND_APPROVED:'رقم کی واپسی منظور',REFUND_REJECTED:'رقم کی واپسی مسترد',
+  REFUND_INITIATED:'رقم کی واپسی شروع',REFUND_SUCCEEDED:'رقم واپس ہو گئی',REFUND_FAILED:'رقم کی واپسی میں رکاوٹ',SETTLEMENT_ELIGIBLE:'سپلائر کی ادائیگی جانچ کے لیے تیار',
+  SETTLEMENT_INITIATED:'سپلائر کی ادائیگی شروع',SETTLEMENT_SUCCEEDED:'سپلائر کی ادائیگی مکمل',SETTLEMENT_FAILED:'سپلائر کی ادائیگی میں رکاوٹ',RECONCILIATION_EXCEPTION:'مالی جانچ میں مسئلہ',
+  ASSIGNED:'آرڈر سپلائر کو مل گیا',ACCEPTED:'آرڈر قبول ہو گیا',REJECTED:'آرڈر مسترد ہو گیا',PACKING:'آرڈر تیار ہو رہا ہے',READY_FOR_DISPATCH:'آرڈر روانگی کے لیے تیار',
+  READY_FOR_PICKUP:'آرڈر وصولی کے لیے تیار',PICKUP_CODE_ISSUED:'وصولی کا کوڈ جاری ہو گیا',PICKED_UP:'آرڈر وصول کر لیا گیا',DISPATCHED:'آرڈر روانہ ہو گیا',
+  CLUSTER_FORMED:'ترسیل کا گروپ بن گیا',CLUSTER_CUTOFF:'ترسیل کے گروپ کی مہلت ختم',CLUSTER_REROUTED:'ترسیل کا راستہ تبدیل',ETA_CHANGED:'ترسیل کا متوقع وقت تبدیل',
+  DELIVERY_ATTEMPTED:'ترسیل کی کوشش کی گئی',DELIVERY_FAILED:'ترسیل مکمل نہیں ہو سکی',SUPPLIER_MARKED_DELIVERED:'سپلائر نے ترسیل کی اطلاع دی',
+  BUYER_CONFIRMATION_REQUIRED:'خریدار کی وصولی کی تصدیق درکار',BUYER_ACCEPTED:'خریدار نے وصولی کی تصدیق کر دی',PARTIAL_DELIVERY:'جزوی ترسیل درج ہو گئی',
+  SHORTAGE_RECORDED:'کم مقدار کی اطلاع درج ہو گئی',SLA_BREACHED:'طے شدہ مہلت پوری نہیں ہوئی',OPENED:'تنازع درج ہو گیا',RESPONSE_SUBMITTED:'جواب جمع ہو گیا',
+  EVIDENCE_REQUESTED:'مزید ثبوت درکار ہیں',RESOLVED:'تنازع حل ہو گیا',SECURITY_HOLD:'حفاظتی پابندی لگ گئی',MANUAL_RECONCILIATION_RESULT:'انتظامی جانچ کا نتیجہ',
+  SERVICE_INCIDENT:'سروس میں رکاوٹ',SERVICE_RESTORED:'سروس بحال ہو گئی'};
+const mandatory=type=>/^(PAYMENT[._]|REFUND_|DISPUTE[._]|SETTLEMENT_|SUBSCRIPTION_|VERIFICATION_|SUSPICIOUS_|FINANCIAL_)/.test(type)||
+  canonical.definitions[type]?.priority==='CRITICAL';
 function eventProjection({eventType,entityId,locale='en'}){
-  const definition=definitions[eventType];
+  let definition=definitions[eventType];
+  if(!definition&&canonical.definitions[eventType]){
+    const meta=canonical.definitions[eventType],name=eventType.split('.')[1];
+    const english=name[0]+name.slice(1).toLowerCase().replaceAll('_',' ');
+    const kind=meta.domain==='IDENTITY'?'account':meta.domain==='CATALOG'?'catalog':
+      meta.domain==='UCP'&&!/ORDER_|HOLD_/.test(name)?'pool':'order';
+    definition=[english,urduActions[name]||'کاروباری ریکارڈ میں تبدیلی',kind,meta.priority!=='INFO'];
+  }
   if(!definition)throw Error('Unsupported notification event');
   if(!/^[1-9]\d*$/.test(String(entityId))||!Number.isSafeInteger(Number(entityId)))throw Error('Invalid notification entity');
   const [english,urdu,kind,important]=definition;
   const title=locale==='ur'?urdu:english;
   const message=locale==='ur'?'تصدیق شدہ تبدیلی دیکھنے کے لیے متعلقہ ریکارڈ کھولیں۔':'Open the relevant record to review this recorded change.';
-  const deepLink=kind==='order'?'/orders':kind==='account'?'/profile':'/procurement';
+  const deepLink=kind==='order'?'/orders':kind==='account'?'/profile':kind==='pool'?'/pools':kind==='catalog'?'/catalog':'/procurement';
   return {title,message,locale:locale==='ur'?'ur':'en',deepLink:deepLink+'?'+kind+'_id='+entityId,
-    mandatory:mandatory(eventType),email:important!==false||mandatory(eventType)};
+    mandatory:mandatory(eventType),routine:important===false&&!mandatory(eventType),
+    transient:/REMINDER|CUTOFF_UPCOMING|^UCP\.(HOLD_EXPIRING|POOL_CLOSING)$/.test(eventType),email:important!==false||mandatory(eventType)};
 }
-module.exports={eventProjection,eventTypes:Object.freeze(Object.keys(definitions)),mandatory};
+module.exports={eventProjection,eventTypes:Object.freeze([...Object.keys(definitions),...Object.keys(canonical.definitions)]),mandatory};

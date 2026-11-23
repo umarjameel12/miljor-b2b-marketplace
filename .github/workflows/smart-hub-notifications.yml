@@ -29,7 +29,7 @@ on:
       - 'frontend/tests/notifications.test.js'
       - '.github/workflows/smart-hub-notifications.yml'
   push:
-    branches: ['feature/smart-procurement-hub-unified-entry']
+    branches: ['feature/smart-procurement-hub-unified-entry', 'integration/pr54-pr61-consolidation']
 jobs:
   notification-contracts:
     runs-on: ubuntu-latest

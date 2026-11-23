@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-11-16T01:29:41.565Z",
+  "readOnly": true,
+  "changedProtectedTables": [
+    "users"
+  ],
+  "unchangedProtectedTables": [
+    "pools",
+    "reservations",
+    "orders",
+    "payments",
+    "platform_ledger"
+  ],
+  "changedUserCount": 1,
+  "actorRole": "SUPER_ADMIN",
+  "action": "SUPPLIER_VERIFICATION_UPDATE",
+  "previousStatus": "MORE_INFORMATION_REQUIRED",
+  "newStatus": "VERIFIED",
+  "occurredAt": "2026-11-16T01:06:47.000Z",
+  "occurredAtPakistan": "2026-11-16 06:06:47 +05:00",
+  "hasAuditIp": false,
+  "hasAuditUserAgent": false,
+  "matchingRecentSessionRows": 0,
+  "userRecognizesUpdate": false,
+  "attribution": "Account-level admin action proven; person/process undetermined. No automatic rollback or session revocation performed.",
+  "privateEvidence": "Preserved locally under ignored backend/logs; identifiers excluded from repository report."
+}

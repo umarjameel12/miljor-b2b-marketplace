@@ -150,4 +150,27 @@ router.put(
   (req, res) => subscriptionController.adminUpdatePlan(req, res)
 );
 
+// ---------------------------------------------------------------------------
+// Mandatory Order Admin Approval Gate (UCP + Smart Procurement Hub)
+// ---------------------------------------------------------------------------
+const authorizeOrderApprovalAdmin = authorize('SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN');
+
+router.get(
+  '/orders/pending-approval',
+  authorizeOrderApprovalAdmin,
+  (req, res) => adminController.getPendingApprovalOrders(req, res)
+);
+
+router.post(
+  '/orders/:id/approve',
+  authorizeOrderApprovalAdmin,
+  (req, res) => adminController.approveOrder(req, res)
+);
+
+router.post(
+  '/orders/:id/reject',
+  authorizeOrderApprovalAdmin,
+  (req, res) => adminController.rejectOrder(req, res)
+);
+
 module.exports = router;

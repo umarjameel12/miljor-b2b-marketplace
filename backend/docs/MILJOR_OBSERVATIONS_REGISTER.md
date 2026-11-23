@@ -1059,6 +1059,14 @@ This register documents all architectural, security, database, concurrency, and 
 - **Test Evidence:** `tests/part4e3_safepay_sandbox_payment_gate.js` (Tests 18–25: Missing/forged/tampered signature rejected with 401; amount mismatch rejected with 422; authentic webhook transitions order to PAID and inserts payment row; duplicate webhook acknowledged safely without duplicate mutations).
 - **Status:** **RESOLVED** (Verified in Part 4E.3 Gate).
 
+---
+
+### OBS-83: PR #54 vs Main (`emailService.js`) and Smart Hub (`096`–`100`) Integration Reconciliation
+- **Description:** Read-only `git merge-tree --write-tree` audit at `fb16b649111ce7ce0702f3daf50c3e5908e7cea3` identified 1 merge conflict with `origin/main` (`9c0a81979b852198c04c00de42ba763a1aa09c2f`) in `backend/src/services/emailService.js`, and 9 content conflicts plus a branch-only migration prefix collision (`096`–`100`, plus Smart Hub `095`) against `origin/feature/smart-procurement-hub-unified-entry` (`b92a6889029cd721a13ae581fe14dd031f27aad6`).
+- **Root Cause Analysis:** Parallel feature development on PR #54 (`096`–`101`) and Smart Hub (`095`–`100`) used overlapping migration version numbers while `main` (`9c0a819`) independently updated `emailService.js`.
+- **Proposed Resolution:** Keep `090`–`094` shared, keep PR #54 unmerged until explicit merge authorization, resolve `emailService.js` preserving PR #54 claim leases, and renumber whichever unmerged branch merges second (`096+` -> `102+`) without rewriting any applied `schema_migrations` journal.
+- **Status:** **OPEN / BLOCKED** (Awaiting explicit user merge authorization; tracked in `MILJOR_UCP_COMPLETION_EXECUTION_PLAN.md` and `MILJOR_UCP_RESILIENCE_NOTIFICATION_IMPLEMENTATION_REPORT.md`).
+
 
 
 

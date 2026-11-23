@@ -205,6 +205,7 @@ export const LandingPage = () => {
         </div>
         {mobileMenu && (
           <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
+            <Link to="/procurement" onClick={() => setMobileMenu(false)} className="rounded-lg px-3 py-2 text-sm">Smart Procurement Hub</Link>
             {isAuthenticated ? (
               <Link to={dashboardPath} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Open Marketplace</Link>
             ) : (
@@ -351,6 +352,7 @@ export const LandingPage = () => {
       <footer className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
         <div className="mx-auto max-w-7xl px-5 py-6 text-center text-xs sm:px-8" style={{ color: 'var(--text-secondary)' }}>
           © {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.
+          <div className="flex flex-wrap justify-center gap-5 mt-2"><Link to="/pools">Pools</Link><Link to="/procurement">Smart Procurement Hub</Link><Link to="/login">Sign In</Link></div>
         </div>
       </footer>
     </div>

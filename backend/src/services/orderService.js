@@ -364,7 +364,7 @@ class OrderService {
 
       // Buyer platform fee calculation via approved feeService slabs
       const subtotalNum = Number(expectedSubtotalStr);
-      const buyerFeeResult = await feeService.calculateBuyerFee(subtotalNum);
+      const buyerFeeResult = await feeService.calculateBuyerFee(subtotalNum,connection);
       const buyerPlatformFeeStr = exactDecimal.toCanonical(buyerFeeResult.buyer_fee, 2);
 
       // Exact sum for total payable amount: subtotal + delivery_fee + buyer_platform_fee
@@ -513,6 +513,8 @@ class OrderService {
       );
 
       // Commit transaction atomically
+      await require('./ucpTransactionalNotifications').recordOrderOnConnection(connection,{
+        orderId,type:'UCP.ORDER_CONFIRMED',transitionId:trimmedKey});
       await connection.commit();
 
       // 19. Retrieve Created Order Record and Format Response
