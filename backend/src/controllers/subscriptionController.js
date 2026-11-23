@@ -4,6 +4,7 @@
 // =============================================================================
 
 const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
+const supplierSubscriptionLifecycleService = require('../services/supplierSubscriptionLifecycleService');
 const db = require('../config/db');
 
 class SubscriptionController {
@@ -11,23 +12,12 @@ class SubscriptionController {
   // GET /api/v1/supplier/subscription
   async getMySubscription(req, res) {
     try {
-      const supplierId = req.user.id;
-      const entitlements = await subscriptionEntitlementService.getSupplierEntitlements(supplierId);
-
-      const [history] = await db.query(
-        `SELECT id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr, created_at
-         FROM supplier_subscriptions
-         WHERE supplier_id = ?
-         ORDER BY id DESC LIMIT 20`,
-        [supplierId]
-      );
+      const requestedSupplierId = req.query.supplier_id ? Number(req.query.supplier_id) : null;
+      const overview = await supplierSubscriptionLifecycleService.getSupplierSubscriptionOverview(req.user, requestedSupplierId);
 
       return res.status(200).json({
         success: true,
-        data: {
-          entitlements,
-          billing_history: history
-        }
+        data: overview
       });
     } catch (error) {
       console.error('Get Subscription Error:', error);
@@ -130,6 +120,169 @@ class SubscriptionController {
       return res.status(500).json({
         success: false,
         error: { code: 'SERVER_ERROR', message: error.message }
+      });
+    }
+  }
+  // POST /api/v1/supplier/subscription/checkout
+  async initiateCheckout(req, res) {
+    try {
+      const planCode = req.body.plan_code || req.body.targetPlan;
+      const idempotencyKey = req.body.idempotency_key || req.headers['idempotency-key'];
+      const result = await supplierSubscriptionLifecycleService.initiateCheckout({
+        actor: req.user,
+        planCode,
+        idempotencyKey
+      });
+      return res.status(result.replay ? 200 : 201).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message, details: error.details }
+      });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/checkout/:attemptId/reconcile
+  async reconcileCheckout(req, res) {
+    try {
+      const attemptId = Number(req.params.attemptId);
+      const result = await supplierSubscriptionLifecycleService.reconcileCheckoutAttempt({
+        actor: req.user,
+        attemptId
+      });
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message, details: error.details }
+      });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/downgrade
+  async scheduleDowngrade(req, res) {
+    try {
+      const targetPlanCode = req.body.target_plan_code || req.body.plan_code || req.body.targetPlan;
+      const result = await supplierSubscriptionLifecycleService.scheduleDowngrade({
+        actor: req.user,
+        targetPlanCode
+      });
+      return res.status(200).json({
+        success: true,
+        message: `Downgrade to ${result.pending_plan_code} scheduled for period end.`,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message }
+      });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/cancel
+  async requestCancellation(req, res) {
+    try {
+      const result = await supplierSubscriptionLifecycleService.requestCancellation({
+        actor: req.user,
+        reason: req.body?.reason
+      });
+      return res.status(200).json({
+        success: true,
+        message: 'Subscription cancellation scheduled for end of current paid period.',
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message }
+      });
+    }
+  }
+
+  // POST /api/v1/payments/webhook/safepay/subscription
+  async handleSafepayWebhook(req, res) {
+    try {
+      const signature = req.headers['x-sfpy-signature'] || req.headers['x-safepay-signature'];
+      const result = await supplierSubscriptionLifecycleService.processSafepayWebhook({
+        rawBody: req.rawBody,
+        signature,
+        headers: req.headers,
+        body: req.body
+      });
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'WEBHOOK_FAILED', message: error.message }
+      });
+    }
+  }
+
+  // GET /api/v1/admin/subscriptions
+  async adminListSubscriptions(req, res) {
+    try {
+      const status = req.query.status ? String(req.query.status).toUpperCase() : null;
+      const subscriptions = await supplierSubscriptionLifecycleService.adminListSubscriptions({ status });
+      return res.status(200).json({
+        success: true,
+        data: { subscriptions }
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message }
+      });
+    }
+  }
+
+  // POST /api/v1/admin/subscriptions/:subscriptionId/approve
+  async adminApproveSubscription(req, res) {
+    try {
+      const subscriptionId = Number(req.params.subscriptionId);
+      const result = await supplierSubscriptionLifecycleService.adminApproveSubscription({
+        subscriptionId,
+        adminActor: req.user,
+        notes: req.body?.notes
+      });
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message }
+      });
+    }
+  }
+
+  // POST /api/v1/admin/subscriptions/:subscriptionId/reject
+  async adminRejectSubscription(req, res) {
+    try {
+      const subscriptionId = Number(req.params.subscriptionId);
+      const result = await supplierSubscriptionLifecycleService.adminRejectSubscription({
+        subscriptionId,
+        adminActor: req.user,
+        reason: req.body?.reason
+      });
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'SERVER_ERROR', message: error.message }
       });
     }
   }

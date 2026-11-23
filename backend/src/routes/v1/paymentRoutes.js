@@ -7,6 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../../controllers/paymentController');
+const subscriptionController = require('../../controllers/subscriptionController');
 const { protect, authorize, authorizeAdmin, authorizeFinance } = require('../../middlewares/authGuard');
 const idempotencyGuard = require('../../middlewares/idempotencyGuard');
 
@@ -16,6 +17,10 @@ const idempotencyGuard = require('../../middlewares/idempotencyGuard');
 router.post(
   '/webhook/safepay',
   (req, res) => paymentController.handleSafepayWebhook(req, res)
+);
+router.post(
+  '/webhook/safepay/subscription',
+  (req, res) => subscriptionController.handleSafepayWebhook(req, res)
 );
 
 // All subsequent payment routes require authentication

@@ -66,6 +66,24 @@ function startScheduler() {
   });
   activeTasks.push(cleanupTask);
 
+  // ---------------------------------------------------------------------------
+  // Every 15 minutes: Supplier subscription period-end, grace, and expiry transitions
+  // Never executes external charges; uses SKIP LOCKED for idempotency.
+  // ---------------------------------------------------------------------------
+  let subscriptionTickRunning = false;
+  const subscriptionTask = cron.schedule('*/15 * * * *', async () => {
+    if (subscriptionTickRunning) return;
+    subscriptionTickRunning = true;
+    try {
+      await require('./supplierSubscriptionLifecycleService').processDueSubscriptionTransitions();
+    } catch (err) {
+      console.error('[Scheduler] Subscription lifecycle tick failed:', err.code || err.message);
+    } finally {
+      subscriptionTickRunning = false;
+    }
+  });
+  activeTasks.push(subscriptionTask);
+
   // Email remains opt-in until transport configuration and runtime acceptance.
   if(process.env.UCP_NOTIFICATION_EMAIL_WORKER_ENABLED==='true' && process.env.NOTIFICATION_WORKER_ENABLED!=='true'){
     let running=false;

@@ -18,6 +18,36 @@ export const supplierApi = {
     return res.data;
   },
 
+  getSubscriptionPlans: async () => {
+    const res = await apiClient.get('/supplier/subscription/plans');
+    return res.data;
+  },
+
+  initiateSubscriptionCheckout: async ({ planCode, idempotencyKey }) => {
+    const res = await apiClient.post('/supplier/subscription/checkout', {
+      plan_code: planCode,
+      idempotency_key: idempotencyKey
+    });
+    return res.data;
+  },
+
+  reconcileSubscriptionCheckout: async (attemptId) => {
+    const res = await apiClient.post(`/supplier/subscription/checkout/${attemptId}/reconcile`);
+    return res.data;
+  },
+
+  scheduleSubscriptionDowngrade: async (targetPlanCode) => {
+    const res = await apiClient.post('/supplier/subscription/downgrade', {
+      target_plan_code: targetPlanCode
+    });
+    return res.data;
+  },
+
+  cancelSubscription: async (reason) => {
+    const res = await apiClient.post('/supplier/subscription/cancel', { reason });
+    return res.data;
+  },
+
   // 2. Update Supplier Business Profile (Save Draft or Update)
   updateProfile: async (profileData) => {
     const res = await apiClient.put('/supplier/profile', profileData);
