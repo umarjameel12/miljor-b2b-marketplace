@@ -32,6 +32,8 @@ module.exports=async({conn,db,orderIds,buyers,supplier,outsider,pass})=>{
  await denied(()=>delivery.buyerContext({id:outsider,role:'BUYER'},orderIds[0]),'ORDER_NOT_FOUND');
  const before=await reporting.getReport(buyerActors[0]);assert.equal(before.reliability.denominator,0);
  const runBody={order_ids:orderIds,vehicle_id:vehicle.vehicle_id,planned_cost_pkr:'40.00',handling_confirmed:true},runKey=intent();
+ await denied(()=>delivery.createRun(supplierActor,runBody,intent()),'ADMIN_APPROVAL_REQUIRED');
+ await conn.query("UPDATE orders SET admin_approval_status='ADMIN_APPROVED',admin_approved_at=UTC_TIMESTAMP() WHERE id IN (?,?)",orderIds);
  const run=await delivery.createRun(supplierActor,runBody,runKey);assert.equal(run.status,'PROPOSED');assert.equal(run.weight_kg,'125.0000');assert.equal((await delivery.createRun(supplierActor,runBody,runKey)).is_replay,true);
  await denied(()=>delivery.createRun(supplierActor,runBody,intent()),'ORDER_ALREADY_ROUTED');
  await conn.query('SAVEPOINT cancel_route');const cancelKey=intent();
