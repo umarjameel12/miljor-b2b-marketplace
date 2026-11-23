@@ -129,8 +129,8 @@ async function run() {
         `INSERT INTO orders (
           order_code, buyer_id, supplier_id, total_qty, unit_price,
           subtotal_amount, delivery_fee, buyer_platform_fee, total_amount,
-          currency, delivery_type, delivery_method, delivery_address, order_status, payment_status, fulfillment_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0.00, ?, 'PKR', ?, ?, 'Test Address Lahore', ?, ?, ?)`,
+          currency, delivery_type, delivery_method, delivery_address, order_status, payment_status, fulfillment_status, admin_approval_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0.00, ?, 'PKR', ?, ?, 'Test Address Lahore', ?, ?, ?, ?)`,
         [
           code,
           buyerId,
@@ -144,7 +144,8 @@ async function run() {
           deliveryMethod,
           paymentStatus === 'PAID' ? 'PAID' : 'AWAITING_PAYMENT',
           paymentStatus,
-          fulfillmentStatus
+          fulfillmentStatus,
+          'ADMIN_APPROVED'
         ]
       );
       createdIds.orders.push(r.insertId);

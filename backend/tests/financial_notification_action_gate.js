@@ -14,6 +14,8 @@ function load(name, dependencies) {
   const localRequire = id => {
     if (Object.hasOwn(dependencies, id)) return dependencies[id];
     if (id === 'crypto' || id === 'node:crypto') return require(id);
+    if (id === './collectivePaymentHoldService') return { markPaid: async () => ({ handled: false }), markFailed: async () => ({ handled: false }) };
+    if (id === './safepayV3ContractService') return require(path.join(services, id));
     if (['./exactDecimal', './notificationEventPolicy', './notificationDeliveryPolicy', './ucpNotificationEventCatalog', './supplierEligibilityPolicy'].includes(id)) {
       return require(path.join(services, id));
     }
@@ -54,6 +56,7 @@ function fixture(options = {}) {
       }
       if (q.includes('FROM users u')) return [[{ id: 8, role: 'SUPPLIER', is_verified: 1, verification_status: 'VERIFIED', profile_verification_status: 'VERIFIED' }]];
       if (q.includes('FROM orders')) return [[{ ...order }]];
+      if (q.includes('FROM collective_payment_holds')) return [[]];
       if (q.includes('FROM payment_attempts')) return [[attempt]];
       if (q.includes('FROM payment_webhook_events')) return [[]];
       if (q.includes('FROM payments')) return [[{ id: 11 }]];

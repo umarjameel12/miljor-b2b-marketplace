@@ -21,7 +21,7 @@ function harness(overrides = {}, options = {}) {
       if (sql === 'SELECT id,role FROM users WHERE id=?') return [[{id:args[0], role:args[0] === 7 ? 'BUYER' : 'SUPPLIER'}]];
       if (sql.includes('FROM users u')) return [[{id:19, role:'SUPPLIER', is_verified:1,
         verification_status:'VERIFIED', profile_verification_status:'VERIFIED'}]];
-      if (sql.includes('FROM orders WHERE')) return [[order]];
+      if (sql.includes('FROM orders WHERE') || sql.includes('FROM orders WHERE id = ?')) return [[{ ...order, admin_approval_status: 'ADMIN_APPROVED' }]];
       if (sql.includes('SELECT * FROM order_fulfillment_events')) return [options.replay ? [{id:93}] : []];
       if (sql.includes('FROM order_disputes')) return [[{activeCount:options.disputes || 0}]];
       if (sql.includes('FROM procurement_award_lines')) return [[{line_count:options.lines || 0}]];
@@ -42,6 +42,7 @@ function harness(overrides = {}, options = {}) {
     './reservationEventService': {generateEventId:() => 'legacy-event'},
     './supplierEligibilityPolicy': require('../src/services/supplierEligibilityPolicy'),
     './deliveryQuantityPolicy': require('../src/services/deliveryQuantityPolicy'),
+    './orderAdminApprovalService': require('../src/services/orderAdminApprovalService'),
     './notificationService': {async enqueueEvent(tx, event) {
       assert.equal(tx, connection);
       assert.deepEqual(Object.keys(event).sort(), ['entityId','eventKey','eventType','role','userId']);

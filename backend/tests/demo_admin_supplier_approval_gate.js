@@ -50,6 +50,7 @@ const guard=load(guardSrc,id=>{
 const controller=load(controllerSrc,id=>{
   if(id==='../config/db')return db;
   if(id==='../services/supplierProfileService')return {recordIdentityEvent:async()=>{}};
+  if(id==='../services/orderAdminApprovalService')return {};
   if(id==='../services/encryptionService')return {isEncrypted:()=>false};
   if(id==='../services/supplierValidationService')return {maskIban:()=>{throw Error('Plaintext should never be decrypted')}};
   throw Error('Unexpected controller require: '+id);

@@ -23,6 +23,7 @@ function service(file,deps){
     if(id==='./ucpTransactionalNotifications')return service('ucpTransactionalNotifications.js',deps);
     if(['./ucpNotificationEventCatalog','./notificationEventPolicy','./notificationDeliveryPolicy','./deliveryQuantityPolicy'].includes(id))return require(path.join(root,id));
     if(id==='crypto'||id==='node:crypto')return require('node:crypto');
+    if(id==='./orderAdminApprovalService')return require('../src/services/orderAdminApprovalService');
     throw Error('Unexpected dependency: '+id);
   });
   return m.exports;
@@ -31,7 +32,8 @@ function service(file,deps){
 function transitionFixture(options={}){
   const order={id:101,order_code:'B6-101',buyer_id:4,supplier_id:11,
     pool_id:null,reservation_id:null,payment_status:options.unpaid?'PENDING':'PAID',
-    fulfillment_status:'AWAITING_SUPPLIER_ACKNOWLEDGEMENT',order_status:'PAID'};
+    fulfillment_status:'AWAITING_SUPPLIER_ACKNOWLEDGEMENT',order_status:'PAID',
+    admin_approval_status:'ADMIN_APPROVED'};
   const notices=[],milestones=[],attempts=[];
   const tx={active:false,commits:0,rollbacks:0,releases:0};
   let snapshot;
