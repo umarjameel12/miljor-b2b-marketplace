@@ -9,7 +9,7 @@ const supplierApiSource = fs.readFileSync(path.join(__dirname, '../src/api/suppl
 const subPageSource = fs.readFileSync(path.join(__dirname, '../src/pages/SupplierSubscriptionPage.jsx'), 'utf8');
 const adminPanelSource = fs.readFileSync(path.join(__dirname, '../src/components/admin/AdminSubscriptionApprovalPanel.jsx'), 'utf8');
 
-test('Frontend Supplier Subscription API & UI enforce backend state without fake payment success', () => {
+test('Frontend Supplier Subscription API & UI enforce server-backed pricing without stale fallbacks', () => {
   for (const fn of [
     'getSubscription',
     'getSubscriptionPlans',
@@ -22,6 +22,11 @@ test('Frontend Supplier Subscription API & UI enforce backend state without fake
   }
 
   assert.ok(!subPageSource.includes('Successfully updated subscription to'));
+  assert.ok(!subPageSource.includes('3500.00'), 'Stale fallback price 3500.00 must be removed');
+  assert.ok(!subPageSource.includes('8000.00'), 'Stale fallback price 8000.00 must be removed');
+  assert.ok(subPageSource.includes('Pricing unavailable'), 'Must show Pricing unavailable when API fails');
+  assert.ok(subPageSource.includes('Transaction Fee (separate)'), 'Must show transaction fee separately');
+  assert.ok(!/early.?adopter|6.?month|six.?month|annual billing/i.test(subPageSource), 'Must not advertise unapproved discounts or annual billing');
   assert.ok(subPageSource.includes('reconcileSubscriptionCheckout'));
   assert.ok(subPageSource.includes('initiateSubscriptionCheckout'));
   assert.ok(subPageSource.includes('scheduleSubscriptionDowngrade'));

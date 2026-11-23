@@ -128,10 +128,12 @@ class SubscriptionController {
     try {
       const planCode = req.body.plan_code || req.body.targetPlan;
       const idempotencyKey = req.body.idempotency_key || req.headers['idempotency-key'];
+      const confirmCataloguePrice = req.body?.confirm_catalogue_price === true;
       const result = await supplierSubscriptionLifecycleService.initiateCheckout({
         actor: req.user,
         planCode,
-        idempotencyKey
+        idempotencyKey,
+        confirmCataloguePrice
       });
       return res.status(result.replay ? 200 : 201).json({
         success: true,

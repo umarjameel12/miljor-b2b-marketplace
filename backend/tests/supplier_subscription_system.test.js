@@ -136,15 +136,30 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
     const otherSupplierToken = signJwt(otherSupplierId, 'SUPPLIER');
     const adminToken = signJwt(adminId, 'ADMIN');
 
-    // 2. Plan Catalogue & Authorization Checks
+    // 2. Plan Catalogue, Pricing (0 / 2999 / 5499), Limits (4 / 13 / 25), Fees & Authorization Checks
     const plansRes = await api('/api/v1/supplier/subscription/plans', {
       headers: { Authorization: `Bearer ${supplierToken}` }
     });
     assert.equal(plansRes.status, 200);
-    const planMap = Object.fromEntries(plansRes.body.data.plans.map((p) => [p.plan_code, p.max_active_families]));
-    assert.equal(planMap.STARTER, 4);
-    assert.equal(planMap.GROWTH, 13);
-    assert.equal(planMap.BUSINESS, 25);
+    const planByCode = Object.fromEntries(plansRes.body.data.plans.map((p) => [p.plan_code, p]));
+    assert.equal(planByCode.STARTER.max_active_families, 4);
+    assert.equal(Number(planByCode.STARTER.monthly_price_pkr), 0);
+    assert.equal(Number(planByCode.STARTER.transaction_fee_pct), 3);
+    assert.equal(planByCode.GROWTH.max_active_families, 13);
+    assert.equal(Number(planByCode.GROWTH.monthly_price_pkr), 2999);
+    assert.equal(Number(planByCode.GROWTH.transaction_fee_pct), 2);
+    assert.equal(planByCode.BUSINESS.max_active_families, 25);
+    assert.equal(Number(planByCode.BUSINESS.monthly_price_pkr), 5499);
+    assert.equal(Number(planByCode.BUSINESS.transaction_fee_pct), 1.5);
+
+    // Annual billing remains disabled
+    const annualAttempt = await api('/api/v1/supplier/subscription/upgrade', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${supplierToken}` },
+      body: { plan_code: 'GROWTH', billing_cycle: 'ANNUAL' }
+    });
+    assert.equal(annualAttempt.status, 400);
+    assert.equal(annualAttempt.body.error.code, 'INVALID_BILLING_CYCLE');
 
     const crossRead = await api(`/api/v1/supplier/subscription?supplier_id=${supplierId}`, {
       headers: { Authorization: `Bearer ${otherSupplierToken}` }
@@ -180,11 +195,13 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       conn5.release();
     }
 
-    // 4. Checkout Initiation (with mocked SafepayV3SandboxClient) + Idempotency + Overlapping Guard
+    // 4. Checkout Initiation (server-side 2999.00 PKR -> 299900 minor units) + Idempotency + Overlapping Guard
     const svc = new SupplierSubscriptionLifecycleService(db);
     const tracker1 = `track_sub_${suffix}_1`;
+    let capturedMinorAmount = null;
     const fakeV3Client = {
-      async createHostedCheckout() {
+      async createHostedCheckout({ amountPkr }) {
+        capturedMinorAmount = Math.round(Number(amountPkr) * 100);
         return {
           tracker: tracker1,
           checkoutUrl: `https://sandbox.api.getsafepay.com/checkout/pay?tracker=${tracker1}`
@@ -204,6 +221,8 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
     });
     assert.equal(init1.replay, false);
     assert.equal(init1.attempt.status, 'INITIATED');
+    assert.equal(init1.attempt.amount_pkr, '2999.00');
+    assert.equal(capturedMinorAmount, 299900);
     assert.equal(init1.attempt.tracker_token, tracker1);
 
     // Idempotent replay returns same attempt
@@ -247,7 +266,7 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
     const badWebhookRes = await api('/api/v1/payments/webhook/safepay/subscription', {
       method: 'POST',
       headers: { 'x-sfpy-signature': 'deadbeef' },
-      body: { tracker: tracker1, state: 'PAID', amount: '3500.00', currency: 'PKR' }
+      body: { tracker: tracker1, state: 'PAID', amount: '2999.00', currency: 'PKR' }
     });
     assert.equal(badWebhookRes.status, 401);
 
@@ -255,7 +274,7 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       event_id: `evt_bad_${suffix}`,
       tracker: tracker1,
       state: 'PAID',
-      amount: '100.00',
+      amount: '3500.00',
       currency: 'PKR'
     };
     const { sig: badAmtSig } = signSafepayPayload(wrongAmountPayload);
@@ -272,7 +291,7 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       event_id: `evt_ok_${suffix}`,
       tracker: tracker1,
       state: 'PAID',
-      amount: '3500.00',
+      amount: '2999.00',
       currency: 'PKR'
     };
     const { sig: goodSig } = signSafepayPayload(goodPayload);
@@ -342,7 +361,21 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       conn5Ok.release();
     }
 
-    // 8. Downgrade & Cancellation at Period End Preserve Paid Entitlements & Existing Products
+    // 8. Existing Subscriber Repricing Protection: historical 3500.00 subscriber fails closed on 2999.00 renewal without consent
+    await db.query(`UPDATE supplier_subscriptions SET price_pkr = 3500.00 WHERE id = ?`, [subscriptionId]);
+    await assert.rejects(
+      () =>
+        svc.initiateCheckout({
+          actor: { id: supplierId, role: 'SUPPLIER' },
+          planCode: 'GROWTH',
+          idempotencyKey: `sub-renew-protect-${suffix}`,
+          v3Client: fakeV3Client
+        }),
+      (err) => err.code === 'RENEWAL_PRICE_CONSENT_REQUIRED' && err.statusCode === 409
+    );
+    await db.query(`UPDATE supplier_subscriptions SET price_pkr = 2999.00 WHERE id = ?`, [subscriptionId]);
+
+    // 9. Downgrade & Cancellation at Period End Preserve Paid Entitlements & Existing Products
     const downgradeRes = await api('/api/v1/supplier/subscription/downgrade', {
       method: 'POST',
       headers: { Authorization: `Bearer ${supplierToken}` },
@@ -400,7 +433,7 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       checkoutAttemptId: init2.attempt.id,
       trackerToken: tracker2,
       eventId: `evt_rej_${suffix}`,
-      amountPkr: '8000.00',
+      amountPkr: '5499.00',
       currency: 'PKR'
     });
     const rejectRes = await api(`/api/v1/admin/subscriptions/${verified2.subscription_id}/reject`, {

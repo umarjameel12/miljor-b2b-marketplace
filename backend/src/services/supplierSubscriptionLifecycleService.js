@@ -177,7 +177,7 @@ class SupplierSubscriptionLifecycleService {
     };
   }
 
-  async initiateCheckout({ actor, planCode, idempotencyKey, v3Client = null }) {
+  async initiateCheckout({ actor, planCode, idempotencyKey, confirmCataloguePrice = false, v3Client = null }) {
     const supplierId = assertSupplierActor(actor);
     const normalizedPlan = String(planCode || '').toUpperCase();
     if (!['GROWTH', 'BUSINESS'].includes(normalizedPlan)) {
@@ -226,7 +226,7 @@ class SupplierSubscriptionLifecycleService {
       if (PLAN_RANK[normalizedPlan] < PLAN_RANK[currentPlan]) {
         throw makeError('USE_DOWNGRADE_FLOW', 400, 'Downgrades are scheduled for period end without a new charge');
       }
-      if (normalizedPlan === currentPlan && currentStatus === 'ACTIVE') {
+      if (normalizedPlan === currentPlan && ['ACTIVE', 'GRACE'].includes(currentStatus)) {
         changeType = 'RENEWAL';
       } else if (PLAN_RANK[normalizedPlan] > PLAN_RANK[currentPlan] && currentPlan !== 'STARTER') {
         changeType = 'UPGRADE';
@@ -260,6 +260,34 @@ class SupplierSubscriptionLifecycleService {
         throw makeError('PLAN_NOT_AVAILABLE', 409, 'Selected subscription plan is not active');
       }
       price = parsePlanPrice(plans[0].monthly_price_pkr);
+
+      // Existing subscriber repricing protection: never silently charge an existing
+      // paid subscriber a different catalogue price without explicit consent.
+      if (changeType === 'RENEWAL') {
+        const [activeSubRows] = await conn.query(
+          `SELECT id, price_pkr FROM supplier_subscriptions
+           WHERE supplier_id = ? AND plan_code = ? AND status IN ('ACTIVE','GRACE')
+           ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+          [supplierId, normalizedPlan]
+        );
+        const storedPriceRaw = activeSubRows[0]?.price_pkr;
+        if (!activeSubRows.length || storedPriceRaw === null || Number(storedPriceRaw) <= 0) {
+          throw makeError(
+            'RENEWAL_AGREED_PRICE_MISSING',
+            409,
+            'Existing subscription lacks a stored agreed renewal price; renewal cannot proceed without explicit pricing confirmation'
+          );
+        }
+        const agreedPrice = exact.toCanonicalString(storedPriceRaw, 2);
+        if (agreedPrice !== price && confirmCataloguePrice !== true) {
+          throw makeError(
+            'RENEWAL_PRICE_CONSENT_REQUIRED',
+            409,
+            `Plan catalogue price (PKR ${price}) differs from your existing agreed price (PKR ${agreedPrice}). Explicit consent is required before initiating renewal checkout.`,
+            { agreed_price_pkr: agreedPrice, current_catalogue_price_pkr: price }
+          );
+        }
+      }
 
       const [ins] = await conn.query(
         `INSERT INTO supplier_subscription_checkout_attempts

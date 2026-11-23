@@ -179,13 +179,7 @@ export const SupplierSubscriptionPage = () => {
     }
   };
 
-  const renderPlans = plans.length > 0
-    ? plans
-    : [
-        { plan_code: 'STARTER', name: 'Starter Supplier', max_active_families: 4, monthly_price_pkr: '0.00', transaction_fee_pct: '3.00' },
-        { plan_code: 'GROWTH', name: 'Growth Wholesale Partner', max_active_families: 13, monthly_price_pkr: '3500.00', transaction_fee_pct: '2.00' },
-        { plan_code: 'BUSINESS', name: 'Enterprise Mill & Distributor', max_active_families: 25, monthly_price_pkr: '8000.00', transaction_fee_pct: '1.50' }
-      ];
+  const renderPlans = plans;
 
   return (
     <AppShell>
@@ -331,6 +325,14 @@ export const SupplierSubscriptionPage = () => {
         )}
 
         {/* Plan Catalogue Cards */}
+        {!loading && renderPlans.length === 0 ? (
+          <div className="max-w-3xl mx-auto p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-center space-y-2">
+            <h2 className="text-lg font-serif font-bold text-[var(--text-primary)]">Pricing unavailable</h2>
+            <p className="text-xs text-[var(--text-muted)]">
+              Authoritative subscription pricing could not be loaded from the server. Please refresh to retry.
+            </p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {renderPlans.map((plan) => {
             const code = plan.plan_code;
@@ -368,7 +370,7 @@ export const SupplierSubscriptionPage = () => {
                       <Icon className="w-6 h-6" />
                     </div>
                     <span className="text-xs font-semibold text-[var(--text-muted)]">
-                      {Number(plan.transaction_fee_pct || 0).toFixed(1)}% Platform Fee
+                      {Number(plan.transaction_fee_pct || 0).toFixed(2)}% Transaction Fee (separate)
                     </span>
                   </div>
 
@@ -421,6 +423,7 @@ export const SupplierSubscriptionPage = () => {
             );
           })}
         </div>
+        )}
 
         {/* Payment & Subscription History */}
         {(paymentAttempts.length > 0 || billingHistory.length > 0) && (
