@@ -171,6 +171,11 @@ async function main(){
       "SELECT COUNT(*) AS n FROM supplier_inventory_allocations WHERE allocation_type='ORDER_DIRECT' AND reference_id=? AND status='COMMITTED'",[oid]);
     assert.equal(Number(stock.n),1);
     pass('Synthetic signed callback reconciled real paid B6 award/stock');
+    const paidUnapproved=await fulfillment.listSupplierFulfillmentOrders({actor:{id:2,role:'SUPPLIER'}});
+    assert.ok(!paidUnapproved.orders.some(o=>Number(o.order_id)===oid));
+    await require('../src/services/orderAdminApprovalService').approveOrder({
+      orderId: oid, actor: { id: 1, role: 'SUPER_ADMIN' }, notes: 'Approved for B6 award gate'
+    });
     const paid=await fulfillment.listSupplierFulfillmentOrders({actor:{id:2,role:'SUPPLIER'}});
     assert.ok(paid.orders.some(o=>Number(o.order_id)===oid));
     const issued=await invoice.generateInvoiceForOrder(oid,{id:5,role:'BUYER'});
