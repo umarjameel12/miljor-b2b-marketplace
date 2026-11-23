@@ -340,12 +340,6 @@ class FulfillmentService {
         err.statusCode = 403;
         throw err;
       }
-      if (order.admin_approval_status !== 'ADMIN_APPROVED') {
-        const err = new Error('Order requires Admin Approval before supplier fulfillment access');
-        err.code = 'ADMIN_APPROVAL_REQUIRED';
-        err.statusCode = 403;
-        throw err;
-      }
 
       // Paid-only eligibility check
       if (order.payment_status !== 'PAID') {

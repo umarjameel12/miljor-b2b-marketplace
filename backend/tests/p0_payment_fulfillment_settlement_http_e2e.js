@@ -84,6 +84,16 @@ async function main(){
    r=await post('/fulfillment/buyer/orders/'+orderId+'/confirm-receipt',{
      key:'e2e-early-'+random()});eq(r,422);
    console.log('PASS G5 no settlement or buyer receipt before supplier delivery');
+   r=await post('/fulfillment/supplier/orders/'+orderId+'/transition',{
+     role:'SUPPLIER',id:2,key:'unapproved-'+random(),body:{to_status:'PREPARING'}});
+   eq(r,403);assert.equal(r.body.error.code,'ADMIN_APPROVAL_REQUIRED');
+   for(const [actorRole,actorId] of [['BUYER',5],['SUPPLIER',2]]){
+     r=await post('/admin/orders/'+orderId+'/approve',{role:actorRole,id:actorId,body:{notes:'Unauthorized'}});
+     eq(r,403);
+   }
+   r=await post('/admin/orders/'+orderId+'/approve',{
+     role:'SUPER_ADMIN',id:1,key:'e2e-approve-'+orderId,body:{notes:'Authorized E2E admin approval'}});
+   eq(r,200);assert.equal(r.body.data.order.admin_approval_status,'ADMIN_APPROVED');
    for(const status of ['PREPARING','READY_FOR_DISPATCH','DISPATCHED','SUPPLIER_DELIVERED']){
      const key='e2e-'+orderId+'-'+status;
      const body={to_status:status};
@@ -155,7 +165,7 @@ async function main(){
    console.log('PASS G9 real financial/fulfillment outbox recipients and no false settlement completion');
    console.log('PASS REAL HTTP+MYSQL E2E with synthetic signed Safepay event; real provider and bank settlement NOT VERIFIED');
  }finally{
-   await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=? AND event_type IN ('PAYMENT_VERIFIED','DISPATCH_SCHEDULED','OUT_FOR_DELIVERY','DELIVERY_REPORTED','RECEIPT_CONFIRMED','SETTLEMENT_PENDING')",[String(orderId)]);
+   await db.query("DELETE FROM procurement_notifications WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.entityId'))=? AND event_type IN ('PAYMENT_VERIFIED','APPROVAL_GRANTED','DISPATCH_SCHEDULED','OUT_FOR_DELIVERY','DELIVERY_REPORTED','RECEIPT_CONFIRMED','SETTLEMENT_PENDING')",[String(orderId)]);
    await new Promise(resolve=>server.close(resolve));
  }
 }

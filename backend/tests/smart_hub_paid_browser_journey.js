@@ -90,6 +90,13 @@ async function main(){
     await api(fixture.supplier,'POST',`/fulfillment/supplier/orders/${oid}/transition`,{to_status:'PREPARING'},422,'UNPAID_ORDER_NOT_IN_FULFILLMENT');
     await fixtureTools.pay(api,db,fixture);
     pass('Injected sandbox checkout, rejected bad HMAC, signed HTTP callback, concurrent replay, one payment and committed inventory');
+    await signin(fixture.opsAdmin,false,fixture.password);
+    await api(fixture.supplier,'POST',`/fulfillment/supplier/orders/${oid}/transition`,{to_status:'PREPARING'},403,'ADMIN_APPROVAL_REQUIRED');
+    await api(fixture.buyer,'POST',`/admin/orders/${oid}/approve`,{},403);
+    await api(fixture.supplier,'POST',`/admin/orders/${oid}/approve`,{},403);
+    const approvedOrder=await api(fixture.opsAdmin,'POST',`/admin/orders/${oid}/approve`,{notes:'Synthetic browser operations admin approval'},200);
+    assert.equal(approvedOrder.order.admin_approval_status,'ADMIN_APPROVED');
+    pass('Mandatory Admin Approval blocked unapproved fulfillment, denied non-admin approval, and unlocked supplier fulfillment via OPERATIONS_ADMIN');
     const buyer=fixture.buyer.page,supplier=fixture.supplier.page;
     async function action(page,locator,endpoint,status=200,method='POST'){
       const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1'+endpoint&&r.request().method()===method,{timeout:20000});

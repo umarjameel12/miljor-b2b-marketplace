@@ -40,6 +40,7 @@ test.before(async () => {
 
 test.after(async () => {
   for (const oid of ownedOrders) {
+    await db.query('DELETE FROM order_fulfillment_events WHERE order_id = ?', [oid]);
     await db.query('DELETE FROM order_admin_approval_audit WHERE order_id = ?', [oid]);
     await db.query('DELETE FROM refund_obligations WHERE order_id = ?', [oid]);
     await db.query('DELETE FROM payments WHERE order_id = ?', [oid]);
@@ -49,6 +50,7 @@ test.after(async () => {
     await db.query('DELETE FROM supplier_profiles WHERE supplier_id = ?', [ownedUsers[1]]);
   }
   for (const uid of ownedUsers) {
+    await db.query('DELETE FROM platform_notifications WHERE user_id = ?', [uid]);
     await db.query('DELETE FROM procurement_notifications WHERE recipient_id = ?', [uid]);
     await db.query('DELETE FROM system_audit_logs WHERE actor_id = ?', [uid]);
     await db.query('DELETE FROM users WHERE id = ? AND email LIKE ?', [uid, `%-${tag}@example.invalid`]);
@@ -179,4 +181,91 @@ test('Section 2 & 3: Admin rejection cancels order, initiates REQUESTED refund o
     orderAdminApprovalService.approveOrder({ orderId, actor: { id: adminId, role: 'ADMIN' } }),
     (e) => e.code === 'ORDER_ALREADY_REJECTED' && e.statusCode === 409
   );
+});
+
+test('Phase 1 guard ordering: unpaid returns 422 UNPAID_ORDER_NOT_IN_FULFILLMENT before 403 ADMIN_APPROVAL_REQUIRED; rejected returns 403 ADMIN_APPROVAL_REJECTED; paid + approved succeeds', async () => {
+  const [, supplierId, adminId] = ownedUsers;
+
+  // A. Unpaid + pending admin approval -> 422 UNPAID_ORDER_NOT_IN_FULFILLMENT
+  const unpaidOrderId = await createTestOrder({
+    notes: 'UNPAID_GUARD_ORDER',
+    paymentStatus: 'AWAITING_PAYMENT',
+    orderStatus: 'AWAITING_PAYMENT'
+  });
+  await assert.rejects(
+    fulfillmentService.transitionSupplierFulfillment({
+      orderId: unpaidOrderId,
+      toStatus: 'PREPARING',
+      actor: { id: supplierId, role: 'SUPPLIER' },
+      idempotencyKey: `guard-unpaid-${tag}`
+    }),
+    (e) => e.code === 'UNPAID_ORDER_NOT_IN_FULFILLMENT' && e.statusCode === 422
+  );
+
+  // B. Paid + pending admin approval -> 403 ADMIN_APPROVAL_REQUIRED
+  const paidPendingOrderId = await createTestOrder({
+    notes: 'PAID_UNAPPROVED_GUARD_ORDER',
+    paymentStatus: 'PAID',
+    orderStatus: 'PAID'
+  });
+  await assert.rejects(
+    fulfillmentService.transitionSupplierFulfillment({
+      orderId: paidPendingOrderId,
+      toStatus: 'PREPARING',
+      actor: { id: supplierId, role: 'SUPPLIER' },
+      idempotencyKey: `guard-paid-unapproved-${tag}`
+    }),
+    (e) => e.code === 'ADMIN_APPROVAL_REQUIRED' && e.statusCode === 403
+  );
+
+  // C. Admin-rejected order -> 403 ADMIN_APPROVAL_REJECTED (both unpaid & paid cases)
+  await orderAdminApprovalService.rejectOrder({
+    orderId: unpaidOrderId,
+    actor: { id: adminId, role: 'ADMIN' },
+    reason: 'Unpaid rejection guard check'
+  });
+  await assert.rejects(
+    fulfillmentService.transitionSupplierFulfillment({
+      orderId: unpaidOrderId,
+      toStatus: 'PREPARING',
+      actor: { id: supplierId, role: 'SUPPLIER' },
+      idempotencyKey: `guard-rejected-unpaid-${tag}`
+    }),
+    (e) => e.code === 'ADMIN_APPROVAL_REJECTED' && e.statusCode === 403
+  );
+
+  const paidRejectedOrderId = await createTestOrder({
+    notes: 'PAID_REJECTED_GUARD_ORDER',
+    paymentStatus: 'PAID',
+    orderStatus: 'PAID'
+  });
+  await orderAdminApprovalService.rejectOrder({
+    orderId: paidRejectedOrderId,
+    actor: { id: adminId, role: 'ADMIN' },
+    reason: 'Paid rejection guard check'
+  });
+  await assert.rejects(
+    fulfillmentService.transitionSupplierFulfillment({
+      orderId: paidRejectedOrderId,
+      toStatus: 'PREPARING',
+      actor: { id: supplierId, role: 'SUPPLIER' },
+      idempotencyKey: `guard-rejected-paid-${tag}`
+    }),
+    (e) => e.code === 'ADMIN_APPROVAL_REJECTED' && e.statusCode === 403
+  );
+
+  // D. Paid + Admin-approved order -> proceeds cleanly to PREPARING
+  await orderAdminApprovalService.approveOrder({
+    orderId: paidPendingOrderId,
+    actor: { id: adminId, role: 'ADMIN' },
+    notes: 'Approved for fulfillment'
+  });
+  const res = await fulfillmentService.transitionSupplierFulfillment({
+    orderId: paidPendingOrderId,
+    toStatus: 'PREPARING',
+    actor: { id: supplierId, role: 'SUPPLIER' },
+    idempotencyKey: `guard-paid-approved-${tag}`
+  });
+  assert.equal(res.fulfillment_status, 'PREPARING');
+  assert.equal(res.is_replay, false);
 });

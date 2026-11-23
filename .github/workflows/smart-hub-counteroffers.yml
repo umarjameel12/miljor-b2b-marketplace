@@ -21,6 +21,7 @@ on:
   push:
     branches:
       - 'feature/smart-procurement-hub-unified-entry'
+      - 'integration/pr54-pr61-consolidation'
 jobs:
   source-and-build:
     runs-on: ubuntu-latest

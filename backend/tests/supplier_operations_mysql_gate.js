@@ -24,9 +24,12 @@ async function main(){
     await connection.query("INSERT INTO procurement_supplier_invitations(request_id,supplier_id,eligible_line_ids) VALUES (?,?,'[]')",[request.insertId,supplier]);
     const [group]=await connection.query("INSERT INTO procurement_collective_groups(request_id,organizer_buyer_id,join_deadline,status) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR),'QUOTING')",[request.insertId,buyer]);
     await connection.query('INSERT INTO procurement_collective_supplier_invitations(group_id,supplier_id) VALUES (?,?)',[group.insertId,supplier]);
-    for(const [index,payment,status] of [[0,'PAID','PREPARING'],[1,'AWAITING_PAYMENT','PREPARING'],[2,'PAID','SUPPLIER_DELIVERED'],[3,'PAID','EXCEPTION']]){
+    for(const [index,payment,status] of [[0,'PAID','PREPARING'],[1,'AWAITING_PAYMENT','PREPARING'],[2,'PAID','SUPPLIER_DELIVERED'],[3,'PAID','EXCEPTION'],[4,'PAID','PREPARING']]){
       await connection.query('INSERT INTO orders(order_code,buyer_id,supplier_id,total_qty,unit_price,subtotal_amount,total_amount,payment_status,fulfillment_status) VALUES (?,?,?,1,100,100,100,?,?)',['OPS'+tag.slice(0,8)+index,buyer,supplier,payment,status]);
     }
+    const unapprovedCounts=(await service.get(actor)).counts;
+    assert.equal(unapprovedCounts.paid_to_fulfill,0,'Unapproved PAID orders must stay excluded from supplier fulfillment counts');
+    await connection.query("UPDATE orders SET admin_approval_status='ADMIN_APPROVED',admin_approved_at=UTC_TIMESTAMP() WHERE order_code=?",['OPS'+tag.slice(0,8)+'0']);
     const counts=(await service.get(actor)).counts;
     assert.equal(counts.rfq_invitations,1);assert.equal(counts.collective_requests,1);
     assert.equal(counts.paid_to_fulfill,1);assert.equal(counts.awaiting_buyer_receipt,1);assert.equal(counts.fulfillment_exceptions,1);

@@ -1,11 +1,9 @@
 name: MilJor Branded OTP Email Quality
 on:
   push:
-    branches: [main]
-    paths:
-      - 'backend/src/services/emailService.js'
-      - 'backend/tests/email_otp_template_branding.test.js'
-      - '.github/workflows/email-otp-template-quality.yml'
+    branches:
+      - main
+      - integration/pr54-pr61-consolidation
   pull_request:
     paths:
       - 'backend/src/services/emailService.js'

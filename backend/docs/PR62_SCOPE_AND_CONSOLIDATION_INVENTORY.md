@@ -19,12 +19,13 @@
 
 | Version | Filename | Source | Disposition | Reason |
 | :--- | :--- | :--- | :--- | :--- |
-| `001`–`055`, `090`–`095`, `102`–`106` | Canonical main / Smart Hub migrations | `main` / PR #54 | **Preserved** | Already-applied canonical history; checksums untouched. |
-| `096`–`101` | UCP recovery, notification controls, phase C delivery, supplier replacement | PR #54 | **Preserved** | Canonical UCP schema; checksums untouched. |
+| `001`–`055`, `090`–`100` | Canonical `main` / Smart Hub migrations (`096_delivery_operations_and_evidence.sql`..`100_delivery_payment_initialization_recovery.sql`) | `main` (`9e7a6d3`) | **Preserved** | Byte-identical to `origin/main` already-applied history; checksums untouched. |
+| `101`–`106` | UCP recovery (`101`), notification controls/events (`102`–`103`), Phase C delivery (`104`), supplier replacement (`105`–`106`) | PR #54 (renumbered from `096`–`101`) | **Preserved & Renumbered Forward** | Moved strictly after `main`'s `096`–`100` so `main` (`001`–`100`) upgrades cleanly to `101`–`109` with zero filename/version collision. |
 | `107` | `107_collective_payment_hold_deadlines.sql` | PR #61 (adapted to `collective_payment_holds`) | **Imported (Forward-Only)** | Adds bounded 15-min per-buyer collective payment leases linked to `orders`, `procurement_collective_groups`, `procurement_collective_commitments`, `users`. |
-| `108` | `108_safepay_v3_payment_contract.sql` | PR #61 `104_safepay_v3_payment_contract.sql` | **Imported & Renumbered** | PR #54 already uses `104` (`104_individual_procurement_delivery_pricing.sql`). Renumbered forward-only to `108` to pin `provider_contract` on `payment_attempts`. |
+| `108` | `108_safepay_v3_payment_contract.sql` | PR #61 `104_safepay_v3_payment_contract.sql` | **Imported & Renumbered** | Renumbered forward-only to `108` to pin `provider_contract` on `payment_attempts`. |
+| `109` | `109_order_admin_approval_gate.sql` | Consolidation Security Requirement | **Added (Forward-Only)** | Adds `admin_approval_status` and `order_admin_approval_audit` mandatory Admin Approval Gate for all procurement tracks. |
 | `090`–`103` (PR #61 branch) | Smart Hub / UCP / Collective duplicates | PR #61 | **Excluded** | Superseded by PR #53 (`main`) and PR #54 canonical migrations `090`–`106`. |
-| `061`, `062`, `105`, `106` | Supplier subscription scheduled changes & Safepay v3 subscription checkout | PR #61 | **Deferred to PR #62** | Independent subscription billing track; requires renumbering above `108` and dedicated subscription E2E acceptance. |
+| `061`, `062`, `105`, `106` (PR #61 branch) | Supplier subscription scheduled changes & Safepay v3 subscription checkout | PR #61 | **Deferred to PR #62** | Independent subscription billing track; requires renumbering above `109` and dedicated subscription E2E acceptance. |
 | `098`–`100` (PR #61 branch) | Supplier verification revisions, replay hash, documents | PR #61 | **Deferred to PR #62** | Conflicts with UCP `098`–`100`; independent supplier verification enhancement. |
 
 ---
@@ -43,14 +44,14 @@
 ## 4. Recommended PR #62 Scope (Independent Follow-Up — Not Created Yet)
 
 1. **Supplier Subscription Safepay v3 & Period-End Downgrade:**
-   - Renumber PR #61 `061`, `062`, `105`, `106` forward-only (`109+`).
+   - Renumber PR #61 `061`, `062`, `105`, `106` forward-only (`110+`).
    - Port `supplierSubscriptionCheckoutService.js`, `subscriptionController.js` / `subscriptionEntitlementService.js` scheduled downgrade worker (`processScheduledStarterChanges`), and `SupplierSubscriptionPage.jsx` updates.
 2. **Supplier Verification Revisions & Document Malware Scanning:**
-   - Renumber PR #61 `098`–`100` forward-only (`113+`).
+   - Renumber PR #61 `098`–`100` forward-only (`114+`).
    - Port `documentMalwareScanService.js`, `supplierVerificationDocumentService.js`, `SupplierVerificationCorrections.jsx`, `SupplierVerificationDocuments.jsx`, and `AdminVerificationPage.jsx` / `supplierProfileController.js` extensions.
 3. **Independent Admin & Supplier Portal Pages:**
    - `frontend/src/pages/AdminFinancePage.jsx` (read-only provider-readiness UI).
    - `frontend/src/pages/SupplierAnalyticsPage.jsx`, `SupplierOpportunitiesPage.jsx`, `SupplierDeliveryPage.jsx`, `SupplierDisputesPage.jsx`, `SupplierSettlementsPage.jsx`, and `supplierDashboardService.js` / `supplierOperationsService.js`.
 4. **Dependencies & Blockers:**
-   - Requires PR #54 / consolidation branch merge first so forward-only migration numbering starts cleanly at `109+`.
+   - Requires PR #54 / consolidation branch merge first so forward-only migration numbering starts cleanly at `110+`.
    - External Safepay live webhook/refund execution remains `DISABLED` (`ALLOW_EXTERNAL_MONEY_MOVEMENT=false`).

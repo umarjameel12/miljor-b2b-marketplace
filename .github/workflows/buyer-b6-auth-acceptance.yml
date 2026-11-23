@@ -3,15 +3,7 @@ on:
   push:
     branches:
       - feature/frontend-redesign-20261112
-    paths:
-      - 'backend/src/controllers/authController.js'
-      - 'backend/src/services/procurement*Service.js'
-      - 'backend/src/routes/v1/procurementRoutes.js'
-      - 'backend/tests/buyer_procurement_auth_alignment_gate.js'
-      - 'backend/package.json'
-      - 'frontend/src/pages/RfqPage.jsx'
-      - 'frontend/src/context/AuthContext.jsx'
-      - '.github/workflows/buyer-b6-auth-acceptance.yml'
+      - integration/pr54-pr61-consolidation
   pull_request:
     paths:
       - 'backend/src/controllers/authController.js'

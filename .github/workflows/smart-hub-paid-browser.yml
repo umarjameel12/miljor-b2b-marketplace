@@ -2,6 +2,9 @@ name: Smart Hub real Chromium with synthetic signed sandbox payment
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - integration/pr54-pr61-consolidation
   pull_request:
     paths:
       - 'backend/**'

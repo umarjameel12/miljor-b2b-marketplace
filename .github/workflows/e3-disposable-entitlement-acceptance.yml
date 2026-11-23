@@ -1,5 +1,8 @@
 name: MilJor E3 Disposable Entitlement Acceptance
 on:
+  push:
+    branches:
+      - integration/pr54-pr61-consolidation
   pull_request:
     branches: [main]
     paths:
