@@ -80,3 +80,27 @@ test('refund v3 preview remains nonexecutable for exact buyer item shortage',()=
   assert.equal(r.providerConfirmation,'NOT_VERIFIED');
   assert.throws(()=>refundPreview({trackerToken:'../../attack',amountPkr:'10'}));
 });
+test('live Safepay v3 metadata.data.order_id wrapper and reporter client.api_key + metadata.order_id.value shapes are verified strictly',()=>{
+  const {validateReportedTracker}=require('../src/services/safepayV3ContractService');
+  const liveCreated={data:{tracker:{token:tracker,client:key,environment:'sandbox',
+    mode:'payment',state:'TRACKER_STARTED',
+    purchase_totals:{quote_amount:{currency:'PKR',amount:10000}},
+    metadata:{data:{order_id:'ORD-LIVE-1',source:'miljor'}}}}};
+  assert.equal(validateCreatedTracker({response:liveCreated,expectedAmountPkr:'100.00',
+    expectedOrderCode:'ORD-LIVE-1',expectedMerchantApiKey:key}).trackerToken,tracker);
+  assert.throws(()=>validateCreatedTracker({response:liveCreated,expectedAmountPkr:'100.00',
+    expectedOrderCode:'ORD-OTHER',expectedMerchantApiKey:key}));
+
+  const liveReported={data:{token:tracker,client:{token:'cli_internal',api_key:key},
+    environment:'sandbox',mode:'payment',state:'TRACKER_STARTED',
+    purchase_totals:{quote_amount:{currency:'PKR',amount:10000}},
+    metadata:{order_id:{key:'order_id',value:'ORD-LIVE-1'}}}};
+  const reported=validateReportedTracker({response:liveReported,expectedTrackerToken:tracker,
+    expectedAmountPkr:'100.00',expectedOrderCode:'ORD-LIVE-1',expectedMerchantApiKey:key});
+  assert.equal(reported.state,'TRACKER_STARTED');
+  assert.equal(reported.canMarkOrderPaid,false);
+  assert.throws(()=>validateReportedTracker({response:{data:{...liveReported.data,client:{api_key:'sec_wrong'}}},
+    expectedTrackerToken:tracker,expectedAmountPkr:'100.00',expectedOrderCode:'ORD-LIVE-1',expectedMerchantApiKey:key}));
+  assert.throws(()=>validateReportedTracker({response:{data:{...liveReported.data,metadata:{order_id:{value:'ORD-OTHER'}}}},
+    expectedTrackerToken:tracker,expectedAmountPkr:'100.00',expectedOrderCode:'ORD-LIVE-1',expectedMerchantApiKey:key}));
+});

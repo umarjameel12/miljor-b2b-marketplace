@@ -44,6 +44,20 @@ function buildPaymentV3({amountPkr,currency='PKR',merchantApiKey,orderCode,inten
     })
   });
 }
+function extractMerchantApiKey(client){
+  if(typeof client==='string')return client;
+  if(client&&typeof client==='object'&&typeof client.api_key==='string')return client.api_key;
+  return '';
+}
+function extractOrderId(metadata){
+  if(!metadata||typeof metadata!=='object')return '';
+  if(typeof metadata.order_id==='string')return metadata.order_id;
+  if(metadata.data&&typeof metadata.data==='object'&&typeof metadata.data.order_id==='string')
+    return metadata.data.order_id;
+  if(metadata.order_id&&typeof metadata.order_id==='object'&&typeof metadata.order_id.value==='string')
+    return metadata.order_id.value;
+  return '';
+}
 function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode,expectedMerchantApiKey}){
   const tracker=response?.data?.tracker;
   if(!tracker||!tokenPattern.test(String(tracker.token||'')))
@@ -53,13 +67,13 @@ function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode,ex
   // A provider-created tracker must belong to the same configured merchant.
   // Reject absent identity rather than relying on later reporter/webhook checks.
   if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
-      tracker.client!==expectedMerchantApiKey)
+      extractMerchantApiKey(tracker.client)!==expectedMerchantApiKey)
     throw fail('V3_TRACKER_MERCHANT_MISMATCH','Created tracker merchant identity differs from configured account');
   const quoted=tracker.purchase_totals?.quote_amount;
   if(!quoted||quoted.currency!=='PKR'||fromMinorPkr(quoted.amount)!==exact.toCanonicalString(expectedAmountPkr,2))
     throw fail('V3_TRACKER_AMOUNT_MISMATCH','Provider quote differs from exact locked order');
   if(typeof expectedOrderCode!=='string'||!expectedOrderCode||
-     tracker.metadata?.order_id!==expectedOrderCode)
+     extractOrderId(tracker.metadata)!==expectedOrderCode)
     throw fail('V3_TRACKER_ORDER_MISMATCH','Provider tracker metadata differs from order');
   return Object.freeze({trackerToken:tracker.token,providerContract:'payments-v3-minor',
     amountPkr:exact.toCanonicalString(expectedAmountPkr,2),currency:'PKR',
@@ -68,13 +82,13 @@ function validateCreatedTracker({response,expectedAmountPkr,expectedOrderCode,ex
 function validateReportedTracker({response,expectedTrackerToken,expectedAmountPkr,expectedOrderCode,expectedMerchantApiKey}){
   if(!tokenPattern.test(String(expectedTrackerToken||'')))
     throw fail('INVALID_TRACKER_TOKEN','Invalid Safepay tracker token');
-  const tracker=response?.data?.tracker;
+  const tracker=response?.data?.tracker||(response?.data?.token?response.data:null);
   if(!tracker||tracker.token!==expectedTrackerToken)
     throw fail('V3_TRACKER_IDENTITY_MISMATCH','Provider reporter did not return expected tracker');
   if(tracker.environment!=='sandbox'||tracker.mode!=='payment')
     throw fail('V3_TRACKER_STATE_MISMATCH','Tracker is not Sandbox payment mode');
   if(typeof expectedMerchantApiKey!=='string'||!expectedMerchantApiKey||
-      tracker.client!==expectedMerchantApiKey)
+      extractMerchantApiKey(tracker.client)!==expectedMerchantApiKey)
     throw fail('V3_TRACKER_MERCHANT_MISMATCH','Provider reporter merchant identity mismatch');
   const quoted=tracker.purchase_totals?.quote_amount;
   if(!quoted||quoted.currency!=='PKR'||
@@ -83,7 +97,7 @@ function validateReportedTracker({response,expectedTrackerToken,expectedAmountPk
   // Checkout creation pins order metadata. Reporter must return the same
   // immutable reference; missing metadata is not evidence of ownership.
   if(typeof expectedOrderCode!=='string'||!expectedOrderCode||
-      tracker.metadata?.order_id!==expectedOrderCode)
+      extractOrderId(tracker.metadata)!==expectedOrderCode)
     throw fail('V3_TRACKER_ORDER_MISMATCH','Reporter metadata missing or differs from original order');
   // A reported state alone is never sufficient to mark an order PAID in
   // MilJor. Provider-origin signed webhook plus exact locked order reconciliation
