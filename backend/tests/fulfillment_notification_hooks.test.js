@@ -42,7 +42,7 @@ function harness(overrides = {}, options = {}) {
     './reservationEventService': {generateEventId:() => 'legacy-event'},
     './supplierEligibilityPolicy': require('../src/services/supplierEligibilityPolicy'),
     './deliveryQuantityPolicy': require('../src/services/deliveryQuantityPolicy'),
-    './orderAdminApprovalService': require('../src/services/orderAdminApprovalService'),
+    './orderAdminApprovalService': { assertOrderAdminApproved: async (_conn, id) => ({ id, admin_approval_status: 'ADMIN_APPROVED' }) },
     './notificationService': {async enqueueEvent(tx, event) {
       assert.equal(tx, connection);
       assert.deepEqual(Object.keys(event).sort(), ['entityId','eventKey','eventType','role','userId']);

@@ -23,7 +23,7 @@ function service(file,deps){
     if(id==='./ucpTransactionalNotifications')return service('ucpTransactionalNotifications.js',deps);
     if(['./ucpNotificationEventCatalog','./notificationEventPolicy','./notificationDeliveryPolicy','./deliveryQuantityPolicy'].includes(id))return require(path.join(root,id));
     if(id==='crypto'||id==='node:crypto')return require('node:crypto');
-    if(id==='./orderAdminApprovalService')return require('../src/services/orderAdminApprovalService');
+    if(id==='./orderAdminApprovalService')return {assertOrderAdminApproved:async(_conn,id)=>({id,admin_approval_status:'ADMIN_APPROVED'})};
     throw Error('Unexpected dependency: '+id);
   });
   return m.exports;

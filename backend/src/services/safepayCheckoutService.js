@@ -567,10 +567,30 @@ class SafepayCheckoutService {
         });
       } else {
         if (normalizedProviderState === 'TRACKER_ENDED') {
-          const err = new Error('TRACKER_ENDED is only valid for payments-v3-minor attempts');
-          err.code = 'PROVIDER_CONTRACT_MISMATCH';
-          err.statusCode = 422;
-          throw err;
+          await connection.query(
+            `INSERT INTO payment_webhook_events (
+              event_id, provider, event_type, order_id, attempt_id, provider_tracker_token,
+              signature, timestamp_header, raw_payload, processed_status
+            ) VALUES (?, 'SAFEPAY', ?, ?, ?, ?, ?, ?, ?, 'PROCESSED')
+            ON DUPLICATE KEY UPDATE id = id`,
+            [
+              effectiveEventId,
+              `${effectiveEventType}:TRACKER_ENDED`.slice(0, 100),
+              order.id,
+              attempt.id,
+              trackerToken,
+              signature,
+              String(timestamp),
+              JSON.stringify(parsedPayload)
+            ]
+          );
+          await connection.commit();
+          return {
+            success: true,
+            event_type: effectiveEventType,
+            provider_state: normalizedProviderState,
+            message: 'Legacy TRACKER_ENDED recorded without state transition'
+          };
         }
         const receivedAmountStr = exactDecimal.toCanonicalString(providerAmount, 2);
         if (!exactDecimal.exactDecimalEquals(expectedAmountStr, receivedAmountStr, 2)) {
