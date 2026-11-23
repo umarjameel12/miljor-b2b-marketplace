@@ -361,9 +361,30 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       conn5Ok.release();
     }
 
-    // 8. Existing Subscriber Repricing Protection: historical 3500.00 subscriber fails closed on 2999.00 renewal without auditable consent
+    // 8. Existing Subscriber Repricing Protection & Security Regression:
     await db.query(`UPDATE supplier_subscriptions SET price_pkr = 3500.00 WHERE id = ?`, [subscriptionId]);
-    // Bare request without server-issued consent token is rejected
+
+    // 8a. Unauthenticated and malformed ID checks
+    const unauthConsent = await api('/api/v1/supplier/subscription/renewal-consent', {
+      method: 'POST',
+      body: { subscription_id: subscriptionId, expected_new_price_pkr: '2999.00' }
+    });
+    assert.equal(unauthConsent.status, 401);
+    const badIdReconcile = await api('/api/v1/supplier/subscription/checkout/not-a-number/reconcile', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${supplierToken}` }
+    });
+    assert.equal(badIdReconcile.status, 400);
+
+    // 8b. Cross-supplier consent creation blocked (403)
+    const crossConsent = await api('/api/v1/supplier/subscription/renewal-consent', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${otherSupplierToken}` },
+      body: { subscription_id: subscriptionId, expected_new_price_pkr: '2999.00' }
+    });
+    assert.equal(crossConsent.status, 403);
+
+    // 8c. Bare request without server-issued consent token is rejected
     await assert.rejects(
       () =>
         svc.initiateCheckout({
@@ -375,7 +396,7 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
       (err) => err.code === 'RENEWAL_PRICE_CONSENT_REQUIRED' && err.statusCode === 409
     );
 
-    // Mismatched expected price cannot create a renewal consent record
+    // 8d. Mismatched expected price cannot create a renewal consent record
     const badConsentRes = await api('/api/v1/supplier/subscription/renewal-consent', {
       method: 'POST',
       headers: { Authorization: `Bearer ${supplierToken}` },
@@ -384,16 +405,74 @@ test('Supplier Subscription System — Complete Safe Lifecycle, Safepay v3, Admi
     assert.equal(badConsentRes.status, 409);
     assert.equal(badConsentRes.body.error.code, 'RENEWAL_PRICE_MISMATCH');
 
-    // Explicit supplier consent with exact current catalogue price creates auditable consent token
+    // 8e. Expired consent token is rejected
+    const expConsentRes = await api('/api/v1/supplier/subscription/renewal-consent', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${supplierToken}` },
+      body: { subscription_id: subscriptionId, expected_new_price_pkr: '2999.00' }
+    });
+    assert.equal(expConsentRes.status, 201);
+    assert.ok(expConsentRes.body.data.expires_at);
+    await db.query(
+      `UPDATE supplier_subscription_renewal_consents SET expires_at = DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE id = ?`,
+      [expConsentRes.body.data.consent_id]
+    );
+    await assert.rejects(
+      () =>
+        svc.initiateCheckout({
+          actor: { id: supplierId, role: 'SUPPLIER' },
+          planCode: 'GROWTH',
+          idempotencyKey: `sub-renew-exp-${suffix}`,
+          renewalConsentToken: expConsentRes.body.data.consent_token,
+          v3Client: fakeV3Client
+        }),
+      (err) => err.code === 'RENEWAL_PRICE_CONSENT_EXPIRED' && err.statusCode === 409
+    );
+
+    // 8f. Explicit supplier consent creates single-use token; concurrent consumption allows only ONE checkout
     const goodConsentRes = await api('/api/v1/supplier/subscription/renewal-consent', {
       method: 'POST',
       headers: { Authorization: `Bearer ${supplierToken}` },
       body: { subscription_id: subscriptionId, expected_new_price_pkr: '2999.00' }
     });
     assert.equal(goodConsentRes.status, 201);
-    assert.ok(goodConsentRes.body.data.consent_token.startsWith('rc_'));
+    const consentToken = goodConsentRes.body.data.consent_token;
+    assert.ok(consentToken.startsWith('rc_'));
     assert.equal(goodConsentRes.body.data.previous_agreed_price_pkr, '3500.00');
     assert.equal(goodConsentRes.body.data.accepted_price_pkr, '2999.00');
+
+    const renewClient = {
+      async createHostedCheckout() {
+        return {
+          tracker: `track_renew_${suffix}`,
+          checkoutUrl: `https://sandbox.api.getsafepay.com/checkout/pay?tracker=track_renew_${suffix}`
+        };
+      }
+    };
+    const [r1, r2] = await Promise.allSettled([
+      svc.initiateCheckout({
+        actor: { id: supplierId, role: 'SUPPLIER' },
+        planCode: 'GROWTH',
+        idempotencyKey: `sub-renew-race-1-${suffix}`,
+        renewalConsentToken: consentToken,
+        v3Client: renewClient
+      }),
+      svc.initiateCheckout({
+        actor: { id: supplierId, role: 'SUPPLIER' },
+        planCode: 'GROWTH',
+        idempotencyKey: `sub-renew-race-2-${suffix}`,
+        renewalConsentToken: consentToken,
+        v3Client: renewClient
+      })
+    ]);
+    const fulfilledCount = [r1, r2].filter((r) => r.status === 'fulfilled').length;
+    const rejectedCount = [r1, r2].filter((r) => r.status === 'rejected').length;
+    assert.equal(fulfilledCount, 1);
+    assert.equal(rejectedCount, 1);
+
+    // Cancel pending renewal attempt so subsequent downgrade/rejection tests proceed cleanly
+    const wonAttempt = r1.status === 'fulfilled' ? r1.value.attempt : r2.value.attempt;
+    await db.query(`UPDATE supplier_subscription_checkout_attempts SET status = 'CANCELLED' WHERE id = ?`, [wonAttempt.id]);
 
     // Historical price remains unchanged
     const [histCheck] = await db.query('SELECT price_pkr FROM supplier_subscriptions WHERE id = ?', [subscriptionId]);

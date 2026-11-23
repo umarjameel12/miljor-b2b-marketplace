@@ -251,9 +251,13 @@ class SupplierSubscriptionLifecycleService {
       const consentToken = `rc_${crypto.randomBytes(24).toString('hex')}`;
       const [ins] = await conn.query(
         `INSERT INTO supplier_subscription_renewal_consents
-         (supplier_id, subscription_id, plan_code, billing_cycle, previous_agreed_price_pkr, accepted_price_pkr, consent_token, accepted_at)
-         VALUES (?, ?, ?, 'MONTHLY', ?, ?, ?, NOW())`,
+         (supplier_id, subscription_id, plan_code, billing_cycle, previous_agreed_price_pkr, accepted_price_pkr, consent_token, accepted_at, expires_at)
+         VALUES (?, ?, ?, 'MONTHLY', ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 15 MINUTE))`,
         [supplierId, sub.id, sub.plan_code, previousPrice, cataloguePrice, consentToken]
+      );
+      const [[createdConsent]] = await conn.query(
+        'SELECT accepted_at, expires_at FROM supplier_subscription_renewal_consents WHERE id = ?',
+        [ins.insertId]
       );
 
       await this._recordAudit(conn, {
@@ -270,7 +274,8 @@ class SupplierSubscriptionLifecycleService {
           consent_id: ins.insertId,
           billing_cycle: 'MONTHLY',
           previous_agreed_price_pkr: previousPrice,
-          accepted_price_pkr: cataloguePrice
+          accepted_price_pkr: cataloguePrice,
+          expires_at: createdConsent?.expires_at || null
         }
       });
 
@@ -282,7 +287,9 @@ class SupplierSubscriptionLifecycleService {
         plan_code: sub.plan_code,
         billing_cycle: 'MONTHLY',
         previous_agreed_price_pkr: previousPrice,
-        accepted_price_pkr: cataloguePrice
+        accepted_price_pkr: cataloguePrice,
+        accepted_at: createdConsent?.accepted_at || null,
+        expires_at: createdConsent?.expires_at || null
       };
     } catch (err) {
       await conn.rollback();
@@ -411,7 +418,8 @@ class SupplierSubscriptionLifecycleService {
             );
           }
           const [consents] = await conn.query(
-            `SELECT * FROM supplier_subscription_renewal_consents
+            `SELECT *, (expires_at IS NOT NULL AND expires_at > NOW()) AS is_unexpired
+             FROM supplier_subscription_renewal_consents
              WHERE consent_token = ? AND supplier_id = ? AND subscription_id = ? AND consumed_by_attempt_id IS NULL
              FOR UPDATE`,
             [renewalConsentToken, supplierId, activeSubRows[0].id]
@@ -429,6 +437,13 @@ class SupplierSubscriptionLifecycleService {
               'Renewal consent token is invalid, already used, or does not match the current catalogue price'
             );
           }
+          if (Number(consents[0].is_unexpired) !== 1) {
+            throw makeError(
+              'RENEWAL_PRICE_CONSENT_EXPIRED',
+              409,
+              'Renewal consent token has expired; please review and accept the renewal price again'
+            );
+          }
           consumedConsentId = consents[0].id;
         }
       }
@@ -442,12 +457,19 @@ class SupplierSubscriptionLifecycleService {
       attemptId = ins.insertId;
 
       if (consumedConsentId) {
-        await conn.query(
+        const [consumeRes] = await conn.query(
           `UPDATE supplier_subscription_renewal_consents
            SET consumed_by_attempt_id = ?, consumed_at = NOW()
-           WHERE id = ?`,
+           WHERE id = ? AND consumed_by_attempt_id IS NULL`,
           [attemptId, consumedConsentId]
         );
+        if (consumeRes.affectedRows !== 1) {
+          throw makeError(
+            'RENEWAL_PRICE_CONSENT_INVALID',
+            409,
+            'Renewal consent token was already consumed by another checkout attempt'
+          );
+        }
       }
 
       await this._recordAudit(conn, {
@@ -701,18 +723,22 @@ class SupplierSubscriptionLifecycleService {
       throw makeError('INVALID_WEBHOOK_SIGNATURE', 401, 'Invalid Safepay webhook signature');
     }
 
-    const payload = body?.data || body || {};
-    const notification = payload?.notification || body?.notification || payload;
+    const payload = scope === 'data' ? (body?.data || {}) : (body?.data || body || {});
+    const notification = scope === 'data' ? (payload?.notification || payload) : (payload?.notification || body?.notification || payload);
     const tracker = notification?.tracker || payload?.tracker || payload?.token || notification?.token || null;
     const state = String(notification?.state || payload?.state || '').toUpperCase();
-    const eventType = String(headers['x-sfpy-event-type'] || headers['x-safepay-event-type'] || payload?.type || body?.type || 'payment:created');
-    const eventId = String(
-      headers['x-sfpy-event-id'] ||
-      headers['x-safepay-event-id'] ||
-      payload?.event_id ||
-      notification?.reference ||
-      `sfpy:${tracker}:${state}`
-    );
+    const eventType = scope === 'data'
+      ? String(payload?.type || 'payment:created')
+      : String(headers['x-sfpy-event-type'] || headers['x-safepay-event-type'] || payload?.type || body?.type || 'payment:created');
+    const eventId = scope === 'data'
+      ? String(payload?.event_id || notification?.reference || `sfpy:${tracker}:${state}`)
+      : String(
+          headers['x-sfpy-event-id'] ||
+          headers['x-safepay-event-id'] ||
+          payload?.event_id ||
+          notification?.reference ||
+          `sfpy:${tracker}:${state}`
+        );
 
     if (!tracker) {
       throw makeError('MISSING_TRACKER', 400, 'Webhook payload missing tracker token');

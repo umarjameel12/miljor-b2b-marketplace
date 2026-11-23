@@ -171,6 +171,12 @@ class SubscriptionController {
   async reconcileCheckout(req, res) {
     try {
       const attemptId = Number(req.params.attemptId);
+      if (!Number.isSafeInteger(attemptId) || attemptId <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_ATTEMPT_ID', message: 'Valid positive integer attemptId is required' }
+        });
+      }
       const result = await supplierSubscriptionLifecycleService.reconcileCheckoutAttempt({
         actor: req.user,
         attemptId
@@ -271,6 +277,12 @@ class SubscriptionController {
   async adminApproveSubscription(req, res) {
     try {
       const subscriptionId = Number(req.params.subscriptionId);
+      if (!Number.isSafeInteger(subscriptionId) || subscriptionId <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_SUBSCRIPTION_ID', message: 'Valid positive integer subscriptionId is required' }
+        });
+      }
       const result = await supplierSubscriptionLifecycleService.adminApproveSubscription({
         subscriptionId,
         adminActor: req.user,
@@ -292,6 +304,12 @@ class SubscriptionController {
   async adminRejectSubscription(req, res) {
     try {
       const subscriptionId = Number(req.params.subscriptionId);
+      if (!Number.isSafeInteger(subscriptionId) || subscriptionId <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_SUBSCRIPTION_ID', message: 'Valid positive integer subscriptionId is required' }
+        });
+      }
       const result = await supplierSubscriptionLifecycleService.adminRejectSubscription({
         subscriptionId,
         adminActor: req.user,
