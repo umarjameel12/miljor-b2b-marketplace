@@ -28,6 +28,22 @@ export const adminApi = {
   reactivateUser: async (userId) => {
     const res = await apiClient.put(`/admin/users/${userId}/reactivate`);
     return res.data;
+  },
+
+  // 5. Mandatory Order Admin Approval Gate (UCP + Smart Procurement Hub)
+  getPendingApprovalOrders: async () => {
+    const res = await apiClient.get('/admin/orders/pending-approval');
+    return res.data;
+  },
+
+  approveOrder: async (orderId, notes = null) => {
+    const res = await apiClient.post(`/admin/orders/${orderId}/approve`, { notes });
+    return res.data;
+  },
+
+  rejectOrder: async (orderId, reason) => {
+    const res = await apiClient.post(`/admin/orders/${orderId}/reject`, { reason });
+    return res.data;
   }
 };
 

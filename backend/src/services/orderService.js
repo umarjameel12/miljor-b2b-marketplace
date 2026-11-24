@@ -665,6 +665,7 @@ class OrderService {
       payment_status: order.payment_status,
       order_status: order.order_status,
       fulfillment_status: order.fulfillment_status,
+      admin_approval_status: order.admin_approval_status,
       allowed_actions: this._computeAllowedActions(order, actor.role),
       created_at: order.created_at,
       updated_at: order.updated_at
