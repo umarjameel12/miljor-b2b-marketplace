@@ -125,6 +125,42 @@ export const AuthProvider = ({ children }) => {
     throw new Error(response.error?.message || 'Login failed');
   };
 
+  // Google Sign-In handler
+  const loginWithGoogle = async (credential, options = {}) => {
+    const response = await authApi.googleAuth(credential, options);
+    if (response.success && response.data?.token) {
+      updateAuthCredentials(response.data.token, response.data.user);
+      localStorage.removeItem('miljor_token');
+      try {
+        const authChannel = new BroadcastChannel('miljor_auth_channel');
+        authChannel.postMessage({ type: 'LOGIN', user: response.data.user });
+        authChannel.close();
+      } catch {
+        // Ignore channel errors
+      }
+      return { success: true, user: response.data.user, isNewUser: Boolean(response.data.is_new_user) };
+    }
+    throw new Error(response.error?.message || 'Google authentication failed');
+  };
+
+  // Google Sign-Up handler (Buyer / Supplier onboarding)
+  const registerWithGoogle = async (payload) => {
+    const response = await authApi.googleRegister(payload);
+    if (response.success && response.data?.token) {
+      updateAuthCredentials(response.data.token, response.data.user);
+      localStorage.removeItem('miljor_token');
+      try {
+        const authChannel = new BroadcastChannel('miljor_auth_channel');
+        authChannel.postMessage({ type: 'LOGIN', user: response.data.user });
+        authChannel.close();
+      } catch {
+        // Ignore channel errors
+      }
+      return { success: true, user: response.data.user };
+    }
+    throw new Error(response.error?.message || 'Google registration failed');
+  };
+
   // Register handler
   const register = async (formData) => {
     const response = await authApi.register(formData);
@@ -208,7 +244,9 @@ export const AuthProvider = ({ children }) => {
     isVerified: Boolean(user?.is_verified),
     loading,
     login,
+    loginWithGoogle,
     register,
+    registerWithGoogle,
     verifyEmail,
     resendOtp,
     updateBaseCluster,
