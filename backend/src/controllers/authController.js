@@ -1151,6 +1151,12 @@ class AuthController {
         });
       }
       const cluster = clusterRows[0];
+      if (cluster.district && cluster.district.toLowerCase() !== 'lahore') {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'OUTSIDE_LAHORE_DISTRICT', message: 'The selected cluster does not belong to Lahore District.' }
+        });
+      }
 
       const effectiveArea = (society_area || area || '').trim();
       const effectiveAddress = (full_address || address || '').trim();

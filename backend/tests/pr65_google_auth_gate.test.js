@@ -201,7 +201,25 @@ test('PR #65 Google Authentication: Backend Security, Onboarding, Linking & Brow
     const [[suppProfile]] = await db.query('SELECT verification_status FROM supplier_profiles WHERE supplier_id = ?', [suppRegJson.data.user.id]);
     assert.equal(suppProfile.verification_status, 'NOT_SUBMITTED');
 
-    // 8. Duplicate email protection & explicit linking (never silently merge password accounts)
+    // 7b. Existing Google Supplier Sign-In preserves SUPPLIER role & unverified restriction
+    const suppLoginRes = await fetch(`${apiBase}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: `valid:${suppSub}:${suppEmail}:Google Supplier`, mode: 'login' })
+    });
+    assert.equal(suppLoginRes.status, 200);
+    const suppLoginJson = await suppLoginRes.json();
+    assert.equal(suppLoginJson.data.user.role, 'SUPPLIER');
+    assert.equal(suppLoginJson.data.user.is_verified, false);
+
+    // 8. Duplicate email protection, unauthorized link rejection & explicit linking
+    const unauthLinkRes = await fetch(`${apiBase}/auth/google/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: `valid:sub_unauth_${suffix}:unauth_${suffix}@gmail.com:NoAuth` })
+    });
+    assert.equal(unauthLinkRes.status, 401);
+
     const pwEmail = `pwuser_${suffix}@miljor.test`;
     const pwHash = await bcrypt.hash('Password123!', 4);
     const [pwIns] = await db.query(
@@ -230,12 +248,47 @@ test('PR #65 Google Authentication: Backend Security, Onboarding, Linking & Brow
     const collisionJson = await collisionRes.json();
     assert.equal(collisionJson.error.code, 'ACCOUNT_LINKING_REQUIRED');
 
+    const dupRegRes = await fetch(`${apiBase}/auth/google/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        credential: `valid:sub_link_${suffix}:${pwEmail}:Local User`,
+        role: 'BUYER',
+        business_name: 'Dup Biz',
+        full_name: 'Local User',
+        phone: `0333${String(suffix).slice(-7)}`,
+        base_cluster_id: clusterId
+      })
+    });
+    assert.equal(dupRegRes.status, 409);
+
     const linkRes = await fetch(`${apiBase}/auth/google/link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pwToken}` },
       body: JSON.stringify({ credential: `valid:sub_link_${suffix}:${pwEmail}:Local User` })
     });
     assert.equal(linkRes.status, 200);
+
+    // 8b. Existing password registration + OTP requirement regression check
+    const normalEmail = `normal_${suffix}@miljor.test`;
+    const normalRegRes = await fetch(`${apiBase}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: 'Normal Buyer',
+        business_name: 'Normal Kitchen',
+        email: normalEmail,
+        phone: `0344${String(suffix).slice(-7)}`,
+        password: 'Password123!',
+        role: 'BUYER',
+        city: 'Lahore',
+        base_cluster_id: clusterId
+      })
+    });
+    assert.equal(normalRegRes.status, 201);
+    const normalRegJson = await normalRegRes.json();
+    assert.equal(normalRegJson.requires_verification, true);
+    createdUserIds.push(normalRegJson.data.user.id);
 
     // 9. Browser UI verification & after screenshots
     if (chromium) {
