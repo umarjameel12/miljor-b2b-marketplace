@@ -49,9 +49,19 @@ export const authApi = {
     return res.data;
   },
 
-  // Google OIDC Authentication
-  googleAuth: async (credential) => {
-    const res = await apiClient.post('/auth/google', { credential });
+  // Google OIDC Configuration & Authentication
+  getGoogleConfig: async () => {
+    const res = await apiClient.get('/auth/google/config');
+    return res.data;
+  },
+
+  googleAuth: async (credential, options = {}) => {
+    const res = await apiClient.post('/auth/google', { credential, ...options });
+    return res.data;
+  },
+
+  googleRegister: async (payload) => {
+    const res = await apiClient.post('/auth/google/register', payload);
     return res.data;
   },
 
