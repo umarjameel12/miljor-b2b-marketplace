@@ -454,14 +454,33 @@ export const AppShell = ({ children }) => {
           : []),
       ];
 
-  // Mobile bottom bar items matching reference phone mockup
-  const mobileBottomItems = [
-    ...(isAdmin ? [{label:'Admin',path:'/admin',icon:ShieldCheck,active:location.pathname.startsWith('/admin')}] : []),
-    { label: 'Home', path: '/', icon: Home, active: location.pathname === '/' },
-    { label: 'Pools', path: '/pools', icon: Layers, active: location.pathname === '/pools' },
-    { label: 'Orders', path: '/orders', icon: ClipboardList, active: location.pathname === '/orders' },
-    { label: 'Profile', path: isAuthenticated ? '/profile' : '/login', icon: User, active: location.pathname === '/login' || location.pathname === '/profile' },
-  ];
+  // Mobile bottom bar items matching role-specific primary routes
+  const mobileBottomItems = isAdmin
+    ? [
+        { label: 'Console', path: '/admin', icon: ShieldCheck, active: path === '/admin' || path === '/admin/dashboard' },
+        { label: 'Verify', path: '/admin/verifications', icon: Users, active: is('/admin/verifications') || is('/admin/suppliers') },
+        { label: 'Catalog', path: '/admin/catalog', icon: Layers, active: is('/admin/catalog') },
+        { label: 'Profile', path: '/profile', icon: User, active: is('/profile') },
+      ]
+    : isSupplier
+    ? [
+        { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
+        { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
+        { label: 'Pools', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
+        { label: 'Hub', path: '/procurement', icon: ClipboardList, active: is('/procurement') },
+        { label: 'Plan', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
+      ]
+    : [
+        { label: 'Home', path: '/', icon: Home, active: path === '/' },
+        { label: 'Pools', path: '/pools', icon: Layers, active: is('/pools') },
+        ...(isAuthenticated
+          ? [
+              { label: 'Hub', path: '/procurement', icon: Tag, active: is('/procurement') },
+              { label: 'Orders', path: '/orders', icon: ClipboardList, active: is('/orders') },
+            ]
+          : []),
+        { label: isAuthenticated ? 'Profile' : 'Sign in', path: isAuthenticated ? '/profile' : '/login', icon: User, active: path === '/login' || path === '/profile' },
+      ];
 
   return (
     <div

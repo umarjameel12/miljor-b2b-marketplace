@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import adminApi from '../api/admin';
 import { AdminDeliveryRecoveryPanel } from '../components/admin/AdminDeliveryRecoveryPanel';
+import { AdminOrderApprovalPanel } from '../components/admin/AdminOrderApprovalPanel';
 import { AdminSubscriptionApprovalPanel } from '../components/admin/AdminSubscriptionApprovalPanel';
 import { AdminProcurementSettlementReview } from '../components/procurement/AdminProcurementSettlementReview';
 
@@ -107,6 +108,7 @@ export function AdminDashboardPage() {
           </Link>}
         </div>
         <AdminDeliveryRecoveryPanel />
+        {['ADMIN', 'SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN'].includes(role) && <AdminOrderApprovalPanel />}
         {['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN', 'OPERATIONS_ADMIN'].includes(role) && <AdminSubscriptionApprovalPanel />}
         {['ADMIN', 'SUPER_ADMIN', 'FINANCE_ADMIN'].includes(role) && <AdminProcurementSettlementReview />}
         <p className="text-xs opacity-60">All approval operations are enforced by the backend. Suppliers cannot approve their own application.</p>

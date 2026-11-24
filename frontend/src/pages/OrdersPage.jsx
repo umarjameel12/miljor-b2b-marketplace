@@ -232,9 +232,24 @@ export const OrdersPage = () => {
                 </div>
                 <p className="text-sm">{order.product_title || 'Procurement Order'}</p>
                 <div className="flex flex-wrap gap-3 text-xs items-center justify-between" style={{color:'var(--text-muted)'}}>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-3 items-center">
                     <span>Order status: {order.order_status || 'PENDING'}</span>
                     <span>Fulfillment: {order.fulfillment_status || 'NOT_STARTED'}</span>
+                    {order.admin_approval_status === 'PENDING_ADMIN_APPROVAL' && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                        Pending Admin Approval
+                      </span>
+                    )}
+                    {order.admin_approval_status === 'ADMIN_APPROVED' && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                        Admin Approved
+                      </span>
+                    )}
+                    {order.admin_approval_status === 'ADMIN_REJECTED' && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300">
+                        Rejected by Admin
+                      </span>
+                    )}
                     <span>Total: PKR {Number(order.total_amount || 0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
                   </div>
                   {order.payment_status !== 'PAID' && order.order_status !== 'PAID' ? (
