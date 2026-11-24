@@ -38,7 +38,9 @@ export function GoogleAuthButton({
   const [clientId, setClientId] = useState(import.meta.env.VITE_GOOGLE_CLIENT_ID || '');
   const [gsiReady, setGsiReady] = useState(false);
 
-  callbackRef.current = onCredential;
+  useEffect(() => {
+    callbackRef.current = onCredential;
+  }, [onCredential]);
 
   useEffect(() => {
     let active = true;
