@@ -1072,7 +1072,7 @@ export const SupplierCatalogPage = () => {
             <div className="lg:col-span-4 space-y-4">
               <Card className="p-4 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-3">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                  Step 1 • Select Category ({categories.length})
+                  Categories ({categories.length})
                 </span>
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                   {categories.map((cat) => {
@@ -1084,8 +1084,8 @@ export const SupplierCatalogPage = () => {
                         onClick={() => handleSelectCategory(String(cat.id))}
                         className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between ${
                           isSelected
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-semibold'
-                            : 'bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-emerald-500/30'
+                            ? 'bg-[var(--brand-accent)]/15 border-[var(--brand-accent)]/50 text-[var(--text-primary)] font-semibold'
+                            : 'bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--brand-accent)]/40'
                         }`}
                       >
                         <div>
@@ -1103,12 +1103,12 @@ export const SupplierCatalogPage = () => {
               <Card className="p-4 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                    Step 2 • Product Family ({filteredFamiliesForCategory.length})
+                    Product Families ({filteredFamiliesForCategory.length})
                   </span>
                   <button
                     type="button"
                     onClick={() => openNewRequestModal('NEW_FAMILY')}
-                    className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                    className="text-[11px] font-semibold text-[var(--brand-accent)] hover:underline flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
                     Missing Family?
@@ -1151,8 +1151,8 @@ export const SupplierCatalogPage = () => {
               <Card className="p-5 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-4">
                   <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                      Step 3 • Approved Specifications & Supplier Product Creation
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--brand-accent)]">
+                      Approved Specifications & Supplier Products
                     </span>
                     <h2 className="text-lg font-bold text-[var(--text-primary)]">
                       {currentFamily ? `${currentFamily.name} Specifications` : 'Select a Product Family'}
@@ -1740,8 +1740,8 @@ export const SupplierCatalogPage = () => {
             <Card className="w-full max-w-md p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-4">
               <div className="flex items-start justify-between border-b border-[var(--border-subtle)] pb-3">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                    Physical Package SKU (Level 4)
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--brand-accent)]">
+                    Physical Package SKU
                   </span>
                   <h3 className="text-base font-bold text-[var(--text-primary)]">
                     {editingSupplierSku ? 'Edit Draft Physical SKU' : 'Add Physical Package SKU'}

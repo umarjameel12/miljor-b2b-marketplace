@@ -88,6 +88,13 @@ export const AppShell = ({ children }) => {
   const { isAuthenticated, logout, user } = useAuth();
   const role = user?.role;
 
+  const handleSignOut = async () => {
+    setAccountMenuOpen(false);
+    setMobileDrawerOpen(false);
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
   const [hoveredNav, setHoveredNav] = useState(null);
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -161,9 +168,12 @@ export const AppShell = ({ children }) => {
     };
   }, [mobileNotificationsOpen]);
 
-  const toggleAppearance = () => {
+  const toggleAppearance = (e) => {
     const next = !appearanceExpanded;
     setAppearanceExpanded(next);
+    if (!next && e?.currentTarget) {
+      e.currentTarget.blur();
+    }
     try {
       localStorage.setItem('miljor_appearance_expanded', String(next));
     } catch {}
@@ -223,7 +233,7 @@ export const AppShell = ({ children }) => {
         { label: 'Dashboard', path: '/supplier/dashboard', icon: Home, active: is('/supplier/dashboard') },
         { label: 'Catalog', path: '/supplier/catalog', icon: Tag, active: is('/supplier/catalog') },
         { label: 'Pool Management', path: '/supplier/pools', icon: Layers, active: is('/supplier/pools') },
-        { label: 'Procurement', path: '/rfqs', icon: ClipboardList, active: is('/rfqs') },
+        { label: 'Sourcing Hub', path: '/procurement', icon: ClipboardList, active: is('/procurement') },
         { label: 'Subscription', path: '/supplier/subscription', icon: Building2, active: is('/supplier/subscription') },
         { label: 'Business Profile', path: '/supplier/profile', icon: User, active: is('/supplier/profile') || is('/supplier/onboarding') },
       ]
@@ -233,8 +243,7 @@ export const AppShell = ({ children }) => {
         ...(isAuthenticated
           ? [
               { label: 'Orders', path: '/orders', icon: ClipboardList, active: is('/orders') },
-              { label: 'Procurement', path: '/rfqs', icon: Tag, active: is('/rfqs') },
-              { label: 'Demand Requests', path: '/demand-requests', icon: Users, active: is('/demand-requests') },
+              { label: 'Sourcing Hub', path: '/procurement', icon: Tag, active: is('/procurement') },
             ]
           : []),
       ];
@@ -250,8 +259,8 @@ export const AppShell = ({ children }) => {
 
   return (
     <div
-      className="min-h-screen flex flex-col md:flex-row transition-colors duration-200 overflow-x-hidden"
-      style={{ backgroundColor: 'var(--bg-page)' }}
+      className={`${FLAGS.landingThemeAfterSignIn ? 'miljor-app-landing-theme ' : ''}min-h-screen flex flex-col md:flex-row transition-colors duration-200 overflow-x-hidden`}
+      style={FLAGS.landingThemeAfterSignIn ? undefined : { backgroundColor: 'var(--bg-page)' }}
     >
       {/* =========================================================================
           1. MOBILE TOP HEADER (Phone Viewport)
@@ -363,7 +372,7 @@ export const AppShell = ({ children }) => {
                 <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
                 {unreadCount > 0 && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
+                    className="w-2 h-2 rounded-full bg-[var(--brand-accent)] ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
                     aria-label={`${unreadCount} unread alerts`}
                   />
                 )}
@@ -435,7 +444,7 @@ export const AppShell = ({ children }) => {
                                 {n.title || n.type || 'Alert'}
                               </p>
                               {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-accent)]" />
                               )}
                             </div>
                             <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
@@ -468,33 +477,33 @@ export const AppShell = ({ children }) => {
         ref={sidebarRef}
         style={{
           backgroundColor: 'var(--bg-sidebar)',
-          borderColor: 'var(--border-sidebar, var(--border-subtle))',
-          boxShadow: isDark
-            ? '2px 0 16px rgba(0, 0, 0, 0.4), 1px 0 0 0 rgba(200, 178, 118, 0.35)'
-            : '2px 0 16px rgba(45, 32, 18, 0.08), 1px 0 0 0 rgba(145, 120, 85, 0.55)',
+          borderColor: isDark ? 'rgba(200, 178, 118, 0.18)' : 'rgba(122, 103, 76, 0.20)',
           willChange: 'width',
         }}
-        className={`hidden md:flex flex-col border-r transition-all duration-300 ease-in-out relative shrink-0 z-30 select-none overflow-hidden transform-gpu ${
+        className={`hidden md:flex flex-col border-r transition-[width] duration-300 ease-in-out relative shrink-0 z-30 select-none overflow-hidden ${
           collapsed ? 'w-18' : 'w-60 lg:w-64'
         }`}
       >
-        {/* Top Header Row: Standalone Approved Ribbon-M Monogram Toggle */}
-        <div
-          className="h-16 flex items-center px-3 border-b shrink-0"
-          style={{ borderColor: 'var(--border-sidebar, var(--border-subtle))' }}
-        >
+        {/* Top Header Row: Standalone Approved Ribbon-M Monogram Toggle (no bottom divider line) */}
+        <div className="h-16 flex items-center px-3 shrink-0">
           <button
             type="button"
             onClick={() => {
               const next = !collapsed;
               setCollapsed(next);
+              if (next) {
+                setAppearanceExpanded(false);
+                try {
+                  localStorage.setItem('miljor_appearance_expanded', 'false');
+                } catch (e) {}
+              }
               try {
                 localStorage.setItem('miljor_sidebar_collapsed', String(next));
               } catch (e) {}
             }}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-expanded={!collapsed}
-            className="w-12 h-8 flex items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] cursor-pointer transition-transform duration-200 hover:opacity-90 active:scale-95 shrink-0"
+            className="miljor-sidebar-logo-btn w-12 h-8 flex items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] cursor-pointer transition-transform duration-200 active:scale-95 shrink-0"
           >
             {/* Exactly size="sm" (48px x 24px) in BOTH expanded and collapsed states */}
             <Logo size="sm" />
@@ -512,12 +521,11 @@ export const AppShell = ({ children }) => {
                   <div
                     className={`flex items-center px-3 py-2 rounded-xl text-xs font-sans transition-colors duration-150 ${
                       item.active
-                        ? 'font-semibold shadow-xs'
-                        : 'font-medium hover:bg-black/5 dark:hover:bg-white/5'
+                        ? 'miljor-sidebar-item-active font-semibold shadow-xs'
+                        : 'miljor-sidebar-item-inactive font-medium'
                     }`}
                     style={{
                       backgroundColor: item.active ? 'var(--bg-sidebar-active)' : 'transparent',
-                      color: item.active ? 'var(--text-primary)' : 'var(--text-secondary)',
                       border: item.active ? '1px solid var(--border-subtle)' : '1px solid transparent',
                     }}
                   >
@@ -526,9 +534,8 @@ export const AppShell = ({ children }) => {
                         className={`w-4 h-4 shrink-0 transition-colors ${
                           item.active
                             ? 'text-emerald-900 dark:text-champagne'
-                            : ''
+                            : 'text-[#2b5244] dark:text-[#b9c8c0]'
                         }`}
-                        style={{ color: item.active ? undefined : 'var(--text-secondary)' }}
                       />
                     </span>
                     <span
@@ -574,13 +581,12 @@ export const AppShell = ({ children }) => {
                       aria-controls="sidebar-appearance-options"
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-sans transition-colors duration-150 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${
                         appearanceExpanded
-                          ? 'font-semibold shadow-xs'
-                          : 'font-medium hover:bg-black/5 dark:hover:bg-white/5'
+                          ? 'miljor-sidebar-item-active font-semibold shadow-xs'
+                          : 'miljor-sidebar-item-inactive font-medium'
                       }`}
                       style={{
                         backgroundColor: appearanceExpanded ? 'var(--bg-sidebar-active)' : 'transparent',
-                        color: appearanceExpanded ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        border: appearanceExpanded ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                        border: '1px solid transparent',
                       }}
                     >
                       <div className="flex items-center">
@@ -589,9 +595,8 @@ export const AppShell = ({ children }) => {
                             className={`w-4 h-4 shrink-0 transition-colors ${
                               appearanceExpanded
                                 ? 'text-emerald-900 dark:text-champagne'
-                                : ''
+                                : 'text-[#2b5244] dark:text-[#b9c8c0]'
                             }`}
-                            style={{ color: appearanceExpanded ? undefined : 'var(--text-secondary)' }}
                           />
                         </span>
                         <span
@@ -603,9 +608,8 @@ export const AppShell = ({ children }) => {
                       </div>
                       <ChevronDown
                         className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
-                          appearanceExpanded ? 'rotate-180 text-emerald-900 dark:text-champagne' : ''
+                          appearanceExpanded ? 'rotate-180 text-emerald-900 dark:text-champagne' : 'text-[#2b5244] dark:text-[#b9c8c0]'
                         }`}
-                        style={{ color: appearanceExpanded ? undefined : 'var(--text-secondary)' }}
                       />
                     </button>
 
@@ -631,22 +635,20 @@ export const AppShell = ({ children }) => {
                               aria-checked={isSelected}
                               className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer ${
                                 isSelected
-                                  ? 'font-bold shadow-xs'
-                                  : 'font-medium hover:bg-black/5 dark:hover:bg-white/10'
+                                  ? 'miljor-sidebar-item-active font-bold shadow-xs'
+                                  : 'miljor-sidebar-item-inactive font-medium'
                               }`}
                               style={{
                                 backgroundColor: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
-                                color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                border: isSelected ? '1px solid var(--border-default)' : '1px solid transparent',
+                                border: '1px solid transparent',
                               }}
                             >
                               <OptionIcon
                                 className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                                   isSelected
-                                    ? 'text-emerald-900 dark:text-champagne'
-                                    : ''
+                                    ? 'text-[#0f4c3a] dark:text-[#dfbf85]'
+                                    : 'text-[#2b5244] dark:text-[#b9c8c0]'
                                 }`}
-                                style={{ color: isSelected ? undefined : 'var(--text-secondary)' }}
                               />
                               <span className="truncate">{label}</span>
                             </button>
@@ -670,22 +672,16 @@ export const AppShell = ({ children }) => {
                       title={!FLAGS.customTooltips ? `Appearance (${theme}) — Click to open options` : undefined}
                       className={`w-full flex items-center px-3 py-2 rounded-xl text-xs font-sans transition-colors duration-150 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] ${
                         appearanceExpanded
-                          ? 'font-semibold shadow-xs'
-                          : 'font-medium hover:bg-black/5 dark:hover:bg-white/5'
+                          ? 'miljor-sidebar-item-active font-semibold shadow-xs'
+                          : 'miljor-sidebar-item-inactive font-medium'
                       }`}
                       style={{
                         backgroundColor: appearanceExpanded ? 'var(--bg-sidebar-active)' : 'transparent',
-                        color: appearanceExpanded ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        border: appearanceExpanded ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                        border: '1px solid transparent',
                       }}
                     >
                       <span className="w-6 h-6 flex items-center justify-center shrink-0">
-                        <ActiveThemeIcon
-                          className={`w-4 h-4 shrink-0 transition-colors ${
-                            appearanceExpanded ? 'text-emerald-900 dark:text-champagne' : ''
-                          }`}
-                          style={{ color: appearanceExpanded ? undefined : 'var(--text-secondary)' }}
-                        />
+                        <ActiveThemeIcon className="w-4 h-4 shrink-0 transition-colors" />
                       </span>
                     </button>
                     {FLAGS.customTooltips && collapsed && hoveredNav === 'Appearance' && (
@@ -739,7 +735,7 @@ export const AppShell = ({ children }) => {
                                     className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                                       isSelected ? 'text-emerald-900 dark:text-champagne' : ''
                                     }`}
-                                    style={{ color: isSelected ? undefined : 'var(--text-secondary)' }}
+                                    style={{ color: isSelected ? (isDark ? '#dfbf85' : '#6c501e') : 'var(--text-secondary)' }}
                                   />
                                   <span>{label}</span>
                                 </button>
@@ -782,7 +778,7 @@ export const AppShell = ({ children }) => {
                 {!collapsed && (
                   <button
                     type="button"
-                    onClick={logout}
+                    onClick={handleSignOut}
                     title="Sign Out"
                     className="p-1 rounded text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 cursor-pointer mr-1 shrink-0"
                   >
@@ -818,8 +814,8 @@ export const AppShell = ({ children }) => {
           3. MAIN VIEWPORT CONTENT AREA
           ========================================================================= */}
       <div
-        className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-y-auto overflow-x-hidden transition-colors duration-300"
-        style={{ background: 'var(--bg-dashboard)' }}
+        className="miljor-main-canvas flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-y-auto overflow-x-hidden transition-colors duration-300"
+        style={{ background: FLAGS.landingThemeAfterSignIn ? 'transparent' : 'var(--bg-dashboard)' }}
       >
         {/* Desktop Top Utility Bar (Search, Notifications, Interactive Account Dropdown) */}
         <div className="hidden md:flex items-center justify-end h-16 px-6 lg:px-8 shrink-0 relative z-40">
@@ -863,7 +859,7 @@ export const AppShell = ({ children }) => {
                 </button>
               </form>
             ) : (
-              <button
+                <button
                 type="button"
                 onClick={() => {
                   if (FLAGS.headerSearchExpanded) {
@@ -874,14 +870,14 @@ export const AppShell = ({ children }) => {
                 }}
                 aria-label="Search commodities"
                 title="Search Commodities"
-                className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+                className="landing-utility-btn w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
                 style={{
                   backgroundColor: 'var(--bg-card)',
                   borderColor: 'var(--border-default)',
                   color: 'var(--text-primary)',
                 }}
               >
-                <Search className="w-4 h-4 text-emerald-900 dark:text-champagne" />
+                <Search className="w-4 h-4 text-[var(--lp-accent)]" />
               </button>
             )}
 
@@ -892,17 +888,17 @@ export const AppShell = ({ children }) => {
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
                 aria-label="Notifications"
                 title="Notifications"
-                className="w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95 relative"
+                className="landing-utility-btn w-9 h-9 flex items-center justify-center rounded-xl border transition-all duration-200 cursor-pointer shadow-xs active:scale-95 relative"
                 style={{
                   backgroundColor: 'var(--bg-card)',
                   borderColor: 'var(--border-default)',
                   color: 'var(--text-primary)',
                 }}
               >
-                <Bell className="w-4 h-4 text-emerald-900 dark:text-champagne" />
+                <Bell className="w-4 h-4 text-[var(--lp-accent)]" />
                 {unreadCount > 0 && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
+                    className="w-2 h-2 rounded-full bg-[var(--brand-accent)] ring-2 ring-[var(--bg-card)] absolute top-2 right-2 animate-pulse"
                     aria-label={`${unreadCount} unread alerts`}
                   />
                 )}
@@ -910,7 +906,7 @@ export const AppShell = ({ children }) => {
 
               {FLAGS.headerNotificationsPopover && notificationsOpen && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-80 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  className="absolute right-0 top-full mt-2 w-64 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
                     borderColor: 'var(--border-default)',
@@ -973,7 +969,7 @@ export const AppShell = ({ children }) => {
                                 {n.title || n.type || 'Alert'}
                               </p>
                               {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-accent)]" />
                               )}
                             </div>
                             <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
@@ -999,9 +995,11 @@ export const AppShell = ({ children }) => {
                 type="button"
                 onClick={() => setAccountMenuOpen(!accountMenuOpen)}
                 aria-label="User Account Menu"
+                aria-haspopup="menu"
                 aria-expanded={accountMenuOpen}
+                aria-controls="landing-account-options"
                 title="Account Menu"
-                className="flex items-center gap-2.5 h-9 px-3 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+                className="landing-account-trigger flex items-center gap-2.5 h-9 px-3 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
                 style={{
                   backgroundColor: 'var(--bg-card)',
                   borderColor: 'var(--border-default)',
@@ -1027,9 +1025,12 @@ export const AppShell = ({ children }) => {
                 />
               </button>
 
-              {/* Account Dropdown Popover */}
+              {/* Account Dropdown Popover — LandingPage matched, no sidebar duplicate items */}
               {accountMenuOpen && (
                 <div
+                  id="landing-account-options"
+                  role="menu"
+                  aria-label="Account options"
                   className="absolute right-0 top-full mt-2 w-64 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
@@ -1039,117 +1040,58 @@ export const AppShell = ({ children }) => {
                 >
                   {isAuthenticated ? (
                     <div className="space-y-3">
-                      <div className="pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                            {user?.business_name || user?.full_name || 'Valued Partner'}
-                          </p>
-                          {user?.role && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-[var(--brand-accent)]/15 text-[var(--brand-accent)] shrink-0">
-                              {user.role}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] truncate text-stone-500 dark:text-stone-400">
+                      <div className="text-center pb-2.5">
+                        <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {user?.business_name || user?.full_name || 'Valued Partner'}
+                        </p>
+                        <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                           {user?.email}
                         </p>
                       </div>
 
-                      <div className="space-y-1">
-                        {['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'VERIFICATION_ADMIN', 'ADMIN'].includes(user?.role) && (
-                          <>
-                            <Link
-                              to="/admin/verifications"
-                              onClick={() => setAccountMenuOpen(false)}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20"
-                            >
-                              <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                              <span>Admin Verifications</span>
-                            </Link>
-                            <Link
-                              to="/admin/catalog"
-                              onClick={() => setAccountMenuOpen(false)}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
-                            >
-                              <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                              <span>Admin Catalog Governance</span>
-                            </Link>
-                          </>
-                        )}
-                        {user?.role === 'SUPPLIER' && (
-                          <>
-                            <Link
-                              to="/supplier/profile"
-                              onClick={() => setAccountMenuOpen(false)}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] hover:bg-[var(--brand-accent)]/20"
-                            >
-                              <Building2 className="w-4 h-4 text-[var(--brand-accent)]" />
-                              <span>Supplier Portal</span>
-                            </Link>
-                            <Link to="/supplier/pools" onClick={() => setAccountMenuOpen(false)}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20">
-                              <Layers className="w-4 h-4 text-emerald-600"/> <span>Pool Management</span>
-                            </Link>
-                            <Link
-                              to="/supplier/catalog"
-                              onClick={() => setAccountMenuOpen(false)}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
-                            >
-                              <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                              <span>Catalog & Offers</span>
-                            </Link>
-                          </>
-                        )}
+                      <div className="space-y-2">
                         <Link
+                          role="menuitem"
                           to="/profile"
                           onClick={() => setAccountMenuOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/5"
-                          style={{ color: 'var(--text-primary)' }}
+                          className="landing-signin-option w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]"
+                          style={{
+                            backgroundColor: 'var(--bg-card)',
+                            borderColor: 'var(--border-default)',
+                            color: 'var(--text-primary)',
+                          }}
                         >
-                          <User className="w-4 h-4 text-emerald-900 dark:text-champagne" />
+                          <User className="w-3.5 h-3.5 text-emerald-900 dark:text-champagne" />
                           <span>My Profile</span>
                         </Link>
-                        <Link
-                          to="/orders"
-                          onClick={() => setAccountMenuOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/5"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          <ClipboardList className="w-4 h-4 text-emerald-900 dark:text-champagne" />
-                          <span>My Orders</span>
-                        </Link>
-                      </div>
 
-                      <div className="pt-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                         <button
                           type="button"
-                          onClick={() => {
-                            logout();
-                            setAccountMenuOpen(false);
+                          role="menuitem"
+                          onClick={handleSignOut}
+                          className="landing-gradient-cta w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
+                          style={{
+                            color: 'var(--text-on-champagne)',
                           }}
-                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-medium border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer"
                         >
-                          <LogOut className="w-3.5 h-3.5" />
                           <span>Sign Out</span>
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="text-center pb-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div className="text-center pb-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
                         <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
                           Welcome to MilJor
-                        </p>
-                        <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          Wholesale Collective Procurement
                         </p>
                       </div>
 
                       <div className="space-y-2">
                         <Link
+                          role="menuitem"
                           to="/login"
                           onClick={() => setAccountMenuOpen(false)}
-                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+                          className="landing-signin-option w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
                           style={{
                             backgroundColor: 'var(--bg-card)',
                             borderColor: 'var(--border-default)',
@@ -1161,15 +1103,16 @@ export const AppShell = ({ children }) => {
                         </Link>
 
                         <Link
+                          role="menuitem"
                           to="/register"
                           onClick={() => setAccountMenuOpen(false)}
-                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer hover:opacity-95"
+                          className="landing-gradient-cta w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer hover:opacity-95"
                           style={{
                             backgroundColor: 'var(--brand-accent)',
                             color: 'var(--text-on-champagne)',
                           }}
                         >
-                          <span>Create Account</span>
+                          <span>Register</span>
                         </Link>
                       </div>
                     </div>
@@ -1305,8 +1248,8 @@ export const AppShell = ({ children }) => {
                           }`}
                           style={{
                             backgroundColor: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
-                            color: 'var(--text-primary)',
-                            border: isSelected ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                            color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            border: isSelected ? '1px solid var(--brand-accent)' : '1px solid transparent',
                           }}
                         >
                           <div className="flex items-center gap-2.5">
@@ -1314,7 +1257,7 @@ export const AppShell = ({ children }) => {
                               className={`w-3.5 h-3.5 shrink-0 transition-colors ${
                                 isSelected ? 'text-emerald-800 dark:text-champagne' : ''
                               }`}
-                              style={{ color: isSelected ? undefined : 'var(--text-secondary)' }}
+                              style={{ color: isSelected ? (isDark ? '#dfbf85' : '#6c501e') : 'var(--text-secondary)' }}
                             />
                             <span style={{ color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{label}</span>
                           </div>
@@ -1334,13 +1277,9 @@ export const AppShell = ({ children }) => {
           <div className="pt-4 border-t mt-6 space-y-3" style={{ borderColor: 'var(--border-subtle)' }}>
             {isAuthenticated ? (
               <button
-                onClick={() => {
-                  logout();
-                  setMobileDrawerOpen(false);
-                }}
-                className="w-full py-2.5 px-4 text-sm font-semibold rounded-xl border border-red-200 text-red-600 dark:text-red-400 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/30 transition flex items-center justify-center gap-2 cursor-pointer"
+                onClick={handleSignOut}
+                className="landing-gradient-cta w-full py-2.5 px-4 text-sm font-semibold rounded-xl transition flex items-center justify-center cursor-pointer"
               >
-                <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>
               </button>
             ) : (

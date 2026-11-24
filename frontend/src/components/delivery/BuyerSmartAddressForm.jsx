@@ -123,25 +123,43 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-xl overflow-hidden transition-all">
+    <div
+      className="w-full max-w-xl mx-auto rounded-2xl border shadow-sm overflow-hidden transition-all"
+      style={{
+        backgroundColor: 'var(--bg-elevated)',
+        borderColor: 'var(--border-default)',
+      }}
+    >
       {/* Header */}
-      <div className="px-6 py-5 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/70 flex items-center justify-between">
+      <div
+        className="px-5 py-4 border-b flex items-center justify-between"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-subtle)',
+        }}
+      >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
-            <Building className="w-5 h-5" />
+          <div
+            className="w-9 h-9 rounded-xl border flex items-center justify-center shrink-0"
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              borderColor: 'var(--border-subtle)',
+            }}
+          >
+            <Building className="w-4 h-4 text-emerald-800 dark:text-champagne" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
-              Delivery Location (Lahore Only)
+            <h3 className="font-display text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+              Add Delivery Address
             </h3>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Smart Location Lite: Select your cluster and enter your delivery address
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              Lahore cluster & drop-off details
             </p>
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="p-5 space-y-4">
         {/* Error Alert */}
         {errorMessage && (
           <div className="p-3 text-xs rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center gap-2">
@@ -152,72 +170,90 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
 
         {/* Mismatch Warning Alert */}
         {mismatchWarning && (
-          <div className="p-3 text-xs rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 flex items-start gap-2">
+          <div className="p-3 text-xs rounded-xl border flex items-start gap-2 bg-[#fbf5e8] dark:bg-[#2b2212] border-[#e2cb9c] dark:border-[#59441f] text-[#7a5418] dark:text-[#e6c785]">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold">{mismatchWarning.message}</p>
-              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+              <p className="mt-1 text-[11px]">
                 Suggested Cluster: <strong>{mismatchWarning.suggested_cluster_name}</strong>
               </p>
             </div>
           </div>
         )}
 
-        {/* 1. City: Fixed to Lahore (Decision 5) */}
+        {/* 1. City: Fixed to Lahore */}
         <div>
-          <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-            City <span className="text-neutral-400 font-normal">(Launch Market)</span>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            City
           </label>
-          <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-xs font-medium cursor-not-allowed">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Lahore District, Punjab</span>
-            <span className="ml-auto text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-              Fixed Launch Market
-            </span>
+          <div
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-medium cursor-not-allowed"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-subtle)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
+            <span>Lahore, Punjab</span>
           </div>
         </div>
 
-        {/* 2. Delivery Cluster: Predefined Searchable List (Decision 2) */}
+        {/* 2. Delivery Cluster: Predefined Searchable List */}
         <div className="relative">
-          <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-            Delivery Cluster <span className="text-amber-600 font-bold">*</span>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Delivery Cluster <span style={{ color: 'var(--brand-accent)' }}>*</span>
           </label>
 
           <div
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs cursor-pointer hover:border-amber-500 transition-colors"
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs cursor-pointer transition-colors hover:border-[var(--brand-accent)]"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-default)',
+            }}
           >
             {selectedCluster ? (
               <div className="flex flex-col text-left">
-                <span className="font-semibold text-neutral-900 dark:text-neutral-100">
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                   {selectedCluster.name}
                 </span>
-                <span className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-1">
+                <span className="text-[11px] line-clamp-1" style={{ color: 'var(--text-muted)' }}>
                   {selectedCluster.covered_areas_summary || selectedCluster.hub_name}
                 </span>
               </div>
             ) : (
-              <span className="text-neutral-400">Select your Lahore delivery cluster...</span>
+              <span style={{ color: 'var(--text-muted)' }}>Select Lahore cluster...</span>
             )}
-            <ChevronDown className="w-4 h-4 text-neutral-400 ml-2 shrink-0" />
+            <ChevronDown className="w-4 h-4 ml-2 shrink-0" style={{ color: 'var(--text-muted)' }} />
           </div>
 
           {/* Searchable Dropdown Menu */}
           {isDropdownOpen && (
-            <div className="absolute z-30 w-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-2xl overflow-hidden max-h-64 flex flex-col">
-              <div className="p-2 border-b border-neutral-100 dark:border-neutral-700 flex items-center gap-2">
-                <Search className="w-3.5 h-3.5 text-neutral-400" />
+            <div
+              className="absolute z-30 w-full mt-1 border rounded-xl shadow-2xl overflow-hidden max-h-60 flex flex-col"
+              style={{
+                backgroundColor: 'var(--bg-surface)',
+                borderColor: 'var(--border-default)',
+              }}
+            >
+              <div
+                className="p-2 border-b flex items-center gap-2"
+                style={{ borderColor: 'var(--border-subtle)' }}
+              >
+                <Search className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
                 <input
                   type="text"
                   value={clusterSearch}
                   onChange={(e) => setClusterSearch(e.target.value)}
-                  placeholder="Search cluster or town (e.g. Johar, DHA, Gulberg)..."
-                  className="w-full text-xs bg-transparent border-none focus:outline-none text-neutral-900 dark:text-neutral-100"
+                  placeholder="Search cluster or area (e.g. Johar, DHA, Gulberg)..."
+                  className="w-full text-xs bg-transparent border-none focus:outline-none"
+                  style={{ color: 'var(--text-primary)' }}
                   autoFocus
                 />
               </div>
 
-              <div className="overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-700/50">
+              <div className="overflow-y-auto divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
                 {filteredClusters.length > 0 ? (
                   filteredClusters.map((cluster) => (
                     <div
@@ -227,25 +263,23 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
                         setIsDropdownOpen(false);
                         setClusterSearch('');
                       }}
-                      className={`p-3 text-xs cursor-pointer transition-colors hover:bg-amber-50 dark:hover:bg-amber-950/20 ${
-                        Number(selectedClusterId) === cluster.id ? 'bg-amber-500/10' : ''
-                      }`}
+                      className="p-3 text-xs cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                      style={{
+                        backgroundColor: Number(selectedClusterId) === cluster.id ? 'var(--bg-sidebar-active)' : 'transparent',
+                      }}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-neutral-900 dark:text-neutral-100">
+                        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                           {cluster.name}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300">
-                          ID: {cluster.id}
-                        </span>
                       </div>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
                         {cluster.covered_areas_summary}
                       </p>
                     </div>
                   ))
                 ) : (
-                  <div className="p-4 text-center text-xs text-neutral-400">
+                  <div className="p-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
                     No matching clusters found.
                   </div>
                 )}
@@ -254,56 +288,63 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
           )}
         </div>
 
-        {/* 3. Society / Area: Free Text (Decision 3) */}
+        {/* 3. Society / Area */}
         <div>
-          <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-            Society / Area <span className="text-amber-600 font-bold">*</span>
-            <span className="text-neutral-400 font-normal ml-1">(Free Text)</span>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Society / Area <span style={{ color: 'var(--brand-accent)' }}>*</span>
           </label>
           <input
             type="text"
             value={societyArea}
             onChange={(e) => setSocietyArea(e.target.value)}
-            placeholder="e.g. Johar Town Block G1, DHA Phase 6 Sector B, Model Town Block H..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+            placeholder="e.g. Johar Town Block G1, DHA Phase 6"
+            className="w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none focus:border-[var(--brand-accent)]"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
           />
-          <p className="text-[11px] text-neutral-400 mt-1">
-            Enter your neighborhood, housing society, phase, or commercial market.
-          </p>
         </div>
 
-        {/* 4. Complete Delivery Address: Free Text (Decision 4) */}
+        {/* 4. Complete Delivery Address */}
         <div>
-          <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-            Complete Delivery Address <span className="text-amber-600 font-bold">*</span>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Street / Building Address <span style={{ color: 'var(--brand-accent)' }}>*</span>
           </label>
           <textarea
             rows={2}
             value={fullAddress}
             onChange={(e) => setFullAddress(e.target.value)}
-            placeholder="Shop / Unit #, Building name, Street #, Nearby landmark..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-none"
+            placeholder="Shop / Unit #, Building, Street, Landmark..."
+            className="w-full px-3.5 py-2.5 rounded-xl border text-xs focus:outline-none focus:border-[var(--brand-accent)] resize-none"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
           />
         </div>
 
-        {/* 5. Optional Map Pin (Decision 6) */}
-        <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800">
+        {/* 5. Optional Map Pin */}
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
           <button
             type="button"
             onClick={() => setIsMapExpanded(!isMapExpanded)}
-            className="w-full flex items-center justify-between text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 py-1"
+            className="w-full flex items-center justify-between text-xs font-semibold py-1 cursor-pointer transition-opacity hover:opacity-80"
+            style={{ color: 'var(--brand-accent)' }}
           >
             <span className="flex items-center gap-1.5">
               <Compass className="w-4 h-4" />
-              {isMapExpanded ? 'Hide Optional Map Pin' : 'Optional: Set Pin on Map to Improve Delivery Accuracy'}
+              {isMapExpanded ? 'Hide Map Pin' : 'Pin location on map (optional)'}
             </span>
-            <span className="text-[11px] text-neutral-400 font-normal">
+            <span className="text-[11px] font-normal" style={{ color: 'var(--text-muted)' }}>
               {pinPosition ? 'Pin Placed' : 'Not Set'}
             </span>
           </button>
 
           {isMapExpanded && (
-            <div className="mt-3 rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-700 h-48 relative">
+            <div className="mt-3 rounded-xl overflow-hidden border h-48 relative" style={{ borderColor: 'var(--border-default)' }}>
               <MapContainer
                 center={pinPosition || [31.5204, 74.3587]}
                 zoom={12}
@@ -316,8 +357,15 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
                 />
                 <MapPinPicker position={pinPosition} onPinPlaced={(pos) => setPinPosition(pos)} />
               </MapContainer>
-              <div className="absolute bottom-2 left-2 z-[400] bg-white/90 dark:bg-neutral-900/90 backdrop-blur px-2 py-1 rounded text-[10px] text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
-                Click anywhere on map to position pin
+              <div
+                className="absolute bottom-2 left-2 z-[400] backdrop-blur px-2 py-1 rounded text-[10px] border"
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  borderColor: 'var(--border-subtle)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Click map to set pin
               </div>
             </div>
           )}
@@ -330,20 +378,24 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
             id="is_default_addr"
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
-            className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+            className="rounded cursor-pointer"
           />
-          <label htmlFor="is_default_addr" className="text-xs text-neutral-600 dark:text-neutral-400 cursor-pointer">
-            Set as default delivery address for future pools
+          <label htmlFor="is_default_addr" className="text-xs cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+            Set as default delivery address
           </label>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
           {onCancel && (
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+              style={{
+                borderColor: 'var(--border-subtle)',
+                color: 'var(--text-secondary)',
+              }}
             >
               Cancel
             </button>
@@ -351,9 +403,9 @@ export default function BuyerSmartAddressForm({ onAddressSaved, onCancel, initia
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-neutral-950 transition-colors shadow-sm disabled:opacity-50"
+            className="landing-gradient-cta px-5 py-2 rounded-xl text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
           >
-            {isSubmitting ? 'Saving...' : 'Save Delivery Address'}
+            {isSubmitting ? 'Saving...' : 'Save Address'}
           </button>
         </div>
       </form>

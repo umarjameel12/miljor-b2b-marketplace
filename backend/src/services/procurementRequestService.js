@@ -4,6 +4,8 @@
 const crypto = require('node:crypto');
 const db = require('../config/db');
 const { normalizeRequestDraft } = require('./procurementRequestPolicy');
+const matching = require('./procurementMatchingService');
+const notificationService = require('./notificationService');
 
 const issue = (code, message, statusCode = 400) => {
   const error = new Error(message);
@@ -124,11 +126,14 @@ class ProcurementRequestService {
       const code = 'MJ-REQ-' + crypto.randomUUID();
       const [created] = await conn.query(
         `INSERT INTO procurement_requests
-          (buyer_id,request_code,ownership,frequency,award_policy,priority,status,delivery_area,notes,
-           quote_deadline,join_deadline,idempotency_key,request_hash)
-         VALUES (?,?,?,?,?,?,'DRAFT',?,?,?,?,?,?)`,
+          (buyer_id,request_code,ownership,frequency,award_policy,priority,status,open_to_suppliers,
+           delivery_area,notes,target_price_pkr,required_delivery_date,quote_deadline,join_deadline,
+           idempotency_key,request_hash)
+         VALUES (?,?,?,?,?,?,'DRAFT',?,?,?,?,?,?,?,?,?)`,
         [buyer,code,draft.ownership,draft.frequency,draft.award_policy,draft.priority,
-          draft.delivery_area,draft.notes,utcSql(draft.quote_deadline),utcSql(draft.join_deadline),idem,hash]
+          draft.open_to_suppliers ? 1 : 0, draft.delivery_area,draft.notes,
+          draft.target_price_pkr,draft.required_delivery_date,
+          utcSql(draft.quote_deadline),utcSql(draft.join_deadline),idem,hash]
       );
       for (let index=0;index<draft.items.length;index++) {
         const line=draft.items[index];
@@ -183,10 +188,13 @@ class ProcurementRequestService {
       await this._validateFamilies(conn,draft.items);
       await conn.query(
         `UPDATE procurement_requests SET ownership=?,frequency=?,award_policy=?,priority=?,
-         delivery_area=?,notes=?,quote_deadline=?,join_deadline=?,version_number=version_number+1
+         open_to_suppliers=?,delivery_area=?,notes=?,target_price_pkr=?,required_delivery_date=?,
+         quote_deadline=?,join_deadline=?,version_number=version_number+1
          WHERE id=? AND status='DRAFT'`,
         [draft.ownership,draft.frequency,draft.award_policy,draft.priority,
-         draft.delivery_area,draft.notes,utcSql(draft.quote_deadline),utcSql(draft.join_deadline),id]
+         draft.open_to_suppliers ? 1 : 0, draft.delivery_area,draft.notes,
+         draft.target_price_pkr,draft.required_delivery_date,
+         utcSql(draft.quote_deadline),utcSql(draft.join_deadline),id]
       );
       await conn.query('DELETE FROM procurement_request_items WHERE request_id=?',[id]);
       for(let index=0;index<draft.items.length;index++){
@@ -256,22 +264,120 @@ class ProcurementRequestService {
          VALUES (?,?,'PUBLISH',?,?,?)`,
         [id,buyer,idem,hash,JSON.stringify(request)]
       );
+      await conn.query(
+        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
+         VALUES (?, 'BUYER', 'PROCUREMENT_REQUEST_PUBLISHED', 'procurement_requests', ?, ?, ?)`,
+        [buyer, id, JSON.stringify({ status: 'DRAFT' }), JSON.stringify({ status: 'OPEN', open_to_suppliers: Boolean(request.open_to_suppliers) })]
+      );
       await conn.commit();
+
+      if (Number(request.open_to_suppliers) === 1) {
+        try {
+          const candidates = await matching._candidates(this.database, request);
+          for (const candidate of candidates) {
+            await notificationService.createNotification({
+              userId: candidate.supplier_id,
+              role: 'SUPPLIER',
+              eventType: 'NEW_OPEN_PROCUREMENT_REQUEST',
+              eventKey: `open_req_${id}_sup_${candidate.supplier_id}`,
+              title: 'New eligible buyer request available',
+              message: `A buyer published request ${request.request_code} for ${request.delivery_area}. Review specs and submit your quotation before expiry.`,
+              payload: { request_id: id, request_code: request.request_code, delivery_area: request.delivery_area }
+            });
+          }
+        } catch (notifErr) {
+          console.error('[ProcurementRequestService] Open request notification error:', notifErr.message);
+        }
+      }
+
       return {request,is_replay:false};
     }catch(e){await conn.rollback();throw e;}finally{conn.release();}
   }
 
   async listMine(buyerId) {
     const id=positiveId(buyerId);
+    await this.database.query(
+      "UPDATE procurement_requests SET status='EXPIRED', version_number=version_number+1 WHERE buyer_id=? AND status='OPEN' AND quote_deadline IS NOT NULL AND quote_deadline <= UTC_TIMESTAMP()",
+      [id]
+    );
     const [rows]=await this.database.query(
-      `SELECT id,request_code,status,ownership,frequency,delivery_area,quote_deadline,
-       version_number,created_at,published_at
-       FROM procurement_requests WHERE buyer_id=? ORDER BY created_at DESC,id DESC LIMIT 100`,[id]
+      `SELECT id,request_code,status,open_to_suppliers,ownership,frequency,delivery_area,
+       target_price_pkr,required_delivery_date,quote_deadline,
+       version_number,created_at,published_at,closed_at,fulfilled_at
+       FROM procurement_requests WHERE buyer_id=? AND status <> 'CANCELLED' ORDER BY created_at DESC,id DESC LIMIT 100`,[id]
     );
     return rows;
   }
+
+  async closeMine(buyerId, requestId) {
+    const buyer = positiveId(buyerId);
+    const id = positiveId(requestId);
+    const conn = await this.database.getConnection();
+    try {
+      await conn.beginTransaction();
+      await this._buyer(conn, buyer);
+      const current = await this._load(id, buyer, conn, true);
+      if (current.status === 'CLOSED') {
+        await conn.commit();
+        return { request: current };
+      }
+      if (current.status !== 'OPEN') {
+        throw issue('REQUEST_NOT_OPEN', 'Only an open procurement request can be closed.', 409);
+      }
+      await conn.query(
+        "UPDATE procurement_requests SET status='CLOSED', closed_at=UTC_TIMESTAMP(), version_number=version_number+1 WHERE id=? AND buyer_id=?",
+        [id, buyer]
+      );
+      await conn.query(
+        `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, previous_value, new_value)
+         VALUES (?, 'BUYER', 'PROCUREMENT_REQUEST_CLOSED', 'procurement_requests', ?, ?, ?)`,
+        [buyer, id, JSON.stringify({ status: current.status }), JSON.stringify({ status: 'CLOSED' })]
+      );
+      const updated = await this._load(id, buyer, conn);
+      await conn.commit();
+      return { request: updated };
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  }
   async getMine(buyerId,requestId) {
     return this._load(positiveId(requestId),positiveId(buyerId));
+  }
+
+  async deleteMine(buyerId, requestId) {
+    const buyer = positiveId(buyerId);
+    const id = positiveId(requestId);
+    const conn = await this.database.getConnection();
+    try {
+      await conn.beginTransaction();
+      await this._buyer(conn, buyer);
+      const current = await this._load(id, buyer, conn, true);
+      if (current.status === 'CANCELLED') {
+        await conn.commit();
+        return { deleted: true, id };
+      }
+      const [awards] = await conn.query(
+        'SELECT id FROM procurement_awards WHERE request_id=? LIMIT 1',
+        [id]
+      );
+      if (awards.length) {
+        throw issue('REQUEST_ALREADY_AWARDED', 'Awarded procurement requests cannot be deleted.', 409);
+      }
+      await conn.query(
+        "UPDATE procurement_requests SET status='CANCELLED', version_number=version_number+1 WHERE id=? AND buyer_id=?",
+        [id, buyer]
+      );
+      await conn.commit();
+      return { deleted: true, id };
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
   }
 }
 module.exports=new ProcurementRequestService();

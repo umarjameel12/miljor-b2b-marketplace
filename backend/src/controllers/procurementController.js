@@ -15,6 +15,8 @@ const procurementRecurringService = require('../services/procurementRecurringSer
 const procurementAwardService = require('../services/procurementAwardService');
 const procurementCollectiveBidService = require('../services/procurementCollectiveBidService');
 const procurementCollectiveApprovalService = require('../services/procurementCollectiveApprovalService');
+const notificationService = require('../services/notificationService');
+const db = require('../config/db');
 
 class ProcurementController {
 
@@ -60,6 +62,27 @@ class ProcurementController {
         req.user.id, req.params.id, req.body?.version_number,
         req.headers['x-idempotency-key']
       );
+      res.json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async deleteSmartRequest(req, res) {
+    try {
+      const result = await procurementRequestService.deleteMine(req.user.id, req.params.id);
+      res.json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async closeSmartRequest(req, res) {
+    try {
+      const result = await procurementRequestService.closeMine(req.user.id, req.params.id);
+      res.json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async listOpenRequestsForSupplier(req, res) {
+    try {
+      const result = await procurementQuoteService.listOpenForSupplier(req.user.id);
       res.json({ success: true, data: result });
     } catch (err) { this._smartError(res, err); }
   }
@@ -171,6 +194,19 @@ class ProcurementController {
         req.user.id,req.params.id,req.params.quoteId,req.body,
         req.headers['x-idempotency-key']
       );
+      if (!result.is_replay && result.negotiation?.supplier_id) {
+        try {
+          await notificationService.createNotification({
+            userId: result.negotiation.supplier_id,
+            role: 'SUPPLIER',
+            eventType: 'QUOTE_IMPROVEMENT_REQUESTED',
+            eventKey: `quote_neg_${result.negotiation.id}`,
+            title: 'Buyer requested an improved quotation',
+            message: `A buyer requested an updated offer on quotation #${req.params.quoteId}. Review and submit a revision if available.`,
+            payload: { request_id: Number(req.params.id), quote_id: Number(req.params.quoteId) }
+          });
+        } catch {}
+      }
       res.status(result.is_replay?200:201).json({success:true,data:result});
     }catch(err){this._smartError(res,err);}
   }
@@ -185,6 +221,67 @@ class ProcurementController {
       const negotiations=await procurementNegotiationService.forSupplier(req.user.id);
       res.json({success:true,data:{negotiations}});
     }catch(err){this._smartError(res,err);}
+  }
+
+  async listSupplierCounteroffers(req, res) {
+    try {
+      const result = await procurementNegotiationService.forSupplierCounteroffers(req.user.id, {
+        limit: req.query?.limit,
+        offset: req.query?.offset,
+      });
+      res.json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async respondSupplierCounteroffer(req, res) {
+    try {
+      const result = await procurementNegotiationService.respondToCounteroffer(
+        req.user.id,
+        req.params.offerId,
+        req.body || {}
+      );
+      res.json({ success: true, data: { counteroffer: result } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async listBuyerCounteroffers(req, res) {
+    try {
+      const rows = await procurementNegotiationService.forBuyer(req.user.id, req.params.id);
+      const counteroffers = rows.map((row) => ({
+        id: row.id,
+        request_id: row.request_id,
+        quote_id: row.quote_id,
+        request_item_id: row.requested_version,
+        buyer_proposed_unit_price: row.buyer_target_total ?? null,
+        buyer_message: row.buyer_message,
+        decision: row.status,
+        status: row.status,
+        created_at: row.created_at,
+      }));
+      res.json({ success: true, data: { counteroffers } });
+    } catch (err) { this._smartError(res, err); }
+  }
+
+  async submitBuyerCounteroffers(req, res) {
+    try {
+      const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+      const firstPrice = lines[0]?.proposed_unit_price;
+      const summaryMessage = lines.length
+        ? `Product counteroffer (${lines.map((l) => `item #${l.request_item_id}: Rs. ${l.proposed_unit_price}`).join(', ')})`
+        : req.body?.message;
+      const result = await procurementNegotiationService.requestBetterOffer(
+        req.user.id,
+        req.params.id,
+        req.params.quoteId,
+        {
+          version_number: req.body?.version_number,
+          message: summaryMessage,
+          target_total: firstPrice,
+        },
+        req.headers['x-idempotency-key']
+      );
+      res.status(result.is_replay ? 200 : 201).json({ success: true, data: result });
+    } catch (err) { this._smartError(res, err); }
   }
 
   // B6-G/H preview only. NO award/order/payment/stock mutation.
@@ -287,6 +384,34 @@ class ProcurementController {
       const result=await procurementAwardService.accept(
         req.user.id,req.params.id,req.body,req.headers['x-idempotency-key']
       );
+      if (!result.is_replay) {
+        try {
+          const [quoteRows] = await db.query(
+            `SELECT DISTINCT pq.supplier_id
+             FROM procurement_quotes pq
+             WHERE pq.request_id = ? AND pq.status = 'ACTIVE'`,
+            [Number(req.params.id)]
+          );
+          const awardedSuppliers = new Set(
+            (result.award?.orders || result.orders || []).map(o => Number(o.supplier_id)).filter(Boolean)
+          );
+          for (const row of quoteRows) {
+            const supId = Number(row.supplier_id);
+            const accepted = awardedSuppliers.has(supId);
+            await notificationService.createNotification({
+              userId: supId,
+              role: 'SUPPLIER',
+              eventType: accepted ? 'QUOTE_ACCEPTED' : 'QUOTE_NOT_SELECTED',
+              eventKey: `quote_outcome_${req.params.id}_${supId}_${result.award?.id || 'awd'}`,
+              title: accepted ? 'Your quotation was selected by buyer' : 'Procurement request awarded to another offer',
+              message: accepted
+                ? `Buyer accepted your quotation for request #${req.params.id}. Order proceeds through standard MilJor payment and admin verification.`
+                : `Request #${req.params.id} was awarded. Thank you for submitting your quotation.`,
+              payload: { request_id: Number(req.params.id), accepted }
+            });
+          }
+        } catch {}
+      }
       res.status(result.is_replay?200:201).json({success:true,data:result});
     }catch(err){this._smartError(res,err);}
   }

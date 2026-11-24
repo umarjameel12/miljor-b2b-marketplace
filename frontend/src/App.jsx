@@ -7,8 +7,10 @@ import { Navbar } from './components/Navbar';
 import { OpeningTreatment } from './components/ui/OpeningTreatment';
 import { Logo } from './components/ui/Logo';
 import { LandingPage } from './pages/LandingPage';
+import { AuthenticatedHomePage } from './pages/AuthenticatedHomePage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -16,7 +18,6 @@ import 'react-toastify/dist/ReactToastify.css';
 const PoolsPage = lazy(() => import('./pages/PoolsPage').then((m) => ({ default: m.PoolsPage })));
 const OrdersPage = lazy(() => import('./pages/OrdersPage').then((m) => ({ default: m.OrdersPage })));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage })));
-const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const SupplierProfilePage = lazy(() => import('./pages/SupplierProfilePage').then((m) => ({ default: m.SupplierProfilePage })));
 const SupplierOnboardingPage = lazy(() => import('./pages/SupplierOnboardingPage').then((m) => ({ default: m.SupplierOnboardingPage })));
@@ -27,7 +28,6 @@ const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then((m) 
 const SupplierDashboardPage = lazy(() => import('./pages/SupplierDashboardPage').then((m) => ({ default: m.SupplierDashboardPage })));
 const SupplierPoolsPage = lazy(() => import('./pages/SupplierPoolsPage').then((m) => ({ default: m.SupplierPoolsPage })));
 const SupplierSubscriptionPage = lazy(() => import('./pages/SupplierSubscriptionPage').then((m) => ({ default: m.SupplierSubscriptionPage })));
-const DemandRequestsPage = lazy(() => import('./pages/DemandRequestsPage').then((m) => ({ default: m.DemandRequestsPage })));
 const RfqPage = lazy(() => import('./pages/RfqPage').then((m) => ({ default: m.RfqPage })));
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
 const PaymentReturnPage = lazy(() => import('./pages/PaymentReturnPage').then((m) => ({ default: m.PaymentReturnPage })));
@@ -43,7 +43,7 @@ function RouteFallback() {
 const CURRENT_YEAR = new Date().getFullYear();
 
 function AppContent() {
-  const { loading: authLoading } = useAuth();
+  const { loading: authLoading, isAuthenticated } = useAuth();
   const { isDark } = useTheme();
   const location = useLocation();
 
@@ -54,7 +54,7 @@ function AppContent() {
 
   // Showcase (/), marketplace (/pools), orders (/orders), checkout (/checkout), payment (/payment), profile (/profile), supplier (/supplier), and admin (/admin) use the responsive AppShell layout with sidebar.
   // Auth routes (/login, /register, /verify-email, /forgot-password) use the clean standalone Navbar.
-  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/checkout') || location.pathname.startsWith('/payment') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
+  const isAppShellRoute = location.pathname === '/' || location.pathname.startsWith('/pools') || location.pathname.startsWith('/orders') || location.pathname.startsWith('/checkout') || location.pathname.startsWith('/payment') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/supplier') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/flash-pools') || location.pathname.startsWith('/procurement') || location.pathname.startsWith('/demand-requests') || location.pathname.startsWith('/rfqs');
 
   return (
     <div
@@ -69,7 +69,7 @@ function AppContent() {
       <div className="flex-1 flex flex-col">
         <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={isAuthenticated ? <AuthenticatedHomePage /> : <LandingPage />} />
           <Route path="/pools" element={<PoolsPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/checkout/:orderId" element={<CheckoutPage />} />
@@ -77,8 +77,9 @@ function AppContent() {
           <Route path="/payment/cancelled" element={<PaymentReturnPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/flash-pools" element={<Navigate to="/pools?type=FLASH" replace />} />
-          <Route path="/demand-requests" element={<DemandRequestsPage />} />
-          <Route path="/rfqs" element={<RfqPage />} />
+          <Route path="/procurement" element={<RfqPage />} />
+          <Route path="/demand-requests" element={<Navigate to="/procurement" replace />} />
+          <Route path="/rfqs" element={<Navigate to="/procurement" replace />} />
           <Route path="/supplier/dashboard" element={<SupplierDashboardPage />} />
           <Route path="/supplier/pools" element={<SupplierPoolsPage />} />
           <Route path="/supplier/subscription" element={<SupplierSubscriptionPage />} />
@@ -139,13 +140,9 @@ function AppContent() {
                 Explore Active Pools
               </Link>
               <span>•</span>
-              <a href="/#how-it-works" className="hover:underline">
-                How It Works
-              </a>
-              <span>•</span>
-              <a href="/#collective-procurement" className="hover:underline">
-                Collective Buying
-              </a>
+              <Link to="/" className="hover:underline">
+                Home
+              </Link>
             </div>
 
             <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>

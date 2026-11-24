@@ -6,16 +6,6 @@
 // =============================================================================
 import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  ShieldCheck,
-  CheckCircle2,
-  TrendingUp,
-  Layers,
-  Scale,
-  Sparkles,
-  Building2,
-  PackageCheck
-} from 'lucide-react';
 
 import signInHeroDark from '../../assets/hero/miljor-rice-hero-dark.png';
 import signInHeroLight from '../../assets/hero/miljor-rice-hero-light.png';
@@ -42,8 +32,8 @@ export function AuthHeroPanel({
     ? {
         bg: '#072A21',
         borderRight: '1px solid rgba(200, 178, 118, 0.15)',
-        heading: '#FBF8F1',
-        supporting: '#E4EDE7',
+        heading: '#EAD5A6',
+        supporting: '#D4C5A8',
         secondary: '#C8D4CD',
         accent: '#C8B276',
         badgeBg: 'rgba(7, 42, 33, 0.65)',
@@ -59,8 +49,8 @@ export function AuthHeroPanel({
     : {
         bg: '#EADDC7',
         borderRight: '1px solid rgba(169, 133, 67, 0.25)',
-        heading: '#1C1C19',
-        supporting: '#38342C',
+        heading: '#735124',
+        supporting: '#675540',
         secondary: '#4A443A',
         accent: '#967434',
         badgeBg: 'rgba(255, 255, 255, 0.65)',
@@ -69,109 +59,35 @@ export function AuthHeroPanel({
         benefitIconBg: 'rgba(169, 133, 67, 0.12)',
         benefitBorder: 'rgba(169, 133, 67, 0.18)',
         divider: 'rgba(169, 133, 67, 0.20)',
-        imageOpacity: 0.25,
+        imageOpacity: 0.36,
         imageBlend: 'multiply',
-        imageOverlay: 'linear-gradient(180deg, rgba(246,240,230,0.82) 0%, rgba(234,221,199,0.92) 100%)',
+        imageOverlay: 'linear-gradient(180deg, rgba(246,240,230,0.69) 0%, rgba(234,221,199,0.81) 100%)',
       };
 
-  // Distinct copy & benefits per page type and role
-  let badgeLabel = 'B2B Wholesale Procurement';
-  let heading = '';
-  let supportingCopy = '';
-  let benefits = [];
+  // Minimal, role-aware copy; original illustration and theme colors stay unchanged.
+  const heading = pageType === 'signin'
+    ? 'Welcome back'
+    : pageType === 'forgot-password'
+    ? 'Welcome to MilJor'
+    : role === 'SUPPLIER'
+    ? 'Grow with MilJor'
+    : 'Buy better, together';
 
-  if (pageType === 'signin') {
-    badgeLabel = 'B2B Procurement Platform';
-    heading = 'Welcome back to smarter procurement.';
-    supportingCopy = 'Your purchasing, suppliers and wholesale opportunities — all in one place.';
-    benefits = [
-      {
-        icon: CheckCircle2,
-        title: 'Direct Mill Pricing',
-        desc: 'Wholesale commodity rates unlocked through pooled demand.',
-      },
-      {
-        icon: Building2,
-        title: 'Verified Commercial Network',
-        desc: 'Vetted food manufacturers, importers and certified distributors.',
-      },
-      {
-        icon: ShieldCheck,
-        title: 'Escrow Payment Protection',
-        desc: 'Safepay sandbox escrow custody released upon delivery confirmation.',
-      },
-    ];
-  } else if (pageType === 'register') {
-    if (role === 'SUPPLIER') {
-      badgeLabel = 'Supplier Network Registration';
-      heading = 'Grow Your Business. Reach More Buyers.';
-      supportingCopy =
-        'Connect with business buyers, manage your product offerings and grow through organized procurement demand.';
-      benefits = [
-        {
-          icon: Building2,
-          title: 'Reach Business Buyers',
-          desc: 'Access verified commercial kitchens and restaurants across Lahore.',
-        },
-        {
-          icon: Scale,
-          title: 'Manage Products and Inventory',
-          desc: 'Maintain published catalog specifications, pricing tiers and batch stock.',
-        },
-        {
-          icon: TrendingUp,
-          title: 'Receive Organized Purchase Demand',
-          desc: 'Predictable scheduled fulfillment with locked orders and escrow deposits.',
-        },
-      ];
-    } else {
-      // BUYER
-      badgeLabel = 'Collective Buyer Registration';
-      heading = 'Better buying power starts together.';
-      supportingCopy =
-        'Bring your purchasing needs together, discover trusted suppliers and unlock smarter wholesale opportunities.';
-      benefits = [
-        {
-          icon: Layers,
-          title: 'Collective Purchasing Power',
-          desc: 'Aggregate wholesale volume with nearby kitchens for verified mill rates.',
-        },
-        {
-          icon: ShieldCheck,
-          title: 'Trusted Supplier Connections',
-          desc: 'Procure directly from vetted mills, importers and authorized distributors.',
-        },
-        {
-          icon: Sparkles,
-          title: 'Smarter Procurement Decisions',
-          desc: 'Transparent tier pricing, guaranteed fulfillment and escrow payment safety.',
-        },
-      ];
-    }
-  } else {
-    // forgot-password
-    badgeLabel = 'Account Security Verification';
-    heading = 'Secure account recovery.';
-    supportingCopy =
-      'Verify your registered business email to reset your account password and restore access.';
-    benefits = [
-      {
-        icon: ShieldCheck,
-        title: 'Encrypted Verification Codes',
-        desc: 'Single-use, time-limited cryptographic reset authorization.',
-      },
-      {
-        icon: CheckCircle2,
-        title: 'Immediate Session Invalidation',
-        desc: 'Existing authentication tokens safely revoked on password change.',
-      },
-      {
-        icon: Layers,
-        title: 'Dedicated B2B Protection',
-        desc: 'Enterprise-grade account defense for commercial buyers and suppliers.',
-      },
-    ];
-  }
+  const supportingCopy = pageType === 'signin'
+    ? 'Everything you need to manage procurement.'
+    : pageType === 'forgot-password'
+    ? 'Securely recover your account.'
+    : role === 'SUPPLIER'
+    ? 'Connect with buyers and manage orders.'
+    : 'Discover suppliers and better prices.';
+
+  const isCompactTopHero = pageType === 'signin' || pageType === 'forgot-password';
+
+  const highlights = pageType !== 'register'
+    ? []
+    : role === 'SUPPLIER'
+    ? ['Reach business buyers', 'Manage products and orders']
+    : ['Find trusted suppliers', 'Unlock wholesale prices'];
 
   return (
     <div
@@ -179,6 +95,7 @@ export function AuthHeroPanel({
       style={{
         backgroundColor: colors.bg,
         borderRight: colors.borderRight,
+        boxShadow: isDark ? 'inset 0 0 0 1px rgba(200, 178, 118, 0.14)' : 'inset 0 0 0 1px rgba(150, 116, 52, 0.20)',
       }}
     >
       {/* Background Hero Layer */}
@@ -203,94 +120,30 @@ export function AuthHeroPanel({
         </div>
       )}
 
-      {/* Top Section: Refined Category Badge & Editorial Heading */}
-      <div className="relative z-10 space-y-2.5">
-        <div
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-sans font-semibold tracking-wide border shadow-2xs"
-          style={{
-            backgroundColor: colors.badgeBg,
-            borderColor: colors.badgeBorder,
-            color: colors.badgeText,
-          }}
-        >
-          <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: colors.accent }}
-          />
-          <span>{badgeLabel}</span>
-        </div>
-
-        <div className="space-y-1.5">
-          <h2
-            className="font-display font-bold text-xl sm:text-2xl tracking-tight leading-tight"
-            style={{ color: colors.heading }}
-          >
-            {heading}
-          </h2>
-
-          <p
-            className="text-xs sm:text-sm font-sans leading-relaxed"
-            style={{ color: colors.supporting }}
-          >
-            {supportingCopy}
-          </p>
-        </div>
+      <div className={`relative z-10 flex flex-1 flex-col gap-3 ${isCompactTopHero ? "justify-start pt-2 sm:pt-3" : "justify-center"}`}>
+        <h2 className="auth-heading text-2xl sm:text-[27px] leading-tight" style={{ color: colors.heading }}>
+          {heading}
+        </h2>
+        <p className="text-xs sm:text-sm font-sans leading-relaxed max-w-xs" style={{ color: colors.supporting }}>
+          {supportingCopy}
+        </p>
+        {highlights.length > 0 && (
+          <div className="flex flex-col gap-2 pt-3 mt-2 border-t" style={{ borderColor: colors.divider }}>
+            {highlights.map((item) => (
+              <div key={item} className="flex items-center gap-2.5 text-xs font-medium" style={{ color: colors.heading }}>
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: colors.accent }} />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Middle/Bottom Section: Visually Balanced Role-Specific Benefits */}
-      <div
-        className="relative z-10 space-y-2.5 pt-4 border-t mt-4 sm:mt-5"
-        style={{ borderColor: colors.divider }}
-      >
-        <div className="space-y-2">
-          {benefits.map((benefit, idx) => {
-            const Icon = benefit.icon;
-            return (
-              <div
-                key={idx}
-                className="flex items-start gap-2.5 p-2 rounded-xl transition-colors"
-                style={{
-                  backgroundColor: isDark ? 'rgba(7, 42, 33, 0.40)' : 'rgba(255, 255, 255, 0.32)',
-                  border: `1px solid ${colors.benefitBorder}`,
-                }}
-              >
-                <div
-                  className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                  style={{
-                    backgroundColor: colors.benefitIconBg,
-                    color: colors.accent,
-                  }}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex flex-col space-y-0.5 text-xs font-sans">
-                  <span
-                    className="font-semibold text-xs leading-snug"
-                    style={{ color: colors.heading }}
-                  >
-                    {benefit.title}
-                  </span>
-                  <span
-                    className="text-[11px] leading-relaxed"
-                    style={{ color: colors.secondary }}
-                  >
-                    {benefit.desc}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer Monogram & Tagline */}
-        <div className="pt-2 flex items-center justify-center text-center text-[11px] font-sans">
-          <span
-            className="font-semibold tracking-widest uppercase text-[10px]"
-            style={{ color: colors.accent }}
-          >
-            Mil Kar Khareedo, Behtar Pao.
-          </span>
-        </div>
+      {/* Original tagline: centered, gold, uppercase and bottom-aligned. */}
+      <div className="relative z-10 pt-2 flex items-center justify-center text-center text-[11px] font-sans">
+        <span className="font-semibold tracking-widest uppercase text-[10px]" style={{ color: colors.accent }}>
+          Mil Kar Khareedo, Behtar Pao.
+        </span>
       </div>
     </div>
   );

@@ -6,11 +6,12 @@
 // =============================================================================
 
 const db = require('../config/db');
+const notificationService = require('./notificationService');
 
 const PLAN_LIMITS = {
-  STARTER: { maxFamilies: 4, maxListings: 4, name: 'Starter Supplier' },
-  GROWTH: { maxFamilies: 13, maxListings: 13, name: 'Growth Wholesale Partner' },
-  BUSINESS: { maxFamilies: 25, maxListings: 25, name: 'Enterprise Mill & Distributor' }
+  STARTER: { maxFamilies: 4, maxListings: 4, name: 'Starter Supplier', feePct: 3.00 },
+  GROWTH: { maxFamilies: 13, maxListings: 13, name: 'Growth Wholesale Partner', feePct: 2.00 },
+  BUSINESS: { maxFamilies: 25, maxListings: 25, name: 'Enterprise Mill & Distributor', feePct: 1.50 }
 };
 
 class SubscriptionEntitlementService {
@@ -44,7 +45,40 @@ class SubscriptionEntitlementService {
     }
 
     const profile = profiles[0];
-    const planCode = (profile.subscription_plan || 'STARTER').toUpperCase();
+    let planCode = (profile.subscription_plan || 'STARTER').toUpperCase();
+    let effectiveStatus = profile.subscription_status || 'STARTER_ACTIVE';
+    let isExpired = false;
+    let isExpiringSoon = false;
+    let currentPeriodStart = null;
+    let currentPeriodEnd = null;
+
+    const [latestSubRows] = await conn.query(
+      `SELECT id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr
+       FROM supplier_subscriptions
+       WHERE supplier_id = ?
+       ORDER BY id DESC LIMIT 1`,
+      [supplierId]
+    );
+    const latestSub = latestSubRows[0] || null;
+    if (latestSub) {
+      currentPeriodStart = latestSub.current_period_start;
+      currentPeriodEnd = latestSub.current_period_end;
+    }
+
+    if (planCode !== 'STARTER') {
+      const endMs = currentPeriodEnd ? new Date(currentPeriodEnd).getTime() : null;
+      const nowMs = Date.now();
+      const statusInactive = ['EXPIRED', 'CANCELLED', 'SUSPENDED', 'PAST_DUE'].includes(effectiveStatus);
+      const periodEnded = endMs !== null && Number.isFinite(endMs) && endMs <= nowMs;
+      if (statusInactive || periodEnded) {
+        isExpired = true;
+        effectiveStatus = 'EXPIRED';
+        planCode = 'STARTER';
+      } else if (endMs !== null && Number.isFinite(endMs) && (endMs - nowMs) <= 5 * 24 * 60 * 60 * 1000) {
+        isExpiringSoon = true;
+      }
+    }
+
     const planConfig = PLAN_LIMITS[planCode] || PLAN_LIMITS.STARTER;
     const maxAllowedFamilies = planConfig.maxFamilies;
 
@@ -102,11 +136,18 @@ class SubscriptionEntitlementService {
       supplier_id: supplierId,
       plan_code: planCode,
       current_plan: planCode,
-      plan_name: planConfig.name,
-      subscription_status: profile.subscription_status || 'STARTER_ACTIVE',
+      configured_plan: (profile.subscription_plan || 'STARTER').toUpperCase(),
+      plan_name: planMeta?.name || planConfig.name,
+      subscription_status: effectiveStatus,
       verification_status: profile.verification_status,
-      max_allowed_families: maxAllowedFamilies,
-      max_families: maxAllowedFamilies,
+      is_expired: isExpired,
+      is_expiring_soon: isExpiringSoon,
+      current_period_start: currentPeriodStart,
+      current_period_end: currentPeriodEnd,
+      monthly_price_pkr: planMeta ? Number(planMeta.monthly_price_pkr) : 0,
+      transaction_fee_pct: planMeta ? Number(planMeta.transaction_fee_pct) : planConfig.feePct,
+      max_allowed_families: planMeta ? Number(planMeta.max_active_families) : maxAllowedFamilies,
+      max_families: planMeta ? Number(planMeta.max_active_families) : maxAllowedFamilies,
       active_families_count: activeFamiliesCount,
       used_distinct_families: activeFamiliesCount,
       remaining_family_slots: remainingFamilySlots,
@@ -284,9 +325,10 @@ class SubscriptionEntitlementService {
          SET subscription_plan = ?,
              subscription_status = ?,
              max_active_listings = ?,
+             transaction_fee_percent = ?,
              updated_at = NOW()
          WHERE supplier_id = ?`,
-        [normalizedPlan, newStatus, planConfig.maxListings, supplierId]
+        [normalizedPlan, newStatus, planConfig.maxListings, planConfig.feePct, supplierId]
       );
 
       // Record in supplier_subscriptions
@@ -319,6 +361,22 @@ class SubscriptionEntitlementService {
       );
 
       await connection.commit();
+
+      if (previousPlan !== normalizedPlan) {
+        try {
+          await notificationService.createNotification({
+            userId: supplierId,
+            role: 'SUPPLIER',
+            eventType: 'SUBSCRIPTION_DOWNGRADED',
+            eventKey: `sub_downgrade_${supplierId}_${normalizedPlan}_${Date.now()}`,
+            title: `Subscription switched to ${planConfig.name}`,
+            message: `Your plan is now ${normalizedPlan} (${planConfig.maxFamilies} product families, ${planConfig.feePct}% transaction fee). Existing published products remain preserved.`,
+            payload: { previous_plan: previousPlan, new_plan: normalizedPlan }
+          });
+        } catch (notifErr) {
+          console.error('[SubscriptionEntitlementService] Notification error:', notifErr.message);
+        }
+      }
 
       // Return updated entitlements
       return await this.getSupplierEntitlements(supplierId);

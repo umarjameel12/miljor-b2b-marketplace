@@ -29,6 +29,9 @@ export const FLAGS = {
 
   // 5. Orders Page (Clean Sample Order Flow without emoji)
   ordersSamplePreview: false, // simulated orders must never appear in the real orders journey
+
+  // 6. Post-Sign-In Landing Theme (set to false for instant 1-line rollback)
+  landingThemeAfterSignIn: true,
 };
 
 export default FLAGS;

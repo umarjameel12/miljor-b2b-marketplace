@@ -64,14 +64,14 @@ export const OrdersPage = () => {
                 color: 'var(--brand-accent)',
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-accent)]" />
               <span>{isAuthenticated ? (isSupplier ? `Supplier Account · ${user?.business_name || user?.full_name || 'Verified Supplier'}` : `Buyer Account · ${user?.business_name || user?.full_name || 'Verified Member'}`) : 'Guest Preview'}</span>
             </div>
-            <h1 className="font-display font-bold text-2xl sm:text-3xl tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {isSupplier ? 'Supplier Orders & Fulfillment Queue' : 'Procurement Orders & Reservations'}
+            <h1 className="font-sans font-bold text-2xl sm:text-3xl tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              {isSupplier ? 'Orders & Fulfillment' : 'Orders & Commitments'}
             </h1>
-            <p className="mt-1 text-xs sm:text-sm max-w-xl" style={{ color: 'var(--text-muted)' }}>
-              {isSupplier ? 'Manage funded buyer procurement orders, view escrow custody, and coordinate dispatch.' : 'Track pooled commodity commitments, collective volume lock milestones, and delivery fulfillment.'}
+            <p className="mt-1 text-xs sm:text-sm max-w-xl" style={{ color: 'var(--text-secondary)' }}>
+              {isSupplier ? 'Manage funded buyer orders and coordinate dispatch.' : 'Track your active pool commitments, payments, and deliveries.'}
             </p>
           </div>
 
@@ -79,14 +79,13 @@ export const OrdersPage = () => {
             <Link to="/pools">
               <button
                 type="button"
-                className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                className="landing-gradient-cta px-4 py-2.5 rounded-full text-xs font-semibold flex items-center gap-2 shadow-xs transition cursor-pointer"
                 style={{
-                  backgroundColor: 'var(--brand-accent)',
-                  color: '#072a21',
+                  color: 'var(--text-on-champagne)',
                 }}
               >
                 <Layers className="w-4 h-4" />
-                <span>Explore Active Pools</span>
+                <span>Explore Pools</span>
               </button>
             </Link>
           </div>
@@ -95,69 +94,69 @@ export const OrdersPage = () => {
         {/* Operational Overview Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div
-            className="p-4 sm:p-5 rounded-2xl border"
+            className="p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5"
             style={{
               backgroundColor: 'var(--bg-surface)',
               borderColor: 'var(--border-subtle)',
             }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-sans text-stone-500">Active Commitments</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Active Commitments</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border"
-                style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                <Clock className="w-4 h-4 text-amber-500" />
+                style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
+                <Clock className="w-4 h-4 text-[var(--lp-accent)]" />
               </div>
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-sans tabular-nums" style={{ color: 'var(--text-primary)' }}>
                 {activeCommitmentCount}
               </span>
-              <span className="ml-1 text-xs text-stone-500">orders</span>
+              <span className="ml-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>orders</span>
             </div>
           </div>
 
           <div
-            className="p-4 sm:p-5 rounded-2xl border"
+            className="p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5"
             style={{
               backgroundColor: 'var(--bg-surface)',
               borderColor: 'var(--border-subtle)',
             }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-sans text-stone-500">Volume Locked</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Confirmed Deliveries</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border"
-                style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
+                <CheckCircle2 className="w-4 h-4 text-[var(--lp-accent)]" />
               </div>
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold font-sans tabular-nums" style={{ color: 'var(--text-primary)' }}>
                 {realOrders.filter(o=>o.fulfillment_status==='BUYER_CONFIRMED').length}
               </span>
-              <span className="ml-1 text-xs text-stone-500">buyer-confirmed orders (not payouts)</span>
+              <span className="ml-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>buyer-confirmed</span>
             </div>
           </div>
 
           <div
-            className="p-4 sm:p-5 rounded-2xl border"
+            className="p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5"
             style={{
               backgroundColor: 'var(--bg-surface)',
               borderColor: 'var(--border-subtle)',
             }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-sans text-stone-500">Escrow Protection</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Escrow Protection</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border"
-                style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
+                <ShieldCheck className="w-4 h-4 text-[var(--lp-accent)]" />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                Payment verification required
+              <span className="text-xs font-semibold text-[var(--lp-accent)]">
+                Protected Checkout
               </span>
-              <p className="text-[11px] text-stone-500 mt-0.5">
-                Provider custody and payouts are verified separately; buyer receipt alone is not a bank transfer.
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                Held safely until delivery is confirmed
               </p>
             </div>
           </div>

@@ -35,7 +35,7 @@ import {
 function mapRecoveryError(errCode, status, rawMessage) {
   switch (errCode) {
     case 'VALIDATION_ERROR':
-      return 'Please verify that your business email is valid and your new password meets complexity requirements (at least 8 characters with letters and numbers).';
+      return 'Please verify that your email is valid and your new password meets complexity requirements (at least 8 characters with letters and numbers).';
     case 'INVALID_OTP':
       return 'The verification code entered is incorrect. Please check the 6-digit code or request a fresh one.';
     case 'OTP_EXPIRED':
@@ -100,15 +100,6 @@ export const ForgotPasswordPage = () => {
     };
   }, [cooldownSeconds]);
 
-  // Cleanup sensitive fields when component unmounts
-  useEffect(() => {
-    return () => {
-      setOtp('');
-      setNewPassword('');
-      setConfirmPassword('');
-    };
-  }, []);
-
   // Password validation
   const isLengthValid = newPassword.length >= 8;
   const hasLetter = /[a-zA-Z]/.test(newPassword);
@@ -128,7 +119,7 @@ export const ForgotPasswordPage = () => {
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Please enter a valid business email address.');
+      setError('Please enter a valid email address.');
       return;
     }
 
@@ -346,7 +337,7 @@ export const ForgotPasswordPage = () => {
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
                 isActive
-                  ? 'shadow-xs ring-2 ring-emerald-500/20'
+                  ? 'shadow-xs ring-2 ring-[var(--brand-accent-soft)]'
                   : isPast
                   ? 'opacity-90'
                   : 'opacity-40'
@@ -386,8 +377,8 @@ export const ForgotPasswordPage = () => {
         {step < 4 && renderStepIndicator()}
 
         <h1
-          className="font-display font-black text-xl sm:text-2xl tracking-tight"
-          style={{ color: 'var(--text-primary)' }}
+          className="auth-heading text-2xl sm:text-[29px] leading-tight"
+          style={{ color: 'var(--auth-heading-color)' }}
         >
           {step === 1 && 'Reset your password'}
           {step === 2 && 'Enter verification code'}
@@ -399,10 +390,10 @@ export const ForgotPasswordPage = () => {
           className="text-xs font-sans mt-0.5"
           style={{ color: 'var(--text-muted)' }}
         >
-          {step === 1 && 'Enter your registered business email to receive an account recovery code.'}
+          {step === 1 && 'We will email you a reset code.'}
           {step === 2 && `Enter the 6-digit code dispatched to ${email || 'your email'}.`}
-          {step === 3 && 'Choose a strong new password for your MilJor procurement account.'}
-          {step === 4 && 'Your credentials have been securely updated. You can now sign in.'}
+          {step === 3 && 'Choose a new password.'}
+          {step === 4 && 'You can now sign in.'}
         </p>
       </div>
 
@@ -459,7 +450,7 @@ export const ForgotPasswordPage = () => {
             color: 'var(--text-secondary)',
           }}
         >
-          <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+          <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1 text-[11px] leading-relaxed">
             <span>{infoMessage}</span>
             <p className="text-[10px] text-stone-400 mt-0.5">
@@ -473,7 +464,7 @@ export const ForgotPasswordPage = () => {
       {step === 1 && (
         <form onSubmit={handleRequestCode} className="flex flex-col gap-3.5">
           <Input
-            label="Registered Business Email"
+            label="Email"
             type="email"
             required
             autoComplete="email"
@@ -517,12 +508,12 @@ export const ForgotPasswordPage = () => {
           <div className="text-[11px] text-stone-600 dark:text-stone-300 bg-stone-50 dark:bg-stone-900/50 p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 leading-relaxed flex items-start gap-2">
             <HelpCircle className="w-4 h-4 shrink-0 text-stone-400 mt-0.5" />
             <span>
-              Enter the 6-digit code sent to your email. The code and your new password will be verified together upon final submission.
+              Enter the code from your email.
             </span>
           </div>
 
           <Input
-            label="6-Digit Verification Code (OTP)"
+            label="Verification Code"
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
@@ -683,11 +674,11 @@ export const ForgotPasswordPage = () => {
           </div>
 
           <div className="space-y-1">
-            <h2 className="font-display font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
+            <h2 className="auth-heading text-lg" style={{ color: 'var(--text-primary)' }}>
               Password Reset Complete
             </h2>
             <p className="text-xs max-w-xs mx-auto" style={{ color: 'var(--text-muted)' }}>
-              Your account password has been updated. You can now access your wholesale procurement dashboard.
+              Your password has been updated.
             </p>
           </div>
 

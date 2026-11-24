@@ -10,6 +10,7 @@
 const paymentRepo = require('../repositories/paymentRepo');
 const paymentProviderService = require('../services/paymentProviderService');
 const safepayCheckoutService = require('../services/safepayCheckoutService');
+const subscriptionBillingService = require('../services/subscriptionBillingService');
 const db = require('../config/db');
 
 
@@ -395,6 +396,20 @@ class PaymentController {
       const timestamp = req.headers['x-sfpy-timestamp'] || req.headers['x-safepay-timestamp'];
       const eventId = req.headers['x-sfpy-event-id'] || req.headers['x-safepay-event-id'];
       const eventType = req.headers['x-sfpy-event-type'] || req.headers['x-safepay-event-type'];
+
+      const subResult = await subscriptionBillingService.processSubscriptionWebhook({
+        rawBody,
+        signature,
+        eventId,
+        eventType
+      });
+      if (subResult && subResult.handled) {
+        return res.status(200).json({
+          success: true,
+          message: subResult.duplicate ? subResult.message : 'Subscription webhook processed successfully',
+          data: subResult
+        });
+      }
 
       const result = await safepayCheckoutService.processWebhookEvent({
         rawBody,

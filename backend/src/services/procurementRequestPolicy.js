@@ -101,6 +101,26 @@ function normalizeRequestDraft(payload) {
   if (quoteDeadline && joinDeadline && Date.parse(quoteDeadline) <= Date.parse(joinDeadline)) {
     throw err('INVALID_PROCUREMENT_DEADLINE', 'Quote deadline must follow the collective join deadline.');
   }
+  let targetPricePkr = null;
+  if (payload.target_price_pkr !== undefined && payload.target_price_pkr !== null && payload.target_price_pkr !== '') {
+    try {
+      const normalizedPrice = exact.toCanonical(payload.target_price_pkr, 2);
+      if (!exact.exactDecimalGte(normalizedPrice, '0.01', 2) || normalizedPrice.split('.')[0].length > 10) {
+        throw new Error('invalid');
+      }
+      targetPricePkr = normalizedPrice;
+    } catch {
+      throw err('INVALID_PROCUREMENT_TARGET_PRICE', 'Target price must be a positive PKR amount with at most two decimals.');
+    }
+  }
+  let requiredDeliveryDate = null;
+  if (payload.required_delivery_date !== undefined && payload.required_delivery_date !== null && payload.required_delivery_date !== '') {
+    if (typeof payload.required_delivery_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(payload.required_delivery_date.trim())) {
+      throw err('INVALID_PROCUREMENT_DELIVERY_DATE', 'Required delivery date must use YYYY-MM-DD format.');
+    }
+    requiredDeliveryDate = payload.required_delivery_date.trim();
+  }
+  const openToSuppliers = payload.open_to_suppliers === undefined ? true : Boolean(payload.open_to_suppliers);
   return {
     ownership,
     frequency,
@@ -111,6 +131,9 @@ function normalizeRequestDraft(payload) {
     join_deadline: joinDeadline,
     delivery_area: textField(payload.delivery_area, 'delivery_area', 255, true),
     notes: textField(payload.notes, 'notes', 2000),
+    target_price_pkr: targetPricePkr,
+    required_delivery_date: requiredDeliveryDate,
+    open_to_suppliers: openToSuppliers,
     // IMPORTANT: recurring is opt-in only; contract and charges are never
     // created by this pure normalization function.
     recurring_requires_explicit_consent: frequency !== 'ONE_TIME',

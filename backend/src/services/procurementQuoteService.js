@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const db = require('../config/db');
 const exact = require('./exactDecimal');
 const matching = require('./procurementMatchingService');
+const notificationService = require('./notificationService');
 
 const failure = (code,message,statusCode=400) => Object.assign(new Error(message),{code,statusCode});
 function positiveId(value){
@@ -80,7 +81,7 @@ class ProcurementQuoteService{
       await conn.beginTransaction();
       // Parent request is always locked before quote rows to serialize close/withdraw/revisions.
       const [requests]=await conn.query(
-        `SELECT id, status, quote_deadline, delivery_area
+        `SELECT id, buyer_id, request_code, status, open_to_suppliers, ownership, frequency, quote_deadline, delivery_area
            FROM procurement_requests WHERE id=? FOR UPDATE`,[rid]);
       if(!requests.length)throw failure('REQUEST_NOT_FOUND','Request not found.',404);
       // Durable response replay precedes expiry and stock checks: retries must
@@ -111,7 +112,12 @@ class ProcurementQuoteService{
       const [inviteRows]=await conn.query(
         `SELECT id,status FROM procurement_supplier_invitations
          WHERE request_id=? AND supplier_id=? FOR UPDATE`,[rid,supplier]);
-      if(!inviteRows.length||inviteRows[0].status!=='INTERESTED')
+      const isOpenToSuppliers = Number(requests[0].open_to_suppliers) === 1 &&
+        requests[0].ownership === 'SINGLE_BUYER' &&
+        requests[0].frequency === 'ONE_TIME';
+      if(!inviteRows.length && !isOpenToSuppliers)
+        throw failure('INVITATION_REQUIRED','Supplier must accept an invitation before quoting.',403);
+      if(inviteRows.length && inviteRows[0].status!=='INTERESTED' && !isOpenToSuppliers)
         throw failure('INVITATION_REQUIRED','Supplier must accept an invitation before quoting.',403);
       const [verified]=await conn.query(
         `SELECT u.id FROM users u
@@ -191,9 +197,21 @@ class ProcurementQuoteService{
       if(quote){
         if(quote.status!=='ACTIVE')throw failure('QUOTE_WITHDRAWN','Withdrawn quotes cannot be revised.',409);
       }else{
+        let invitationId = inviteRows[0]?.id || null;
+        if(!invitationId){
+          await conn.query(
+            `INSERT IGNORE INTO procurement_supplier_invitations (request_id,supplier_id,status)
+             VALUES (?,?,'INTERESTED')`,[rid,supplier]
+          );
+          const [createdInv]=await conn.query(
+            `SELECT id FROM procurement_supplier_invitations WHERE request_id=? AND supplier_id=? LIMIT 1`,
+            [rid,supplier]
+          );
+          invitationId = createdInv[0]?.id;
+        }
         const [created]=await conn.query(
           `INSERT INTO procurement_quotes (request_id,supplier_id,invitation_id,status,current_version)
-           VALUES (?,?,?,'ACTIVE',1)`,[rid,supplier,inviteRows[0].id]);
+           VALUES (?,?,?,'ACTIVE',1)`,[rid,supplier,invitationId]);
         quote={id:created.insertId,current_version:0,status:'ACTIVE'};
       }
       const version=Number(quote.current_version)+1;
@@ -237,6 +255,30 @@ class ProcurementQuoteService{
         [version,quote.id,supplier,version]
       );
       await conn.commit();
+
+      try {
+        await notificationService.createNotification({
+          userId: requests[0].buyer_id,
+          role: 'BUYER',
+          eventType: 'BUYER_QUOTE_RECEIVED',
+          eventKey: `buyer_quote_${rid}_${quote.id}_v${version}`,
+          title: 'New supplier quotation received',
+          message: `A verified supplier submitted quotation v${version} (PKR ${payable}) for request ${requests[0].request_code}.`,
+          payload: { request_id: rid, quote_id: quote.id, version_number: version, quoted_total: payable }
+        });
+        await notificationService.createNotification({
+          userId: supplier,
+          role: 'SUPPLIER',
+          eventType: 'SUPPLIER_QUOTE_SUBMITTED',
+          eventKey: `sup_quote_${rid}_${quote.id}_v${version}`,
+          title: 'Quotation submitted',
+          message: `Your quotation v${version} (PKR ${payable}) for ${requests[0].request_code} was submitted.`,
+          payload: { request_id: rid, quote_id: quote.id, version_number: version }
+        });
+      } catch (notifErr) {
+        console.error('[ProcurementQuoteService] Notification error:', notifErr.message);
+      }
+
       return {...response,is_replay:false};
     }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')
       throw failure('QUOTE_CONFLICT','Concurrent quotation detected; refresh before retrying.',409);
@@ -337,6 +379,119 @@ class ProcurementQuoteService{
     return rows.map(row=>({...row,quote_snapshot:
       typeof row.immutable_snapshot==='string'?JSON.parse(row.immutable_snapshot):row.immutable_snapshot,
       immutable_snapshot:undefined}));
+  }
+  async listOpenForSupplier(supplierId) {
+    const supplier = positiveId(supplierId);
+    // Auto-expire any open requests past their quote_deadline
+    await this.database.query(
+      "UPDATE procurement_requests SET status='EXPIRED', version_number=version_number+1 WHERE status='OPEN' AND quote_deadline IS NOT NULL AND quote_deadline <= UTC_TIMESTAMP()"
+    );
+
+    const [verified] = await this.database.query(
+      `SELECT u.id, u.is_verified, u.verification_status AS user_verif, p.verification_status AS profile_verif
+       FROM users u
+       JOIN supplier_profiles p ON p.supplier_id = u.id
+       WHERE u.id = ? AND u.role = 'SUPPLIER' LIMIT 1`,
+      [supplier]
+    );
+    const isVerified = verified.length === 1 &&
+      Number(verified[0].is_verified) === 1 &&
+      verified[0].user_verif === 'VERIFIED' &&
+      verified[0].profile_verif === 'VERIFIED';
+
+    const [listingRows] = await this.database.query(
+      `SELECT sl.id, sk.purchasing_unit, sl.available_stock, sl.buyer_min_qty,
+              sk.family_id, sp.title, sp.brand, sp.quality_grade, sp.title AS spec_title
+       FROM supplier_listings sl
+       JOIN supplier_skus sk ON sk.id = sl.supplier_sku_id AND sk.supplier_id = sl.supplier_id AND sk.status = 'PUBLISHED'
+       JOIN supplier_products sp ON sp.id = sk.supplier_product_id AND sp.supplier_id = sl.supplier_id AND sp.status = 'PUBLISHED'
+       JOIN product_specifications ps ON ps.id = sl.product_spec_id AND ps.is_active = 1 AND ps.approval_status = 'APPROVED'
+       WHERE sl.supplier_id = ? AND sl.status = 'ACTIVE' AND sl.currency = 'PKR'`,
+      [supplier]
+    );
+
+    if (!isVerified) {
+      return {
+        eligible_supplier: false,
+        active_listings_count: listingRows.length,
+        reason: 'SUPPLIER_NOT_VERIFIED',
+        requests: [],
+      };
+    }
+
+    if (listingRows.length === 0) {
+      return {
+        eligible_supplier: true,
+        active_listings_count: 0,
+        reason: 'NO_ACTIVE_LISTINGS',
+        requests: [],
+      };
+    }
+
+    const [openRequests] = await this.database.query(
+      `SELECT id, request_code, delivery_area, notes, target_price_pkr, required_delivery_date,
+              quote_deadline, published_at,
+              (SELECT COUNT(*) FROM procurement_quotes pq WHERE pq.request_id = procurement_requests.id AND pq.status = 'ACTIVE') AS quote_count,
+              EXISTS(SELECT 1 FROM procurement_quotes pq2 WHERE pq2.request_id = procurement_requests.id AND pq2.supplier_id = ? AND pq2.status = 'ACTIVE') AS already_quoted
+       FROM procurement_requests
+       WHERE status = 'OPEN'
+         AND open_to_suppliers = 1
+         AND ownership = 'SINGLE_BUYER'
+         AND frequency = 'ONE_TIME'
+         AND quote_deadline > UTC_TIMESTAMP()
+       ORDER BY published_at DESC, id DESC
+       LIMIT 50`,
+      [supplier]
+    );
+
+    const eligibleRequests = [];
+    for (const reqRow of openRequests) {
+      const [items] = await this.database.query(
+        `SELECT pri.id, pri.line_number, pri.family_id, f.name AS family_name,
+                pri.quantity, pri.unit, pri.requirements
+         FROM procurement_request_items pri
+         JOIN catalog_product_families f ON f.id = pri.family_id
+         WHERE pri.request_id = ?
+         ORDER BY pri.line_number`,
+        [reqRow.id]
+      );
+      if (!items.length) continue;
+
+      const candidates = await matching._candidates(this.database, { ...reqRow, items });
+      const match = candidates.find(c => Number(c.supplier_id) === supplier);
+      if (!match) continue;
+
+      const allowedIds = new Set((match.eligible_listing_ids || []).map(Number));
+      const enrichedItems = items.map(item => ({
+        ...item,
+        matching_listings: listingRows.filter(l =>
+          allowedIds.has(Number(l.id)) &&
+          Number(l.family_id) === Number(item.family_id) &&
+          String(l.purchasing_unit).toLowerCase() === String(item.unit).toLowerCase()
+        ),
+      }));
+
+      eligibleRequests.push({
+        id: reqRow.id,
+        request_code: reqRow.request_code,
+        delivery_area: reqRow.delivery_area,
+        notes: reqRow.notes,
+        target_price_pkr: reqRow.target_price_pkr,
+        required_delivery_date: reqRow.required_delivery_date,
+        quote_deadline: reqRow.quote_deadline,
+        published_at: reqRow.published_at,
+        quote_count: Number(reqRow.quote_count || 0),
+        already_quoted: Number(reqRow.already_quoted) === 1,
+        items: enrichedItems,
+      });
+    }
+
+    return {
+      eligible_supplier: true,
+      active_listings_count: listingRows.length,
+      reason: null,
+      requests: eligibleRequests,
+    };
   }
 }
 module.exports=new ProcurementQuoteService();

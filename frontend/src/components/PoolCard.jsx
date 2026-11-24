@@ -39,6 +39,7 @@ const DEFAULT_CARD_IMAGES = {
 export const PoolCard = ({ pool, onSelect }) => {
   const [imgError, setImgError] = useState(false);
   const [deadlineExpired, setDeadlineExpired] = useState(false);
+  const [showProductDetails, setShowProductDetails] = useState(false);
   useEffect(() => setDeadlineExpired(false), [pool.scheduled_close_at, pool.expires_at]);
 
   // Safe progress percentage clamped between 0 and 100
@@ -57,6 +58,14 @@ export const PoolCard = ({ pool, onSelect }) => {
   const targetQty = Number(pool.target_quantity || pool.target_qty || 1000);
   const cutoffFormatted = formatLahoreTimestamp(pool.scheduled_close_at || pool.expires_at);
   const promisedDeliveryFormatted = formatLahoreTimestamp(pool.promised_delivery_at);
+
+  const productName = pool.product_name || pool.title || 'Wholesale Commodity';
+  const productLower = productName.toLowerCase();
+  const categoryLabel = /rice|basmati|kainat|sella|grain/.test(productLower) ? 'Rice & Grains'
+    : /oil|ghee|olein/.test(productLower) ? 'Cooking Oil & Ghee'
+    : /flour|atta|maida|chakki|wheat/.test(productLower) ? 'Flour & Bakery'
+    : /daal|dal|lentil|masoor|chana|moong|pulse/.test(productLower) ? 'Pulses & Lentils'
+    : /sugar|shakar/.test(productLower) ? 'Sugar & Sweeteners' : 'Wholesale Essentials';
 
   // Fulfillment Availability Indicators (Phase 6D.3 / Package D Invariant)
   const hasStandard = Boolean(
@@ -183,9 +192,30 @@ export const PoolCard = ({ pool, onSelect }) => {
             style={{ color: 'var(--text-primary)' }}
             title={pool.product_name || pool.title}
           >
-            {pool.product_name || pool.title || 'Wholesale Commodity'}
+            {productName}
           </h3>
+          <span className="mt-1.5 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold" style={{ color: 'var(--pool-detail-accent)', borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-subtle)' }}>{categoryLabel}</span>
 
+
+          {(pool.variety || pool.grade || pool.quality_grade || pool.quality_spec_grade || pool.pack_size) && (
+            <div className="mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-5" style={{ backgroundColor: 'var(--bg-subtle)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>Product specifications</span>
+              <span className="mt-1 block">
+                {[pool.variety, pool.quality_spec_grade || pool.quality_grade || pool.grade, pool.pack_size ? `${pool.pack_size} ${pool.pack_unit || 'kg'}` : null].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+          )}
+
+          {showProductDetails && (
+            <>
+              <button type="button"
+                onClick={() => setShowProductDetails(false)}
+                className="mt-2 text-[11px] font-semibold"
+                style={{ color: 'var(--pool-detail-accent)' }}>
+                Hide product details ?
+              </button>
+              <div className="mt-2 rounded-xl border p-2.5"
+                style={{ borderColor: 'var(--border-subtle)' }}>
           {/* Supplier Info & Grade Line */}
           <div className="flex items-center justify-between text-[11px] font-sans text-stone-500 dark:text-stone-400 mt-0.5">
             <span className="truncate max-w-[170px]" title={pool.supplier_name || pool.supplier_business_name}>
@@ -208,16 +238,17 @@ export const PoolCard = ({ pool, onSelect }) => {
             </div>
           </div>
 
+
+              </div>
+            </>
+          )}
+
           {/* Participation Cutoff & Promised 1-3 Day Delivery SLA */}
           {(cutoffFormatted || promisedDeliveryFormatted) && (
             <div className="mt-2 p-2 rounded-xl border text-[10px] space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
               {cutoffFormatted && (
-                <div className="flex items-center justify-between text-stone-500 dark:text-stone-400">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-600" />
-                    <span>Closes (PKT):</span>
-                  </span>
-                  <div className="flex flex-col items-end gap-0.5">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-end text-[10px] font-medium" style={{ color: 'var(--pool-detail-accent)' }}>
                     <CountdownTimer
                       deadline={pool.scheduled_close_at || pool.expires_at}
                       serverTime={pool.server_time || null}
@@ -225,22 +256,28 @@ export const PoolCard = ({ pool, onSelect }) => {
                       label="Closes in"
                       onExpire={() => setDeadlineExpired(true)}
                     />
-                    <strong className="font-mono text-[10px] text-stone-700 dark:text-stone-200">{cutoffFormatted}</strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-2" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="inline-flex shrink-0 items-center gap-1 font-medium">
+                      <Clock className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} aria-hidden="true" />
+                      Closes (PKT):
+                    </span>
+                    <strong className="text-right font-sans font-semibold tabular-nums" style={{ color: 'var(--pool-detail-accent)' }}>{cutoffFormatted}</strong>
                   </div>
                 </div>
               )}
               {promisedDeliveryFormatted && (
-                <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400">
-                  <span className="inline-flex items-center gap-1 font-medium">
-                    <Truck className="w-3 h-3" />
+                <div className="flex items-center justify-between gap-3" style={{ color: 'var(--pool-detail-accent)' }}>
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Truck className="w-3 h-3 shrink-0" style={{ color: 'var(--pool-detail-accent)' }} aria-hidden="true" />
                     <span>Promised Delivery:</span>
                   </span>
-                  <strong className="font-mono">{promisedDeliveryFormatted}</strong>
+                  <strong className="font-sans font-semibold tabular-nums text-right" style={{ color: 'var(--pool-detail-accent)' }}>{promisedDeliveryFormatted}</strong>
                 </div>
               )}
               <div className="flex items-center justify-between text-[9px] text-stone-400 pt-0.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                 <span className="inline-flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5 text-emerald-600" />
+                  <Lock className="w-2.5 h-2.5 text-emerald-600" style={{ color: 'var(--pool-detail-accent)' }} />
                   <span>Immutable Published Terms</span>
                 </span>
                 <span>1–3 Day SLA</span>
@@ -260,7 +297,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Clustered doorstep delivery available across Lahore clusters"
               >
-                <Truck className="w-3 h-3 text-emerald-600" />
+                <Truck className="w-3 h-3 text-emerald-600" style={{ color: 'var(--pool-detail-accent)' }} />
                 <span>Doorstep</span>
               </span>
             )}
@@ -274,7 +311,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Self-collection available from authorized supplier depots"
               >
-                <Store className="w-3 h-3 text-amber-600" />
+                <Store className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
                 <span>Pickup</span>
               </span>
             )}
@@ -288,7 +325,7 @@ export const PoolCard = ({ pool, onSelect }) => {
                 }}
                 title="Expedited dedicated dispatch available"
               >
-                <Zap className="w-3 h-3 text-indigo-500" />
+                <Zap className="w-3 h-3" style={{ color: 'var(--pool-detail-accent)' }} />
                 <span>Express</span>
               </span>
             )}
@@ -357,16 +394,16 @@ export const PoolCard = ({ pool, onSelect }) => {
         <div className="pt-2">
           <button
             type="button"
-            onClick={() => onSelect && onSelect(pool)}
+            onClick={() => { if (onSelect) onSelect(pool); else setShowProductDetails(true); }}
             disabled={isClosed}
-            className="w-full py-2 px-3 rounded-xl font-sans font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
+            className="miljor-pool-join w-full py-2 px-3 rounded-xl font-sans font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
             style={{
               backgroundColor: 'var(--brand-primary)',
               color: 'var(--text-on-emerald)',
               border: '1px solid var(--border-subtle)',
             }}
           >
-            <span>{isClosed ? 'Pool Concluded' : 'Join Wholesale Pool'}</span>
+            <span>{isClosed ? 'Pool Concluded' : 'Join Pool'}</span>
           </button>
         </div>
       </div>

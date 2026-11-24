@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import {
@@ -13,19 +13,41 @@ import {
   Truck,
   ArrowRight,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  Calendar
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { geoApi } from '../api/geo';
+import { deliveryApi } from '../api/delivery';
+import { RecurringCycleControls } from '../components/procurement/RecurringCycleControls';
 
 export const RfqPage = () => {
   const { user, token } = useAuth();
+  const navigate=useNavigate();
+  const [awardAddress,setAwardAddress]=useState(''),[awardConsent,setAwardConsent]=useState(false);
+  const awardIntents=useRef(new Map());
   const [activeTab, setActiveTab] = useState(user?.role === 'SUPPLIER' ? 'supplier' : 'buyer');
+  const location = useLocation();
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (user?.role !== 'SUPPLIER' || !['supplier-invitations', 'supplier-collective', 'supplier-counteroffers'].includes(id)) return;
+    const frame = requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, user?.role, activeTab]);
 
   // B6: Buyer-first multi-item shopping list, stored in the existing RFQ page.
   const emptyItem = () => ({ family_id: '', quantity: '', unit: 'kg', requirements: '' });
   const [shoppingList, setShoppingList] = useState([emptyItem()]);
   const [deliveryArea, setDeliveryArea] = useState('');
   const [quoteDeadline, setQuoteDeadline] = useState('');
+  const [targetPricePkr, setTargetPricePkr] = useState('');
+  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState('');
+  const [openToSuppliers, setOpenToSuppliers] = useState(true);
+  const [openBuyerRequests, setOpenBuyerRequests] = useState([]);
+  const [openRequestsMeta, setOpenRequestsMeta] = useState({ eligible_supplier: true, active_listings_count: 0, reason: null });
+  const [openRequestsLoading, setOpenRequestsLoading] = useState(false);
+  const [openRequestsError, setOpenRequestsError] = useState('');
   const [buyerMode,setBuyerMode] = useState('SINGLE_BUYER');
   const [purchaseCadence,setPurchaseCadence] = useState('ONE_TIME');
   const [joinDeadline,setJoinDeadline] = useState('');
@@ -55,6 +77,8 @@ export const RfqPage = () => {
 
   const [familyChoices, setFamilyChoices] = useState([]);
   const [savedRequests, setSavedRequests] = useState([]);
+  const [legacyRequests, setLegacyRequests] = useState([]);
+  const [convertingLegacy, setConvertingLegacy] = useState(null);
   const [activeRequest, setActiveRequest] = useState(null);
   const [shoppingBusy, setShoppingBusy] = useState(false);
   const [shoppingError, setShoppingError] = useState('');
@@ -71,10 +95,18 @@ export const RfqPage = () => {
   const [quoteHistory,setQuoteHistory] = useState(null);
   const [quoteComparison,setQuoteComparison]=useState(null);
   const [compareRequestId,setCompareRequestId]=useState(null);
-  const [improvementNotes,setImprovementNotes]=useState({});
-  const [improvementTargets,setImprovementTargets]=useState({});
-  const [buyerNegotiations,setBuyerNegotiations]=useState([]);
-  const [supplierNegotiations,setSupplierNegotiations]=useState([]);
+  const [counterofferDrafts,setCounterofferDrafts]=useState({});
+  const [buyerCounteroffers,setBuyerCounteroffers]=useState([]);
+  const [supplierCounteroffers,setSupplierCounteroffers]=useState([]);
+  const [supplierCounterDrafts,setSupplierCounterDrafts]=useState({});
+  const [deliveryClusters,setDeliveryClusters]=useState([]);
+  const [deliveryClusterId,setDeliveryClusterId]=useState(user?.base_cluster_id?String(user.base_cluster_id):'');
+  const [deliveryOptionResults,setDeliveryOptionResults]=useState({});
+  const [deliveryAddresses,setDeliveryAddresses]=useState([]);
+  const [chosenAddress,setChosenAddress]=useState('');
+  const [deliveryChoices,setDeliveryChoices]=useState({});
+  const deliveryAccountRef=useRef(user?.id);
+  deliveryAccountRef.current=user?.id;
 
 
 
@@ -109,6 +141,7 @@ export const RfqPage = () => {
         if (alive) {
           setFamilyChoices((catalog.data?.families || []).filter(x => x.is_active && x.approval_status === 'APPROVED'));
           setSavedRequests(requests.data?.requests || []);
+          setLegacyRequests((requests.data?.legacy_requests || []).filter(x => !x.already_converted));
         }
       } catch (error) {
         if (alive) setShoppingError(error.message);
@@ -125,6 +158,66 @@ export const RfqPage = () => {
     const body = await response.json();
     if (!response.ok) throw Error(body.error?.message || 'Could not refresh requests');
     setSavedRequests(body.data?.requests || []);
+    setLegacyRequests((body.data?.legacy_requests || []).filter(x => !x.already_converted));
+  };
+
+  const reviewLegacyRequest = legacy => {
+    setActiveRequest(null);
+    setConvertingLegacy(legacy);
+    setShoppingError('');
+    if (legacy.cluster_name && !deliveryArea) setDeliveryArea(`${legacy.cluster_name}, Lahore`);
+    else if (!deliveryArea) setDeliveryArea('Lahore');
+    if (legacy.needed_by_date) setQuoteDeadline(toLocalInput(legacy.needed_by_date));
+    else if (!quoteDeadline) setQuoteDeadline(toLocalInput(new Date(Date.now() + 5 * 86400000)));
+    setShoppingList([{
+      family_id: legacy.family_id ? String(legacy.family_id) : '',
+      quantity: legacy.target_quantity ? String(legacy.target_quantity) : '1',
+      unit: (legacy.target_unit || 'kg').toLowerCase(),
+      requirements: legacy.desired_specs || legacy.commodity_name || ''
+    }]);
+  };
+
+  const convertLegacyToDraft = async () => {
+    if (!convertingLegacy) return;
+    setShoppingBusy(true);
+    setShoppingError('');
+    try {
+      const item = shoppingList[0] || {};
+      const quoteDate = quoteDeadline ? new Date(quoteDeadline).toISOString() : null;
+      const joinDate = buyerMode === 'COLLECTIVE' && joinDeadline
+        ? new Date(joinDeadline).toISOString()
+        : null;
+      const res = await fetch(`/api/v1/procurement/legacy-requests/${convertingLegacy.id}/convert`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `legacy-convert-${convertingLegacy.id}-${crypto.randomUUID()}`
+        },
+        body: JSON.stringify({
+          confirm_conversion: true,
+          ownership: buyerMode,
+          frequency: purchaseCadence,
+          delivery_area: deliveryArea,
+          quote_deadline: quoteDate,
+          ...(joinDate ? { join_deadline: joinDate } : {}),
+          family_id: item.family_id ? Number(item.family_id) : null,
+          quantity: item.quantity,
+          unit: item.unit,
+          requirements: item.requirements,
+          notes: convertingLegacy.notes || undefined
+        })
+      });
+      const body = await res.json();
+      if (!res.ok) throw Error(body.error?.message || 'Could not convert legacy request');
+      setConvertingLegacy(null);
+      await refreshRequests();
+      toast.success(`Converted ${convertingLegacy.request_code} to Smart Hub draft ${body.data?.request?.request_code || ''}`);
+    } catch (err) {
+      setShoppingError(err.message);
+    } finally {
+      setShoppingBusy(false);
+    }
   };
 
   const loadShoppingDraft = async requestId => {
@@ -165,6 +258,9 @@ export const RfqPage = () => {
         ownership: buyerMode, frequency: purchaseCadence,
         award_policy: 'SPLIT_ALLOWED', priority: 'BEST_VALUE',
         delivery_area: deliveryArea,
+        open_to_suppliers: openToSuppliers,
+        ...(targetPricePkr ? { target_price_pkr: targetPricePkr } : {}),
+        ...(requiredDeliveryDate ? { required_delivery_date: requiredDeliveryDate } : {}),
         quote_deadline: quoteDeadline ? new Date(quoteDeadline).toISOString() : null,
         join_deadline: buyerMode==='COLLECTIVE' && joinDeadline
           ? new Date(joinDeadline).toISOString() : null,
@@ -214,12 +310,58 @@ export const RfqPage = () => {
         setShoppingList([emptyItem()]);
         setDeliveryArea('');
         setQuoteDeadline('');
+        setTargetPricePkr('');
+        setRequiredDeliveryDate('');
       }
       await refreshRequests();
-      toast.success(publish ? 'Shopping list published. Invite eligible suppliers to receive quotations.' : 'Shopping list draft saved');
+      toast.success(publish ? 'Shopping list published. Eligible suppliers can now discover and quote.' : 'Shopping list draft saved');
     } catch (error) {
       setShoppingError(error.message);
     } finally { setShoppingBusy(false); }
+  };
+
+  const closeShoppingRequest = async (request) => {
+    try {
+      setShoppingBusy(true);
+      const response = await fetch(`/api/v1/procurement/requests/${request.id}/close`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || 'Could not close request');
+      await refreshRequests();
+      toast.success('Request closed');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setShoppingBusy(false);
+    }
+  };
+
+  const deleteShoppingRequest = async (request) => {
+    try {
+      setShoppingBusy(true);
+      setShoppingError('');
+      const response = await fetch(`/api/v1/procurement/requests/${request.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || 'Could not delete request');
+      setSavedRequests((prev) => prev.filter((item) => item.id !== request.id));
+      if (activeRequest?.id === request.id) {
+        setActiveRequest(null);
+        setShoppingList([emptyItem()]);
+        setDeliveryArea('');
+        setQuoteDeadline('');
+      }
+      toast.success('Request deleted');
+    } catch (error) {
+      setShoppingError(error.message);
+      toast.error(error.message);
+    } finally {
+      setShoppingBusy(false);
+    }
   };
 
   // B6-D invitation workflow: no buyer contact/address is returned to suppliers.
@@ -305,7 +447,7 @@ export const RfqPage = () => {
         body:JSON.stringify({})
       });
       await refreshMySmartQuotes();
-      await refreshSupplierNegotiations();
+      await refreshSupplierCounteroffers();
       toast.success('Quotation withdrawn; historical versions retained');
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -345,13 +487,15 @@ export const RfqPage = () => {
           request_item_id:Number(line.request_item_id),quote_id:Number(line.quote_id),
           version_number:Number(version),supplier_sku_id:Number(snapshot.supplier_sku_id),
           product_spec_id:Number(snapshot.product_spec_id),
-          physical_specifications_accepted:true
+          physical_specifications_accepted:true,
+          ...(buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id))?.quote_snapshot?.delivery_terms
+            ?{delivery_terms_hash:buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id)).quote_snapshot.delivery_terms.hash}:{})
         };
       });
       const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/checkout-preview`,{
         method:'POST',body:JSON.stringify({selections})
       });
-      setAwardPreview(data.preview);
+      setAwardPreview({...data.preview,confirmed_selections:selections,request_id:compareRequestId});setAwardConsent(false);
       toast.success('Fee-inclusive nonbinding preview created. Real checkout remains gated.');
     }catch(e){setShoppingError(e.message);}
     finally{setQuoteBusy(false);}
@@ -362,14 +506,14 @@ export const RfqPage = () => {
     setQuoteBusy(true);
     setShoppingError('');
     try{
-      const [compared,negotiations,currentQuotes]=await Promise.all([
+      const [compared,currentQuotes,productOffers]=await Promise.all([
         procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/negotiations`),
-        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`)
+        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/counteroffers`)
       ]);
       setCompareRequestId(requestId);
       setQuoteComparison(compared);
-      setBuyerNegotiations(negotiations.negotiations||[]);
+      setBuyerCounteroffers(productOffers.counteroffers||[]);
       setBuyerQuotes(currentQuotes.quotes||[]);
       setReviewedAwardLines({});
       setAwardPreview(null);
@@ -377,30 +521,90 @@ export const RfqPage = () => {
     finally{setQuoteBusy(false);}
   };
 
-  const requestBetterSmartOffer = async (quoteId,versionNumber) => {
-    if(!compareRequestId)return;
-    const message=improvementNotes[quoteId]?.trim()||'';
-    if(message.length<5){setShoppingError('Describe the requested improvement (at least 5 characters).');return;}
-    setQuoteBusy(true);
-    setShoppingError('');
+  const submitProductCounteroffers=async quote=>{
+    const fields=counterofferDrafts[quote.id]||{};
+    const lines=(quote.quote_snapshot?.lines||[])
+      .filter(line=>String(fields[line.request_item_id]||'').trim())
+      .map(line=>({request_item_id:Number(line.request_item_id),
+        proposed_unit_price:String(fields[line.request_item_id]).trim()}));
+    if(!lines.length){setShoppingError('Enter a numeric offer on at least one selected product.');return;}
+    setQuoteBusy(true);setShoppingError('');
     try{
-      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quoteId}/improve`,{
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/counteroffers`,{
         method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
-        body:JSON.stringify({message,target_total:improvementTargets[quoteId]||null,
-          version_number:versionNumber})
+        body:JSON.stringify({version_number:Number(quote.current_version),lines})
       });
-      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/negotiations`);
-      setBuyerNegotiations(data.negotiations||[]);
-      toast.success('Request for a better quote sent. No order or payment created.');
-    }catch(e){setShoppingError(e.message);}
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/counteroffers`);
+      setBuyerCounteroffers(data.counteroffers||[]);
+      setCounterofferDrafts(old=>({...old,[quote.id]:{}}));
+      toast.success('Product counteroffer submitted. No payment or order created.');
+    }catch(error){setShoppingError(error.message);}
     finally{setQuoteBusy(false);}
   };
-
-  const refreshSupplierNegotiations = async () => {
-    if(!token||user?.role!=='SUPPLIER')return;
-    const data=await procurementApi('/api/v1/procurement/supplier/negotiations');
-    setSupplierNegotiations(data.negotiations||[]);
+  useEffect(()=>{
+    let active=true;
+    setDeliveryAddresses([]);setChosenAddress('');setDeliveryChoices({});
+    if(user?.role!=='BUYER')return;
+    geoApi.getClusters().then(result=>setDeliveryClusters(result?.data?.clusters||[]))
+      .catch(()=>setDeliveryClusters([]));
+    deliveryApi.getBuyerAddresses().then(result=>{if(active)setDeliveryAddresses(result.data||[]);}).catch(()=>{if(active)setDeliveryAddresses([]);});
+    return()=>{active=false;};
+  },[user?.id,user?.role,token]);
+  const chooseDelivery=async(quote,mode,pickupPointId=null)=>{
+    const owner=user?.id;
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-choice`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},body:JSON.stringify({cluster_id:Number(deliveryClusterId),mode,
+          ...(mode==='PICKUP'?{pickup_point_id:Number(pickupPointId)}:{address_id:Number(chosenAddress)})})});
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,[quote.id]:result.delivery_terms}));
+      toast.success('Delivery choice recorded. Supplier must publish a revised quote before your final approval.');
+    }catch(error){setShoppingError(error.message);}finally{setQuoteBusy(false);}
   };
+  const loadSupplierDeliveryChoices=async invitation=>{
+    const owner=user?.id;
+    setQuoteBusy(true);
+    try{
+      const result=await procurementApi(`/api/v1/procurement/supplier/requests/${invitation.request_id}/delivery-choices`);
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,['supplier:'+invitation.invitation_id]:result.choices}));
+    }catch(error){toast.error(error.message);}finally{setQuoteBusy(false);}
+  };
+  const viewSupplierDeliveryOptions=async quote=>{
+    if(!deliveryClusterId){setShoppingError('Select your delivery area cluster first.');return;}
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(
+        `/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-options?cluster_id=${encodeURIComponent(deliveryClusterId)}`
+      );
+      setDeliveryOptionResults(old=>({...old,[quote.id]:data.options}));
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  const refreshSupplierCounteroffers=async()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    try{
+      const data=await procurementApi('/api/v1/procurement/supplier/counteroffers');
+      setSupplierCounteroffers(data.counteroffers||[]);
+    }catch(error){toast.error(error.message);}
+  };
+  const respondProductCounteroffer=async(offer,decision)=>{
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const proposed=String(supplierCounterDrafts[offer.id]||'').trim();
+      await procurementApi(`/api/v1/procurement/supplier/counteroffers/${offer.id}/respond`,{
+        method:'POST',body:JSON.stringify(decision==='COUNTER_AGAIN'
+          ?{decision,proposed_unit_price:proposed}:{decision})
+      });
+      await refreshSupplierCounteroffers();
+      toast.success('Decision saved. Publish a revised supplier quotation before buyer checkout.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  useEffect(()=>{
+    if(token&&user?.role==='SUPPLIER')refreshSupplierCounteroffers();
+  },[token,user?.role]);
 
   const updateQuoteDraft = (invitationId,patch) => {
     setSupplierQuoteDrafts(old=>({
@@ -430,12 +634,13 @@ export const RfqPage = () => {
           lines,delivery_fee:saved.delivery_fee||'0',
           delivery_lead_days:Number(saved.delivery_lead_days??2),
           valid_until:new Date(deadline).toISOString(),
-          supplier_notes:saved.supplier_notes||''
+          supplier_notes:saved.supplier_notes||'',
+          ...(saved.delivery_quote_code?{delivery_quote_code:saved.delivery_quote_code}:{})
         })
       });
       toast.success(`Quotation version ${result.quote.version_number} submitted`);
       await refreshMySmartQuotes();
-      await refreshSupplierNegotiations();
+      await refreshSupplierCounteroffers();
       setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
     }catch(error){toast.error(error.message);}
     finally{setQuoteBusy(false);}
@@ -444,7 +649,7 @@ export const RfqPage = () => {
   useEffect(()=>{
     if(token && user?.role==='SUPPLIER'){
       refreshMySmartQuotes().catch(error=>toast.error(error.message));
-      refreshSupplierNegotiations().catch(error=>toast.error(error.message));
+      refreshSupplierCounteroffers().catch(error=>toast.error(error.message));
     }
   },[token,user?.role]);
 
@@ -517,8 +722,8 @@ export const RfqPage = () => {
         cadence,timezone_name:'Asia/Karachi',local_run_time:recurringTime,
         starts_on:recurringStart,ends_on:recurringEnd||null,
         payment_policy:'EXPLICIT_PER_CYCLE',pricing_policy:'REQUOTE_EACH_CYCLE',
-        ...(cadence==='WEEKLY'?{weekday_number:Number(recurringCadenceDay)}
-          :{month_day:Number(recurringCadenceDay),month_end_policy:'LAST_DAY'})
+        ...(cadence!=='MONTHLY'?{weekday_number:recurringCadenceDay}
+          :{month_day:recurringCadenceDay,month_end_policy:'LAST_DAY'})
       };
       await procurementApi(`/api/v1/procurement/requests/${request.id}/recurring`,{
         method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
@@ -539,6 +744,7 @@ export const RfqPage = () => {
       });
       await refreshProcurementModes();
       toast.success('Recurring schedule updated without an automatic payment.');
+      if(recurringCyclesContract===contract.id)await loadActualRecurringCycles(contract.id);
     }catch(e){setShoppingError(e.message);}
     finally{setShoppingBusy(false);}
   };
@@ -553,6 +759,34 @@ export const RfqPage = () => {
   };
 
   // B6-J/K: private supplier bids and independent buyer consent.
+  const prepareCollectiveCommitment=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    const signature=`group:${user.id}:${groupId}:prepare`;
+    if(!awardIntents.current.has(signature))awardIntents.current.set(signature,'group-'+crypto.randomUUID());
+    try{
+      const result=await procurementApi(`/api/v1/procurement/collectives/${groupId}/commitment`,{method:'POST',headers:{'X-Idempotency-Key':awardIntents.current.get(signature)},body:'{}'});
+      await refreshRequests();await viewSmartComparison(result.request_id);
+      toast.success('Group stock held. Review your own physical terms and final amount; payment has not started.');
+    }catch(error){setShoppingError(error.message);}finally{setShoppingBusy(false);}
+  };
+  const confirmReviewedAward=async()=>{
+    if(!awardConsent||!awardPreview||awardAddress.trim().length<8)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const recoveredResponse=await fetch(`/api/v1/procurement/requests/${compareRequestId}/award`,{headers:{Authorization:`Bearer ${token}`}});
+      if(recoveredResponse.ok){const recovered=await recoveredResponse.json();if(recovered.data?.award?.orders?.length){navigate('/orders');return;}}
+      else if(recoveredResponse.status!==404)throw Error('Unable to confirm whether an award already exists. Refresh before submitting.');
+      if(Number(awardPreview.request_id)!==Number(compareRequestId)||!awardPreview.confirmed_selections?.every(line=>reviewedAwardLines[`${line.quote_id}:${line.request_item_id}:${line.version_number}`]))throw Error('Refresh and review every selected physical specification before confirming.');
+      const payload={selections:awardPreview.confirmed_selections,accepted_total_payable:awardPreview.total_payable,buyer_total_confirmed:true,delivery_address:awardAddress.trim()};
+      const signature=JSON.stringify([user.id,compareRequestId,payload]);
+      if(!awardIntents.current.has(signature))awardIntents.current.set(signature,'award-'+crypto.randomUUID());
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award`,{method:'POST',headers:{'X-Idempotency-Key':awardIntents.current.get(signature)},body:JSON.stringify(payload)});
+      navigate('/orders');
+    }catch(error){
+      try{const recovered=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award`);if(recovered.award?.orders?.length){navigate('/orders');return;}}catch{/* Keep original error; no unconfirmed success. */}
+      setShoppingError(error.message);
+    }finally{setShoppingBusy(false);}
+  };
   const openGroupBidding=async groupId=>{
     setShoppingBusy(true);setShoppingError('');
     try{
@@ -692,8 +926,65 @@ export const RfqPage = () => {
     finally{setShoppingBusy(false);}
   };
 
+  const refreshOpenRequests = async () => {
+    if (!token || user?.role !== 'SUPPLIER') return;
+    try {
+      setOpenRequestsLoading(true);
+      setOpenRequestsError('');
+      const data = await procurementApi('/api/v1/procurement/supplier/open-requests');
+      setOpenBuyerRequests(data.requests || []);
+      setOpenRequestsMeta({
+        eligible_supplier: data.eligible_supplier !== false,
+        active_listings_count: Number(data.active_listings_count || 0),
+        reason: data.reason || null,
+      });
+    } catch (err) {
+      setOpenRequestsError(err.message || 'Could not load open buyer requests.');
+    } finally {
+      setOpenRequestsLoading(false);
+    }
+  };
+
+  const submitOpenRequestQuote = async (openReq) => {
+    const draft = supplierQuoteDrafts[openReq.id] || {};
+    const lines = (openReq.items || []).flatMap((item) => {
+      const row = draft.lines?.[item.id] || {};
+      const selectedListing = row.supplier_listing_id || (item.matching_listings?.[0]?.id ? String(item.matching_listings[0].id) : '');
+      return selectedListing && row.unit_price
+        ? [{ request_item_id: item.id, supplier_listing_id: Number(selectedListing), quantity: item.quantity, unit_price: row.unit_price }]
+        : [];
+    });
+    if (!lines.length) {
+      toast.error('Select a compatible listing and enter your unit price in PKR.');
+      return;
+    }
+    setQuoteBusy(true);
+    try {
+      await procurementApi(`/api/v1/procurement/supplier/requests/${openReq.id}/quotes`, {
+        method: 'POST',
+        headers: { 'X-Idempotency-Key': newRequestKey() },
+        body: JSON.stringify({
+          lines,
+          delivery_fee: draft.delivery_fee || '0',
+          delivery_lead_days: Number(draft.delivery_lead_days ?? 1),
+          valid_until: draft.valid_until
+            ? new Date(draft.valid_until).toISOString()
+            : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          supplier_notes: draft.supplier_notes || undefined,
+        }),
+      });
+      toast.success('Quotation submitted to buyer.');
+      await Promise.all([refreshOpenRequests(), refreshMySmartQuotes()]);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
+
   useEffect(()=>{
     if(!token||user?.role!=='SUPPLIER')return;
+    refreshOpenRequests();
     refreshCollectiveSellerInbox();
     procurementApi('/api/v1/listings/me')
       .then(data=>setCollectiveSupplierListings((data.listings||[])
@@ -703,30 +994,33 @@ export const RfqPage = () => {
 
   return (
     <AppShell>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div id="smart-procurement-hub" className="miljor-smart-hub max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        {/* Header — Minimal Luxury Editorial Header */}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-7">
           <div>
-            <span className="text-xs uppercase tracking-wider font-semibold text-[var(--brand-accent)] block mb-1">
-              Custom Procurement Desk
+            <span
+              className="landing-tagline inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em] mb-3"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)', backgroundColor: 'var(--bg-card)' }}
+            >
+              Mil Kar Khareedo, Behtar Pao
             </span>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
-              Get Best Quotes
+            <h1 className="text-2xl sm:text-3xl font-sans font-bold tracking-tight text-[var(--text-primary)]">
+              {user?.role === 'SUPPLIER' ? 'Supplier Sourcing Hub' : 'Sourcing Hub'}
             </h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
-              One shopping list, flexible suppliers, clearer wholesale comparisons. Start by creating a multi-product request below.
+            <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-xl">
+              {user?.role === 'SUPPLIER'
+                ? 'Discover eligible open buyer requests, submit verified quotations, and respond to invitations.'
+                : 'Request wholesale quotes, compare verified suppliers, and schedule deliveries.'}
             </p>
           </div>
-
-
         </div>
 
         {user?.role === 'BUYER' && (
-          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Get Best Quotes">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent)]">Smart Procurement Hub</p>
-              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Get Best Quotes — Your Shopping List</h2>
-              <p className="text-sm text-[var(--text-muted)] mt-1">Choose solo or group purchasing, one product or a complete shopping list, and one-time or recurring procurement. Payments require a later explicit buyer confirmation.</p>
+          <section className="mb-8 rounded-[1.75rem] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 sm:p-8 shadow-sm space-y-5" aria-label="Sourcing Hub">
+            <div className="border-b border-[var(--border-subtle)] pb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-accent)]">Wholesale Request</p>
+              <h2 className="text-xl font-sans font-bold tracking-tight text-[var(--text-primary)] mt-1">New Sourcing List</h2>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">Solo or collective buying, one-time or scheduled. Nothing is charged until you confirm an offer.</p>
             </div>
             {user?.role === 'BUYER' && (!user.is_verified || !['VERIFIED', 'EMAIL_VERIFIED'].includes(user.verification_status)) && (
               <div role="status" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-sm text-[var(--text-primary)]">
@@ -737,21 +1031,22 @@ export const RfqPage = () => {
               </div>
             )}
             {shoppingError && <p role="alert" className="text-sm text-red-600">{shoppingError}</p>}
-            <div className="grid sm:grid-cols-2 gap-3">
-              <label className="text-xs font-semibold">How would you like to buy?
+            <div className="grid sm:grid-cols-2 gap-3.5">
+              <label className="text-xs font-semibold">Purchasing Mode
                 <select value={buyerMode}
                   onChange={e=>{setBuyerMode(e.target.value);if(e.target.value==='COLLECTIVE')setPurchaseCadence('ONE_TIME');}}
                   className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                  <option value="SINGLE_BUYER">Buy Alone — My Business</option>
-                  <option value="COLLECTIVE">Buy Together — Verified Businesses</option>
+                  <option value="SINGLE_BUYER">Solo Business</option>
+                  <option value="COLLECTIVE">Collective Businesses</option>
                 </select>
               </label>
-              <label className="text-xs font-semibold">How often?
+              <label className="text-xs font-semibold">Schedule
                 <select value={purchaseCadence} onChange={e=>setPurchaseCadence(e.target.value)}
                   className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                  <option value="ONE_TIME">One-Time Purchase</option>
-                  <option value="WEEKLY" disabled={buyerMode==='COLLECTIVE'}>Weekly Recurring</option>
-                  <option value="MONTHLY" disabled={buyerMode==='COLLECTIVE'}>Monthly Recurring</option>
+                  <option value="ONE_TIME">One-Time Order</option>
+                  <option value="WEEKLY" disabled={buyerMode==='COLLECTIVE'}>Weekly</option>
+                  <option value="BIWEEKLY" disabled={buyerMode==='COLLECTIVE'}>Every Two Weeks</option>
+                  <option value="MONTHLY" disabled={buyerMode==='COLLECTIVE'}>Monthly</option>
                 </select>
               </label>
             </div>
@@ -767,18 +1062,17 @@ export const RfqPage = () => {
                     onChange={e=>setMinimumBuyers(Number(e.target.value))}
                     className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
                 </label>
-                <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">
-                  Private invitations and individual quantity consent are available in this stage.
-                  Collective supplier bids, group checkout and collective recurring follow their financial gates.
+                <p className="sm:col-span-2 text-xs text-[var(--text-secondary)]">
+                  Invited businesses confirm their own quantities independently before supplier bids open.
                 </p>
               </div>
             )}
             {buyerMode==='SINGLE_BUYER' && purchaseCadence!=='ONE_TIME' && (
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="text-xs font-semibold">
-                  {purchaseCadence==='WEEKLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
-                  <input type="number" min={purchaseCadence==='WEEKLY'?0:1}
-                    max={purchaseCadence==='WEEKLY'?6:31} value={recurringCadenceDay}
+                  {purchaseCadence!=='MONTHLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
+                  <input type="number" min={purchaseCadence!=='MONTHLY'?0:1}
+                    max={purchaseCadence!=='MONTHLY'?6:31} value={recurringCadenceDay}
                     onChange={e=>setRecurringCadenceDay(e.target.value)}
                     className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
                 </label>
@@ -841,33 +1135,126 @@ export const RfqPage = () => {
               className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--brand-accent)] disabled:opacity-40">
               <Plus size={15}/> Add another product
             </button>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <label className="text-xs font-semibold">Your delivery area
-                <input value={deliveryArea} maxLength={255} placeholder="e.g. Johar Town, Lahore"
-                  onChange={e=>setDeliveryArea(e.target.value)}
-                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
-              </label>
-              <label className="text-xs font-semibold">Quotation closing time (Pakistan local time)
-                <input type="datetime-local" value={quoteDeadline} onChange={e=>setQuoteDeadline(e.target.value)}
-                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2.5">
+                {deliveryAddresses.length > 0 && (
+                  <label className="block text-xs font-semibold">Saved Address (optional)
+                    <select
+                      value={chosenAddress}
+                      onChange={(e) => {
+                        const picked = deliveryAddresses.find((a) => String(a.id) === String(e.target.value));
+                        if (picked) {
+                          setChosenAddress(String(picked.id));
+                          setDeliveryArea(
+                            [
+                              picked.society_area,
+                              picked.cluster_name || (picked.cluster_id ? `Cluster #${picked.cluster_id}` : ''),
+                              picked.full_address,
+                            ]
+                              .filter(Boolean)
+                              .join(', ')
+                          );
+                        } else {
+                          setChosenAddress('');
+                        }
+                      }}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"
+                    >
+                      <option value="">Select a saved address...</option>
+                      {deliveryAddresses.map((addr) => (
+                        <option key={addr.id} value={addr.id}>
+                          {[
+                            addr.society_area,
+                            addr.cluster_name || (addr.cluster_id ? `Cluster #${addr.cluster_id}` : ''),
+                            addr.full_address,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label className="block text-xs font-semibold">Delivery Area
+                  <input value={deliveryArea} maxLength={255} placeholder="e.g. Johar Town, Lahore"
+                    onChange={e=>setDeliveryArea(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+                </label>
+              </div>
+              <label className="block text-xs font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-800 dark:text-champagne" />
+                  <span>Quote Deadline (PKT)</span>
+                </span>
+                <input
+                  type="datetime-local"
+                  value={quoteDeadline}
+                  onChange={e=>setQuoteDeadline(e.target.value)}
+                  className="miljor-datetime-input block w-full px-3.5 py-2.5 mt-1 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] text-sm font-medium tabular-nums tracking-wide"
+                />
               </label>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <label className="block text-xs font-semibold">Target Price (PKR, optional)
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={targetPricePkr}
+                  onChange={e=>setTargetPricePkr(e.target.value)}
+                  placeholder="Optional target price per order"
+                  className="block w-full p-2.5 mt-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"
+                />
+              </label>
+              <label className="block text-xs font-semibold">Required Delivery Date (optional)
+                <input
+                  type="date"
+                  value={requiredDeliveryDate}
+                  onChange={e=>setRequiredDeliveryDate(e.target.value)}
+                  className="miljor-datetime-input block w-full p-2.5 mt-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"
+                />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={openToSuppliers}
+                onChange={e=>setOpenToSuppliers(e.target.checked)}
+                className="rounded cursor-pointer"
+              />
+              <span>Publish as an Open Buyer Request visible to eligible verified suppliers (private contact details remain hidden)</span>
+            </label>
+            <div className="flex flex-wrap gap-2.5 pt-1">
               <button type="button" disabled={shoppingBusy}
                 onClick={()=>submitShoppingList(false)}
-                className="rounded-xl px-4 py-2 border border-[var(--border-subtle)] text-sm font-semibold disabled:opacity-50">
+                className="rounded-full px-5 py-2.5 border border-[var(--border-default)] bg-[var(--bg-card)] text-xs font-semibold disabled:opacity-50 transition hover:opacity-90">
                 {shoppingBusy?'Saving...':'Save Draft'}
               </button>
               <button type="button" disabled={shoppingBusy||!quoteDeadline||buyerMode!=='SINGLE_BUYER'||purchaseCadence!=='ONE_TIME'}
                 onClick={()=>submitShoppingList(true)}
-                className="rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-sm font-semibold disabled:opacity-50">
+                className="landing-gradient-cta rounded-full px-5 py-2.5 bg-[var(--brand-accent)] text-[#17332a] text-xs font-semibold disabled:opacity-50">
                 Publish Shopping List
               </button>
               {activeRequest && <button type="button" disabled={shoppingBusy}
                 onClick={()=>{setActiveRequest(null);setShoppingList([emptyItem()]);setDeliveryArea('');setQuoteDeadline('');setShoppingError('');}}
-                className="text-sm px-3 py-2 underline">Start New</button>}
+                className="rounded-full px-4 py-2.5 border border-[var(--border-subtle)] text-xs font-semibold">Start New</button>}
             </div>
-            <p className="text-xs text-[var(--text-muted)]">No payment or inventory reservation happens when you publish or create a schedule/group. Solo one-time requests can receive supplier quotes now. Group bids and recurring payment remain gated until their completion tests.</p>
+            <p className="text-xs text-[var(--text-secondary)]">Publishing a shopping list or schedule never charges your account or locks stock automatically. Every order requires your explicit approval.</p>
+            {convertingLegacy && (
+              <div className="rounded-xl border border-[var(--brand-accent)]/40 bg-[var(--bg-surface)] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span>
+                  Reviewing legacy request <strong>{convertingLegacy.request_code}</strong> ({convertingLegacy.commodity_name} · {convertingLegacy.target_quantity} {convertingLegacy.target_unit}). Confirm delivery area &amp; deadline above, then click Convert to Draft.
+                </span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={shoppingBusy} onClick={convertLegacyToDraft} className="rounded-lg px-3 py-1.5 font-semibold text-white bg-[var(--brand-accent)]">
+                    Confirm &amp; Convert to Draft
+                  </button>
+                  <button type="button" disabled={shoppingBusy} onClick={() => setConvertingLegacy(null)} className="underline text-[var(--text-muted)]">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {savedRequests.length>0 && (
               <div className="border-t border-[var(--border-subtle)] pt-3">
                 <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
@@ -894,7 +1281,43 @@ export const RfqPage = () => {
                         {request.status==='OPEN' &&
                           <button type="button" disabled={quoteBusy} onClick={()=>viewSmartComparison(request.id)}
                             className="text-[var(--brand-accent)] underline text-xs">Compare offers</button>}
+                        {request.status==='OPEN' &&
+                          <button
+                            type="button"
+                            disabled={shoppingBusy}
+                            onClick={() => closeShoppingRequest(request)}
+                            className="text-xs font-medium text-[var(--text-secondary)] hover:underline cursor-pointer disabled:opacity-40"
+                          >
+                            Close
+                          </button>}
+                        <button
+                          type="button"
+                          disabled={shoppingBusy}
+                          onClick={() => deleteShoppingRequest(request)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 dark:text-rose-400 hover:opacity-80 cursor-pointer disabled:opacity-40"
+                          title="Delete request"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {legacyRequests.length>0 && (
+              <div className="border-t border-[var(--border-subtle)] pt-3">
+                <p className="text-sm font-semibold mb-2">Legacy Demand Requests (Unconverted)</p>
+                <div className="space-y-2">
+                  {legacyRequests.map(legacy=>(
+                    <div key={`legacy-${legacy.id}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span>
+                        <span className="inline-block rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-1.5 py-0.5 text-[10px] font-semibold mr-2">LEGACY</span>
+                        {legacy.request_code} · {legacy.commodity_name} · {legacy.target_quantity} {legacy.target_unit} · {legacy.status}
+                      </span>
+                      <button type="button" disabled={shoppingBusy} onClick={()=>reviewLegacyRequest(legacy)}
+                        className="text-[var(--brand-accent)] underline text-xs">Review &amp; Convert to Draft</button>
                     </div>
                   ))}
                 </div>
@@ -955,6 +1378,10 @@ export const RfqPage = () => {
                       <button type="button" disabled={shoppingBusy}
                         onClick={()=>showCollectiveBids(invite.group_id)}
                         className="text-xs underline">View private bids</button>}
+                    {invite.status==='LOCKED'&&invite.group_status==='QUALIFIED'&&<div className="text-xs space-y-2">
+                      <p>Every buyer creates and pays only their own order. Supplier preparation waits for the entire approved group to be funded. Unfunded group failures require explicit resolution; paid peers are never automatically repriced or refunded.</p>
+                      <button type="button" disabled={shoppingBusy} onClick={()=>prepareCollectiveCommitment(invite.group_id)} className="underline">Prepare my individual group order</button>
+                    </div>}
                     {invite.status==='INVITED'&&invite.group_status==='FORMING' && <>
                       {(invite.items||[]).map(item=>(
                         <label key={item.id} className="block text-xs">
@@ -1105,6 +1532,7 @@ export const RfqPage = () => {
                           <button type="button" disabled={shoppingBusy}
                             onClick={()=>prepareRecurringDraft(recurringCyclesContract,cycle.id)}
                             className="text-xs underline">Prepare Due Shopping Draft</button>}
+                        <RecurringCycleControls key={`${user.id}:${cycle.id}`} contractId={recurringCyclesContract} cycle={cycle} onChanged={()=>loadActualRecurringCycles(recurringCyclesContract)} />
                       </div>
                     ))}
                     <p className="text-xs text-amber-700">
@@ -1218,52 +1646,111 @@ export const RfqPage = () => {
                     <p className="text-sm font-semibold">Supplier quote total: Rs. {awardPreview.supplier_quoted_total}</p>
                     <p className="text-sm font-semibold">MilJor buyer processing fee: Rs. {awardPreview.buyer_platform_fee_total}</p>
                     <p className="text-base font-semibold">Calculated basket payable: Rs. {awardPreview.total_payable}</p>
-                    <p className="text-xs text-amber-700">
-                      Nonbinding preflight only. Tax policy and authoritative inventory checkout gate are not yet approved.
-                      No stock is reserved, order created or payment requested.
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Order breakdown preview only. Creating or paying for an order requires your explicit confirmation below.
                     </p>
+                    <label className="block text-xs">Your delivery address or agreed pickup destination<input aria-label="Final award delivery address" value={awardAddress} onChange={event=>{setAwardAddress(event.target.value);setAwardConsent(false);}} className="block w-full p-2 rounded-lg border bg-[var(--bg-surface)]"/></label>
+                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={awardConsent} onChange={event=>setAwardConsent(event.target.checked)}/>I approve these selected physical specifications and the displayed final amount. Order creation remains subject to server financial gates; payment is a separate action.</label>
+                    <button type="button" disabled={shoppingBusy||!awardConsent||awardAddress.trim().length<8} onClick={confirmReviewedAward} className="text-xs underline">Confirm reviewed terms through gated checkout</button>
                   </section>
                 )}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold">Ask a supplier for a better offer</p>
+                <div className="space-y-3" aria-label="Product-wise numeric counteroffers">
+                  <p className="text-sm font-semibold">Product-Level Price Counteroffers</p>
+                  <label className="flex flex-col gap-1 text-xs">
+                    Check supplier delivery eligibility for your cluster
+                    <select value={deliveryClusterId} onChange={e=>{
+                      setDeliveryClusterId(e.target.value);setDeliveryOptionResults({});
+                    }} className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                      <option value="">Select delivery cluster</option>
+                      {deliveryClusters.map(cluster=>(
+                        <option key={cluster.id} value={cluster.id}>{cluster.name}</option>
+                      ))}
+                    </select>
+                  </label>
                   {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
-                    <div key={quote.id} className="border-t border-[var(--border-subtle)] pt-2 space-y-2">
+                    <div key={quote.id} className="border border-[var(--border-subtle)] rounded-xl p-3 space-y-3">
                       <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
-                      <div className="grid sm:grid-cols-2 gap-2">
-                        <input value={improvementNotes[quote.id]||''}
-                          onChange={e=>setImprovementNotes(old=>({...old,[quote.id]:e.target.value}))}
-                          maxLength={1000} placeholder="e.g. Can you improve the delivery fee?"
-                          aria-label={`Requested improvement for quote ${quote.id}`}
-                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
-                        <input value={improvementTargets[quote.id]||''}
-                          onChange={e=>setImprovementTargets(old=>({...old,[quote.id]:e.target.value}))}
-                          placeholder="Optional target total (Rs.)" inputMode="decimal"
-                          aria-label={`Optional target for quote ${quote.id}`}
-                          className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      <div className="space-y-1 text-xs">
+                        <span>Current supplier delivery fee: Rs. {quote.delivery_fee} · Quoted lead time: {quote.delivery_lead_days} days</span>
+                        {quote.quote_snapshot?.delivery_terms&&<p>Supplier-approved {quote.quote_snapshot.delivery_terms.mode} · Rs. {quote.quote_snapshot.delivery_terms.fee} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.point_name||'saved destination'} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.address_line} · Review these terms together with the selected products.</p>}
+                        <button type="button" disabled={quoteBusy||!deliveryClusterId}
+                          onClick={()=>viewSupplierDeliveryOptions(quote)}
+                          className="ml-2 underline disabled:opacity-40">Check Delivery Options</button>
+                        {deliveryOptionResults[quote.id]&&(
+                          <div className="rounded-lg p-2 bg-[var(--bg-card)] space-y-1">
+                            <p className="font-semibold">Eligible delivery modes (not yet selected)</p>
+                            <label>Saved delivery address
+                              <select value={chosenAddress} onChange={event=>setChosenAddress(event.target.value)} className="block w-full p-2 border rounded">
+                                <option value="">Select saved address</option>
+                                {deliveryAddresses.map(address => (
+                                  <option key={address.id} value={address.id}>
+                                    {[
+                                      address.society_area,
+                                      address.cluster_name || (address.cluster_id ? `Cluster #${address.cluster_id}` : ''),
+                                      address.full_address,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            {(deliveryOptionResults[quote.id].eligible_modes||[]).length
+                              ?deliveryOptionResults[quote.id].eligible_modes.map(mode=>(
+                                <div key={mode.mode}>
+                                  <span>{mode.label||mode.mode}</span>
+                                  {mode.mode==='PICKUP'?(mode.pickup_points||[]).map(point=><button type="button" disabled={quoteBusy} key={point.id} onClick={()=>chooseDelivery(quote,mode.mode,point.id)} className="ml-2 underline">Request pickup at {point.point_name||point.id} · {point.address_line} · Rs. {point.handling_fee_pkr}</button>):
+                                    <button type="button" disabled={quoteBusy||!chosenAddress} onClick={()=>chooseDelivery(quote,mode.mode)} className="ml-2 underline">Request this mode · Rs. {mode.fee_pkr}</button>}
+                                </div>
+                              ))
+                              :<p>No eligible modes found for this supplier and cluster.</p>}
+                            <p className="text-[var(--text-muted)]">Rates and modes require a confirmed supplier quotation and your approval before checkout.</p>
+                            {deliveryChoices[quote.id]&&<p>Requested {deliveryChoices[quote.id].mode} · Rs. {deliveryChoices[quote.id].fee} · awaiting supplier revised quote</p>}
+                          </div>
+                        )}
                       </div>
-                      <button type="button" disabled={quoteBusy ||
-                        buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
-                          Number(n.requested_version)===Number(quote.current_version))}
-                        onClick={()=>requestBetterSmartOffer(quote.id,quote.current_version)}
-                        className="text-xs underline disabled:opacity-40">
-                        {buyerNegotiations.some(n=>Number(n.quote_id)===Number(quote.id) &&
-                          Number(n.requested_version)===Number(quote.current_version))
-                          ? 'Improvement already requested for this version' : 'Request Better Offer'}
+                      {(quote.quote_snapshot?.lines||[]).map(line=>{
+                        const already=buyerCounteroffers.some(o=>Number(o.quote_id)===Number(quote.id)&&
+                          Number(o.quote_version)===Number(quote.current_version)&&Number(o.request_item_id)===Number(line.request_item_id));
+                        return (
+                          <label key={line.request_item_id} className="grid sm:grid-cols-2 gap-2 items-center text-xs">
+                            <span>{line.snapshot?.product_title||'Selected product'} · Supplier Rs. {line.unit_price} per unit
+                              {already&&<span className="ml-2 text-[var(--brand-accent)]">Counteroffer recorded</span>}
+                            </span>
+                            <input type="number" step="0.01" min="0.01" inputMode="decimal"
+                              disabled={quoteBusy||already} placeholder="Your proposed unit price (PKR)"
+                              aria-label={`Counteroffer price for product ${line.request_item_id}`}
+                              value={counterofferDrafts[quote.id]?.[line.request_item_id]||''}
+                              onChange={event=>setCounterofferDrafts(old=>({
+                                ...old,[quote.id]:{...(old[quote.id]||{}),[line.request_item_id]:event.target.value}
+                              }))}
+                              className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                          </label>
+                        );
+                      })}
+                      <button type="button" disabled={quoteBusy}
+                        onClick={()=>submitProductCounteroffers(quote)}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold bg-[var(--brand-accent)] text-stone-900 disabled:opacity-40">
+                        Submit Selected Product Counteroffers
                       </button>
                     </div>
                   ))}
+                  {buyerCounteroffers.length>0&&(
+                    <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
+                      <p className="text-xs font-semibold">Product Counteroffer History</p>
+                      {buyerCounteroffers.map(offer=>(
+                        <p key={offer.id} className="text-xs text-[var(--text-muted)]">
+                          Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                          Rs. {offer.quoted_unit_price} to Rs. {offer.buyer_proposed_unit_price} · {offer.decision}
+                          {offer.supplier_proposed_unit_price&&` · Supplier Rs. ${offer.supplier_proposed_unit_price}`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--text-muted)]">
+                    All offers are nonbinding. Supplier must publish a revised quotation and buyer must explicitly approve it.
+                  </p>
                 </div>
-                {buyerNegotiations.length>0 && (
-                  <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
-                    <p className="text-xs font-semibold">Negotiation history</p>
-                    {buyerNegotiations.map(n=>(
-                      <p key={n.id} className="text-xs text-[var(--text-muted)]">
-                        Quote #{n.quote_id} · v{n.requested_version} · {n.status} · {n.buyer_message}
-                        {n.responded_version ? ` · Supplier revised to v${n.responded_version}`:''}
-                      </p>
-                    ))}
-                  </div>
-                )}
               </section>
             )}
             {selectedQuotesRequest && (
@@ -1337,8 +1824,190 @@ export const RfqPage = () => {
         )}
 
         {user?.role === 'SUPPLIER' && (
+          <section
+            id="supplier-open-requests"
+            aria-label="Open Buyer Requests"
+            className="mb-8 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 space-y-4 shadow-sm"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
+              <div>
+                <p className="miljor-section-kicker text-[11px] font-bold uppercase tracking-wider">Open Market Discovery</p>
+                <h2 className="text-lg font-serif font-bold text-[var(--text-primary)]">Open Buyer Requests</h2>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Published requests matching your active catalog families and delivery coverage. Private buyer details are hidden.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={refreshOpenRequests}
+                disabled={openRequestsLoading}
+                className="px-3.5 py-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+              >
+                {openRequestsLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            {openRequestsError && (
+              <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">{openRequestsError}</p>
+            )}
+
+            {openRequestsLoading ? (
+              <p className="text-xs text-[var(--text-secondary)] py-3">Loading eligible open buyer requests...</p>
+            ) : !openRequestsMeta.eligible_supplier ? (
+              <div className="p-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-xs text-[var(--text-secondary)]">
+                Your supplier account must be verified before viewing or quoting open buyer requests.
+              </div>
+            ) : openRequestsMeta.active_listings_count === 0 ? (
+              <div className="p-5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs space-y-1">
+                  <p className="font-semibold text-[var(--text-primary)]">No ACTIVE catalog listings found</p>
+                  <p className="text-[var(--text-secondary)]">
+                    Create and activate at least one compatible product listing to discover and quote matching buyer requests.
+                  </p>
+                </div>
+                <Link
+                  to="/supplier/catalog"
+                  className="landing-gradient-cta px-4 py-2 rounded-xl text-xs font-semibold"
+                >
+                  Create / Activate Listing
+                </Link>
+              </div>
+            ) : openBuyerRequests.length === 0 ? (
+              <p className="text-xs text-[var(--text-secondary)] py-2">
+                No matching open buyer requests are active right now.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {openBuyerRequests.map((reqItem) => {
+                  const draft = supplierQuoteDrafts[reqItem.id] || {};
+                  return (
+                    <article
+                      key={reqItem.id}
+                      className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 sm:p-5 space-y-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{reqItem.request_code}</span>
+                          <span className="text-xs text-[var(--text-secondary)] ml-2">· {reqItem.delivery_area}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                          {reqItem.target_price_pkr && (
+                            <span className="px-2.5 py-0.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] font-semibold text-[var(--text-primary)]">
+                              Target: PKR {Number(reqItem.target_price_pkr).toLocaleString()}
+                            </span>
+                          )}
+                          <span className="px-2.5 py-0.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-secondary)]">
+                            Quotes: {reqItem.quote_count}
+                          </span>
+                          {reqItem.already_quoted && (
+                            <span className="miljor-badge-verified px-2.5 py-0.5 rounded-full border font-semibold">
+                              Quoted
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-[var(--text-muted)] flex flex-wrap gap-3">
+                        <span>Expires: {new Date(reqItem.quote_deadline).toLocaleString()}</span>
+                        {reqItem.required_delivery_date && (
+                          <span>Needed by: {new Date(reqItem.required_delivery_date).toLocaleDateString()}</span>
+                        )}
+                      </div>
+
+                      <div className="space-y-2.5 border-t border-[var(--border-subtle)] pt-3">
+                        {(reqItem.items || []).map((item) => {
+                          const row = draft.lines?.[item.id] || {};
+                          const defaultListingId = row.supplier_listing_id || (item.matching_listings?.[0]?.id ? String(item.matching_listings[0].id) : '');
+                          return (
+                            <div key={item.id} className="grid sm:grid-cols-3 gap-2.5 items-end text-xs">
+                              <div>
+                                <p className="font-semibold text-[var(--text-primary)]">
+                                  {item.family_name} · {Number(item.quantity)} {item.unit}
+                                </p>
+                                {item.requirements && (
+                                  <p className="text-[11px] text-[var(--text-secondary)]">{item.requirements}</p>
+                                )}
+                              </div>
+                              <label className="font-medium text-[var(--text-secondary)]">
+                                Compatible Listing
+                                <select
+                                  value={defaultListingId}
+                                  onChange={(e) => updateSupplierQuoteDraft(reqItem.id, {
+                                    lines: { ...(draft.lines || {}), [item.id]: { ...row, supplier_listing_id: e.target.value } },
+                                  })}
+                                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                                >
+                                  {(item.matching_listings || []).map((l) => (
+                                    <option key={l.id} value={l.id}>
+                                      #{l.id} · {l.spec_title || l.title}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="font-medium text-[var(--text-secondary)]">
+                                Unit Price (PKR / {item.unit})
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={row.unit_price || ''}
+                                  onChange={(e) => updateSupplierQuoteDraft(reqItem.id, {
+                                    lines: { ...(draft.lines || {}), [item.id]: { ...row, supplier_listing_id: defaultListingId, unit_price: e.target.value } },
+                                  })}
+                                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                                />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="grid sm:grid-cols-3 gap-2.5 text-xs pt-1">
+                        <label className="font-medium text-[var(--text-secondary)]">
+                          Delivery Fee (PKR)
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.delivery_fee ?? '0'}
+                            onChange={(e) => updateSupplierQuoteDraft(reqItem.id, { delivery_fee: e.target.value })}
+                            className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                          />
+                        </label>
+                        <label className="font-medium text-[var(--text-secondary)]">
+                          Lead Time (Days)
+                          <input
+                            type="number"
+                            min="0"
+                            max="90"
+                            value={draft.delivery_lead_days ?? '1'}
+                            onChange={(e) => updateSupplierQuoteDraft(reqItem.id, { delivery_lead_days: e.target.value })}
+                            className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                          />
+                        </label>
+                        <div className="flex items-end">
+                          <button
+                            type="button"
+                            disabled={quoteBusy}
+                            onClick={() => submitOpenRequestQuote(reqItem)}
+                            className="landing-gradient-cta w-full py-2 px-4 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50"
+                          >
+                            {reqItem.already_quoted ? 'Update Quotation' : 'Submit Quotation'}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {user?.role === 'SUPPLIER' && (
           <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3"
-            aria-label="Collective group supplier bidding">
+            id="supplier-collective" aria-label="Collective group supplier bidding">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-serif font-semibold">Collective Supplier Bids</h2>
               <button type="button" className="text-xs underline"
@@ -1414,28 +2083,42 @@ export const RfqPage = () => {
         )}
 
         {user?.role === 'SUPPLIER' && (
-          <section aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
+          <section id="supplier-invitations" aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
             <div className="flex justify-between items-center gap-3">
               <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
               <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
-            {supplierNegotiations.length>0 && (
-              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
-                <p className="text-sm font-semibold">Requests for Better Offers</p>
-                {supplierNegotiations.map(n=>(
-                  <div key={n.id} className="border-t border-[var(--border-subtle)] pt-2">
-                    <p className="text-xs font-semibold">Quote #{n.quote_id} · Request #{n.request_id} · {n.status}</p>
-                    <p className="text-xs">{n.buyer_message}</p>
-                    {n.buyer_target_total && <p className="text-xs">Buyer suggested total: Rs. {n.buyer_target_total}</p>}
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {n.status==='OPEN'?'To respond, submit a revised quote using the existing invitation quotation form.':
-                        `Responded with quote version ${n.responded_version||'pending'}.`}
-                    </p>
-                  </div>
-                ))}
+            <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+              <div className="flex items-center justify-between">
+                <p id="supplier-counteroffers" className="text-sm font-semibold">Product Counteroffers</p>
+                <button type="button" className="text-xs underline" onClick={refreshSupplierCounteroffers}>Refresh</button>
               </div>
-            )}
+              {supplierCounteroffers.length===0&&<p className="text-xs text-[var(--text-muted)]">No product counteroffers yet.</p>}
+              {supplierCounteroffers.map(offer=>(
+                <div key={offer.id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                  <p className="text-xs">Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                    Your price Rs. {offer.quoted_unit_price} · Buyer offers Rs. {offer.buyer_proposed_unit_price}</p>
+                  <p className="text-xs font-semibold">{offer.decision}</p>
+                  {offer.decision==='OPEN'&&(
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'ACCEPT')} className="text-xs underline">Accept</button>
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'REJECT')} className="text-xs underline">Reject</button>
+                      <input type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="Your new unit price"
+                        aria-label={`Supplier counter price for product ${offer.request_item_id}`}
+                        value={supplierCounterDrafts[offer.id]||''}
+                        onChange={e=>setSupplierCounterDrafts(old=>({...old,[offer.id]:e.target.value}))}
+                        className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      <button type="button" disabled={quoteBusy||!supplierCounterDrafts[offer.id]}
+                        onClick={()=>respondProductCounteroffer(offer,'COUNTER_AGAIN')} className="text-xs underline">Counter Again</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-[var(--text-muted)]">
+                Accept/Counter Again records a nonbinding decision. Send a revised quotation for buyer approval.
+              </p>
+            </div>
             {mySmartQuotes.length>0 && (
               <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
                 <p className="text-sm font-semibold">My submitted quotations</p>
@@ -1494,6 +2177,12 @@ export const RfqPage = () => {
                     })}
                     <div className="grid sm:grid-cols-2 gap-2">
                       <label className="text-xs font-semibold">Delivery fee (Rs.)
+                        <button type="button" className="ml-2 underline" disabled={quoteBusy} onClick={()=>loadSupplierDeliveryChoices(invitation)}>Load buyer delivery choices</button>
+                        {(deliveryChoices['supplier:'+invitation.invitation_id]||[]).map(terms=><button key={terms.quote_code} type="button" className="block underline" onClick={()=>{
+                          const localTime=new Date(new Date(terms.expires_at).getTime()-new Date(terms.expires_at).getTimezoneOffset()*60000).toISOString().slice(0,16);
+                          updateQuoteDraft(invitation.invitation_id,{delivery_quote_code:terms.quote_code,delivery_fee:terms.fee,valid_until:localTime});
+                        }}>Confirm {terms.mode} · Rs. {terms.fee} · {terms.quote_code}</button>)}
+                        {(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_quote_code&&<span className="block">Delivery terms selected for revised quote</span>}
                         <input value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_fee??'0'}
                           onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_fee:event.target.value})}
                           className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>

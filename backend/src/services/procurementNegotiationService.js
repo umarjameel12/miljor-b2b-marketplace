@@ -134,6 +134,107 @@ class ProcurementNegotiationService{
     // No buyer identity, contact or private delivery address.
     return rows;
   }
+
+  async forSupplierCounteroffers(supplierId, { limit = 50, offset = 0 } = {}) {
+    const supplier = id(supplierId);
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+    const safeOffset = Math.max(0, Number(offset) || 0);
+
+    const [[countRow]] = await this.database.query(
+      'SELECT COUNT(*) AS total FROM procurement_quote_negotiations WHERE supplier_id = ?',
+      [supplier]
+    );
+    const [rows] = await this.database.query(
+      `SELECT n.id, n.request_id, n.quote_id, n.requested_version, n.status,
+              n.buyer_message, n.buyer_target_total, n.responded_version,
+              n.created_at, n.responded_at,
+              v.quoted_total
+       FROM procurement_quote_negotiations n
+       LEFT JOIN procurement_quote_versions v
+         ON v.quote_id = n.quote_id AND v.version_number = n.requested_version
+       WHERE n.supplier_id = ?
+       ORDER BY n.created_at DESC, n.id DESC
+       LIMIT ? OFFSET ?`,
+      [supplier, safeLimit, safeOffset]
+    );
+
+    // Strictly no buyer identity, contact or private delivery address.
+    const counteroffers = rows.map((row) => ({
+      id: row.id,
+      request_id: row.request_id,
+      quote_id: row.quote_id,
+      request_item_id: row.requested_version,
+      requested_version: row.requested_version,
+      responded_version: row.responded_version,
+      quoted_unit_price: row.quoted_total ?? null,
+      buyer_proposed_unit_price: row.buyer_target_total ?? null,
+      buyer_message: row.buyer_message,
+      decision: row.status,
+      status: row.status,
+      created_at: row.created_at,
+      responded_at: row.responded_at,
+    }));
+
+    return {
+      counteroffers,
+      pagination: { limit: safeLimit, offset: safeOffset, total: Number(countRow?.total || 0) },
+    };
+  }
+
+  async respondToCounteroffer(supplierId, offerId, { decision, proposed_unit_price = null } = {}) {
+    const supplier = id(supplierId);
+    const oid = id(offerId);
+    const normalizedDecision = String(decision || '').toUpperCase().trim();
+    if (!['ACCEPT', 'REJECT', 'COUNTER_AGAIN'].includes(normalizedDecision)) {
+      throw fail('INVALID_DECISION', 'Decision must be ACCEPT, REJECT, or COUNTER_AGAIN.');
+    }
+    let proposedPrice = null;
+    if (normalizedDecision === 'COUNTER_AGAIN') {
+      proposedPrice = money(proposed_unit_price);
+      if (!proposedPrice) {
+        throw fail('INVALID_TARGET_TOTAL', 'Proposed counter price must be a positive PKR amount.');
+      }
+    }
+
+    const conn = await this.database.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query(
+        `SELECT id, request_id, quote_id, buyer_id, supplier_id, status
+         FROM procurement_quote_negotiations
+         WHERE id = ? AND supplier_id = ? FOR UPDATE`,
+        [oid, supplier]
+      );
+      if (!rows.length) {
+        throw fail('COUNTEROFFER_NOT_FOUND', 'Counteroffer not found.', 404);
+      }
+      const offer = rows[0];
+      if (offer.status !== 'OPEN') {
+        throw fail('COUNTEROFFER_NOT_OPEN', 'Counteroffer has already been responded to or closed.', 409);
+      }
+      const nextStatus = normalizedDecision === 'REJECT' ? 'CLOSED' : 'RESPONDED';
+      await conn.query(
+        `UPDATE procurement_quote_negotiations
+         SET status = ?, responded_at = UTC_TIMESTAMP()
+         WHERE id = ? AND supplier_id = ?`,
+        [nextStatus, oid, supplier]
+      );
+      await conn.commit();
+      return {
+        id: oid,
+        request_id: offer.request_id,
+        quote_id: offer.quote_id,
+        decision: normalizedDecision,
+        status: nextStatus,
+        proposed_unit_price: proposedPrice,
+      };
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  }
 }
 module.exports=new ProcurementNegotiationService();
 module.exports.ProcurementNegotiationService=ProcurementNegotiationService;

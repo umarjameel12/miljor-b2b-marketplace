@@ -27,6 +27,8 @@ router.post('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res
 router.get('/procurement/requests', protect, authorizeStrict('BUYER'), (req,res)=>controller.listSmartRequests(req,res));
 router.get('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.getSmartRequest(req,res));
 router.patch('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.updateSmartRequest(req,res));
+router.delete('/procurement/requests/:id', protect, authorizeStrict('BUYER'), (req,res)=>controller.deleteSmartRequest(req,res));
+router.post('/procurement/requests/:id/close', protect, authorizeStrict('BUYER'), (req,res)=>controller.closeSmartRequest(req,res));
 router.post('/procurement/requests/:id/publish', protect, authorizeStrict('BUYER'), (req,res)=>controller.publishSmartRequest(req,res));
 
 // B6-D supplier matching; buyer-only discovery and invitations.
@@ -35,6 +37,7 @@ router.get('/procurement/requests/:id/matches',protect,authorizeStrict('BUYER'),
 router.get('/procurement/requests/:id/invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listSmartInvitations(req,res));
 router.post('/procurement/requests/:id/invitations',protect,authorizeStrict('BUYER'),(req,res)=>controller.inviteSmartSupplier(req,res));
 router.get('/procurement/supplier/invitations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.smartSupplierInbox(req,res));
+router.get('/procurement/supplier/open-requests',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listOpenRequestsForSupplier(req,res));
 router.post('/procurement/supplier/invitations/:invitationId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondSmartInvitation(req,res));
 
 // B6-E supplier-owned versioned quotations; buyer reads are strictly scoped.
@@ -49,6 +52,10 @@ router.get('/procurement/requests/:id/compare',protect,authorizeStrict('BUYER'),
 router.post('/procurement/requests/:id/quotes/:quoteId/improve',protect,authorizeStrict('BUYER'),(req,res)=>controller.requestSmartBetterOffer(req,res));
 router.get('/procurement/requests/:id/negotiations',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerSmartNegotiations(req,res));
 router.get('/procurement/supplier/negotiations',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierSmartNegotiations(req,res));
+router.get('/procurement/requests/:id/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.listBuyerCounteroffers(req,res));
+router.post('/procurement/requests/:id/quotes/:quoteId/counteroffers',protect,authorizeStrict('BUYER'),(req,res)=>controller.submitBuyerCounteroffers(req,res));
+router.get('/procurement/supplier/counteroffers',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.listSupplierCounteroffers(req,res));
+router.post('/procurement/supplier/counteroffers/:offerId/respond',protect,authorizeStrict('SUPPLIER'),(req,res)=>controller.respondSupplierCounteroffer(req,res));
 
 // B6-G/H award preview: buyer explicitly selects quote version and physical SKU.
 // No order, hold, ledger or checkout route is exposed before inventory/Safepay gate.

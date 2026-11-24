@@ -370,7 +370,7 @@ export function SupplierPoolsPage(){
           {form.delivery_type==='SUPPLIER_PICKUP'&&<p className="text-xs text-[var(--text-muted)]">
             Active pickup location required. Available: {(operations.delivery?.pickup_points||[]).filter(p=>p.is_active).map(p=>p.point_name).join(', ')||'None'}.
           </p>}
-          <p className="text-xs text-[var(--text-muted)]">Regular reservations, commercial qualification, delivery clusters and buyer commitments remain governed by B4. Pricing is not guaranteed until terms are locked.</p>
+          <p className="text-xs text-[var(--text-muted)]">Regular pool reservations, commercial qualification, delivery clusters and buyer commitments lock final pricing only when commercial terms are confirmed.</p>
         </>:<>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Ready stock (listing purchase units)" value={form.total_stock} onChange={v=>update('total_stock',v)} step="0.01"/>
@@ -393,7 +393,7 @@ export function SupplierPoolsPage(){
           <label className="block text-xs font-semibold space-y-1">Stock condition notes
             <textarea value={form.condition_notes} maxLength={2000} onChange={e=>update('condition_notes',e.target.value)} rows={3} className="w-full rounded-xl border p-3 bg-[var(--bg-elevated)] border-[var(--border-subtle)]"/>
           </label>
-          <p className="text-xs text-[var(--text-muted)]">Flash uses B5 ready-stock allocation and a buyer delivery address, its existing fixed delivery fee, instant stock hold and Safepay checkout. Supplier clustered pricing and pickup are not represented as an accepted B5 delivery quote.</p>
+          <p className="text-xs text-[var(--text-muted)]">Flash pools use ready-stock allocation, verified buyer delivery address, instant stock hold and Safepay checkout.</p>
           {operations.delivery&&<p className="text-xs text-[var(--text-muted)]">
             Supplier delivery configuration: Standard {operations.delivery.configuration?.standard_delivery_enabled?'enabled':'disabled'}, Pickup {operations.delivery.configuration?.pickup_enabled?'enabled':'disabled'}. Confirm feasible delivery before publishing.
           </p>}

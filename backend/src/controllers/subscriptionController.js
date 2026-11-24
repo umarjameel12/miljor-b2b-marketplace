@@ -4,6 +4,8 @@
 // =============================================================================
 
 const subscriptionEntitlementService = require('../services/subscriptionEntitlementService');
+const subscriptionBillingService = require('../services/subscriptionBillingService');
+const notificationService = require('../services/notificationService');
 const db = require('../config/db');
 
 class SubscriptionController {
@@ -14,6 +16,32 @@ class SubscriptionController {
       const supplierId = req.user.id;
       const entitlements = await subscriptionEntitlementService.getSupplierEntitlements(supplierId);
 
+      if (entitlements.is_expired && entitlements.configured_plan !== 'STARTER') {
+        try {
+          await notificationService.createNotification({
+            userId: supplierId,
+            role: 'SUPPLIER',
+            eventType: 'SUBSCRIPTION_EXPIRED',
+            eventKey: `sub_expired_${supplierId}_${entitlements.current_period_end || 'now'}`,
+            title: 'Subscription expired — reverted to Starter limits',
+            message: `Your ${entitlements.configured_plan} subscription has expired. Renew via Safepay to restore higher product family capacity.`,
+            payload: { previous_plan: entitlements.configured_plan }
+          });
+        } catch {}
+      } else if (entitlements.is_expiring_soon) {
+        try {
+          await notificationService.createNotification({
+            userId: supplierId,
+            role: 'SUPPLIER',
+            eventType: 'SUBSCRIPTION_EXPIRING_SOON',
+            eventKey: `sub_expiring_${supplierId}_${entitlements.current_period_end}`,
+            title: 'Subscription approaching expiry',
+            message: `Your ${entitlements.plan_code} plan expires on ${new Date(entitlements.current_period_end).toLocaleDateString()}.`,
+            payload: { plan_code: entitlements.plan_code, current_period_end: entitlements.current_period_end }
+          });
+        } catch {}
+      }
+
       const [history] = await db.query(
         `SELECT id, plan_code, status, current_period_start, current_period_end, billing_cycle, price_pkr, created_at
          FROM supplier_subscriptions
@@ -21,12 +49,14 @@ class SubscriptionController {
          ORDER BY id DESC LIMIT 20`,
         [supplierId]
       );
+      const payments = await subscriptionBillingService.listSupplierPayments(supplierId);
 
       return res.status(200).json({
         success: true,
         data: {
           entitlements,
-          billing_history: history
+          billing_history: history,
+          payments
         }
       });
     } catch (error) {
@@ -97,6 +127,72 @@ class SubscriptionController {
       return res.status(500).json({
         success: false,
         error: { code: 'SERVER_ERROR', message: error.message }
+      });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/checkout
+  async initiateCheckout(req, res) {
+    try {
+      const planCode = req.body.plan_code || req.body.targetPlan;
+      const billingCycle = req.body.billing_cycle || req.body.billingCycle || 'MONTHLY';
+      const idempotencyKey = req.headers['x-idempotency-key'] || req.body.idempotency_key;
+      const result = await subscriptionBillingService.initiateCheckout({
+        supplierId: req.user.id,
+        planCode,
+        billingCycle,
+        idempotencyKey,
+        redirectUrl: req.body.redirect_url,
+        cancelUrl: req.body.cancel_url,
+      });
+      return res.status(result.is_replay ? 200 : 201).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'CHECKOUT_INITIATION_FAILED', message: error.message, details: error.details }
+      });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/verify
+  async verifyCheckout(req, res) {
+    try {
+      const result = await subscriptionBillingService.verifyAndActivatePayment({
+        supplierId: req.user.id,
+        paymentId: req.body.payment_id,
+        trackerToken: req.body.tracker_token || req.body.tracker,
+      });
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'PAYMENT_VERIFICATION_FAILED', message: error.message, details: error.details }
+      });
+    }
+  }
+
+  // POST /api/v1/supplier/subscription/cancel
+  async cancelCheckout(req, res) {
+    try {
+      const payment = await subscriptionBillingService.markPaymentCancelled({
+        supplierId: req.user.id,
+        paymentId: req.body.payment_id,
+        orderCode: req.body.order_code,
+      });
+      return res.status(200).json({
+        success: true,
+        data: { payment },
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        error: { code: error.code || 'PAYMENT_CANCEL_FAILED', message: error.message }
       });
     }
   }

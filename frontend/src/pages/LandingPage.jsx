@@ -1,847 +1,551 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, ChevronLeft, ChevronRight, ShoppingBag, Truck, ShieldCheck, Layers, Menu, X, ArrowUpRight, FileText, Store, ChevronDown, LogIn, UserPlus, User, UserRound } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { poolsApi } from '../api/pools';
-import { PoolCard } from '../components/PoolCard';
-import { AppShell } from '../components/layout/AppShell';
+import { ThemeSelector } from '../components/ui/ThemeSelector';
 import { Logo } from '../components/ui/Logo';
-import FLAGS from '../config/featureFlags';
-import riceHeroDark from '../assets/hero/miljor-rice-hero-dark.png';
-import riceHeroLight from '../assets/hero/miljor-rice-hero-light.png';
-import {
-  Play,
-  Users,
-  Coins,
-  Zap,
-  ShieldCheck,
-  ArrowRight,
-  Layers,
-  FileText,
-  CheckCircle2,
-  Building2,
-  Store,
-  Truck,
-  TrendingDown,
-  Sparkles,
-  Lock,
-  BadgeCheck,
-} from 'lucide-react';
+import { PoolCard as LandingPoolCard } from '../components/LandingPoolCard';
+import { poolsApi } from '../api/pools';
+import riceImage from '../assets/premium_rice_sack.jpg';
+import riceHero from '../assets/hero/miljor-rice-hero-light.png';
+import chanaDalImage from '../assets/landing/miljor-chana-dal-premium.webp';
 
-const CURRENT_YEAR = new Date().getFullYear();
-
-// Realistic Lahore Wholesale Commodity Spotlights for fallback/preview
-const COMMODITY_SPOTLIGHTS = [
+/**
+ * Public-only landing page. Authenticated procurement pages retain AppShell.
+ * API pools are genuine published offers. Temporary landing-only showcase cards
+ * are illustrative and never create, publish, or reserve inventory.
+ */
+const COMMODITIES = [
   {
-    id: 'spotlight-rice',
-    title: 'Super Kernel Basmati Rice (50kg)',
-    category: 'Grains & Rice',
-    basePrice: 'PKR 14,800',
-    tierPrice: 'PKR 13,950',
-    savings: '6% volume discount',
-    minOrder: '10 bags (500 kg)',
-    unit: 'Bag (50kg)',
-    cluster: 'Badami Bagh / Shah Alam',
+    title: 'Rice & grains',
+    subtitle: 'Basmati and everyday staples',
+    image: riceImage,
+    alt: 'Premium rice packaged for wholesale food supply',
   },
   {
-    id: 'spotlight-oil',
-    title: 'Refined Vegetable Cooking Oil (16L)',
-    category: 'Oils & Fats',
-    basePrice: 'PKR 7,900',
-    tierPrice: 'PKR 7,450',
-    savings: '5.7% volume discount',
-    minOrder: '15 tins (240 L)',
-    unit: 'Tin (16L)',
-    cluster: 'Multan Road / Kot Lakhpat',
+    title: 'Wheat & flour',
+    subtitle: 'Everyday supplies for busy kitchens',
+    image: 'https://unsplash.com/photos/KMDGu1blGi8/download?force=true&w=1200',
+    alt: 'Golden wheat heads and grain texture',
   },
   {
-    id: 'spotlight-atta',
-    title: 'Premium Whole Wheat Fine Atta (50kg)',
-    category: 'Flour & Grain',
-    basePrice: 'PKR 5,400',
-    tierPrice: 'PKR 4,950',
-    savings: '8.3% volume discount',
-    minOrder: '20 bags (1,000 kg)',
-    unit: 'Bag (50kg)',
-    cluster: 'Raiwind / Quaid-e-Azam IE',
+    title: 'Cooking oil',
+    subtitle: 'Everyday kitchen essentials',
+    image: 'https://images.pexels.com/photos/3737651/pexels-photo-3737651.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    alt: 'Unbranded clear glass bottle of golden cooking oil against a neutral backdrop',
   },
 ];
 
+
+// Introductory 32-day landing-only examples. Never inserted into supplier listings.
+// Prices and progress below are illustrative; users must sign in to see actual availability.
+const LANDING_SHOWCASE_END = Date.parse('2026-12-18T00:00:00+05:00');
+const DEMO_PREVIEWS = [
+  {
+    id: 'showcase-rice-preview', pool_code: 'SHOW-RICE', status: 'ACTIVE',
+    product_name: 'Super Kernel Basmati Rice — 25kg', variety: 'Premium Long Grain · Food-Service Supply',
+    category_name: 'Rice & Grains', quality_grade: 'Restaurant Grade A',
+    pack_size: '25kg Bag', pool_unit: 'bag', supplier_business_name: 'Sample Rice Supplier',
+    estimated_unit_price: 7200, committed_quantity: 72, target_quantity: 150,
+    fill_percentage: 48, delivery_type: 'BOTH',
+    image_url: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=960&q=82',
+    illustrative_sku: 'MJ-INTRO-RICE-25',
+    scheduled_close_at: '2026-12-17T17:30:00+05:00',
+    promised_delivery_at: '2026-12-20T17:30:00+05:00',
+    pricing_tiers: [{ min_qty: 50, price_per_unit: 7450 }, { min_qty: 150, price_per_unit: 7200 }],
+  },
+  {
+    id: 'demo-flour-preview', pool_code: 'DEMO-FLOUR', status: 'ACTIVE',
+    product_name: 'Sunridge Super Fine Atta', variety: 'Super Fine Wheat Atta · Restaurant Use',
+    category_name: 'Flour & Bakery', quality_grade: 'Commercial Fine-Milled',
+    pack_size: '20kg Bag', pool_unit: 'bag', supplier_business_name: 'Punjab Flour Traders',
+    estimated_unit_price: 2650, committed_quantity: 36, target_quantity: 120,
+    fill_percentage: 30, delivery_type: 'BOTH',
+    image_url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=960&q=82',
+    illustrative_sku: 'MJ-INTRO-ATTA-20',
+    scheduled_close_at: '2026-12-17T18:00:00+05:00',
+    promised_delivery_at: '2026-12-20T18:00:00+05:00',
+    pricing_tiers: [{ min_qty: 40, price_per_unit: 2800 }, { min_qty: 120, price_per_unit: 2650 }],
+  },
+  {
+    id: 'demo-oil-preview', pool_code: 'DEMO-OIL', status: 'ACTIVE',
+    product_name: 'Sufi Cooking Oil — 16L Tin', variety: 'Refined Cooking Oil · Food-Service Use',
+    category_name: 'Cooking Oil & Ghee', quality_grade: 'Commercial Food-Service Grade',
+    pack_size: '16L Tin', pool_unit: 'tin', supplier_business_name: 'City Oils Wholesale',
+    estimated_unit_price: 7900, committed_quantity: 24, target_quantity: 80,
+    fill_percentage: 30, delivery_type: 'BOTH',
+    image_url: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=960&q=82',
+    illustrative_sku: 'MJ-INTRO-OIL-16',
+    scheduled_close_at: '2026-12-17T18:30:00+05:00',
+    promised_delivery_at: '2026-12-21T18:30:00+05:00',
+    pricing_tiers: [{ min_qty: 30, price_per_unit: 8150 }, { min_qty: 80, price_per_unit: 7900 }],
+  },
+  {
+    id: 'demo-daal-preview', pool_code: 'DEMO-DAAL', status: 'ACTIVE',
+    product_name: 'Premium Daal Chana — Bold Grain', variety: 'Polished Chana Dal · Bold Grain',
+    category_name: 'Pulses & Lentils', quality_grade: 'Selected Commercial Quality',
+    pack_size: '25kg Bag', pool_unit: 'bag', supplier_business_name: 'Lahore Pulses Supply',
+    estimated_unit_price: 6100, committed_quantity: 45, target_quantity: 150,
+    fill_percentage: 30, delivery_type: 'BOTH',
+    image_url: chanaDalImage,
+    illustrative_sku: 'MJ-INTRO-CHANA-25',
+    scheduled_close_at: '2026-12-17T19:00:00+05:00',
+    promised_delivery_at: '2026-12-21T19:00:00+05:00',
+    pricing_tiers: [{ min_qty: 50, price_per_unit: 6300 }, { min_qty: 150, price_per_unit: 6100 }],
+  },
+];
+
+function CommoditySlide({ item, active }) {
+  return (
+    <div
+      className={'absolute inset-0 transition-opacity duration-700 ease-in-out ' + (active ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none')}
+      aria-hidden={!active}
+    >
+      <img
+        src={item.image}
+        alt={item.alt}
+        className="absolute inset-0 h-full w-full object-cover object-center"
+        loading={active ? 'eager' : 'lazy'}
+        onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = riceHero; }}
+      />
+      <div data-miljor-hero-shade="v2" className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(6,30,24,0.06), rgba(6,30,24,0.08) 35%, rgba(6,30,24,0.78))' }} />
+      <div data-miljor-caption-upgrade="v2" className="absolute bottom-0 left-0 right-0 p-7 sm:p-10 text-[#F9F4E9]">
+        <h3 className="font-sans text-3xl sm:text-4xl font-semibold tracking-tight">{item.title}</h3>
+        <p className="mt-2 text-sm text-[#E9E2D5]">{item.subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
 export const LandingPage = () => {
   const { isDark } = useTheme();
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const miljorV6RootRef = useRef(null);
+  const miljorV6OriginalBackgroundRef = useRef(null);
+  const scrollToPools = () => {
+    document.getElementById('live-pools')
+      ?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+  };
+  const [slide, setSlide] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
   const [featuredPools, setFeaturedPools] = useState([]);
   const [loadingPools, setLoadingPools] = useState(true);
+  const [poolLoadError, setPoolLoadError] = useState(false);
+  const poolCarouselRef = useRef(null);
+  const [showIntroPools, setShowIntroPools] = useState(() => Date.now() < LANDING_SHOWCASE_END);
 
-  // Preload both dark and light hero images to prevent flash or flicker during theme switches
+  // MILJOR_V10_GRADIENT_APPROVED: dark preview + lightly enriched ivory; only landing-root background.
   useEffect(() => {
-    const imgDark = new Image();
-    imgDark.src = riceHeroDark;
-    const imgLight = new Image();
-    imgLight.src = riceHeroLight;
-  }, []);
-
-  const currentHeroImg = isDark ? riceHeroDark : riceHeroLight;
-
-  useEffect(() => {
-    async function loadFeatured() {
-      try {
-        const res = await poolsApi.getActivePools({ limit: 3 });
-        if (res.success && res.data?.pools && res.data.pools.length > 0) {
-          setFeaturedPools(res.data.pools.slice(0, 3));
-        }
-      } catch (err) {
-        console.warn('Could not load featured pools:', err.message);
-      } finally {
-        setLoadingPools(false);
-      }
+    const root = miljorV6RootRef.current;
+    if (!root) return;
+    if (!miljorV6OriginalBackgroundRef.current) {
+      miljorV6OriginalBackgroundRef.current = {
+        value: root.style.getPropertyValue('background'),
+        priority: root.style.getPropertyPriority('background')
+      };
     }
-    loadFeatured();
+    if (isDark) {
+      // MILJOR_APPROVED_DARK_GRADIENT_V12: EXACT APPROVED F12 PREVIEW
+      root.style.setProperty('background', "radial-gradient(ellipse 1100px 740px at 24% 260px, rgba(38, 115, 85, 0.55) 0%, rgba(25, 85, 64, 0.24) 50%, transparent 86%), radial-gradient(ellipse 950px 650px at 76% 160px, rgba(4, 21, 17, 0.62) 0%, rgba(5, 24, 19, 0.24) 52%, transparent 88%), linear-gradient(112deg, rgba(10, 59, 44, 0.15) 0%, rgba(13, 48, 37, 0.08) 40%, rgba(1, 17, 14, 0.48) 100%), linear-gradient(180deg, #0B3025 0%, #154A38 24%, #174638 54%, #10372C 78%, #0A2B23 100%)", 'important');
+      root.dataset.miljorBackgroundV10 = 'dark';
+    } else {
+      root.style.setProperty('background', "radial-gradient(ellipse 1050px 780px at 83% 190px, rgba(195, 157, 94, 0.39) 0%, rgba(211, 177, 125, 0.20) 46%, transparent 82%), radial-gradient(ellipse 980px 750px at 15% 210px, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.27) 49%, transparent 86%), radial-gradient(ellipse 920px 720px at 7% 82%, rgba(164, 132, 87, 0.15) 0%, rgba(164, 132, 87, 0.05) 55%, transparent 88%), linear-gradient(112deg, rgba(158, 122, 72, 0.11) 0%, rgba(255, 255, 255, 0.08) 42%, rgba(171, 127, 65, 0.16) 100%), linear-gradient(90deg, #E4D8C5 0%, #F5F0E8 13%, #FAF7F1 34%, #F1E9DC 55%, #E9D9BF 79%, #DCC5A4 100%)", 'important');
+      root.dataset.miljorBackgroundV10 = 'light';
+    }
+  }, [isDark]);
+
+  useEffect(() => {
+    if (!showIntroPools) return undefined;
+    const delay = Math.max(0, LANDING_SHOWCASE_END - Date.now());
+    const timer = window.setTimeout(() => setShowIntroPools(false), Math.min(delay, 2147483647));
+    return () => window.clearTimeout(timer);
+  }, [showIntroPools]);
+
+  useEffect(() => {
+    if (paused || (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return undefined;
+    const timer = setInterval(() => setSlide((index) => (index + 1) % COMMODITIES.length), 5000);
+    return () => clearInterval(timer);
+  }, [paused]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+    const onOutside = (event) => {
+      if (!accountMenuRef.current?.contains(event.target)) setAccountMenuOpen(false);
+    };
+    const onEscape = (event) => {
+      if (event.key === 'Escape') setAccountMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
+    let mounted = true;
+    poolsApi.getActivePools({ limit: 12 })
+      .then((response) => {
+        if (mounted) setFeaturedPools(Array.isArray(response?.data?.pools) ? response.data.pools.filter((pool) => pool?.id && ['ACTIVE', 'OPEN', 'PUBLISHED'].includes(String(pool.status || 'ACTIVE').toUpperCase())).slice(0, 12) : []);
+      })
+      .catch(() => { if (mounted) { setFeaturedPools([]); setPoolLoadError(true); } })
+      .finally(() => { if (mounted) setLoadingPools(false); });
+    return () => { mounted = false; };
   }, []);
+
+  const changeSlide = (direction) => setSlide((index) => (index + direction + COMMODITIES.length) % COMMODITIES.length);
+  const dashboardPath = user?.role === 'SUPPLIER' ? '/supplier/dashboard' : ['ADMIN', 'SUPER_ADMIN'].includes(user?.role) ? '/admin/dashboard' : '/pools';
+  const requestQuoteDestination = isAuthenticated ? '/procurement' : '/login';
+  const quoteState = isAuthenticated ? undefined : { from: { pathname: '/procurement' } };
+  const buttonGold = { color: 'var(--text-on-champagne)' };
+  const panel = { backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' };
+
+  // MILJOR DIRECT LANDING VISUAL FIX START
+  // Apply on the actual DOM nodes to overcome older !important landing styles.
+  // No card, auth, or marketplace behavior is changed.
+  useEffect(() => {
+    const root = document.getElementById('top');
+    const heading = root?.querySelector('h1.landing-display');
+    const together = heading?.querySelector('.landing-display-gradient');
+    const navbar = root?.querySelector('header.landing-topbar');
+    if (!root || !heading || !together || !navbar) return undefined;
+
+    // Save original inline styles so unmounting restores exactly this component's DOM.
+    const nodes = [root, heading, together, navbar];
+    const originalStyles = nodes.map((node) => node.getAttribute('style'));
+    const force = (node, prop, value) => node.style.setProperty(prop, value, 'important');
+    const apply = () => {
+      const dark = document.documentElement.classList.contains('dark');
+      force(root, 'background', dark
+        ? 'radial-gradient(ellipse 1100px 740px at 24% 260px, rgba(38, 115, 85, 0.55) 0%, rgba(25, 85, 64, 0.24) 50%, transparent 86%), radial-gradient(ellipse 950px 650px at 76% 160px, rgba(4, 21, 17, 0.62) 0%, rgba(5, 24, 19, 0.24) 52%, transparent 88%), linear-gradient(112deg, rgba(10, 59, 44, 0.15) 0%, rgba(13, 48, 37, 0.08) 40%, rgba(1, 17, 14, 0.48) 100%), linear-gradient(180deg, #0B3025 0%, #154A38 24%, #174638 54%, #10372C 78%, #0A2B23 100%)'
+        : 'radial-gradient(ellipse 1050px 780px at 83% 190px, rgba(195, 157, 94, 0.39) 0%, rgba(211, 177, 125, 0.20) 46%, transparent 82%), radial-gradient(ellipse 980px 750px at 15% 210px, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.27) 49%, transparent 86%), radial-gradient(ellipse 920px 720px at 7% 82%, rgba(164, 132, 87, 0.15) 0%, rgba(164, 132, 87, 0.05) 55%, transparent 88%), linear-gradient(112deg, rgba(158, 122, 72, 0.11) 0%, rgba(255, 255, 255, 0.08) 42%, rgba(171, 127, 65, 0.16) 100%), linear-gradient(90deg, #E4D8C5 0%, #F5F0E8 13%, #FAF7F1 34%, #F1E9DC 55%, #E9D9BF 79%, #DCC5A4 100%)');
+      force(root, 'background-color', dark ? '#062a21' : '#f7f1e7');
+      force(root, '--miljor-direct-fix', 'active');
+      force(navbar, 'border-bottom', dark
+        ? '1px solid rgba(200, 178, 118, .32)'
+        : '1px solid rgba(144, 122, 89, .28)');
+      // Descending strokes such as g, p, y need space BELOW the glyph's baseline.
+      force(heading, 'overflow', 'visible');
+      force(heading, 'line-height', '1.17');
+      force(together, 'display', 'block');
+      force(together, 'overflow', 'visible');
+      force(together, 'line-height', '1.34');
+      force(together, 'padding-bottom', '.22em');
+      force(together, 'padding-top', '.015em');
+      force(together, 'box-sizing', 'content-box');
+      force(together, '-webkit-box-decoration-break', 'clone');
+      force(together, '--miljor-g-fix', 'active');
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => {
+      observer.disconnect();
+      nodes.forEach((node, index) => {
+        if (originalStyles[index] === null) node.removeAttribute('style');
+        else node.setAttribute('style', originalStyles[index]);
+      });
+    };
+  }, []);
+  // MILJOR DIRECT LANDING VISUAL FIX END
 
   return (
-    <AppShell>
-      <div className="w-full overflow-x-hidden transition-colors duration-200">
-        {/* =========================================================================
-            SECTION 1: HERO SECTION — PRECISION LOCKED TO REFERENCE (PART 5A-VF6/VF9)
-            - Dark Mode: Layered Deep Forest #072A21 / #05251D with Emerald & Champagne ambient glow
-            - Light Mode: Layered Warm Ivory #F7F3E8 / #FAF6EE with soft porcelain & cream warmth
-            - Headline: "Buy Better," line 1, "Together" line 2 with selective gold gradient
-            - STRICTLY ZERO PERIOD after "Together"
-            - Premium Basmati Rice Sack in authentic natural burlap with rice grains & scoop
-            - Overhead ambient champagne curved arc line
-            ========================================================================= */}
-        <section className="relative px-5 sm:px-8 lg:px-10 pt-4 pb-8 sm:pb-10 overflow-hidden">
-          {/* Layer 0: Subtle Top-Left Ambient Radial Light (Light Mode Only) */}
-          <div
-            className="absolute -left-20 -top-20 w-80 sm:w-[420px] h-80 sm:h-[420px] rounded-full pointer-events-none opacity-40 dark:opacity-0 blur-3xl transition-opacity duration-300"
-            style={{
-              background: 'radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.6) 0%, rgba(214, 185, 125, 0.16) 50%, transparent 75%)',
-            }}
-            aria-hidden="true"
-          />
+    <div ref={miljorV6RootRef} id="top" className="miljor-public-landing miljor-premium-landing min-h-screen font-sans" style={{ background: 'var(--bg-dashboard)', color: 'var(--text-primary)' }}>
 
-          {/* Layer 1: Atmospheric Tonal Radial Glow behind Rice Imagery — One-Sided Sweep */}
-          <div
-            className="absolute right-0 top-0 w-[500px] sm:w-[650px] lg:w-[780px] h-[450px] sm:h-[550px] rounded-full pointer-events-none opacity-70 dark:opacity-85 blur-3xl transition-opacity duration-300"
-            style={{
-              background: 'var(--glow-hero)',
-            }}
-          />
-
-          {/* Layer 2: Overhead Ambient Champagne Arc Line sweeping over commodity imagery */}
-          <svg
-            className="ambient-arc pointer-events-none transition-opacity duration-300"
-            style={{ opacity: 'var(--arc-opacity)' }}
-            viewBox="0 0 1000 320"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <defs>
-              <linearGradient id="champagne-arc-grad" x1="360" y1="50" x2="800" y2="280" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#DFBF85" stopOpacity="0.85"/>
-                <stop offset="35%" stopColor="#C8B276" stopOpacity="0.6"/>
-                <stop offset="70%" stopColor="#B89452" stopOpacity="0.25"/>
-                <stop offset="100%" stopColor="#C8B276" stopOpacity="0"/>
-              </linearGradient>
-            </defs>
-            <path
-              d="M 360 55 C 400 55, 480 70, 580 120 C 680 170, 750 230, 790 270"
-              stroke="url(#champagne-arc-grad)"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
-            {/* Left Column: Eyebrow, Editorial Headline, Subtitle & CTAs */}
-            <div className="lg:col-span-7 flex flex-col items-start pt-2">
-              {/* Tagline Eyebrow Pill */}
-              <div
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-medium mb-3.5 border shadow-2xs"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  borderColor: 'var(--border-subtle)',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Milkar Khareedo, Behtar Pao</span>
-              </div>
-
-              {/* Editorial Serif Headline — Exact 2 lines, NO PERIOD */}
-              <h1 className="font-display font-bold text-3xl sm:text-4xl lg:text-[46px] leading-[1.18] tracking-tight pb-2 overflow-visible">
-                <span className="block text-xs sm:text-sm font-sans font-medium uppercase tracking-widest text-[#c8b276] mb-1.5">
-                  Smarter Procurement. Better Buying Power.
-                </span>
-                <span className="block" style={{ color: 'var(--text-forest)' }}>
-                  Buy Better,
-                </span>
-                <span className="text-gold-gradient inline-block">
-                  Together
-                </span>
-              </h1>
-
-              {/* Subtext */}
-              <p
-                className="mt-3 text-xs sm:text-sm leading-relaxed max-w-lg font-sans"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Source essential supplies, compare trusted offers and simplify purchasing through one connected marketplace. Group demand and unlock wholesale value for restaurants, caterers and food businesses across Lahore.
-              </p>
-
-              {/* CTAs */}
-              <div className="flex items-center gap-3 mt-6">
-                <Link to="/pools">
-                  <button
-                    type="button"
-                    className={`px-5 py-2.5 rounded-full font-sans font-medium text-xs sm:text-sm transition-all duration-200 shadow-xs hover:shadow-md flex items-center justify-center cursor-pointer ${
-                      FLAGS.ctaShimmerEffect ? 'btn-shimmer' : ''
-                    }`}
-                    style={{
-                      backgroundColor: 'var(--brand-accent)',
-                      color: '#072a21',
-                    }}
-                  >
-                    <span>Explore Pools</span>
-                  </button>
-                </Link>
-
-                <a href="#how-it-works">
-                  <button
-                    type="button"
-                    className="px-4 py-2.5 rounded-full font-sans font-medium text-xs sm:text-sm border transition-all duration-200 flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                    style={{
-                      backgroundColor: 'var(--bg-card)',
-                      borderColor: 'var(--border-default)',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    <Play className="w-3 h-3 fill-current text-stone-500 dark:text-stone-300" />
-                    <span>How It Works</span>
-                  </button>
-                </a>
-              </div>
-            </div>
-
-            {/* Right Column: Prominent, Sophisticated Basmati Rice Sack in Jute Burlap */}
-            <div className="lg:col-span-5 relative flex justify-center lg:justify-end">
-              <div className="relative w-full max-w-md sm:max-w-lg lg:max-w-xl h-64 sm:h-80 lg:h-[390px] flex items-center justify-center lg:justify-end">
-                {/* Ambient Studio Radial Backlight (Emerald + Champagne Gold Luxury Aura) */}
-                <div
-                  className="absolute inset-0 m-auto w-[94%] sm:w-[102%] h-[90%] sm:h-[96%] rounded-full pointer-events-none transition-opacity duration-500 z-0"
-                  style={{
-                    background: isDark
-                      ? 'radial-gradient(circle at 50% 50%, rgba(200, 178, 118, 0.35) 0%, rgba(16, 185, 129, 0.24) 38%, rgba(15, 90, 72, 0.10) 65%, transparent 82%)'
-                      : 'radial-gradient(circle at 50% 50%, rgba(214, 185, 125, 0.35) 0%, rgba(200, 178, 118, 0.18) 40%, rgba(247, 243, 232, 0.05) 65%, transparent 80%)',
-                    filter: isDark ? 'blur(50px)' : 'blur(35px)',
-                  }}
-                  aria-hidden="true"
-                />
-
-                {/* Single Seamless Ground Pedestal Ellipse */}
-                <div
-                  className="absolute bottom-1 sm:bottom-2 lg:bottom-3 w-[84%] sm:w-[90%] h-12 sm:h-16 rounded-[100%] pointer-events-none z-0"
-                  style={{
-                    background: isDark
-                      ? 'radial-gradient(ellipse at 50% 50%, rgba(200, 178, 118, 0.22) 0%, rgba(15, 90, 72, 0.35) 45%, rgba(2, 20, 15, 0.40) 75%, transparent 100%)'
-                      : 'radial-gradient(ellipse at 50% 50%, rgba(105, 80, 50, 0.32) 0%, rgba(160, 130, 90, 0.18) 48%, rgba(210, 185, 145, 0.06) 70%, transparent 85%)',
-                    filter: isDark ? 'blur(14px)' : 'blur(9px)',
-                  }}
-                  aria-hidden="true"
-                />
-
-                {/* Master Canonical Burlap Rice Sack */}
-                <img
-                  src={currentHeroImg}
-                  alt="MilJor Premium Basmati Rice in Woven Burlap Sack"
-                  className="relative z-10 w-full h-full object-contain object-center lg:object-right transition-transform duration-300 transform scale-105 sm:scale-110 lg:scale-115 drop-shadow-[0_14px_20px_rgba(75,55,30,0.24)] dark:drop-shadow-[0_20px_34px_rgba(0,0,0,0.60)]"
-                  loading="eager"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* =========================================================================
-              SECTION 2: MARKETPLACE ADVANTAGES (Value Pillars with Verified Suppliers)
-              ========================================================================= */}
-          <div
-            className="mt-8 pt-5 border-t grid grid-cols-1 sm:grid-cols-3 gap-4"
-            style={{ borderColor: 'var(--border-subtle)' }}
-          >
-            <div
-              className={`p-3.5 rounded-2xl flex items-center gap-3.5 border transition-all duration-200 backdrop-blur-md ${
-                FLAGS.featureCardGlow ? 'hover:-translate-y-1 hover:shadow-md hover:border-[var(--brand-accent)]' : ''
-              }`}
-              style={{
-                backgroundColor: 'var(--bg-card)',
-                borderColor: 'var(--border-subtle)',
-                boxShadow: 'var(--shadow-card)',
-              }}
-            >
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  borderColor: 'var(--border-subtle)',
-                  color: 'var(--brand-accent)',
-                }}
-              >
-                <Users className="w-4 h-4" />
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-xs font-sans font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Collective Procurement
-                </span>
-                <span className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Unlock tiered discounts from verified suppliers
-                </span>
-              </div>
-            </div>
-
-            <div
-              className={`p-3.5 rounded-2xl flex items-center gap-3.5 border transition-all duration-200 backdrop-blur-md ${
-                FLAGS.featureCardGlow ? 'hover:-translate-y-1 hover:shadow-md hover:border-[var(--brand-accent)]' : ''
-              }`}
-              style={{
-                backgroundColor: 'var(--bg-card)',
-                borderColor: 'var(--border-subtle)',
-                boxShadow: 'var(--shadow-card)',
-              }}
-            >
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  borderColor: 'var(--border-subtle)',
-                  color: 'var(--brand-accent)',
-                }}
-              >
-                <Coins className="w-4 h-4" />
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-xs font-sans font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Transparent Pricing
-                </span>
-                <span className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Track volume progress with honest rate locks
-                </span>
-              </div>
-            </div>
-
-            <div
-              className={`p-3.5 rounded-2xl flex items-center gap-3.5 border transition-all duration-200 backdrop-blur-md ${
-                FLAGS.featureCardGlow ? 'hover:-translate-y-1 hover:shadow-md hover:border-[var(--brand-accent)]' : ''
-              }`}
-              style={{
-                backgroundColor: 'var(--bg-card)',
-                borderColor: 'var(--border-subtle)',
-                boxShadow: 'var(--shadow-card)',
-              }}
-            >
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  borderColor: 'var(--border-subtle)',
-                  color: 'var(--brand-accent)',
-                }}
-              >
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-xs font-sans font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Verified Quality Assurance
-                </span>
-                <span className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Escrow protection & grade inspection on dispatch
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            SECTION 3: HOW IT WORKS (Section Anchor)
-            ========================================================================= */}
-        <section
-          id="how-it-works"
-          className="px-5 sm:px-8 lg:px-10 py-10 border-t transition-colors duration-200"
-          style={{
-            backgroundColor: 'var(--bg-elevated)',
-            borderColor: 'var(--border-subtle)',
-          }}
-        >
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <span className="text-[11px] font-sans font-semibold tracking-wider uppercase text-emerald-800 dark:text-champagne">
-                Operational Transparency
-              </span>
-              <h3 className="font-display font-bold text-xl sm:text-2xl mt-1" style={{ color: 'var(--text-primary)' }}>
-                How Collective Buying Works
-              </h3>
-            </div>
-
-            <div className="relative">
-              {FLAGS.howItWorksConnectors && (
-                <div
-                  className="hidden sm:block absolute top-1/2 left-[15%] right-[15%] h-0.5 border-t border-dashed pointer-events-none -translate-y-7 z-0"
-                  style={{ borderColor: 'var(--brand-accent)', opacity: 0.35 }}
-                />
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 relative z-10">
-                <div className="p-5 rounded-2xl border backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center font-display font-bold text-sm mb-3 shadow-xs" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                    01
-                  </div>
-                  <h4 className="font-sans font-semibold text-xs mb-1" style={{ color: 'var(--text-primary)' }}>
-                    Pool Creation & Thresholds
-                  </h4>
-                  <p className="text-[11px] text-stone-500 leading-relaxed">
-                    Wholesale commodity pools open with minimum order quantities directly from verified suppliers.
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl border backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center font-display font-bold text-sm mb-3 shadow-xs" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                    02
-                  </div>
-                  <h4 className="font-sans font-semibold text-xs mb-1" style={{ color: 'var(--text-primary)' }}>
-                    Order Volume Aggregation
-                  </h4>
-                  <p className="text-[11px] text-stone-500 leading-relaxed">
-                    Independent kitchens reserve quantities. As volume rises, estimated price locks at bulk tier.
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl border backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center font-display font-bold text-sm mb-3 shadow-xs" style={{ backgroundColor: 'var(--brand-accent-soft)', color: 'var(--brand-accent)' }}>
-                    03
-                  </div>
-                  <h4 className="font-sans font-semibold text-xs mb-1" style={{ color: 'var(--text-primary)' }}>
-                    Direct Fulfillment
-                  </h4>
-                  <p className="text-[11px] text-stone-500 leading-relaxed">
-                    Supplier fulfills batch delivery with escrow inspection and settlement.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            SECTION 4: REAL WHOLESALE POOLS & COMMODITY SPOTLIGHT
-            ========================================================================= */}
-        <section className="px-5 sm:px-8 lg:px-10 py-8 sm:py-10">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2
-                className="font-display font-bold text-lg sm:text-xl tracking-tight"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                Wholesale Commodity Pools
-              </h2>
-              <p className="text-[11px] text-stone-500 mt-0.5">
-                Aggregate bulk orders with fellow commercial buyers across Lahore
-              </p>
-            </div>
-
-            <Link
-              to="/pools"
-              className="inline-flex items-center gap-1 text-xs font-medium hover:underline transition-colors"
-              style={{ color: 'var(--brand-accent)' }}
-            >
-              <span>View All Pools</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* Active Pools Grid */}
-          {featuredPools.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
-              {featuredPools.map((pool) => (
-                <PoolCard key={pool.id} pool={pool} />
-              ))}
-            </div>
-          ) : !loadingPools ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {COMMODITY_SPOTLIGHTS.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-4 rounded-2xl border transition-all duration-200 backdrop-blur-sm flex flex-col justify-between"
-                    style={{
-                      backgroundColor: 'var(--bg-card)',
-                      borderColor: 'var(--border-subtle)',
-                      boxShadow: 'var(--shadow-card)',
-                    }}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] text-stone-500 mb-2">
-                        <span className="font-semibold uppercase tracking-wider text-[var(--brand-accent)]">
-                          {item.category}
-                        </span>
-                        <span>{item.cluster}</span>
-                      </div>
-                      <h4 className="font-sans font-semibold text-xs leading-snug mb-3" style={{ color: 'var(--text-primary)' }}>
-                        {item.title}
-                      </h4>
-                      <div className="p-2.5 rounded-xl border mb-3 space-y-1" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
-                        <div className="flex justify-between text-[11px]">
-                          <span className="text-stone-500">Base Unit Rate:</span>
-                          <span className="font-mono text-stone-600 dark:text-stone-300 line-through">{item.basePrice}</span>
-                        </div>
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span style={{ color: 'var(--text-primary)' }}>Volume Tier Price:</span>
-                          <span className="font-mono text-emerald-800 dark:text-champagne">{item.tierPrice}</span>
-                        </div>
-                        <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
-                          {item.savings}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t text-[11px]" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <span className="text-stone-500">Min. Commitment: {item.minOrder}</span>
-                      <Link to="/pools" className="text-xs font-medium hover:underline" style={{ color: 'var(--brand-accent)' }}>
-                        Browse Pool →
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div
-                className="p-4 rounded-xl border text-center text-xs flex items-center justify-between flex-wrap gap-2"
-                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
-              >
-                <span>Live supplier batches update continuously based on mill availability.</span>
-                <Link to="/pools" className="font-medium hover:underline inline-flex items-center gap-1" style={{ color: 'var(--brand-accent)' }}>
-                  <span>Open Full Marketplace Directory</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-44 rounded-2xl animate-pulse" style={{ backgroundColor: 'var(--bg-elevated)' }} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* =========================================================================
-            SECTION 5: PROCUREMENT METHODS (Collective, Direct RFQ, Flash)
-            ========================================================================= */}
-        <section
-          className="px-5 sm:px-8 lg:px-10 py-10 border-t transition-colors duration-200"
-          style={{
-            backgroundColor: 'var(--bg-elevated)',
-            borderColor: 'var(--border-subtle)',
-          }}
-        >
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-8">
-              <span className="text-[11px] font-sans font-semibold tracking-wider uppercase text-emerald-800 dark:text-champagne">
-                Procurement Flexibility
-              </span>
-              <h3 className="font-display font-bold text-xl sm:text-2xl mt-1" style={{ color: 'var(--text-primary)' }}>
-                Three Ways to Source on MilJor
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="p-5 rounded-2xl border flex flex-col justify-between backdrop-blur-sm" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3.5 border" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--brand-accent)' }}>
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <h4 className="font-sans font-semibold text-sm mb-1.5" style={{ color: 'var(--text-primary)' }}>
-                    Collective Pools
-                  </h4>
-                  <p className="text-xs text-stone-500 leading-relaxed mb-4">
-                    Group recurring staple demand with commercial kitchens in your zone. Higher aggregated volume unlocks bulk tier prices without holding excess stock.
-                  </p>
-                </div>
-                <Link to="/pools" className="text-xs font-medium hover:underline inline-flex items-center gap-1" style={{ color: 'var(--brand-accent)' }}>
-                  <span>Explore Open Pools</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-
-              <div className="p-5 rounded-2xl border flex flex-col justify-between backdrop-blur-sm" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3.5 border" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--brand-accent)' }}>
-                    <FileText className="w-4 h-4" />
-                  </div>
-                  <h4 className="font-sans font-semibold text-sm mb-1.5" style={{ color: 'var(--text-primary)' }}>
-                    Direct RFQs & Custom Specs
-                  </h4>
-                  <p className="text-xs text-stone-500 leading-relaxed mb-4">
-                    Require tailored packaging, specific grain lengths, or multi-week contract delivery? Issue structured RFQs to receive competitive supplier bids.
-                  </p>
-                </div>
-                <Link to="/rfq" className="text-xs font-medium hover:underline inline-flex items-center gap-1" style={{ color: 'var(--brand-accent)' }}>
-                  <span>Create Request</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-
-              <div className="p-5 rounded-2xl border flex flex-col justify-between backdrop-blur-sm" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3.5 border" style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--brand-accent)' }}>
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <h4 className="font-sans font-semibold text-sm mb-1.5" style={{ color: 'var(--text-primary)' }}>
-                    Flash Allocation Offers
-                  </h4>
-                  <p className="text-xs text-stone-500 leading-relaxed mb-4">
-                    Access spot-rate clearance and time-sensitive mill surpluses. Instant allocation holds with guaranteed door-to-door delivery windows.
-                  </p>
-                </div>
-                <Link to="/pools" className="text-xs font-medium hover:underline inline-flex items-center gap-1" style={{ color: 'var(--brand-accent)' }}>
-                  <span>View Spot Allocations</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            SECTION 6: SUPPLIER BENEFITS (Sell at Scale)
-            ========================================================================= */}
-        <section className="px-5 sm:px-8 lg:px-10 py-10">
-          <div className="max-w-6xl mx-auto rounded-3xl p-6 sm:p-10 border relative overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-              <div className="lg:col-span-7">
-                <span className="text-[11px] font-sans font-semibold tracking-wider uppercase text-emerald-800 dark:text-champagne">
-                  For Mills & Wholesale Distributors
-                </span>
-                <h3 className="font-display font-bold text-2xl sm:text-3xl mt-1.5 leading-tight" style={{ color: 'var(--text-primary)' }}>
-                  Sell at Scale with Predictable Bulk Demand
-                </h3>
-                <p className="mt-3 text-xs sm:text-sm text-stone-500 leading-relaxed max-w-xl">
-                  Eliminate individual restaurant payment default risk. MilJor aggregates verified commercial kitchens into guaranteed volume commitments, lowering your customer acquisition and delivery dispatch costs across Lahore.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-6">
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
-                      Secured buyer funds held in escrow
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
-                      Predictable route-clustered dispatch
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
-                      Verified commercial buyer network
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
-                      Automated digital invoice reconciliation
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-7">
-                  <Link to="/register">
-                    <button
-                      type="button"
-                      className="px-5 py-2.5 rounded-full font-sans font-medium text-xs sm:text-sm transition-all duration-200 border hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer inline-flex items-center gap-2"
-                      style={{
-                        backgroundColor: 'var(--bg-elevated)',
-                        borderColor: 'var(--border-default)',
-                        color: 'var(--text-primary)',
-                      }}
-                    >
-                      <Store className="w-3.5 h-3.5 text-[var(--brand-accent)]" />
-                      <span>Apply as Verified Supplier</span>
-                    </button>
-                  </Link>
-                </div>
-              </div>
-
-              <div className="lg:col-span-5 flex justify-center">
-                <div className="w-full max-w-sm p-5 rounded-2xl border space-y-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                  <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    <Building2 className="w-4 h-4 text-[var(--brand-accent)]" />
-                    <span>Commercial Hub Coverage</span>
-                  </div>
-                  <p className="text-[11px] text-stone-500 leading-relaxed">
-                    Active procurement routes connecting mills to central hospitality zones:
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {['Gulberg', 'DHA Phase 1-6', 'Johar Town', 'Faisal Town', 'Shah Alam', 'Badami Bagh', 'Model Town'].map((area) => (
-                      <span key={area} className="text-[10px] px-2 py-0.5 rounded-md border font-medium" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                        {area}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            SECTION 7: TRUST, QUALITY & ESCROW SAFETY
-            ========================================================================= */}
-        <section
-          className="px-5 sm:px-8 lg:px-10 py-10 border-t transition-colors duration-200"
-          style={{
-            backgroundColor: 'var(--bg-elevated)',
-            borderColor: 'var(--border-subtle)',
-          }}
-        >
-          <div className="max-w-4xl mx-auto text-center">
-            <span className="text-[11px] font-sans font-semibold tracking-wider uppercase text-emerald-800 dark:text-champagne">
-              Enterprise Governance
-            </span>
-            <h3 className="font-display font-bold text-xl sm:text-2xl mt-1" style={{ color: 'var(--text-primary)' }}>
-              Built on Trust and Physical Verification
-            </h3>
-            <p className="mt-2 text-xs sm:text-sm text-stone-500 max-w-xl mx-auto leading-relaxed">
-              Every participant, transaction, and commodity lot on MilJor complies with strict B2B commercial invariants.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-8 text-left">
-              <div className="p-4 rounded-2xl border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                <BadgeCheck className="w-5 h-5 text-[var(--brand-accent)] mb-2" />
-                <h4 className="font-sans font-semibold text-xs mb-1" style={{ color: 'var(--text-primary)' }}>
-                  Rigorous Supplier Vetting
-                </h4>
-                <p className="text-[11px] text-stone-500 leading-relaxed">
-                  Suppliers undergo documented business verification, facility checks, and catalog review by admin before listing.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                <Lock className="w-5 h-5 text-[var(--brand-accent)] mb-2" />
-                <h4 className="font-sans font-semibold text-xs mb-1" style={{ color: 'var(--text-primary)' }}>
-                  Secured Financial Escrow
-                </h4>
-                <p className="text-[11px] text-stone-500 leading-relaxed">
-                  Payments are held securely in compliant escrow accounts and released only upon certified receipt verification.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl border" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
-                <Truck className="w-5 h-5 text-[var(--brand-accent)] mb-2" />
-                <h4 className="font-sans font-semibold text-xs mb-1" style={{ color: 'var(--text-primary)' }}>
-                  Doorstep Grade Inspection
-                </h4>
-                <p className="text-[11px] text-stone-500 leading-relaxed">
-                  Buyers verify commodity grades upon dispatch arrival with documented dispute protection and partial credit resolution.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            SECTION 8: FINAL CALL TO ACTION
-            ========================================================================= */}
-        <section className="px-5 sm:px-8 lg:px-10 py-12">
-          <div className="max-w-4xl mx-auto rounded-3xl p-8 sm:p-12 text-center border relative overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-elevated)' }}>
-            <span className="text-[11px] font-sans font-semibold tracking-wider uppercase text-emerald-800 dark:text-champagne">
-              Start Sourcing Today
-            </span>
-            <h3 className="font-display font-bold text-2xl sm:text-3xl mt-2 leading-tight" style={{ color: 'var(--text-primary)' }}>
-              Join Lahore's Leading Food Procurement Marketplace
-            </h3>
-            <p className="mt-3 text-xs sm:text-sm text-stone-500 max-w-lg mx-auto leading-relaxed">
-              Unlock volume pricing on premium staples, streamline vendor management, and safeguard your restaurant margins.
-            </p>
-
-            <div className="flex items-center justify-center gap-3 mt-7">
-              <Link to="/register">
+      <style>{`/* MILJOR HERO CAPTION DIRECT V2 */
+        #top#top.miljor-public-landing .miljor-commodity-frame [data-miljor-hero-shade="v2"] {
+          background: linear-gradient(180deg, rgba(9,29,23,.03) 0%, rgba(8,28,22,.13) 37%, rgba(8,30,23,.64) 69%, rgba(6,24,19,.93) 100%) !important;
+        }
+        #top#top.miljor-public-landing .miljor-commodity-frame [data-miljor-caption-upgrade="v2"] h3 {
+          font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+          font-size: clamp(1.9rem,3.1vw,2.6rem) !important;
+          font-weight: 760 !important;
+          letter-spacing: -.047em !important;
+          line-height: 1.14 !important;
+          color: #fffaf0 !important;
+          -webkit-text-fill-color: #fffaf0 !important;
+          text-shadow: 0 2px 16px rgba(0,0,0,.6) !important;
+        }
+        #top#top.miljor-public-landing .miljor-commodity-frame [data-miljor-caption-upgrade="v2"] p {
+          font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+          font-size: clamp(.85rem,1.15vw,.96rem) !important;
+          font-weight: 560 !important;
+          letter-spacing: .005em !important;
+          line-height: 1.55 !important;
+          color: #eddfc3 !important;
+          -webkit-text-fill-color: #eddfc3 !important;
+          text-shadow: 0 1px 11px rgba(0,0,0,.68) !important;
+        }
+        html.dark #top#top.miljor-public-landing .miljor-commodity-frame [data-miljor-hero-shade="v2"] {
+          background: linear-gradient(180deg, rgba(2,22,16,.06) 0%, rgba(4,29,21,.20) 37%, rgba(2,26,19,.75) 70%, rgba(2,20,15,.98) 100%) !important;
+        }
+        html.dark #top#top.miljor-public-landing .miljor-commodity-frame [data-miljor-caption-upgrade="v2"] h3 {
+          color: #fff9e9 !important;
+          -webkit-text-fill-color: #fff9e9 !important;
+          text-shadow: 0 3px 18px rgba(0,0,0,.72) !important;
+        }
+        html.dark #top#top.miljor-public-landing .miljor-commodity-frame [data-miljor-caption-upgrade="v2"] p {
+          color: #e8cb92 !important;
+          -webkit-text-fill-color: #e8cb92 !important;
+        }
+      `}</style>
+      <header className="landing-topbar landing-premium-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-sidebar)', color: 'var(--text-primary)' }}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8 lg:px-10">
+          <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
+          
+          <div className="hidden sm:flex items-center gap-3">
+            <ThemeSelector minimal />
+            {isAuthenticated ? (
+              <Link to={dashboardPath} className="rounded-full px-5 py-2.5 text-xs font-semibold" style={buttonGold}>Open Marketplace</Link>
+            ) : (
+              <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"
-                  className="px-6 py-2.5 rounded-full font-sans font-medium text-xs sm:text-sm transition-all duration-200 shadow-xs hover:shadow-md cursor-pointer"
+                  onClick={() => setAccountMenuOpen((open) => !open)}
+                  aria-label="User Account Menu"
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  aria-controls="landing-account-options"
+                  title="Account Menu"
+                  className="landing-account-trigger flex items-center gap-2.5 h-9 px-3 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
                   style={{
-                    backgroundColor: 'var(--brand-accent)',
-                    color: '#072a21',
-                  }}
-                >
-                  Create Business Account
-                </button>
-              </Link>
-              <Link to="/pools">
-                <button
-                  type="button"
-                  className="px-5 py-2.5 rounded-full font-sans font-medium text-xs sm:text-sm border transition-all duration-200 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                  style={{
-                    backgroundColor: 'var(--bg-surface)',
+                    backgroundColor: 'var(--bg-card)',
                     borderColor: 'var(--border-default)',
                     color: 'var(--text-primary)',
                   }}
                 >
-                  Explore Active Pools
+                  <div className="w-6 h-6 rounded-full bg-[var(--brand-accent)] text-[#072a21] flex items-center justify-center font-bold text-xs shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-semibold max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>
+                    Account
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-stone-700 dark:text-stone-300 transition-transform duration-200 ${accountMenuOpen ? 'rotate-180' : ''}`}
+                  />
                 </button>
-              </Link>
+                {accountMenuOpen && (
+                  <div
+                    id="landing-account-options"
+                    role="menu"
+                    aria-label="Account options"
+                    className="absolute right-0 top-full mt-2 w-64 p-3.5 rounded-2xl border shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                    style={{
+                      backgroundColor: 'var(--bg-surface)',
+                      borderColor: 'var(--border-default)',
+                      boxShadow: 'var(--shadow-elevated)',
+                    }}
+                  >
+                    <div className="space-y-3">
+                      <div className="text-center pb-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          Welcome to MilJor
+                        </p>
+                        
+                      </div>
+                      <div className="space-y-2">
+                        <Link
+                          role="menuitem"
+                          to="/login"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold border transition cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+                          style={{
+                            backgroundColor: 'var(--bg-card)',
+                            borderColor: 'var(--border-default)',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <User className="w-3.5 h-3.5 text-emerald-900 dark:text-champagne" />
+                          <span>Sign In</span>
+                        </Link>
+                        <Link
+                          role="menuitem"
+                          to="/register"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="landing-gradient-cta w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
+                          style={{
+                            color: 'var(--text-on-champagne)',
+                          }}
+                        >
+                          <span>Register</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 sm:hidden"><ThemeSelector minimal /><button type="button" onClick={() => setMobileMenu((open) => !open)} aria-expanded={mobileMenu} aria-label="Toggle navigation" className="rounded-lg border p-2" style={{ borderColor: 'var(--border-subtle)' }}>{mobileMenu ? <X size={19} /> : <Menu size={19} />}</button></div>
+        </div>
+        {mobileMenu && (
+          <nav className="flex flex-col gap-1 border-t px-5 py-3 sm:hidden" style={panel} aria-label="Mobile public navigation">
+            {isAuthenticated ? (
+              <Link to={dashboardPath} className="rounded-lg px-3 py-2 text-sm font-semibold" onClick={() => setMobileMenu(false)}>Open Marketplace</Link>
+            ) : (
+              <div className="mt-2 border-t pt-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center gap-2 px-3 py-2 text-sm font-semibold"><UserRound size={16} style={{ color: 'var(--text-secondary)' }} />Account</div>
+                <Link to="/login" onClick={() => setMobileMenu(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"><LogIn size={15} />Sign In</Link>
+                <Link to="/register" onClick={() => setMobileMenu(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"><UserPlus size={15} />Register</Link>
+              </div>
+            )}
+          </nav>
+        )}
+      </header>
+
+      <main>
+        <section className="landing-premium-hero mx-auto grid max-w-7xl grid-cols-1 items-center gap-9 px-5 pb-14 pt-10 sm:px-8 md:pt-14 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:pb-12">
+          <div className="max-w-xl">
+            <span className="landing-tagline inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.17em]" style={{ borderColor: 'var(--border-default)', color: 'var(--brand-accent)' }}>Mil Kar Khareedo, Behtar Pao</span>
+            <h1 data-miljor-headline-v7="restored" className="landing-display mt-7 text-[clamp(2.75rem,5.1vw,5.1rem)] font-semibold leading-[1.07] tracking-[-0.055em]" data-miljor-hero-fix="v4">
+              Buy Better<span className="landing-display-gradient block" style={{ color: 'var(--brand-accent)', lineHeight: 1.18, paddingBottom: '0.16em', overflow: 'visible' }}>Together</span>
+            </h1>
+            <p data-miljor-description-v7="restored" className="mt-6 max-w-md text-sm leading-7 sm:text-base" style={{ color: 'var(--text-secondary)' }}>
+              Wholesale procurement, made easier for growing food businesses.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <button type="button"
+      onClick={scrollToPools}
+      className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold"
+      style={buttonGold}>
+      Explore Pools
+    </button>
+              <Link to={requestQuoteDestination} state={quoteState} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Request a Quote</Link>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="miljor-commodity-frame landing-premium-image relative aspect-[5/4] overflow-hidden rounded-[1.75rem] border shadow-2xl sm:aspect-[6/5]" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
+              onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+              onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
+              {COMMODITIES.map((item, index) => <CommoditySlide key={item.title} item={item} active={index === slide} />)}
+              
+              <div className="absolute right-5 bottom-6 z-20 flex gap-2">
+                <button type="button" aria-label="Previous commodity" onClick={() => changeSlide(-1)} className="grid h-9 w-9 place-items-center rounded-full border border-white/40 bg-black/30 text-white backdrop-blur-md hover:bg-black/50"><ChevronLeft size={18} /></button>
+                <button type="button" aria-label="Next commodity" onClick={() => changeSlide(1)} className="grid h-9 w-9 place-items-center rounded-full border border-white/40 bg-black/30 text-white backdrop-blur-md hover:bg-black/50"><ChevronRight size={18} /></button>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-center gap-2" role="group" aria-label="Choose commodity slide">
+              {COMMODITIES.map((item, index) => <button key={item.title} type="button" aria-label={'Show ' + item.title} aria-current={index === slide ? 'true' : undefined} onClick={() => setSlide(index)} className="h-1.5 rounded-full transition-all" style={{ width: index === slide ? 34 : 12, backgroundColor: index === slide ? 'var(--brand-accent)' : 'var(--border-default)' }} />)}
             </div>
           </div>
         </section>
 
-        {/* =========================================================================
-            SECTION 9: QUIET LUXURY B2B FOOTER
-            ========================================================================= */}
-        <footer
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-subtle)',
-          }}
-          className="border-t py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-200"
-        >
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-xs">
-            <div className="flex items-center gap-3">
-              <Logo variant="monogram" size="sm" />
-              <div className="flex flex-col">
-                <span className="font-sans font-medium text-xs tracking-wider" style={{ color: 'var(--brand-accent)' }}>
-                  Milkar Khareedo, Behtar Pao
-                </span>
-                <span style={{ color: 'var(--text-muted)' }}>
-                  Collective Food Procurement Platform
-                </span>
+        <section id="live-pools" className="landing-premium-pools mx-auto max-w-7xl scroll-mt-24 px-5 pt-8 pb-12 sm:px-8 sm:pt-10 sm:pb-14 lg:px-10">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">Supplier-led procurement</p>
+              <h2 className="landing-section-title mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Active buying pools</h2>
+            </div>
+            {isAuthenticated ? (
+              <Link to={user?.role === 'SUPPLIER' ? '/supplier/pools' : '/pools'} className="landing-top-link inline-flex items-center gap-2 text-sm font-semibold">
+                {user?.role === 'SUPPLIER' ? 'Manage your pools' : 'View All Pools'} <ArrowRight size={16} />
+              </Link>
+            ) : (
+              <></>
+            )}
+          </div>
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              aria-label="Scroll pools left"
+              onClick={() => poolCarouselRef.current?.scrollBy({ left: -360, behavior: 'smooth' })}
+              className="miljor-pool-nav grid h-9 w-9 place-items-center rounded-full border transition-colors"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)' }}
+            >
+              <ChevronLeft size={17} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label="Scroll pools right"
+              onClick={() => poolCarouselRef.current?.scrollBy({ left: 360, behavior: 'smooth' })}
+              className="miljor-pool-nav grid h-9 w-9 place-items-center rounded-full border transition-colors"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', backgroundColor: 'var(--bg-card)' }}
+            >
+              <ChevronRight size={17} aria-hidden="true" />
+            </button>
+          </div>
+          <div
+            ref={poolCarouselRef}
+            role="region"
+            aria-label="Supplier pools and temporary introductory examples"
+            tabIndex={0}
+            className="miljor-pool-rail flex items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth snap-x snap-mandatory pb-4"
+          >
+            {!loadingPools && featuredPools.map((pool) => (
+              <div key={pool.id} className="landing-pool-shell flex w-[min(84vw,340px)] shrink-0 snap-start flex-col">
+                <LandingPoolCard
+                  pool={pool}
+                  onSelect={() => navigate(isAuthenticated ? '/pools' : '/login', isAuthenticated ? undefined : { state: { from: { pathname: '/pools' } } })}
+                />
+              </div>
+            ))}
+            {showIntroPools && DEMO_PREVIEWS.map((pool) => (
+              <div key={pool.id} className="landing-pool-shell landing-showcase-shell flex w-[min(84vw,340px)] shrink-0 snap-start flex-col" aria-label="Introductory display: sign in for actual supplier availability">
+                <LandingPoolCard
+                  pool={pool}
+                  isExample
+                  onSelect={() => navigate('/login', { state: { from: { pathname: '/pools' } } })}
+                />
+              </div>
+            ))}
+          </div>
+          {loadingPools && (
+            <div role="status" className="landing-pool-loading mt-4 rounded-2xl border px-6 py-8 text-sm" style={{ borderColor: 'var(--border-subtle)' }}>
+              Checking published supplier pools…
+            </div>
+          )}
+          {!loadingPools && poolLoadError && (
+            <div role="alert" className="landing-pool-empty mt-4 rounded-3xl border px-7 py-9 sm:px-10">
+              <h3 className="text-lg font-semibold">Unable to load published pools</h3>
+              <p className="mt-2 text-sm">Live supplier availability could not be checked right now. Please try again shortly.</p>
+            </div>
+          )}
+        </section>
+
+        <section id="suppliers" className="border-t py-16 sm:py-20" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
+            <div className="landing-premium-benefits landing-integrated-benefits rounded-[1.75rem] border p-7 sm:p-10 lg:p-12" style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--card-glass)', boxShadow: 'var(--shadow-card)' }}>
+              <div className="landing-benefits-grid grid items-center gap-10 lg:grid-cols-[1fr_0.85fr] lg:gap-16">
+                <div className="landing-benefit-copy">
+                  <p className="landing-eyebrow text-[11px] font-semibold uppercase tracking-[0.19em]">For buyers and suppliers</p>
+                  <h2 className="landing-section-title mt-4 max-w-xl text-3xl leading-tight font-bold sm:text-[2.6rem]">Better sourcing. Simpler selling.</h2>
+                  <p className="mt-5 max-w-md text-sm leading-7" style={{ color: 'var(--text-secondary)' }}>
+                    Bring business demand and supplier offers together, with clear pricing and coordinated fulfillment.
+                  </p>
+                  <Link to="/register" className="landing-gradient-cta mt-7 inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Join MilJor</Link>
+                </div>
+                <div className="landing-benefit-list grid gap-3">
+                  {[
+                    { icon: Layers, title: 'Buy collectively', text: 'Join available pools and view quantity-based pricing.' },
+                    { icon: ShieldCheck, title: 'Purchase clearly', text: 'See terms before you confirm and pay.' },
+                    { icon: Truck, title: 'Stay informed', text: 'Follow delivery progress and confirm receipt.' },
+                  ].map((item) => <div key={item.title} className="landing-benefit-item flex items-center gap-4 rounded-2xl border p-4 sm:p-5" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-card)' }}>
+                    <span className="shrink-0 rounded-xl border p-3" style={{ borderColor: 'var(--border-default)', color: 'var(--landing-accent-text)' }}><item.icon size={18} /></span>
+                    <div><h3 className="landing-section-title text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>{item.text}</p></div>
+                  </div>)}
+                </div>
               </div>
             </div>
-
-            <div
-              className="flex flex-wrap items-center justify-center gap-6"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <Link to="/pools" className="hover:underline">
-                Explore Active Pools
-              </Link>
-              <span>•</span>
-              <a href="#how-it-works" className="hover:underline">
-                How It Works
-              </a>
-              <span>•</span>
-              <Link to="/rfq" className="hover:underline">
-                Direct RFQs
-              </Link>
-              <span>•</span>
-              <Link to="/register" className="hover:underline">
-                Supplier Registration
-              </Link>
-            </div>
-
-            <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-              © {CURRENT_YEAR} MilJor Platform. All rights reserved.
-            </div>
           </div>
-        </footer>
-      </div>
-    </AppShell>
+        </section>
+      </main>
+
+      <footer className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="mx-auto max-w-7xl px-5 py-6 text-center text-xs sm:px-8" style={{ color: 'var(--text-secondary)' }}>
+          © {new Date().getFullYear()} MilJor · Mil Kar Khareedo, Behtar Pao.
+        </div>
+      </footer>
+    </div>
   );
 };
 

@@ -137,37 +137,41 @@ export const ProfilePage = () => {
             borderColor: 'var(--border-default)',
           }}
         >
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-1"
+            style={{
+              background: 'linear-gradient(90deg, rgba(197, 164, 103, 0.75) 0%, rgba(15, 76, 58, 0.55) 60%, transparent 100%)',
+            }}
+          />
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div className="flex items-center gap-4">
               <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center font-display font-bold text-xl shrink-0 shadow-xs"
+                className="w-16 h-16 rounded-2xl flex items-center justify-center font-display font-bold text-xl shrink-0 shadow-sm ring-2 ring-[#c5a467]/30"
                 style={{
-                  backgroundColor: 'var(--brand-accent)',
+                  background: 'linear-gradient(135deg, #d7b97d 0%, #b48c4c 100%)',
                   color: '#072a21',
                 }}
               >
                 {initials}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-display font-bold text-xl sm:text-2xl" style={{ color: 'var(--text-primary)' }}>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="font-display font-bold text-xl sm:text-2xl tracking-tight" style={{ color: 'var(--text-primary)' }}>
                     {user?.business_name || user?.full_name || 'Verified Member'}
                   </h1>
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                      isSupplier
-                        ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                        : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                      isSupplier ? 'miljor-badge-supplier' : 'miljor-badge-verified'
                     }`}
                   >
                     {isSupplier ? <Truck className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
                     <span>{isSupplier ? 'Verified Supplier' : 'Verified Buyer'}</span>
                   </span>
                 </div>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                   {isSupplier
                     ? 'Wholesale Commodity Supplier & Distributor — Lahore District'
-                    : 'Commercial Food Procurement Partner'}
+                    : 'Commercial Food Procurement Partner — Lahore'}
                 </p>
               </div>
             </div>
@@ -175,7 +179,7 @@ export const ProfilePage = () => {
             <button
               type="button"
               onClick={handleLogout}
-              className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition flex items-center gap-2 cursor-pointer"
+              className="miljor-profile-signout-btn px-4 py-2 rounded-xl text-xs font-semibold border flex items-center gap-2 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out</span>
@@ -228,39 +232,54 @@ export const ProfilePage = () => {
         {/* Account Details Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div
-            className="p-5 rounded-2xl border space-y-4"
+            className="p-5 sm:p-6 rounded-2xl border space-y-4 transition-all duration-200"
             style={{
               backgroundColor: 'var(--bg-surface)',
               borderColor: 'var(--border-subtle)',
             }}
           >
-            <h3 className="font-sans font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--brand-accent)' }}>
-              Business Contact
+            <h3 className="miljor-section-kicker font-sans font-bold text-[11px] uppercase tracking-wider">
+              Account &amp; Contact
             </h3>
-            <div className="space-y-3 text-xs">
-              <div className="flex items-center gap-3">
-                <Mail className="w-4 h-4 text-stone-400 shrink-0" />
-                <div>
-                  <span className="text-[10px] text-stone-500 block">Email Address</span>
-                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+            <div className="space-y-3.5 text-xs">
+              <div className="flex items-center gap-3.5">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
+                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                >
+                  <Mail className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Email Address</span>
+                  <span className="font-semibold truncate block" style={{ color: 'var(--text-primary)' }}>
                     {user?.email || 'N/A'}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Phone className="w-4 h-4 text-stone-400 shrink-0" />
+              <div className="flex items-center gap-3.5">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
+                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                >
+                  <Phone className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                </div>
                 <div>
-                  <span className="text-[10px] text-stone-500 block">SMS Notifications Mobile</span>
-                  <span className="font-medium tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                  <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>SMS Notifications Mobile</span>
+                  <span className="font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>
                     {user?.phone || '0300 1234567'}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Building2 className="w-4 h-4 text-stone-400 shrink-0" />
+              <div className="flex items-center gap-3.5">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
+                  style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                >
+                  <Building2 className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                </div>
                 <div>
-                  <span className="text-[10px] text-stone-500 block">Business Category</span>
-                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                  <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Business Category</span>
+                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {isSupplier ? 'Wholesale Commodity Supplier' : 'Restaurant / Commercial Kitchen'}
                   </span>
                 </div>
@@ -269,15 +288,15 @@ export const ProfilePage = () => {
           </div>
 
           <div
-            className="p-5 rounded-2xl border space-y-4"
+            className="p-5 sm:p-6 rounded-2xl border space-y-4 transition-all duration-200"
             style={{
               backgroundColor: 'var(--bg-surface)',
               borderColor: 'var(--border-subtle)',
             }}
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-sans font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--brand-accent)' }}>
-                {isSupplier ? 'Base Facility Location' : 'Marketplace Base Cluster'}
+              <h3 className="miljor-section-kicker font-sans font-bold text-[11px] uppercase tracking-wider">
+                {isSupplier ? 'Primary Facility Hub' : 'Primary Operations Hub'}
               </h3>
               {!isSupplier && (
                 <button
@@ -286,7 +305,7 @@ export const ProfilePage = () => {
                     setNewClusterId(user?.base_cluster_id ? String(user.base_cluster_id) : '');
                     setEditingCluster(!editingCluster);
                   }}
-                  className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] font-semibold text-emerald-800 dark:text-champagne hover:opacity-80 flex items-center gap-1 cursor-pointer transition-opacity"
                 >
                   <Edit2 className="w-3 h-3" />
                   <span>{editingCluster ? 'Cancel' : 'Change'}</span>
@@ -306,7 +325,7 @@ export const ProfilePage = () => {
                   <button
                     type="button"
                     onClick={() => setEditingCluster(false)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer transition-colors"
                     style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
                   >
                     Cancel
@@ -316,30 +335,43 @@ export const ProfilePage = () => {
                     onClick={handleSaveCluster}
                     disabled={savingCluster}
                     className="px-4 py-1.5 rounded-lg text-xs font-semibold shadow-xs cursor-pointer disabled:opacity-50"
-                    style={{ backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}
+                    style={{
+                      background: 'linear-gradient(135deg, #d7b97d 0%, #b48c4c 100%)',
+                      color: '#0d2219',
+                    }}
                   >
                     {savingCluster ? 'Saving...' : 'Save Cluster'}
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-4 h-4 text-stone-400 shrink-0" />
+              <div className="space-y-3.5 text-xs">
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
+                    style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                  >
+                    <MapPin className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                  </div>
                   <div>
-                    <span className="text-[10px] text-stone-500 block">Operational Cluster</span>
-                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                    <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Operational Cluster</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                       {user?.area || (user?.base_cluster_id ? `Lahore Cluster #${user.base_cluster_id}` : 'Lahore — Not Configured')}
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
+                    style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                  </div>
                   <div>
-                    <span className="text-[10px] text-stone-500 block">
+                    <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>
                       {isSupplier ? 'Platform Verification' : 'Escrow Protection'}
                     </span>
-                    <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                       {isSupplier ? 'Authoritative Lahore Supplier' : '100% Safepay Covered'}
                     </span>
                   </div>
@@ -365,23 +397,23 @@ export const ProfilePage = () => {
               borderColor: 'var(--border-default)',
             }}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-display font-bold text-base sm:text-lg" style={{ color: 'var(--text-primary)' }}>
+                <h2 className="font-display font-bold text-base sm:text-lg tracking-tight" style={{ color: 'var(--text-primary)' }}>
                   Lahore Delivery Addresses
                 </h2>
-                <p className="text-xs text-stone-500">
-                  Predefined 12-cluster drop zones and Smart Location Lite delivery profiles.
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Saved Lahore cluster drop zones for fast RFQ and pool checkout.
                 </p>
               </div>
               {!showAddressForm && (
                 <button
                   type="button"
                   onClick={() => setShowAddressForm(true)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer shadow-xs"
                   style={{
-                    backgroundColor: 'var(--brand-accent)',
-                    color: 'var(--text-on-champagne)',
+                    background: 'linear-gradient(135deg, #d7b97d 0%, #b48c4c 100%)',
+                    color: '#0d2219',
                   }}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -403,7 +435,7 @@ export const ProfilePage = () => {
             ) : (
               <div className="space-y-3 pt-1">
                 {loadingAddresses ? (
-                  <div className="text-xs text-stone-400 py-4 text-center">Loading saved addresses...</div>
+                  <div className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>Loading saved addresses...</div>
                 ) : addresses.length === 0 ? (
                   <div
                     className="p-6 rounded-2xl border text-center space-y-2"
@@ -412,43 +444,44 @@ export const ProfilePage = () => {
                       borderColor: 'var(--border-subtle)',
                     }}
                   >
-                    <MapPin className="w-6 h-6 mx-auto text-stone-400" />
+                    <MapPin className="w-6 h-6 mx-auto text-emerald-800 dark:text-champagne" />
                     <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
                       No delivery address saved yet
                     </p>
-                    <p className="text-[11px] text-stone-500 max-w-sm mx-auto">
+                    <p className="text-[11px] max-w-sm mx-auto" style={{ color: 'var(--text-muted)' }}>
                       Add your commercial kitchen, warehouse, or retail shop location to view cluster-based delivery options.
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {addresses.map((addr) => (
                       <div
                         key={addr.id}
-                        className="p-4 rounded-2xl border space-y-2 relative"
+                        className="p-4 rounded-2xl border space-y-2.5 relative transition-all duration-200 hover:border-[var(--brand-accent)]"
                         style={{
                           backgroundColor: 'var(--bg-card)',
                           borderColor: addr.is_default ? 'var(--brand-accent)' : 'var(--border-subtle)',
                         }}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>
-                            {addr.society_area}
+                          <span className="font-semibold text-xs flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                            <MapPin className="w-3.5 h-3.5 text-emerald-800 dark:text-champagne shrink-0" />
+                            <span>{addr.society_area}</span>
                           </span>
                           <div className="flex items-center gap-1.5">
                             {addr.is_default ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border miljor-badge-verified">
                                 Default
                               </span>
                             ) : null}
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
                                 addr.geographic_match_status === 'VERIFIED'
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
-                                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                                  ? 'miljor-badge-verified'
+                                  : 'miljor-badge-provisional'
                               }`}
                             >
-                              {addr.geographic_match_status}
+                              {addr.geographic_match_status === 'VERIFIED' ? 'Verified' : 'Provisional'}
                             </span>
                           </div>
                         </div>
@@ -461,7 +494,7 @@ export const ProfilePage = () => {
                           <span className="font-medium" style={{ color: 'var(--brand-accent)' }}>
                             {addr.cluster_name || `Cluster #${addr.cluster_id}`}
                           </span>
-                          <span className="text-stone-400">{addr.city}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{addr.city}</span>
                         </div>
                       </div>
                     ))}
@@ -476,21 +509,24 @@ export const ProfilePage = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link
             to="/orders"
-            className="p-4 rounded-2xl border flex items-center justify-between transition hover:opacity-90"
+            className="p-4 rounded-2xl border flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)]"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-default)',
             }}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--bg-elevated)' }}>
+            <div className="flex items-center gap-3.5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center border shrink-0"
+                style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+              >
                 <ClipboardList className="w-5 h-5 text-emerald-800 dark:text-champagne" />
               </div>
               <div>
                 <span className="font-semibold text-xs block" style={{ color: 'var(--text-primary)' }}>
                   View Orders & Reservations
                 </span>
-                <span className="text-[11px] text-stone-500">
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   Track batch milestones and delivery fulfillment
                 </span>
               </div>
@@ -499,21 +535,24 @@ export const ProfilePage = () => {
 
           <Link
             to="/pools"
-            className="p-4 rounded-2xl border flex items-center justify-between transition hover:opacity-90"
+            className="p-4 rounded-2xl border flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)]"
             style={{
               backgroundColor: 'var(--bg-card)',
               borderColor: 'var(--border-default)',
             }}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--bg-elevated)' }}>
+            <div className="flex items-center gap-3.5">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center border shrink-0"
+                style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+              >
                 <Layers className="w-5 h-5 text-emerald-800 dark:text-champagne" />
               </div>
               <div>
                 <span className="font-semibold text-xs block" style={{ color: 'var(--text-primary)' }}>
                   Explore Wholesale Pools
                 </span>
-                <span className="text-[11px] text-stone-500">
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   Browse live commodities and reserve volume
                 </span>
               </div>

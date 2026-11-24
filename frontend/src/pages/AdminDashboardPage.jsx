@@ -83,24 +83,24 @@ export function AdminDashboardPage() {
                 return <span key={status} className="text-xs px-3 py-1.5 rounded-full border" style={{borderColor:'var(--border-subtle)'}}>{status.replaceAll('_',' ')}: <strong>{count}</strong></span>;
               })}
             </div>
-            <Link to="/admin/verifications" className="mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold" style={{background:'var(--brand-accent)',color:'var(--text-on-champagne)'}}>
-              Review suppliers <ArrowRight className="h-4 w-4" />
+            <Link to="/admin/verifications" className="landing-gradient-cta mt-5 inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold" style={{color:'var(--text-on-champagne)'}}>
+              Review suppliers
             </Link>
           </section>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {canCatalog && <Link to="/admin/catalog" className="rounded-2xl border p-6 hover:shadow-lg transition-shadow space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
-            <FolderCheck className="w-7 h-7" style={{color:'var(--brand-accent)'}} />
+          {canCatalog && <Link to="/admin/catalog" className="rounded-2xl border p-6 hover:shadow-lg transition-all space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
+            <FolderCheck className="w-7 h-7" style={{color:'var(--lp-accent)'}} />
             <h2 className="text-lg font-bold">Catalog governance</h2>
-            <p className="text-sm opacity-70">Moderate supplier catalog requests, families and categories.</p>
-            <span className="text-xs font-bold inline-flex items-center gap-1">Open catalog <ArrowRight className="w-3.5 h-3.5" /></span>
+            <p className="text-sm opacity-75">Moderate supplier catalog requests, families and categories.</p>
+            <span className="text-xs font-semibold inline-flex items-center" style={{color:'var(--lp-accent)'}}>Open catalog</span>
           </Link>}
-          {canVerify && <Link to="/admin/verifications" className="rounded-2xl border p-6 hover:shadow-lg transition-shadow space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
-            <ShieldCheck className="w-7 h-7" style={{color:'var(--brand-accent)'}} />
+          {canVerify && <Link to="/admin/verifications" className="rounded-2xl border p-6 hover:shadow-lg transition-all space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
+            <ShieldCheck className="w-7 h-7" style={{color:'var(--lp-accent)'}} />
             <h2 className="text-lg font-bold">Business verification</h2>
-            <p className="text-sm opacity-70">Inspect business details, choose verification level and approve or reject with an audit trail.</p>
-            <span className="text-xs font-bold inline-flex items-center gap-1">Open verification <ArrowRight className="w-3.5 h-3.5" /></span>
+            <p className="text-sm opacity-75">Inspect business details, choose verification level and approve or reject with an audit trail.</p>
+            <span className="text-xs font-semibold inline-flex items-center" style={{color:'var(--lp-accent)'}}>Open verification</span>
           </Link>}
         </div>
         <p className="text-xs opacity-60">All approval operations are enforced by the backend. Suppliers cannot approve their own application.</p>

@@ -34,7 +34,7 @@ export function BuyerRegularReservationsPanel(){
       await apiClient.post(`/reservations/${r.id}/cancel`,{},
         {headers:{'X-Idempotency-Key':idem}});
       delete cancellationKeys.current[r.id];
-      toast.success('Reservation cancelled according to B4 cancellation rules.');
+      toast.success('Reservation cancelled.');
       await load();
     }catch(e){toast.error(e.response?.data?.error?.message||'Reservation cannot be cancelled');}
     finally{setBusy(null);}

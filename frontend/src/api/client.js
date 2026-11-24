@@ -63,6 +63,17 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    if (
+      error.response?.status === 429 &&
+      originalRequest &&
+      String(originalRequest.method || 'get').toLowerCase() === 'get' &&
+      !originalRequest._rateLimitRetried
+    ) {
+      originalRequest._rateLimitRetried = true;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      return apiClient(originalRequest);
+    }
+
     if (!error.response || error.response.status !== 401) {
       return Promise.reject(error);
     }

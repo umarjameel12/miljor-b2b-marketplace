@@ -113,12 +113,16 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 // =============================================================================
 // Rate Limiting
 // =============================================================================
-// 1. Auth limiter (brute-force defense)
+// 1. Auth limiter (brute-force defense on credential/OTP mutations; never throttle /auth/me or /auth/refresh)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 1000 : 30,
+  max: process.env.NODE_ENV === 'production' ? 30 : 500,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    const url = req.originalUrl || req.url || '';
+    return url.endsWith('/auth/me') || url.endsWith('/auth/refresh');
+  },
   message: {
     success: false,
     error: { code: 'RATE_LIMITED', message: 'Too many requests. Please wait 15 minutes before trying again.' }
@@ -128,7 +132,7 @@ const authLimiter = rateLimit({
 // 2. Webhook-specific limiter: provides higher capacity for legitimate provider retries/bursts
 const webhookLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 1000 : 300,
+  max: process.env.NODE_ENV === 'production' ? 300 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -140,7 +144,7 @@ const webhookLimiter = rateLimit({
 // 3. General API limiter (skips webhooks and health endpoints)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 5000 : 200,
+  max: process.env.NODE_ENV === 'production' ? 200 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
