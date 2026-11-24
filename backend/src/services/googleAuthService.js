@@ -134,7 +134,7 @@ class GoogleAuthService {
    * @param {Object} [params.options] - Test or verification options
    * @returns {Promise<Object>} { user, isNewUser, requiresLinking }
    */
-  async authenticateGoogleUser({ idToken, options = {} }) {
+  async authenticateGoogleUser({ idToken, mode = null, options = {} }) {
     const verified = await this.verifyIdToken(idToken, options);
     const googleSub = verified.sub;
     const email = verified.email ? verified.email.toLowerCase().trim() : null;
@@ -187,6 +187,15 @@ class GoogleAuthService {
       err.code = 'ACCOUNT_LINKING_REQUIRED';
       err.statusCode = 409;
       err.data = { email, existingUserId: existingUser.id };
+      throw err;
+    }
+
+    // In explicit login mode, do not silently create an incomplete account without role/cluster onboarding.
+    if (mode === 'login') {
+      const err = new Error('No MilJor account is linked to this Google email yet. Please complete registration first.');
+      err.code = 'ACCOUNT_NOT_REGISTERED';
+      err.statusCode = 404;
+      err.data = { email, name: verified.name || 'Google User' };
       throw err;
     }
 

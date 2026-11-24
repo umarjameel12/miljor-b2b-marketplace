@@ -6,11 +6,12 @@
 // =============================================================================
 import React, { useState } from 'react';
 import { activateRegisterExactPreview } from '../components/auth/registerExactPreview';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAuthAppearance } from '../context/AuthAppearanceContext';
 import { AuthAppearanceControl } from '../components/auth/AuthAppearanceControl';
 import { AuthHeroPanel } from '../components/auth/AuthHeroPanel';
+import { GoogleAuthButton, GoogleLogo } from '../components/auth/GoogleAuthButton';
 import { PasswordField } from '../components/auth/PasswordField';
 import { PasswordStrengthIndicator } from '../components/auth/PasswordStrengthIndicator';
 import { Logo } from '../components/ui/Logo';
@@ -34,11 +35,13 @@ import {
 export const RegisterPage = () => {
   // MILJOR APPROVED REGISTER PREVIEW V1 (reversible; visual only)
   React.useEffect(() => activateRegisterExactPreview(), []);
+  const location = useLocation();
+  const googleSignupState = location.state?.googleSignup || null;
   const [role, setRole] = useState('BUYER'); // 'BUYER' or 'SUPPLIER'
   const [formData, setFormData] = useState({
     business_name: '',
-    full_name: '',
-    email: '',
+    full_name: googleSignupState?.name || '',
+    email: googleSignupState?.email || '',
     phone: '',
     password: '',
     confirm_password: '',
@@ -50,8 +53,9 @@ export const RegisterPage = () => {
 
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { register } = useAuth();
+  const { register, registerWithGoogle } = useAuth();
   const { preferences } = useAuthAppearance();
   const navigate = useNavigate();
 
@@ -199,6 +203,80 @@ export const RegisterPage = () => {
       toast.error(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const validateGoogleProfileFields = () => {
+    setError(null);
+    if (!formData.business_name.trim()) {
+      setError('Business name is required.');
+      return false;
+    }
+    if (!formData.full_name.trim()) {
+      setError('Full name is required.');
+      return false;
+    }
+    if (!/^[0-9]{11}$/.test(cleanPhone)) {
+      setError('Mobile number must be exactly 11 digits (e.g. 03001234567).');
+      return false;
+    }
+    if (!formData.cluster_id) {
+      setError(
+        role === 'SUPPLIER'
+          ? 'Please select your supplier base operational facility cluster in Lahore.'
+          : 'Please select your primary Lahore operational cluster for pool discovery.'
+      );
+      return false;
+    }
+    const hasSociety = Boolean(formData.society_area?.trim());
+    const hasAddress = Boolean(formData.address?.trim());
+    if (role === 'BUYER' && ((hasSociety && !hasAddress) || (!hasSociety && hasAddress))) {
+      setError(
+        'To save an initial delivery address, both Society/Area and Complete Address are required. Or leave both empty to register with base cluster only.'
+      );
+      return false;
+    }
+    if (role === 'SUPPLIER' && (!hasSociety || !hasAddress)) {
+      setError('Please enter your Area and complete mill, processing facility, or warehouse address in Lahore.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleGoogleRegister = async (credential) => {
+    if (!validateGoogleProfileFields()) return;
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const hasSociety = Boolean(formData.society_area?.trim());
+      const hasAddress = Boolean(formData.address?.trim());
+      const payload = {
+        credential,
+        role,
+        business_name: formData.business_name.trim(),
+        full_name: formData.full_name.trim(),
+        phone: cleanPhone,
+        city: 'Lahore',
+        base_cluster_id: Number(formData.cluster_id),
+        cluster_id: Number(formData.cluster_id),
+      };
+      if (hasSociety && hasAddress) {
+        payload.society_area = formData.society_area.trim();
+        payload.address = formData.address.trim();
+      }
+      await registerWithGoogle(payload);
+      toast.success(
+        role === 'SUPPLIER'
+          ? 'Google Supplier account created. Verification remains pending until admin approval.'
+          : 'Google Buyer account created. Welcome to MilJor.'
+      );
+      navigate(role === 'SUPPLIER' ? '/profile' : '/pools', { replace: true });
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message || 'Google registration failed';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -499,6 +577,7 @@ export const RegisterPage = () => {
           variant="primary"
           size="lg"
           loading={loading}
+          disabled={loading || googleLoading}
           className="w-full mt-1.5 font-semibold shadow-xs justify-center cursor-pointer"
           style={{
             backgroundColor: 'var(--brand-accent)',
@@ -507,6 +586,43 @@ export const RegisterPage = () => {
         >
           Get Started
         </Button>
+
+        <div className="flex items-center gap-3 my-0.5" role="separator" aria-label="OR">
+          <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-subtle)' }} />
+          <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            OR
+          </span>
+          <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-subtle)' }} />
+        </div>
+
+        {googleSignupState?.credential ? (
+          <button
+            type="button"
+            disabled={loading || googleLoading}
+            onClick={() => handleGoogleRegister(googleSignupState.credential)}
+            className="w-full h-11 px-4 rounded-xl border text-sm font-semibold flex items-center justify-center gap-2.5 transition-all shadow-2xs hover:opacity-95 disabled:opacity-50 cursor-pointer"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <GoogleLogo />
+            <span>{googleLoading ? 'Completing Google Sign-Up…' : `Complete Google Sign-Up (${googleSignupState.email})`}</span>
+          </button>
+        ) : (
+          <GoogleAuthButton
+            label="Sign up with Google"
+            loading={googleLoading}
+            disabled={loading || googleLoading}
+            onBeforeClick={validateGoogleProfileFields}
+            onCredential={handleGoogleRegister}
+            onError={(msg) => {
+              setError(msg);
+              toast.error(msg);
+            }}
+          />
+        )}
 
         <p className="text-[11px] text-center text-stone-500">
           By creating an account, you agree to MilJor's terms.

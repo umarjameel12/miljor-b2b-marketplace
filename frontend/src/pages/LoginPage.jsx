@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAuthAppearance } from '../context/AuthAppearanceContext';
 import { AuthAppearanceControl } from '../components/auth/AuthAppearanceControl';
 import { AuthHeroPanel } from '../components/auth/AuthHeroPanel';
+import { GoogleAuthButton } from '../components/auth/GoogleAuthButton';
 import { Logo } from '../components/ui/Logo';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -23,8 +24,9 @@ export const LoginPage = () => {
   const [error, setError] = useState(null);
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { preferences } = useAuthAppearance();
   const navigate = useNavigate();
   const location = useLocation();
@@ -66,6 +68,43 @@ export const LoginPage = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async (credential) => {
+    setError(null);
+    setUnverifiedEmail(null);
+    setGoogleLoading(true);
+    try {
+      const result = await loginWithGoogle(credential, { mode: 'login', rememberMe });
+      toast.success('Signed in with Google.');
+      const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
+      const destination = from === '/pools' && adminRoles.includes(result.user?.role) ? '/admin' : from;
+      navigate(destination, { replace: true });
+    } catch (err) {
+      const errData = err.response?.data?.error;
+      const code = errData?.code;
+      const msg = errData?.message || err.message || 'Google sign-in failed';
+
+      if (code === 'ACCOUNT_NOT_REGISTERED') {
+        const profile = errData?.data || {};
+        toast.info('Please select Buyer or Supplier and complete your business details.');
+        navigate('/register', {
+          state: {
+            googleSignup: {
+              credential,
+              email: profile.email || '',
+              name: profile.name || '',
+            },
+          },
+        });
+        return;
+      }
+
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -209,6 +248,7 @@ export const LoginPage = () => {
           variant="primary"
           size="lg"
           loading={loading}
+          disabled={loading || googleLoading}
           className="w-full mt-1 font-semibold shadow-xs justify-center cursor-pointer"
           style={{
             backgroundColor: 'var(--brand-accent)',
@@ -218,6 +258,25 @@ export const LoginPage = () => {
           <span>Sign In</span>
         </Button>
       </form>
+
+      <div className="flex items-center gap-3 my-0.5" role="separator" aria-label="OR">
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-subtle)' }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          OR
+        </span>
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-subtle)' }} />
+      </div>
+
+      <GoogleAuthButton
+        label="Continue with Google"
+        loading={googleLoading}
+        disabled={loading || googleLoading}
+        onCredential={handleGoogleLogin}
+        onError={(msg) => {
+          setError(msg);
+          toast.error(msg);
+        }}
+      />
     </div>
   );
 

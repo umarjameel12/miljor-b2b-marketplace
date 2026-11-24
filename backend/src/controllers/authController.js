@@ -892,13 +892,27 @@ class AuthController {
   }
 
   // ---------------------------------------------------------------------------
+  // GET /api/v1/auth/google/config (Public)
+  // Exposes non-secret Google OAuth Client ID and availability flag
+  // ---------------------------------------------------------------------------
+  getGoogleConfig(req, res) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        enabled: Boolean(googleAuthService.isEnabled),
+        client_id: googleAuthService.clientId || null
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // POST /api/v1/auth/google (Public)
   // Authenticates or safely onboards a user via Google ID Token
   // Enforces Google double-submit cookie CSRF defense when g_csrf_token is provided
   // ---------------------------------------------------------------------------
   async googleAuth(req, res) {
     try {
-      const { id_token, credential, g_csrf_token } = req.body || {};
+      const { id_token, credential, g_csrf_token, mode } = req.body || {};
       const tokenToVerify = id_token || credential;
 
       if (!tokenToVerify) {
@@ -947,6 +961,7 @@ class AuthController {
 
       const { user, isNewUser } = await googleAuthService.authenticateGoogleUser({
         idToken: tokenToVerify,
+        mode: mode === 'login' ? 'login' : null,
         options
       });
 
@@ -999,6 +1014,7 @@ class AuthController {
         err.code === 'INVALID_TOKEN' || err.code === 'MALFORMED_TOKEN' ? 400 :
         err.code === 'INVALID_SIGNATURE' || err.code === 'AUDIENCE_MISMATCH' || err.code === 'ISSUER_MISMATCH' || err.code === 'TOKEN_EXPIRED' || err.code === 'GOOGLE_VERIFICATION_FAILED' ? 401 :
         err.code === 'ACCOUNT_SUSPENDED' || err.code === 'EMAIL_NOT_VERIFIED' ? 403 :
+        err.code === 'ACCOUNT_NOT_REGISTERED' ? 404 :
         err.code === 'ACCOUNT_LINKING_REQUIRED' ? 409 :
         err.code === 'GOOGLE_AUTH_NOT_CONFIGURED' ? 503 : 500
       );
@@ -1007,8 +1023,265 @@ class AuthController {
         success: false,
         error: {
           code: err.code || 'GOOGLE_AUTH_FAILED',
-          message: err.message
+          message: err.message,
+          ...(err.data ? { data: err.data } : {})
         }
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST /api/v1/auth/google/register (Public)
+  // Registers a new Buyer or Supplier using a verified Google ID token
+  // ---------------------------------------------------------------------------
+  async googleRegister(req, res) {
+    try {
+      const {
+        id_token,
+        credential,
+        role: requestedRole,
+        business_name,
+        full_name,
+        phone,
+        city = 'Lahore',
+        base_cluster_id,
+        cluster_id,
+        society_area,
+        area,
+        address,
+        full_address,
+        rememberMe
+      } = req.body || {};
+
+      const tokenToVerify = id_token || credential;
+      if (!tokenToVerify) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Google ID token (id_token or credential) is required' }
+        });
+      }
+
+      let options = {};
+      if (process.env.NODE_ENV === 'test' && req.testHooks?.mockGooglePayload) {
+        options.mockPayload = req.testHooks.mockGooglePayload;
+      }
+
+      const verified = await googleAuthService.verifyIdToken(tokenToVerify, options);
+      const googleSub = verified.sub;
+      const email = verified.email ? verified.email.toLowerCase().trim() : null;
+
+      if (!verified.email_verified || !email) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'EMAIL_NOT_VERIFIED', message: 'Google account email is not verified by Google. Cannot register.' }
+        });
+      }
+
+      const normalizedRole = typeof requestedRole === 'string' ? requestedRole.trim().toUpperCase() : '';
+      if (normalizedRole !== 'BUYER' && normalizedRole !== 'SUPPLIER') {
+        return res.status(422).json({
+          success: false,
+          error: {
+            code: 'INVALID_REGISTRATION_ROLE',
+            message: "Public Google registration is strictly restricted to 'BUYER' or 'SUPPLIER'."
+          }
+        });
+      }
+
+      const cleanBusinessName = typeof business_name === 'string' ? business_name.trim() : '';
+      const cleanFullName = typeof full_name === 'string' && full_name.trim() ? full_name.trim() : (verified.name || '').trim();
+      if (!cleanBusinessName || !cleanFullName) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Business name and contact person name are required.' }
+        });
+      }
+
+      const cleanPhone = phone ? String(phone).replace(/[\s-]/g, '') : '';
+      if (!/^[0-9]{10,15}$/.test(cleanPhone)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'A valid mobile number (10-15 digits) is required.' }
+        });
+      }
+
+      if (city && city.trim().toLowerCase() !== 'lahore') {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'OUTSIDE_LAHORE_DISTRICT', message: 'MilJor currently operates exclusively within Lahore District, Punjab.' }
+        });
+      }
+
+      const effectiveClusterId = (base_cluster_id !== undefined && base_cluster_id !== null && base_cluster_id !== '')
+        ? Number(base_cluster_id)
+        : ((cluster_id !== undefined && cluster_id !== null && cluster_id !== '') ? Number(cluster_id) : null);
+
+      if (!effectiveClusterId || !Number.isSafeInteger(effectiveClusterId)) {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'BASE_CLUSTER_REQUIRED', message: 'A valid Lahore base cluster is required for registration.' }
+        });
+      }
+
+      const [clusterRows] = await db.query(
+        'SELECT * FROM geographic_clusters WHERE id = ? AND is_active = 1',
+        [effectiveClusterId]
+      );
+      if (clusterRows.length === 0) {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'INVALID_CLUSTER', message: 'Selected delivery cluster is inactive or does not exist.' }
+        });
+      }
+      const cluster = clusterRows[0];
+      if (cluster.district && cluster.district.toLowerCase() !== 'lahore') {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'OUTSIDE_LAHORE_DISTRICT', message: 'The selected cluster does not belong to Lahore District.' }
+        });
+      }
+
+      const effectiveArea = (society_area || area || '').trim();
+      const effectiveAddress = (full_address || address || '').trim();
+      const hasArea = effectiveArea.length > 0;
+      const hasAddressText = effectiveAddress.length > 0;
+
+      if (normalizedRole === 'SUPPLIER' && (!hasArea || !hasAddressText)) {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'INCOMPLETE_ADDRESS', message: 'Society/area and complete facility address are required for supplier registration.' }
+        });
+      }
+      if (normalizedRole === 'BUYER' && ((hasArea && !hasAddressText) || (!hasArea && hasAddressText))) {
+        return res.status(422).json({
+          success: false,
+          error: { code: 'INCOMPLETE_ADDRESS', message: 'Both society/area and complete address must be provided if supplying an initial delivery address.' }
+        });
+      }
+
+      const [existingGoogle] = await db.query('SELECT id FROM users WHERE google_id = ?', [googleSub]);
+      if (existingGoogle.length > 0) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'GOOGLE_ACCOUNT_ALREADY_LINKED', message: 'This Google account is already registered. Please sign in with Google.' }
+        });
+      }
+
+      const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+      if (existingEmail.length > 0) {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'ACCOUNT_LINKING_REQUIRED',
+            message: 'An account with this email already exists. Please sign in with your password and link Google in Account Settings.'
+          }
+        });
+      }
+
+      const [existingPhone] = await db.query('SELECT id FROM users WHERE phone = ?', [cleanPhone]);
+      if (existingPhone.length > 0) {
+        return res.status(409).json({
+          success: false,
+          error: { code: 'USER_EXISTS', message: 'An account with this mobile number already exists.' }
+        });
+      }
+
+      const connection = await db.getConnection();
+      let newUserId;
+      try {
+        await connection.beginTransaction();
+        const [result] = await connection.query(
+          `INSERT INTO users
+            (full_name, business_name, email, phone, google_id, role, business_type, city, area, address, base_cluster_id, verification_status, is_verified, buyer_trust_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'Lahore', ?, ?, ?, ?, 0, 'CONTACT_VERIFIED')`,
+          [
+            cleanFullName,
+            cleanBusinessName,
+            email,
+            cleanPhone,
+            googleSub,
+            normalizedRole,
+            normalizedRole === 'SUPPLIER' ? 'Wholesale Supplier' : 'Commercial Food Buyer',
+            cluster.name,
+            hasAddressText ? effectiveAddress : null,
+            cluster.id,
+            normalizedRole === 'BUYER' ? 'EMAIL_VERIFIED' : 'UNVERIFIED'
+          ]
+        );
+        newUserId = result.insertId;
+
+        if (normalizedRole === 'BUYER' && hasArea && hasAddressText) {
+          await connection.query(
+            `INSERT INTO buyer_delivery_addresses
+              (user_id, city, cluster_id, cluster_version, society_area, full_address, geographic_match_status, user_confirmation_status, business_verification_status, manual_review_required, is_default)
+             VALUES (?, 'Lahore', ?, ?, ?, ?, 'PROVISIONAL', 'CONFIRMED', 'NOT_REQUIRED', 0, 1)`,
+            [newUserId, cluster.id, cluster.version || 1, effectiveArea, effectiveAddress]
+          );
+        } else if (normalizedRole === 'SUPPLIER') {
+          await connection.query(
+            `INSERT INTO supplier_profiles
+              (supplier_id, verification_level, verification_status, subscription_plan, max_active_listings, transaction_fee_percent)
+             VALUES (?, 'LEVEL_1_CONTACT', 'NOT_SUBMITTED', 'STARTER', 4, 3.00)`,
+            [newUserId]
+          );
+          await connection.query(
+            `INSERT INTO supplier_delivery_configurations
+              (supplier_id, standard_delivery_enabled, pickup_enabled, express_enabled, express_cutoff_time, express_fulfillment_hours, version)
+             VALUES (?, 0, 0, 0, '14:00:00', 4, 1)`,
+            [newUserId]
+          );
+        }
+
+        await connection.query(
+          `INSERT INTO system_audit_logs (actor_id, actor_role, action, entity_name, entity_id, new_value)
+           VALUES (?, 'SYSTEM', 'USER_REGISTERED_GOOGLE', 'users', ?, ?)`,
+          [newUserId, newUserId, JSON.stringify({ email, phone: cleanPhone, google_sub: googleSub, role: normalizedRole, base_cluster_id: cluster.id })]
+        );
+        await connection.commit();
+      } catch (txErr) {
+        await connection.rollback();
+        throw txErr;
+      } finally {
+        connection.release();
+      }
+
+      const [newUsers] = await db.query('SELECT * FROM users WHERE id = ?', [newUserId]);
+      const createdUser = newUsers[0];
+
+      const session = await sessionService.createSession({
+        userId: createdUser.id,
+        rememberMe: Boolean(rememberMe),
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip
+      });
+      const token = signAccessToken({
+        id: createdUser.id,
+        email: createdUser.email,
+        phone: createdUser.phone,
+        role: createdUser.role,
+        sid: session.sessionId
+      });
+      sessionService.setRefreshCookie(res, session.rawRefreshToken, session.isPersistent, session.absoluteExpiresAt);
+
+      return res.status(201).json({
+        success: true,
+        message: `Google account registered successfully as ${normalizedRole}.`,
+        data: {
+          token,
+          user: safeUser(createdUser),
+          is_new_user: true
+        }
+      });
+    } catch (err) {
+      const statusCode = err.statusCode || (
+        err.code === 'VALIDATION_ERROR' || err.code === 'INVALID_TOKEN' || err.code === 'MALFORMED_TOKEN' ? 400 :
+        err.code === 'INVALID_SIGNATURE' || err.code === 'AUDIENCE_MISMATCH' || err.code === 'ISSUER_MISMATCH' || err.code === 'TOKEN_EXPIRED' || err.code === 'GOOGLE_VERIFICATION_FAILED' ? 401 :
+        err.code === 'EMAIL_NOT_VERIFIED' ? 403 :
+        err.code === 'GOOGLE_AUTH_NOT_CONFIGURED' ? 503 : 500
+      );
+      return res.status(statusCode).json({
+        success: false,
+        error: { code: err.code || 'GOOGLE_REGISTER_FAILED', message: err.message }
       });
     }
   }
