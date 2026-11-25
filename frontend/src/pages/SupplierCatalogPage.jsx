@@ -13,6 +13,7 @@ import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import { SupplierVerificationBadge } from '../components/supplier/SupplierVerificationBadge';
 import catalogApi from '../api/catalog';
+import productsApi from '../api/products';
 import supplierApi from '../api/supplier';
 import { poolsApi } from '../api/pools';
 import {
