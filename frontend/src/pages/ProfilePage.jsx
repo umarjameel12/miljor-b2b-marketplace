@@ -38,23 +38,13 @@ export const ProfilePage = () => {
 
   const isSupplier = user?.role === 'SUPPLIER';
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
-
-  // Active view tab if role is ADMIN or has both capabilities
-  const [activeTab, setActiveTab] = useState(isSupplier ? 'supplier_settings' : 'buyer_addresses');
+  const isBuyer = !isSupplier && !isAdmin;
 
   useEffect(() => {
-    if (isSupplier) {
-      setActiveTab('supplier_settings');
-    } else {
-      setActiveTab('buyer_addresses');
-    }
-  }, [isSupplier]);
-
-  useEffect(() => {
-    if (isAuthenticated && !isSupplier) {
+    if (isAuthenticated && isBuyer) {
       loadAddresses();
     }
-  }, [isAuthenticated, isSupplier]);
+  }, [isAuthenticated, isBuyer]);
 
   const loadAddresses = async () => {
     try {
@@ -183,40 +173,6 @@ export const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Multi-Role Switcher Tabs (For Admin or Dual Access) */}
-        {isAdmin && (
-          <div className="flex border-b border-[var(--border-subtle)] gap-6 overflow-x-auto" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'buyer_addresses'}
-              onClick={() => setActiveTab('buyer_addresses')}
-              className={`flex items-center gap-2 py-3 px-1 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                activeTab === 'buyer_addresses'
-                  ? 'border-[var(--brand-accent)] text-[var(--text-primary)]'
-                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Store className="w-3.5 h-3.5 shrink-0" />
-              <span>Buyer Delivery Addresses</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'supplier_settings'}
-              onClick={() => setActiveTab('supplier_settings')}
-              className={`flex items-center gap-2 py-3 px-1 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                activeTab === 'supplier_settings'
-                  ? 'border-[var(--brand-accent)] text-[var(--text-primary)]'
-                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Truck className="w-3.5 h-3.5 shrink-0" />
-              <span>Supplier Delivery Settings</span>
-            </button>
-          </div>
-        )}
-
         {/* Account Details Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div
@@ -284,9 +240,9 @@ export const ProfilePage = () => {
           >
             <div className="flex items-center justify-between">
               <h3 className="miljor-section-kicker font-sans font-bold text-[11px] uppercase tracking-wider">
-                {isSupplier ? 'Primary Facility Hub' : 'Primary Operations Hub'}
+                {isAdmin ? 'Governance & Operations' : isSupplier ? 'Primary Facility Hub' : 'Primary Operations Hub'}
               </h3>
-              {!isSupplier && (
+              {isBuyer && (
                 <button
                   type="button"
                   onClick={() => {
@@ -369,15 +325,56 @@ export const ProfilePage = () => {
           </div>
         </div>
 
+        {/* ADMIN WORKSPACE SHORTCUTS */}
+        {isAdmin && (
+          <div
+            className="p-6 rounded-2xl border space-y-4"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-subtle)',
+            }}
+          >
+            <div>
+              <h2 className="font-display font-bold text-base sm:text-lg tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                Administration Workspaces
+              </h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                Direct access to supplier verification, subscriptions, and catalog governance.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { label: 'Operations Overview', desc: 'Subscriptions & refunds', path: '/admin' },
+                { label: 'Supplier Verification', desc: 'Review trade credentials', path: '/admin/verifications' },
+                { label: 'Catalog Governance', desc: 'Moderate families & SKUs', path: '/admin/catalog' },
+              ].map((item) => (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className="p-4 rounded-xl border text-left transition-colors hover:border-[var(--brand-accent)] cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    borderColor: 'var(--border-subtle)',
+                  }}
+                >
+                  <span className="text-xs font-semibold block" style={{ color: 'var(--text-primary)' }}>{item.label}</span>
+                  <span className="text-[11px] mt-1 block" style={{ color: 'var(--text-muted)' }}>{item.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* VIEW 1: SUPPLIER DELIVERY CONFIGURATION */}
-        {(isSupplier || activeTab === 'supplier_settings') && (
+        {isSupplier && (
           <div className="space-y-4">
             <SupplierDeliverySettingsForm onSaved={() => {}} />
           </div>
         )}
 
         {/* VIEW 2: BUYER SAVED DELIVERY ADDRESSES (SMART LOCATION LITE) */}
-        {(!isSupplier || activeTab === 'buyer_addresses') && (
+        {isBuyer && (
           <div
             className="p-6 rounded-3xl border shadow-sm space-y-4"
             style={{
@@ -400,8 +397,8 @@ export const ProfilePage = () => {
                   onClick={() => setShowAddressForm(true)}
                   className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer shadow-xs"
                   style={{
-                    background: 'linear-gradient(135deg, #d7b97d 0%, #b48c4c 100%)',
-                    color: '#0d2219',
+                    backgroundColor: 'var(--brand-accent)',
+                    color: 'var(--text-on-champagne)',
                   }}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -432,7 +429,7 @@ export const ProfilePage = () => {
                       borderColor: 'var(--border-subtle)',
                     }}
                   >
-                    <MapPin className="w-6 h-6 mx-auto text-emerald-800 dark:text-champagne" />
+                    <MapPin className="w-6 h-6 mx-auto text-[var(--brand-accent)]" />
                     <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
                       No delivery address saved yet
                     </p>
