@@ -127,29 +127,23 @@ export const ProfilePage = () => {
   const initials = (user?.business_name || user?.full_name || user?.email || 'U').slice(0, 2).toUpperCase();
 
   return (
-    <AppShell title={isSupplier ? 'Supplier Business Portal' : 'Buyer Account Profile'}>
+    <AppShell title={isAdmin ? 'Admin Account Profile' : isSupplier ? 'Supplier Business Portal' : 'Buyer Account Profile'}>
       <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
         {/* Profile Header Banner */}
         <div
-          className="p-6 sm:p-8 rounded-3xl border shadow-sm relative overflow-hidden"
+          className="p-6 sm:p-7 rounded-2xl border shadow-xs relative overflow-hidden"
           style={{
             backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-default)',
           }}
         >
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-1"
-            style={{
-              background: 'linear-gradient(90deg, rgba(197, 164, 103, 0.75) 0%, rgba(15, 76, 58, 0.55) 60%, transparent 100%)',
-            }}
-          />
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div className="flex items-center gap-4">
               <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center font-display font-bold text-xl shrink-0 shadow-sm ring-2 ring-[#c5a467]/30"
+                className="w-14 h-14 rounded-2xl flex items-center justify-center font-display font-bold text-lg shrink-0"
                 style={{
-                  background: 'linear-gradient(135deg, #d7b97d 0%, #b48c4c 100%)',
-                  color: '#072a21',
+                  backgroundColor: 'var(--brand-accent)',
+                  color: 'var(--text-on-champagne)',
                 }}
               >
                 {initials}
@@ -165,13 +159,15 @@ export const ProfilePage = () => {
                     }`}
                   >
                     {isSupplier ? <Truck className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
-                    <span>{isSupplier ? 'Verified Supplier' : 'Verified Buyer'}</span>
+                    <span>{isAdmin ? 'Administrator' : isSupplier ? 'Verified Supplier' : 'Verified Buyer'}</span>
                   </span>
                 </div>
                 <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                  {isSupplier
-                    ? 'Wholesale Commodity Supplier & Distributor — Lahore District'
-                    : 'Commercial Food Procurement Partner — Lahore'}
+                  {isAdmin
+                    ? 'Platform Governance & Operations — Lahore'
+                    : isSupplier
+                      ? 'Wholesale Commodity Supplier — Lahore'
+                      : 'Commercial Food Procurement Partner — Lahore'}
                 </p>
               </div>
             </div>
@@ -189,41 +185,33 @@ export const ProfilePage = () => {
 
         {/* Multi-Role Switcher Tabs (For Admin or Dual Access) */}
         {isAdmin && (
-          <div
-            className="grid grid-cols-2 p-1 rounded-2xl border text-xs font-semibold"
-            style={{
-              backgroundColor: 'var(--bg-input)',
-              borderColor: 'var(--border-subtle)',
-            }}
-          >
+          <div className="flex border-b border-[var(--border-subtle)] gap-6 overflow-x-auto" role="tablist">
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'buyer_addresses'}
               onClick={() => setActiveTab('buyer_addresses')}
-              className={`py-2.5 text-center rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                activeTab === 'buyer_addresses' ? 'shadow-xs font-bold' : 'hover:text-[var(--text-primary)]'
+              className={`flex items-center gap-2 py-3 px-1 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                activeTab === 'buyer_addresses'
+                  ? 'border-[var(--brand-accent)] text-[var(--text-primary)]'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
-              style={{
-                backgroundColor: activeTab === 'buyer_addresses' ? 'var(--bg-surface)' : 'transparent',
-                color: activeTab === 'buyer_addresses' ? 'var(--brand-accent)' : 'var(--text-muted)',
-                border: activeTab === 'buyer_addresses' ? '1px solid var(--border-default)' : '1px solid transparent',
-              }}
             >
-              <Store className="w-3.5 h-3.5" />
+              <Store className="w-3.5 h-3.5 shrink-0" />
               <span>Buyer Delivery Addresses</span>
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'supplier_settings'}
               onClick={() => setActiveTab('supplier_settings')}
-              className={`py-2.5 text-center rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                activeTab === 'supplier_settings' ? 'shadow-xs font-bold' : 'hover:text-[var(--text-primary)]'
+              className={`flex items-center gap-2 py-3 px-1 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                activeTab === 'supplier_settings'
+                  ? 'border-[var(--brand-accent)] text-[var(--text-primary)]'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
-              style={{
-                backgroundColor: activeTab === 'supplier_settings' ? 'var(--bg-surface)' : 'transparent',
-                color: activeTab === 'supplier_settings' ? 'var(--brand-accent)' : 'var(--text-muted)',
-                border: activeTab === 'supplier_settings' ? '1px solid var(--border-default)' : '1px solid transparent',
-              }}
             >
-              <Truck className="w-3.5 h-3.5" />
+              <Truck className="w-3.5 h-3.5 shrink-0" />
               <span>Supplier Delivery Settings</span>
             </button>
           </div>
@@ -247,7 +235,7 @@ export const ProfilePage = () => {
                   className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
                 >
-                  <Mail className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                  <Mail className="w-4 h-4 text-[var(--brand-accent)]" />
                 </div>
                 <div className="min-w-0">
                   <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Email Address</span>
@@ -261,7 +249,7 @@ export const ProfilePage = () => {
                   className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
                 >
-                  <Phone className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                  <Phone className="w-4 h-4 text-[var(--brand-accent)]" />
                 </div>
                 <div>
                   <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>SMS Notifications Mobile</span>
@@ -275,12 +263,12 @@ export const ProfilePage = () => {
                   className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
                 >
-                  <Building2 className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                  <Building2 className="w-4 h-4 text-[var(--brand-accent)]" />
                 </div>
                 <div>
-                  <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Business Category</span>
+                  <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Account Category</span>
                   <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    {isSupplier ? 'Wholesale Commodity Supplier' : 'Restaurant / Commercial Kitchen'}
+                    {isAdmin ? 'Marketplace Administrator' : isSupplier ? 'Wholesale Commodity Supplier' : 'Restaurant / Commercial Kitchen'}
                   </span>
                 </div>
               </div>
@@ -351,7 +339,7 @@ export const ProfilePage = () => {
                     className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                     style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
                   >
-                    <MapPin className="w-4 h-4 text-emerald-800 dark:text-champagne" />
+                    <MapPin className="w-4 h-4 text-[var(--brand-accent)]" />
                   </div>
                   <div>
                     <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>Operational Cluster</span>
@@ -365,14 +353,14 @@ export const ProfilePage = () => {
                     className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                     style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
                   >
-                    <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                    <ShieldCheck className="w-4 h-4 text-[var(--brand-accent)]" />
                   </div>
                   <div>
                     <span className="text-[11px] font-medium block" style={{ color: 'var(--text-secondary)' }}>
-                      {isSupplier ? 'Platform Verification' : 'Escrow Protection'}
+                      {isAdmin ? 'Access Scope' : isSupplier ? 'Platform Verification' : 'Escrow Protection'}
                     </span>
                     <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {isSupplier ? 'Authoritative Lahore Supplier' : '100% Safepay Covered'}
+                      {isAdmin ? 'Full Lahore Operations' : isSupplier ? 'Authoritative Lahore Supplier' : '100% Safepay Covered'}
                     </span>
                   </div>
                 </div>

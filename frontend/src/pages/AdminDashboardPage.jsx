@@ -162,50 +162,50 @@ export function AdminDashboardPage() {
       <main className="mx-auto max-w-6xl w-full min-w-0 overflow-x-hidden p-4 sm:p-8 space-y-7">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{color:'var(--brand-accent)'}}>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--brand-accent)' }}>
               <ShieldCheck className="w-4 h-4" /> MilJor Administration
             </div>
-            <h1 className="mt-2 text-2xl sm:text-3xl font-bold">Operations overview</h1>
-            <p className="mt-2 text-sm opacity-70">Verification, supplier trust and catalog governance for the Lahore marketplace.</p>
+            <h1 className="font-display mt-2 text-2xl sm:text-3xl font-bold tracking-tight">Operations overview</h1>
+            <p className="mt-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>Verification, supplier trust, and catalog governance for Lahore.</p>
           </div>
-          <div className="rounded-xl px-4 py-2 border text-xs font-semibold" style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}>{role.replaceAll('_',' ')}</div>
+          <div className="rounded-xl px-4 py-2 border text-xs font-semibold" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>{role.replaceAll('_', ' ')}</div>
         </div>
 
         {canVerify && (
-          <section className="rounded-2xl border p-5 sm:p-6" style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}>
+          <section className="rounded-2xl border p-5 sm:p-6" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
             <div className="flex flex-wrap justify-between items-center gap-3">
               <div className="flex items-center gap-3">
-                <Users className="w-6 h-6" style={{color:'var(--brand-accent)'}} />
+                <Users className="w-6 h-6" style={{ color: 'var(--brand-accent)' }} />
                 <div>
-                  <p className="text-xs opacity-60 font-semibold uppercase tracking-wide">Supplier verification</p>
-                  <p className="text-2xl font-bold">{loading ? '…' : pending.length} <span className="text-xs font-normal opacity-65">applications awaiting a decision</span></p>
+                  <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Supplier verification</p>
+                  <p className="text-2xl font-bold tabular-nums">{loading ? '…' : pending.length} <span className="text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>applications awaiting review</span></p>
                 </div>
               </div>
-              <button type="button" onClick={refresh} disabled={loading} className="inline-flex gap-2 items-center px-3 py-2 text-xs rounded-lg border disabled:opacity-50" style={{borderColor:'var(--border-subtle)'}}>
+              <button type="button" onClick={refresh} disabled={loading} className="inline-flex gap-2 items-center px-3 py-2 text-xs font-medium rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
                 <RefreshCw className="w-4 h-4" /> Refresh
               </button>
             </div>
             {error && <p role="alert" className="mt-4 text-sm text-red-600 flex gap-2 items-center"><AlertTriangle className="w-4 h-4" /> {error}</p>}
             <div className="mt-5 flex flex-wrap gap-2">
-              {['PENDING_REVIEW','UNDER_REVIEW','MORE_INFORMATION_REQUIRED'].map(status => {
-                const count = pending.filter(s=>s.verification_status===status).length;
-                return <span key={status} className="text-xs px-3 py-1.5 rounded-full border" style={{borderColor:'var(--border-subtle)'}}>{status.replaceAll('_',' ')}: <strong>{count}</strong></span>;
+              {['PENDING_REVIEW', 'UNDER_REVIEW', 'MORE_INFORMATION_REQUIRED'].map(status => {
+                const count = pending.filter(s => s.verification_status === status).length;
+                return <span key={status} className="text-xs px-3 py-1.5 rounded-full border tabular-nums" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}>{status.replaceAll('_', ' ')}: <strong style={{ color: 'var(--text-primary)' }}>{count}</strong></span>;
               })}
             </div>
-            <Link to="/admin/verifications" className="landing-gradient-cta mt-5 inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold" style={{color:'var(--text-on-champagne)'}}>
+            <Link to="/admin/verifications" className="landing-gradient-cta mt-5 inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold" style={{ color: 'var(--text-on-champagne)' }}>
               Review suppliers
             </Link>
           </section>
         )}
 
         {canApproveSubs && (
-          <section className="rounded-2xl border p-5 sm:p-6 space-y-4" style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}>
+          <section className="rounded-2xl border p-5 sm:p-6 space-y-4" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
             <div className="flex flex-wrap justify-between items-center gap-3">
               <div>
-                <p className="text-xs opacity-60 font-semibold uppercase tracking-wide">Verified Safepay Subscriptions</p>
-                <h2 className="text-lg font-bold">Pending Subscription Approvals ({pendingSubs.length})</h2>
+                <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Verified Safepay subscriptions</p>
+                <h2 className="text-lg font-bold tabular-nums">Pending approvals ({pendingSubs.length})</h2>
               </div>
-              <button type="button" onClick={refresh} disabled={loading} className="inline-flex gap-2 items-center px-3 py-2 text-xs rounded-lg border disabled:opacity-50" style={{borderColor:'var(--border-subtle)'}}>
+              <button type="button" onClick={refresh} disabled={loading} className="inline-flex gap-2 items-center px-3 py-2 text-xs font-medium rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh
               </button>
             </div>
@@ -289,8 +289,8 @@ export function AdminDashboardPage() {
                       Plan: <strong>{rf.plan_code}</strong> · Full Refund: <strong>{rf.currency || 'PKR'} {Number(rf.amount_pkr).toLocaleString()}</strong> · Attempts: <strong>{rf.attempt_count}</strong>
                     </p>
                     <p className="opacity-80 break-words">Rejection reason: {rf.rejection_reason}</p>
-                    <p className="font-mono text-[11px] opacity-75 break-all">
-                      Order: {rf.order_code} · Tracker: {rf.tracker_token} · Orig Ref: {rf.original_provider_reference || 'N/A'} · Refund Ref: {rf.provider_refund_reference || 'Pending'}
+                    <p className="font-mono text-[11px] opacity-75">
+                      Order: <span className="break-all">{rf.order_code}</span> · Tracker: <span className="break-all">{rf.tracker_token}</span> · Orig Ref: <span className="break-all">{rf.original_provider_reference || 'N/A'}</span> · Refund Ref: <span className="break-all">{rf.provider_refund_reference || 'Pending'}</span>
                     </p>
                     <p className="text-[11px] opacity-70">
                       Last attempt: {rf.last_attempted_at ? new Date(rf.last_attempted_at).toLocaleString() : 'N/A'}
@@ -311,7 +311,7 @@ export function AdminDashboardPage() {
                             ...old,
                             [rf.subscription_id]: { ...(old[rf.subscription_id] || {}), ref: e.target.value }
                           }))}
-                          className="w-full sm:w-auto px-2.5 py-1.5 rounded-lg border text-xs font-mono"
+                          className="w-full sm:w-auto sm:min-w-[230px] px-2.5 py-1.5 rounded-lg border text-xs font-mono"
                           style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}
                         />
                         <input
@@ -342,7 +342,7 @@ export function AdminDashboardPage() {
                         type="button"
                         disabled={refundBusyId === rf.subscription_id}
                         onClick={() => handleRetryRefund(rf.subscription_id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer disabled:opacity-50 whitespace-nowrap"
                         style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Retry Refund
@@ -353,7 +353,7 @@ export function AdminDashboardPage() {
                         type="button"
                         disabled={refundBusyId === rf.subscription_id}
                         onClick={() => handleSyncRefund(rf.subscription_id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer disabled:opacity-50 whitespace-nowrap"
                         style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Sync Status
@@ -367,20 +367,20 @@ export function AdminDashboardPage() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {canCatalog && <Link to="/admin/catalog" className="rounded-2xl border p-6 hover:shadow-lg transition-all space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
-            <FolderCheck className="w-7 h-7" style={{color:'var(--lp-accent)'}} />
-            <h2 className="text-lg font-bold">Catalog governance</h2>
-            <p className="text-sm opacity-75">Moderate supplier catalog requests, families and categories.</p>
-            <span className="text-xs font-semibold inline-flex items-center" style={{color:'var(--lp-accent)'}}>Open catalog</span>
+          {canCatalog && <Link to="/admin/catalog" className="rounded-2xl border p-6 hover:border-[var(--brand-accent)] transition-colors space-y-2.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+            <FolderCheck className="w-6 h-6" style={{ color: 'var(--brand-accent)' }} />
+            <h2 className="text-base font-bold">Catalog governance</h2>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>Moderate supplier catalog requests, families, and categories.</p>
+            <span className="text-xs font-semibold inline-flex items-center" style={{ color: 'var(--brand-accent)' }}>Open catalog</span>
           </Link>}
-          {canVerify && <Link to="/admin/verifications" className="rounded-2xl border p-6 hover:shadow-lg transition-all space-y-3" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
-            <ShieldCheck className="w-7 h-7" style={{color:'var(--lp-accent)'}} />
-            <h2 className="text-lg font-bold">Business verification</h2>
-            <p className="text-sm opacity-75">Inspect business details, choose verification level and approve or reject with an audit trail.</p>
-            <span className="text-xs font-semibold inline-flex items-center" style={{color:'var(--lp-accent)'}}>Open verification</span>
+          {canVerify && <Link to="/admin/verifications" className="rounded-2xl border p-6 hover:border-[var(--brand-accent)] transition-colors space-y-2.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
+            <ShieldCheck className="w-6 h-6" style={{ color: 'var(--brand-accent)' }} />
+            <h2 className="text-base font-bold">Business verification</h2>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>Inspect business details, set verification level, and review applications.</p>
+            <span className="text-xs font-semibold inline-flex items-center" style={{ color: 'var(--brand-accent)' }}>Open verification</span>
           </Link>}
         </div>
-        <p className="text-xs opacity-60">All approval operations are enforced by the backend. Suppliers cannot approve their own application.</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Verification and settlement actions are server-enforced.</p>
       </main>
     </AppShell>
   );
