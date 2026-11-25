@@ -34,6 +34,7 @@ export function GoogleAuthButton({
   onError,
 }) {
   const gsiContainerRef = useRef(null);
+  const renderedClientIdRef = useRef('');
   const callbackRef = useRef(onCredential);
   const onErrorRef = useRef(onError);
   const [clientId, setClientId] = useState(import.meta.env.VITE_GOOGLE_CLIENT_ID || '');
@@ -65,6 +66,10 @@ export function GoogleAuthButton({
 
     const initGsi = () => {
       if (!window.google?.accounts?.id || !gsiContainerRef.current) return false;
+      if (renderedClientIdRef.current === clientId && gsiContainerRef.current.childElementCount > 0) {
+        setGsiReady(true);
+        return true;
+      }
       window.google.accounts.id.initialize({
         client_id: clientId,
         callback: (response) => {
@@ -81,6 +86,7 @@ export function GoogleAuthButton({
         size: 'large',
         width: 400,
       });
+      renderedClientIdRef.current = clientId;
       setGsiReady(true);
       return true;
     };
@@ -155,16 +161,16 @@ export function GoogleAuthButton({
         <span>{loading ? 'Connecting with Google…' : label}</span>
       </button>
 
-      {gsiReady && !disabled && !loading && (
-        <div
-          ref={gsiContainerRef}
-          aria-hidden="true"
-          className="absolute inset-0 opacity-[0.001] overflow-hidden flex items-center justify-center cursor-pointer"
-        />
-      )}
-      {(!gsiReady || disabled || loading) && (
-        <div ref={gsiContainerRef} className="hidden" aria-hidden="true" />
-      )}
+      <div
+        ref={gsiContainerRef}
+        data-testid="google-gsi-container"
+        aria-hidden="true"
+        className={
+          gsiReady && !disabled && !loading
+            ? 'absolute inset-0 opacity-[0.001] overflow-hidden flex items-center justify-center cursor-pointer'
+            : 'hidden'
+        }
+      />
     </div>
   );
 }

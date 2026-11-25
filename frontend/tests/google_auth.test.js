@@ -29,3 +29,11 @@ test('Google Authentication Frontend Integration & Custom UI Preservation', () =
   assert.ok(registerSrc.includes('activateRegisterExactPreview'));
   assert.ok(registerSrc.includes('Create your MilJor account'));
 });
+
+test('GoogleAuthButton keeps a single persistent GSI container across renders', () => {
+  const refMatches = googleBtnSrc.match(/ref=\{gsiContainerRef\}/g) || [];
+  assert.equal(refMatches.length, 1, 'Expected exactly one persistent ref={gsiContainerRef} container');
+  assert.ok(googleBtnSrc.includes('data-testid="google-gsi-container"'));
+  assert.ok(googleBtnSrc.includes('absolute inset-0 opacity-[0.001] overflow-hidden flex items-center justify-center cursor-pointer'));
+  assert.ok(googleBtnSrc.includes('renderedClientIdRef'));
+});
