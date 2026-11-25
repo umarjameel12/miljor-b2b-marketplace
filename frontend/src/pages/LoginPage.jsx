@@ -49,8 +49,13 @@ export const LoginPage = () => {
       const result = await login({ identifier: identifier.trim(), password, rememberMe });
       toast.success('Signed in successfully.');
       const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
-      // Explicit protected return path wins; otherwise admins reach their console.
-      const destination = from === '/pools' && adminRoles.includes(result.user?.role) ? '/admin' : from;
+      const userRole = result.user?.role;
+      let destination = from;
+      if (adminRoles.includes(userRole)) {
+        destination = from === '/pools' ? '/admin' : from;
+      } else if (from.startsWith('/admin')) {
+        destination = userRole === 'SUPPLIER' ? '/supplier/dashboard' : '/';
+      }
       navigate(destination, { replace: true });
     } catch (err) {
       const errData = err.response?.data?.error;
@@ -79,7 +84,13 @@ export const LoginPage = () => {
       const result = await loginWithGoogle(credential, { mode: 'login', rememberMe });
       toast.success('Signed in with Google.');
       const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'VERIFICATION_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN'];
-      const destination = from === '/pools' && adminRoles.includes(result.user?.role) ? '/admin' : from;
+      const userRole = result.user?.role;
+      let destination = from;
+      if (adminRoles.includes(userRole)) {
+        destination = from === '/pools' ? '/admin' : from;
+      } else if (from.startsWith('/admin')) {
+        destination = userRole === 'SUPPLIER' ? '/supplier/dashboard' : '/';
+      }
       navigate(destination, { replace: true });
     } catch (err) {
       const errData = err.response?.data?.error;

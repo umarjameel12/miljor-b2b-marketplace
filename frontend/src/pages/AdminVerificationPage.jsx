@@ -4,7 +4,7 @@
 // Authorized for: SUPER_ADMIN, VERIFICATION_ADMIN, ADMIN
 // =============================================================================
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import { Card } from '../components/ui/Card';
@@ -182,21 +182,11 @@ export const AdminVerificationPage = () => {
     }
   };
 
-  if (!isAuthenticated || !isAuthorizedAdmin) {
-    return (
-      <AppShell>
-        <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Administrative Access Required</h1>
-          <p className="text-sm opacity-70 mb-6 max-w-md mx-auto">
-            You must be logged in with VERIFICATION_ADMIN, SUPER_ADMIN or authorized role credentials to access this portal.
-          </p>
-          <Button onClick={() => navigate('/login')}>Sign in with Admin Credentials</Button>
-        </div>
-      </AppShell>
-    );
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!isAuthorizedAdmin) {
+    return <Navigate to={user?.role === 'SUPPLIER' ? '/supplier/dashboard' : '/'} replace />;
   }
 
   return (

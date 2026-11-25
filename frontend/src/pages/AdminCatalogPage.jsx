@@ -4,7 +4,7 @@
 // Authorized for: SUPER_ADMIN, OPERATIONS_ADMIN, VERIFICATION_ADMIN, ADMIN
 // =============================================================================
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AppShell } from '../components/layout/AppShell';
 import { Card } from '../components/ui/Card';
@@ -101,22 +101,11 @@ export const AdminCatalogPage = () => {
     }
   }, [isAuthenticated, isAuthorizedAdmin, statusFilter]);
 
-  if (!isAuthenticated || !isAuthorizedAdmin) {
-    return (
-      <AppShell title="Catalog Governance Restricted">
-        <div className="max-w-xl mx-auto py-16">
-          <Card className="p-8 text-center space-y-4">
-            <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">
-              Administrative Privileges Required
-            </h1>
-            <p className="text-xs text-[var(--text-secondary)]">
-              This governance console is restricted to authorized MilJor Catalog & Verification Administrators.
-            </p>
-          </Card>
-        </div>
-      </AppShell>
-    );
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!isAuthorizedAdmin) {
+    return <Navigate to={user?.role === 'SUPPLIER' ? '/supplier/dashboard' : '/'} replace />;
   }
 
   const handleMarkUnderReview = async (reqItem) => {

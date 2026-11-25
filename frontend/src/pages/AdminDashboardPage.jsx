@@ -143,19 +143,10 @@ export function AdminDashboardPage() {
     }
   };
 
-  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: { pathname: '/admin' } }} />;
-  if (!ADMINS.includes(role)) return (
-    <AppShell>
-      <div className="mx-auto max-w-xl p-8 sm:p-12">
-        <div className="rounded-3xl border p-8 space-y-4" style={{background:'var(--bg-surface)',borderColor:'var(--border-subtle)'}}>
-          <LockKeyhole className="h-9 w-9 text-amber-600" />
-          <h1 className="text-2xl font-bold">Administrator access required</h1>
-          <p className="text-sm opacity-75">Your signed-in account is not assigned an administrative role. Business ownership does not automatically grant administrative access. Use a separately provisioned administrator account.</p>
-          <Link className="inline-flex text-sm font-semibold underline" to="/login" state={{ from: { pathname: '/admin' } }}>Sign in as an administrator</Link>
-        </div>
-      </div>
-    </AppShell>
-  );
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!ADMINS.includes(role)) {
+    return <Navigate to={user?.role === 'SUPPLIER' ? '/supplier/dashboard' : '/'} replace />;
+  }
 
   return (
     <AppShell>
