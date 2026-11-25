@@ -171,8 +171,9 @@ export function AdminDashboardPage() {
                   <p className="text-2xl font-bold tabular-nums">{loading ? '…' : pending.length} <span className="text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>applications awaiting review</span></p>
                 </div>
               </div>
-              <button type="button" onClick={refresh} disabled={loading} className="inline-flex gap-2 items-center px-3 py-2 text-xs font-medium rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
-                <RefreshCw className="w-4 h-4" /> Refresh
+              <button type="button" onClick={refresh} disabled={loading} className="inline-flex flex-row items-center justify-center gap-2 px-3.5 h-9 text-xs font-medium leading-none whitespace-nowrap rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
+                <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
               </button>
             </div>
             {error && <p role="alert" className="mt-4 text-sm text-red-600 flex gap-2 items-center"><AlertTriangle className="w-4 h-4" /> {error}</p>}
@@ -195,8 +196,9 @@ export function AdminDashboardPage() {
                 <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Verified Safepay subscriptions</p>
                 <h2 className="text-lg font-bold tabular-nums">Pending approvals ({pendingSubs.length})</h2>
               </div>
-              <button type="button" onClick={refresh} disabled={loading} className="inline-flex gap-2 items-center px-3 py-2 text-xs font-medium rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              <button type="button" onClick={refresh} disabled={loading} className="inline-flex flex-row items-center justify-center gap-2 px-3.5 h-9 text-xs font-medium leading-none whitespace-nowrap rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
+                <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
               </button>
             </div>
             {pendingSubs.length === 0 ? (
