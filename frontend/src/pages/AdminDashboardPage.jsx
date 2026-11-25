@@ -168,7 +168,6 @@ export function AdminDashboardPage() {
             <h1 className="font-display mt-2 text-2xl sm:text-3xl font-bold tracking-tight">Operations overview</h1>
             <p className="mt-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>Verification, supplier trust, and catalog governance for Lahore.</p>
           </div>
-          <div className="rounded-xl px-4 py-2 border text-xs font-semibold" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>{role.replaceAll('_', ' ')}</div>
         </div>
 
         {canVerify && (
@@ -263,14 +262,17 @@ export function AdminDashboardPage() {
           </section>
         )}
 
-        {canApproveSubs && subRefunds.length > 0 && (
+        {canApproveSubs && (() => {
+          const visibleRefunds = subRefunds.filter((rf) => !['REFUND_FAILED', 'FAILED'].includes(String(rf.refund_status || '').toUpperCase()));
+          if (visibleRefunds.length === 0) return null;
+          return (
           <section className="rounded-2xl border p-5 sm:p-6 space-y-4" style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}>
             <div>
               <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Post-rejection refunds</p>
-              <h2 className="text-lg font-bold">Rejected Subscription Refunds ({subRefunds.length})</h2>
+              <h2 className="text-lg font-bold tabular-nums">Rejected Subscription Refunds ({visibleRefunds.length})</h2>
             </div>
             <div className="space-y-3">
-              {subRefunds.map((rf) => (
+              {visibleRefunds.map((rf) => (
                 <div key={rf.refund_id} className="p-4 rounded-xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0" style={{borderColor:'var(--border-subtle)',background:'var(--bg-card)'}}>
                   <div className="space-y-1 text-xs min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -364,7 +366,8 @@ export function AdminDashboardPage() {
               ))}
             </div>
           </section>
-        )}
+          );
+        })()}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {canCatalog && <Link to="/admin/catalog" className="rounded-2xl border p-6 hover:border-[var(--brand-accent)] transition-colors space-y-2.5" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>

@@ -241,34 +241,28 @@ export const AdminCatalogPage = () => {
     <AppShell title="Admin Catalog Governance & Moderation">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Top Header Card */}
-        <Card className="p-6 bg-[var(--bg-card)] border-[var(--border-subtle)]">
+        <Card className="p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] rounded-2xl">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/admin/suppliers/verification"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  Supplier Verification Queue
-                </Link>
-                <span className="text-[var(--border-subtle)]">•</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--brand-accent)]">
-                  Catalog Governance & Verification
-                </span>
-              </div>
+            <div className="space-y-1.5">
+              <Link
+                to="/admin/suppliers/verification"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                <span>Supplier Verification Queue</span>
+              </Link>
               <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
-                Canonical Catalog Taxonomy & Supplier Request Moderation
+                Catalog &amp; Request Moderation
               </h1>
               <p className="text-xs text-[var(--text-secondary)]">
-                Review supplier-submitted Product Family and Physical Variant requests, prevent duplicate SKUs, and manage the 8 canonical categories and product families.
+                Review supplier product requests and manage catalog families and categories.
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase">Pending Review</span>
-                <span className="text-sm font-bold text-amber-500">{pendingCount}</span>
+                <span className="text-sm font-bold tabular-nums text-[var(--text-primary)]">{pendingCount}</span>
               </div>
               <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase">Families</span>
@@ -284,52 +278,52 @@ export const AdminCatalogPage = () => {
 
         {/* Navigation Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('requests')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 cursor-pointer ${
                 activeTab === 'requests'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
-              <FileText className="w-4 h-4" />
-              Moderation Queue ({requests.length})
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>Moderation Queue ({requests.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('families')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 cursor-pointer ${
                 activeTab === 'families'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
-              <Package className="w-4 h-4" />
-              Product Families ({families.length})
+              <Package className="w-4 h-4 shrink-0" />
+              <span>Product Families ({families.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('categories')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 cursor-pointer ${
                 activeTab === 'categories'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
-              <Layers className="w-4 h-4" />
-              Canonical Categories ({categories.length})
+              <Layers className="w-4 h-4 shrink-0" />
+              <span>Categories ({categories.length})</span>
             </button>
           </div>
 
           <button
             type="button"
             onClick={loadAdminCatalogData}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex items-center gap-1.5 px-2.5 py-1.5"
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Refresh
+            <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+            <span>Refresh</span>
           </button>
         </div>
 

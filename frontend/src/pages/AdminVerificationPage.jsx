@@ -218,27 +218,28 @@ export const AdminVerificationPage = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Button
               variant="outline"
               size="sm"
               onClick={() => navigate('/admin/catalog')}
-              className="gap-2"
+              className="h-9 whitespace-nowrap"
             >
-              Catalog Governance & Requests
+              Catalog Governance &amp; Requests
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={fetchPendingSuppliers}
               disabled={loading}
-              className="gap-2"
+              className="h-9 inline-flex items-center gap-2 whitespace-nowrap"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
             </Button>
-            <div className="px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-xs font-semibold">
-              Pending Reviews: <span className="text-[var(--brand-accent)]">{suppliers.length}</span>
+            <div className="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-xs font-semibold whitespace-nowrap">
+              <span>Pending Reviews:</span>
+              <span className="tabular-nums text-[var(--brand-accent)]">{suppliers.length}</span>
             </div>
           </div>
         </div>
@@ -381,33 +382,33 @@ export const AdminVerificationPage = () => {
                       <Button
                         size="sm"
                         variant="primary"
+                        icon={CheckCircle}
                         onClick={() => handleOpenApprove(s)}
                         disabled={isSelf}
-                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                        className="w-full whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                       >
-                        <CheckCircle className="w-4 h-4" />
                         Approve Supplier
                       </Button>
 
                       <Button
                         size="sm"
                         variant="outline"
+                        icon={FileText}
                         onClick={() => handleOpenReject(s, 'request-info')}
                         disabled={isSelf}
-                        className="gap-2"
+                        className="w-full whitespace-nowrap"
                       >
-                        <FileText className="w-4 h-4" />
                         Request Info
                       </Button>
 
                       <Button
                         size="sm"
                         variant="outline"
+                        icon={XCircle}
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
-                        className="gap-2 border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                        className="w-full whitespace-nowrap border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                       >
-                        <XCircle className="w-4 h-4" />
                         Reject
                       </Button>
                     </div>
