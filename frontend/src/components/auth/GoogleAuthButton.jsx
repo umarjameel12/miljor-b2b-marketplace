@@ -126,15 +126,52 @@ export function GoogleAuthButton({
     }
   };
 
+  const isInactive = disabled || loading;
+
   return (
     <div
       data-testid="google-auth-wrapper"
-      className="relative w-full"
+      className={`relative w-full ${isInactive ? 'cursor-not-allowed' : 'is-interactive'}`}
       onClickCapture={handleWrapperClickCapture}
     >
+      <style>{`
+        .miljor-google-btn {
+          background-color: #ffffff;
+          border-color: #d4c7b2;
+          color: #0c2b24;
+          box-shadow: 0 1px 2px rgba(12, 43, 36, 0.05);
+        }
+        [data-testid="google-auth-wrapper"].is-interactive:hover .miljor-google-btn {
+          background-color: #f6f1e6;
+          border-color: #b89452;
+          box-shadow: 0 2px 8px rgba(12, 43, 36, 0.08);
+        }
+        [data-testid="google-auth-wrapper"].is-interactive:active .miljor-google-btn,
+        .miljor-google-btn:not(:disabled):active {
+          transform: scale(0.985);
+        }
+        html.dark .miljor-google-btn {
+          background-color: #06261e;
+          border-color: rgba(200, 178, 118, 0.34);
+          color: #f7f3e8;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+        }
+        html.dark [data-testid="google-auth-wrapper"].is-interactive:hover .miljor-google-btn {
+          background-color: #0d3f32;
+          border-color: rgba(223, 191, 133, 0.68);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.36);
+        }
+        .miljor-google-btn:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px #fcf9f2, 0 0 0 4px #c8b276;
+        }
+        html.dark .miljor-google-btn:focus-visible {
+          box-shadow: 0 0 0 2px #0a3429, 0 0 0 4px #c8b276;
+        }
+      `}</style>
       <button
         type="button"
-        disabled={disabled || loading}
+        disabled={isInactive}
         aria-label={label}
         onClick={() => {
           if (onBeforeClick && onBeforeClick() === false) return;
@@ -146,15 +183,10 @@ export function GoogleAuthButton({
             });
           }
         }}
-        className="w-full h-11 px-4 rounded-xl border text-sm font-semibold flex items-center justify-center gap-2.5 transition-all shadow-2xs hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--brand-accent)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        style={{
-          backgroundColor: 'var(--bg-surface)',
-          borderColor: 'var(--border-default)',
-          color: 'var(--text-primary)',
-        }}
+        className="miljor-google-btn w-full h-11 px-4 rounded-xl border text-sm font-semibold tracking-[0.01em] flex items-center justify-center gap-2.5 select-none cursor-pointer transition-all duration-150 ease-out disabled:opacity-55 disabled:cursor-not-allowed"
       >
         {loading ? (
-          <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--brand-accent)' }} />
+          <Loader2 className="w-4 h-4 animate-spin text-[#c8b276]" />
         ) : (
           <GoogleLogo />
         )}
