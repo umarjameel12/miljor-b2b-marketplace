@@ -1611,8 +1611,13 @@ export const SupplierCatalogPage = () => {
                 </p>
               </div>
               {myListings.some(l => l.status === 'ACTIVE') && (
-                <Button size="sm" onClick={() => openCreatePoolModal(myListings.find(l => l.status === 'ACTIVE'))}>
-                  + Create Draft Pool
+                <Button
+                  size="sm"
+                  icon={Plus}
+                  className="shrink-0 whitespace-nowrap"
+                  onClick={() => openCreatePoolModal(myListings.find(l => l.status === 'ACTIVE'))}
+                >
+                  Create Draft Pool
                 </Button>
               )}
             </div>
@@ -1697,8 +1702,14 @@ export const SupplierCatalogPage = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => openNewRequestModal('NEW_FAMILY')}>
-                  + Request New Family
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={Plus}
+                  className="shrink-0 whitespace-nowrap"
+                  onClick={() => openNewRequestModal('NEW_FAMILY')}
+                >
+                  Request New Family
                 </Button>
 
               </div>

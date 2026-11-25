@@ -411,11 +411,11 @@ export function SupplierPoolsPage(){
       <div className="flex gap-2 flex-wrap">
         <div aria-label="Unified Pool subcategories" className="flex items-center flex-wrap gap-2">
           <span className="text-xs font-semibold text-[var(--text-secondary)]">Pool category</span>
-          {['ALL','REGULAR','FLASH'].map(t=><button type="button" aria-pressed={filter===t} key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${filter===t?'border-[var(--brand-accent)] text-[var(--brand-accent)]':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'All Pools':t==='REGULAR'?'Regular':'Flash'}</button>)}
+          {['ALL','REGULAR','FLASH'].map(t=><button type="button" aria-pressed={filter===t} key={t} onClick={()=>setFilter(t)} className={`px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer ${filter===t?'miljor-btn-primary':'miljor-btn-outline'}`}>{t==='ALL'?'All Pools':t==='REGULAR'?'Regular':'Flash'}</button>)}
         </div>
         <div aria-label="Pool status filters" className="flex items-center flex-wrap gap-2">
           <span className="text-xs text-[var(--text-secondary)]">Status</span>
-          {['ALL','DRAFT','ACTIVE'].map(t=><button type="button" aria-pressed={statusFilter===t} key={t} onClick={()=>setStatusFilter(t)} className={`px-3 py-2 border rounded-xl text-xs ${statusFilter===t?'border-[var(--brand-accent)] text-[var(--brand-accent)]':'border-[var(--border-subtle)]'}`}>{t==='ALL'?'Any status':t==='DRAFT'?'Draft':'Active'}</button>)}
+          {['ALL','DRAFT','ACTIVE'].map(t=><button type="button" aria-pressed={statusFilter===t} key={t} onClick={()=>setStatusFilter(t)} className={`px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer ${statusFilter===t?'miljor-btn-primary':'miljor-btn-outline'}`}>{t==='ALL'?'Any status':t==='DRAFT'?'Draft':'Active'}</button>)}
         </div>
       </div>
       {loading?<p className="text-sm text-[var(--text-muted)]">Loading supplier pools…</p>:rows.length===0?

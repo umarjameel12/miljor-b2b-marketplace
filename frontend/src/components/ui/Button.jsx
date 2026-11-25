@@ -28,11 +28,7 @@ export const Button = ({
       color: 'var(--text-on-champagne)',
       border: '1px solid transparent',
     },
-    outline: {
-      backgroundColor: 'transparent',
-      color: 'var(--text-primary)',
-      border: '1px solid var(--border-default)',
-    },
+    outline: undefined,
     ghost: {
       backgroundColor: 'transparent',
       color: 'var(--text-primary)',
@@ -47,6 +43,7 @@ export const Button = ({
 
   const hasCustomBg = Boolean(props.style?.backgroundColor || props.style?.background);
   const isPrimary = !hasCustomBg && (!variant || variant === 'primary' || !(variant in variantStyles));
+  const isOutline = !hasCustomBg && variant === 'outline';
   const style = variantStyles[variant];
 
   return (
@@ -55,8 +52,8 @@ export const Button = ({
       disabled={disabled || loading}
       onClick={onClick}
       style={style}
-      className={`inline-flex items-center justify-center font-sans font-semibold transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 ${
-        isPrimary ? 'miljor-btn-primary' : ''
+      className={`inline-flex items-center justify-center font-sans font-semibold leading-none transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 ${
+        isPrimary ? 'miljor-btn-primary' : isOutline ? 'miljor-btn-outline' : ''
       } ${fullWidth ? 'w-full' : ''} ${sizeClasses[size] || sizeClasses.md} ${className}`}
       {...props}
     >

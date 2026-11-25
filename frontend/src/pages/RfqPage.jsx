@@ -1271,17 +1271,17 @@ export const RfqPage = () => {
             <div className="flex flex-wrap gap-2.5 pt-1">
               <button type="button" disabled={shoppingBusy}
                 onClick={()=>submitShoppingList(false)}
-                className="rounded-full px-5 py-2.5 border border-[var(--border-default)] bg-[var(--bg-card)] text-xs font-semibold disabled:opacity-50 transition hover:opacity-90">
+                className="miljor-btn-outline rounded-full px-5 py-2.5 text-xs font-semibold disabled:opacity-50 cursor-pointer">
                 {shoppingBusy?'Saving...':'Save Draft'}
               </button>
               <button type="button" disabled={shoppingBusy||!quoteDeadline||buyerMode!=='SINGLE_BUYER'||purchaseCadence!=='ONE_TIME'}
                 onClick={()=>submitShoppingList(true)}
-                className="landing-gradient-cta rounded-full px-5 py-2.5 bg-[var(--brand-accent)] text-[#17332a] text-xs font-semibold disabled:opacity-50">
+                className="landing-gradient-cta rounded-full px-5 py-2.5 bg-[var(--brand-accent)] text-[#17332a] text-xs font-semibold disabled:opacity-50 cursor-pointer">
                 Publish Shopping List
               </button>
               {activeRequest && <button type="button" disabled={shoppingBusy}
                 onClick={()=>{setActiveRequest(null);setShoppingList([emptyItem()]);setDeliveryArea('');setQuoteDeadline('');setShoppingError('');}}
-                className="rounded-full px-4 py-2.5 border border-[var(--border-subtle)] text-xs font-semibold">Start New</button>}
+                className="miljor-btn-outline rounded-full px-4 py-2.5 text-xs font-semibold cursor-pointer">Start New</button>}
             </div>
             <p className="text-xs text-[var(--text-secondary)]">Publishing a shopping list or schedule never charges your account or locks stock automatically. Every order requires your explicit approval.</p>
             {convertingLegacy && (

@@ -466,6 +466,39 @@ html.dark .miljor-btn-primary:active:not(:disabled) {
   transform: translateY(0);
 }
 
+/* Tactile luxury secondary/outline button across Light & Dark themes (replaces hollow transparent buttons) */
+.miljor-btn-outline {
+  background: linear-gradient(180deg, #fcfaf4 0%, #f2ead8 100%);
+  color: #0c2b24;
+  border: 1px solid rgba(176, 138, 68, 0.36);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 1px 3px rgba(12, 43, 36, 0.05);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+.miljor-btn-outline:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffffff 0%, #ebe0c9 100%);
+  border-color: rgba(176, 138, 68, 0.58);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 3px 8px rgba(12, 43, 36, 0.08);
+}
+.miljor-btn-outline:active:not(:disabled) {
+  transform: translateY(0);
+}
+html.dark .miljor-btn-outline {
+  background: linear-gradient(180deg, #134639 0%, #0d332a 100%);
+  color: var(--text-primary);
+  border: 1px solid rgba(200, 178, 118, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 2px 6px rgba(0, 0, 0, 0.24);
+}
+html.dark .miljor-btn-outline:hover:not(:disabled) {
+  background: linear-gradient(180deg, #175243 0%, #103d32 100%);
+  border-color: rgba(200, 178, 118, 0.45);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), 0 4px 10px rgba(0, 0, 0, 0.32);
+}
+html.dark .miljor-btn-outline:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 /* Authentication-only segmented controls: selected gold focus glow in both themes. */
 .auth-segment-active {
   box-shadow: 0 0 0 1px var(--border-default), 0 0 14px 1px var(--brand-accent-soft), 0 3px 9px rgba(20, 30, 25, 0.10);
