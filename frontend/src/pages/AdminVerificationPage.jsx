@@ -378,46 +378,33 @@ export const AdminVerificationPage = () => {
                       <Button
                         size="sm"
                         variant="primary"
-                        icon={CheckCircle}
                         onClick={() => handleOpenApprove(s)}
                         disabled={isSelf}
-                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer"
-                        style={{
-                          backgroundColor: 'var(--brand-primary)',
-                          color: 'var(--text-on-emerald)',
-                          border: '1px solid var(--border-default)',
-                        }}
+                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                       >
+                        <CheckCircle className="w-4 h-4" />
                         Approve Supplier
                       </Button>
 
                       <Button
                         size="sm"
                         variant="outline"
-                        icon={FileText}
                         onClick={() => handleOpenReject(s, 'request-info')}
                         disabled={isSelf}
-                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap cursor-pointer hover:border-[var(--brand-accent)]"
-                        style={{
-                          backgroundColor: 'var(--bg-surface)',
-                          color: 'var(--text-primary)',
-                          border: '1px solid var(--border-default)',
-                        }}
+                        className="gap-2"
                       >
+                        <FileText className="w-4 h-4" />
                         Request Info
                       </Button>
 
                       <Button
                         size="sm"
                         variant="outline"
-                        icon={XCircle}
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
-                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 cursor-pointer"
-                        style={{
-                          backgroundColor: 'var(--bg-surface)',
-                        }}
+                        className="gap-2 border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                       >
+                        <XCircle className="w-4 h-4" />
                         Reject
                       </Button>
                     </div>
