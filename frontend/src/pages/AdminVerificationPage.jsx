@@ -381,11 +381,11 @@ export const AdminVerificationPage = () => {
                         icon={CheckCircle}
                         onClick={() => handleOpenApprove(s)}
                         disabled={isSelf}
-                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer hover:opacity-95"
+                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer"
                         style={{
-                          backgroundColor: '#135e46',
-                          color: '#f7f3e8',
-                          border: '1px solid transparent',
+                          backgroundColor: 'var(--brand-primary)',
+                          color: 'var(--text-on-emerald)',
+                          border: '1px solid var(--border-default)',
                         }}
                       >
                         Approve Supplier
@@ -397,11 +397,11 @@ export const AdminVerificationPage = () => {
                         icon={FileText}
                         onClick={() => handleOpenReject(s, 'request-info')}
                         disabled={isSelf}
-                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer hover:opacity-95"
+                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap cursor-pointer hover:border-[var(--brand-accent)]"
                         style={{
-                          backgroundColor: 'var(--brand-accent)',
-                          color: 'var(--text-on-champagne)',
-                          border: '1px solid transparent',
+                          backgroundColor: 'var(--bg-surface)',
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--border-default)',
                         }}
                       >
                         Request Info
@@ -413,11 +413,9 @@ export const AdminVerificationPage = () => {
                         icon={XCircle}
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
-                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer hover:opacity-95"
+                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 cursor-pointer"
                         style={{
-                          backgroundColor: '#9f1239',
-                          color: '#ffffff',
-                          border: '1px solid transparent',
+                          backgroundColor: 'var(--bg-surface)',
                         }}
                       >
                         Reject
