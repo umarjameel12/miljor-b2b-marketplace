@@ -22,11 +22,7 @@ export const Button = ({
   };
 
   const variantStyles = {
-    primary: {
-      backgroundColor: 'var(--brand-primary)',
-      color: 'var(--text-on-emerald)',
-      border: '1px solid transparent',
-    },
+    primary: undefined,
     accent: {
       backgroundColor: 'var(--brand-accent)',
       color: 'var(--text-on-champagne)',
@@ -49,7 +45,8 @@ export const Button = ({
     },
   };
 
-  const style = variantStyles[variant] || variantStyles.primary;
+  const isPrimary = !variant || variant === 'primary' || !(variant in variantStyles);
+  const style = variantStyles[variant];
 
   return (
     <button
@@ -58,8 +55,8 @@ export const Button = ({
       onClick={onClick}
       style={style}
       className={`inline-flex items-center justify-center font-sans font-semibold transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-2 focus-visible:outline-offset-2 ${
-        fullWidth ? 'w-full' : ''
-      } ${sizeClasses[size] || sizeClasses.md} ${className}`}
+        isPrimary ? 'miljor-btn-primary' : ''
+      } ${fullWidth ? 'w-full' : ''} ${sizeClasses[size] || sizeClasses.md} ${className}`}
       {...props}
     >
       {loading && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}

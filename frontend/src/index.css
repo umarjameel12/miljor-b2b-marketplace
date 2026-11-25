@@ -433,6 +433,39 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border-bottom: 1px solid var(--border-default);
 }
 
+/* Tactile luxury primary button across Light (Champagne Silk) & Dark (Deep Emerald + Champagne Hairline) */
+.miljor-btn-primary {
+  background: linear-gradient(180deg, #fbf7ec 0%, #efe1c1 100%);
+  color: #0c2b24;
+  border: 1px solid rgba(176, 138, 68, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 2px 6px rgba(12, 43, 36, 0.06), 0 1px 2px rgba(176, 138, 68, 0.14);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+.miljor-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fdfaf2 0%, #e8d5aa 100%);
+  border-color: rgba(176, 138, 68, 0.68);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 10px rgba(12, 43, 36, 0.09), 0 2px 4px rgba(176, 138, 68, 0.18);
+}
+.miljor-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+html.dark .miljor-btn-primary {
+  background: linear-gradient(180deg, #0b392e 0%, #06251d 100%);
+  color: var(--text-on-emerald);
+  border: 1px solid rgba(200, 178, 118, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+html.dark .miljor-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #0e4538 0%, #082e24 100%);
+  border-color: rgba(200, 178, 118, 0.45);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.36);
+}
+html.dark .miljor-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 /* Authentication-only segmented controls: selected gold focus glow in both themes. */
 .auth-segment-active {
   box-shadow: 0 0 0 1px var(--border-default), 0 0 14px 1px var(--brand-accent-soft), 0 3px 9px rgba(20, 30, 25, 0.10);

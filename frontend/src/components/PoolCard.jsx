@@ -396,12 +396,7 @@ export const PoolCard = ({ pool, onSelect }) => {
             type="button"
             onClick={() => { if (onSelect) onSelect(pool); else setShowProductDetails(true); }}
             disabled={isClosed}
-            className="miljor-pool-join w-full py-2 px-3 rounded-xl font-sans font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-            style={{
-              backgroundColor: 'var(--brand-primary)',
-              color: 'var(--text-on-emerald)',
-              border: '1px solid var(--border-subtle)',
-            }}
+            className="miljor-pool-join miljor-btn-primary w-full py-2 px-3 rounded-xl font-sans font-semibold text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <span>{isClosed ? 'Pool Concluded' : 'Join Pool'}</span>
           </button>

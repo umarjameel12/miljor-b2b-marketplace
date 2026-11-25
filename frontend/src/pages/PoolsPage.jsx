@@ -406,12 +406,12 @@ export const PoolsPage = () => {
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
                   className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-150 cursor-pointer ${
-                    active ? 'shadow-xs font-semibold' : 'hover:opacity-80'
+                    active ? 'miljor-btn-primary font-semibold' : 'hover:opacity-80'
                   }`}
-                  style={{
-                    backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-elevated)',
-                    color: active ? 'var(--text-on-emerald)' : 'var(--text-secondary)',
-                    border: `1px solid ${active ? 'var(--brand-primary)' : 'var(--border-subtle)'}`,
+                  style={active ? undefined : {
+                    backgroundColor: 'var(--bg-elevated)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   <span>{cat.name}</span>
