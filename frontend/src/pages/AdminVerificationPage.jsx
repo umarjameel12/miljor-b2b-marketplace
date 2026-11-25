@@ -203,13 +203,12 @@ export const AdminVerificationPage = () => {
           color: var(--text-primary);
         }
         .admin-action-btn {
-          background-color: var(--bg-elevated);
-          color: var(--text-primary);
-          border: 1px solid var(--border-default);
+          background-color: #134e3e;
+          color: #fcf9f2;
+          border: 1px solid transparent;
         }
         .admin-action-btn:hover:not(:disabled) {
-          background-color: var(--bg-surface);
-          border-color: var(--brand-accent);
+          background-color: #0e3d30;
         }
         html.dark .admin-action-btn {
           background-color: var(--brand-primary);
