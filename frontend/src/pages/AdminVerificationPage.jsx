@@ -213,21 +213,21 @@ export const AdminVerificationPage = () => {
               variant="outline"
               size="sm"
               onClick={() => navigate('/admin/catalog')}
-              className="h-9 whitespace-nowrap"
+              className="h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap cursor-pointer"
             >
               Catalog Governance &amp; Requests
             </Button>
             <Button
               variant="outline"
               size="sm"
+              icon={RefreshCw}
               onClick={fetchPendingSuppliers}
               disabled={loading}
-              className="h-9 inline-flex items-center gap-2 whitespace-nowrap"
+              className="h-9 inline-flex flex-row items-center justify-center gap-2 leading-none whitespace-nowrap cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
+              Refresh
             </Button>
-            <div className="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-xs font-semibold whitespace-nowrap">
+            <div className="h-9 inline-flex flex-row items-center justify-center gap-1.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-xs font-semibold leading-none whitespace-nowrap">
               <span>Pending Reviews:</span>
               <span className="tabular-nums text-[var(--brand-accent)]">{suppliers.length}</span>
             </div>
@@ -267,7 +267,13 @@ export const AdminVerificationPage = () => {
               return (
                 <Card
                   key={s.supplier_id}
-                  className="p-6 transition-all hover:border-[var(--brand-accent)]/50"
+                  className={`p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] border-l-4 transition-all hover:border-[var(--brand-accent)]/50 ${
+                    s.verification_status === 'PENDING_REVIEW'
+                      ? 'border-l-[var(--brand-accent)]'
+                      : s.verification_status === 'UNDER_REVIEW'
+                        ? 'border-l-emerald-600 dark:border-l-emerald-400'
+                        : 'border-l-[var(--border-default)]'
+                  }`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                     {/* Left: Supplier info */}
@@ -288,7 +294,7 @@ export const AdminVerificationPage = () => {
                           {s.verification_status.replace(/_/g, ' ')}
                         </span>
                         {s.business_type && (
-                          <span className="px-2 py-0.5 rounded-md text-[11px] bg-black/5 dark:bg-white/5 font-medium">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--brand-accent)]/15 border border-[var(--brand-accent)]/35 text-[var(--brand-accent)]">
                             {s.business_type}
                           </span>
                         )}
@@ -302,9 +308,9 @@ export const AdminVerificationPage = () => {
 
                       {/* Detail Grids */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                        <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 space-y-1">
+                        <div className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1">
                           <span className="font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5" /> Contact Person
+                            <User className="w-3.5 h-3.5 text-[var(--brand-accent)]" /> Contact Person
                           </span>
                           <p className="font-medium text-[var(--text-primary)]">
                             {s.contact_person_name || s.full_name}
@@ -317,9 +323,9 @@ export const AdminVerificationPage = () => {
                           </p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 space-y-1">
+                        <div className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1">
                           <span className="font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5" /> Logistics & Location
+                            <MapPin className="w-3.5 h-3.5 text-[var(--brand-accent)]" /> Logistics &amp; Location
                           </span>
                           <p className="font-medium text-[var(--text-primary)] truncate">
                             Area: {s.lahore_service_area || s.area || 'All Lahore'}
@@ -329,9 +335,9 @@ export const AdminVerificationPage = () => {
                           </p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 space-y-1">
+                        <div className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] space-y-1">
                           <span className="font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
-                            <CreditCard className="w-3.5 h-3.5" /> Banking & Tax
+                            <CreditCard className="w-3.5 h-3.5 text-[var(--brand-accent)]" /> Banking &amp; Tax
                           </span>
                           <p className="font-medium text-[var(--text-primary)] truncate">
                             {s.bank_name || 'No Bank'} • {s.bank_account_title || 'N/A'}
@@ -375,7 +381,12 @@ export const AdminVerificationPage = () => {
                         icon={CheckCircle}
                         onClick={() => handleOpenApprove(s)}
                         disabled={isSelf}
-                        className="w-full whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer hover:opacity-95"
+                        style={{
+                          backgroundColor: '#135e46',
+                          color: '#f7f3e8',
+                          border: '1px solid transparent',
+                        }}
                       >
                         Approve Supplier
                       </Button>
@@ -386,7 +397,12 @@ export const AdminVerificationPage = () => {
                         icon={FileText}
                         onClick={() => handleOpenReject(s, 'request-info')}
                         disabled={isSelf}
-                        className="w-full whitespace-nowrap"
+                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer hover:opacity-95"
+                        style={{
+                          backgroundColor: 'var(--brand-accent)',
+                          color: 'var(--text-on-champagne)',
+                          border: '1px solid transparent',
+                        }}
                       >
                         Request Info
                       </Button>
@@ -397,7 +413,12 @@ export const AdminVerificationPage = () => {
                         icon={XCircle}
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
-                        className="w-full whitespace-nowrap border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                        className="w-full h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap font-semibold cursor-pointer hover:opacity-95"
+                        style={{
+                          backgroundColor: '#9f1239',
+                          color: '#ffffff',
+                          border: '1px solid transparent',
+                        }}
                       >
                         Reject
                       </Button>
