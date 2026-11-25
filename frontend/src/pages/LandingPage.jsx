@@ -231,8 +231,8 @@ export const LandingPage = () => {
       force(root, 'background-color', dark ? '#062a21' : '#f7f1e7');
       force(root, '--miljor-direct-fix', 'active');
       force(navbar, 'border-bottom', dark
-        ? '1px solid rgba(200, 178, 118, .32)'
-        : '1px solid rgba(144, 122, 89, .28)');
+        ? '1px solid rgba(240, 234, 214, .09)'
+        : '1px solid rgba(12, 43, 36, .08)');
       // Descending strokes such as g, p, y need space BELOW the glyph's baseline.
       force(heading, 'overflow', 'visible');
       force(heading, 'line-height', '1.17');
