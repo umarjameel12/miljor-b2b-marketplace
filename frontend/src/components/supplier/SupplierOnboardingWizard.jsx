@@ -223,9 +223,9 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
               }}
               className={`flex items-center gap-2 p-2 rounded-xl text-left transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] font-semibold border border-[var(--brand-accent)]/20'
+                  ? 'bg-[var(--brand-accent)]/10 text-[var(--text-primary)] font-semibold border border-[var(--brand-accent)]/30'
                   : isPassed
-                  ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                  ? 'text-[var(--brand-accent)] font-medium'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -234,7 +234,7 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
                   isActive
                     ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)]'
                     : isPassed
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-[var(--brand-accent)]/15 text-[var(--brand-accent)]'
                     : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
                 }`}
               >
@@ -253,11 +253,11 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
       {error && (
         <div
           role="alert"
-          className="p-3.5 rounded-xl border flex items-start gap-3 text-xs bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400 animate-in fade-in"
+          className="p-3.5 rounded-xl border flex items-start gap-3 text-xs bg-[var(--bg-elevated)] border-rose-500/30 text-rose-600 dark:text-rose-400 animate-in fade-in"
         >
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <span className="font-semibold block">Validation Notice</span>
+            <span className="font-semibold block">Check required fields</span>
             <span className="mt-0.5 block leading-relaxed">{error}</span>
           </div>
         </div>
@@ -266,25 +266,25 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
       {successMsg && (
         <div
           role="status"
-          className="p-3.5 rounded-xl border flex items-start gap-3 text-xs bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 animate-in fade-in"
+          className="p-3.5 rounded-xl border flex items-start gap-3 text-xs bg-[var(--bg-elevated)] border-[var(--brand-accent)]/40 text-[var(--text-primary)] animate-in fade-in"
         >
-          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[var(--brand-accent)]" />
           <div className="flex-1">
-            <span className="font-semibold block">Action Completed</span>
-            <span className="mt-0.5 block leading-relaxed">{successMsg}</span>
+            <span className="font-semibold block">Saved</span>
+            <span className="mt-0.5 block text-[var(--text-secondary)] leading-relaxed">{successMsg}</span>
           </div>
         </div>
       )}
 
       {/* STEP 1: BUSINESS IDENTITY */}
       {step === 1 && (
-        <Card className="p-6 space-y-5 bg-[var(--bg-card)] border-[var(--border-subtle)]">
+        <Card className="p-6 space-y-5 bg-[var(--bg-card)] border-[var(--border-subtle)] rounded-2xl">
           <div className="border-b border-[var(--border-subtle)] pb-3">
             <h3 className="font-display text-lg font-bold text-[var(--text-primary)]">
               Wholesale Business Identity
             </h3>
             <p className="text-xs text-[var(--text-muted)] mt-1">
-              Provide your official commercial trading name and primary authorized contact for bulk procurement operations.
+              Your registered trading name and primary contact.
             </p>
           </div>
 
@@ -489,9 +489,9 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
           </div>
 
           <div className="p-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[11px] text-[var(--text-secondary)] flex items-start gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <ShieldCheck className="w-4 h-4 text-[var(--brand-accent)] shrink-0 mt-0.5" />
             <span>
-              Bank details are encrypted and never shown publicly in buyer catalog offers. Invoices and supplier payable summaries mask the middle 16 digits.
+              Bank details are encrypted and masked on invoices and public offers.
             </span>
           </div>
         </Card>
@@ -536,10 +536,10 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
 
           {/* Current Status Callout */}
           <div className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-start gap-3">
-            <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <Clock className="w-4 h-4 text-[var(--brand-accent)] shrink-0 mt-0.5" />
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed">
               <span className="font-semibold text-[var(--text-primary)] block">Verification Timeline</span>
-              Verification reviews are processed by MilJor Lahore Operations within <strong>2 business days</strong>. Once approved, you gain full access to publish Regular Pools and sell to thousands of commercial restaurants, bakeries, and food businesses.
+              Reviews typically complete within <strong>2 business days</strong>.
             </div>
           </div>
         </Card>

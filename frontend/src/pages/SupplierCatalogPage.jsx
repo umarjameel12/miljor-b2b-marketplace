@@ -130,8 +130,11 @@ export const SupplierCatalogPage = () => {
     published_supplier_skus: 0
   });
 
-  // Active view tab: 'browse' | 'my-skus' | 'offers' | 'pools' | 'requests'
-  const [activeTab, setActiveTab] = useState('browse');
+  // Active view tab: 'browse' | 'my-skus' | 'offers' | 'pools' | 'requests' | 'archived'
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return ['browse', 'my-skus', 'offers', 'pools', 'requests', 'archived'].includes(t) ? t : 'browse';
+  });
 
   // Cascading Selection State
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
@@ -968,10 +971,10 @@ export const SupplierCatalogPage = () => {
   }
 
   return (
-    <AppShell title="Canonical Catalog, Supplier SKUs & Immutable Pools">
+    <AppShell title="Supplier Catalog">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Top Header Banner */}
-        <Card className="p-6 bg-[var(--bg-card)] border-[var(--border-subtle)]">
+        <Card className="p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] rounded-2xl">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -982,10 +985,6 @@ export const SupplierCatalogPage = () => {
                   <ArrowLeft className="w-3.5 h-3.5" />
                   Business Profile
                 </Link>
-                <span className="text-[var(--border-subtle)]">•</span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--brand-accent)]">
-                  6-Level Product & Immutable Pool Architecture
-                </span>
                 <SupplierVerificationBadge
                   status={profile?.verification_status}
                   level={profile?.verification_level}
@@ -993,34 +992,34 @@ export const SupplierCatalogPage = () => {
                 />
               </div>
               <h1 className="font-display text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
-                Supplier Products, Physical SKUs, Commercial Offers & Regular Pools
+                Catalog, SKUs &amp; Regular Pools
               </h1>
               <p className="text-xs text-[var(--text-secondary)] max-w-2xl">
-                Manage your 6-level procurement hierarchy: <strong>Category → Canonical Family → Supplier Product (Optional Brand & Grade) → Physical SKU → Commercial Offer → Immutable Pool (1–3 Day Delivery SLA)</strong>.
+                Browse product families, manage your physical SKUs and offers, or publish regular wholesale pools.
               </p>
             </div>
 
-            {/* E3-Ready Family Slot & Offer Summary */}
+            {/* Family Slot & Offer Summary */}
             <div className="flex flex-wrap items-center gap-3 self-stretch lg:self-auto">
-              <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
+              <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">Active Families</span>
-                <span className="text-sm font-bold text-[var(--text-primary)]">
+                <span className="text-sm font-bold tabular-nums text-[var(--text-primary)]">
                   {familyEntitlements?.active_families_count ?? catalogUsage.active_distinct_families} / {familyEntitlements?.max_allowed_families ?? (profile?.subscription_plan === 'BUSINESS' ? 25 : profile?.subscription_plan === 'GROWTH' ? 13 : 4)}
                 </span>
               </div>
-              <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
+              <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">My SKUs</span>
-                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="text-sm font-bold tabular-nums text-[var(--text-primary)]">
                   {mySupplierSkus.length}
                 </span>
               </div>
               <Button
                 size="sm"
                 onClick={openCreateSupplierProductModal}
-                className="flex items-center gap-1.5 text-xs"
+                className="flex items-center gap-1.5 text-xs whitespace-nowrap shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Create Supplier Product
+                New Product
               </Button>
             </div>
           </div>
@@ -1032,74 +1031,74 @@ export const SupplierCatalogPage = () => {
             <button
               type="button"
               onClick={() => setActiveTab('browse')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'browse'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
               <Layers className="w-4 h-4" />
-              1. Canonical Catalog ({variants.length})
+              Catalog ({variants.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('my-skus')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'my-skus'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
               <Package className="w-4 h-4" />
-              2. My Products & SKUs ({mySupplierProducts.length} / {mySupplierSkus.length})
+              Products &amp; SKUs ({mySupplierProducts.length} / {mySupplierSkus.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('offers')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'offers'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
               <Tag className="w-4 h-4" />
-              3. Commercial Offers ({myListings.length})
+              Offers ({myListings.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('pools')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'pools'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
               <Truck className="w-4 h-4" />
-              4. Regular Pools ({myPools.length})
+              Regular Pools ({myPools.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('requests')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'requests'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
               <FileText className="w-4 h-4" />
-              5. Family Requests ({myRequests.length})
+              Requests ({myRequests.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('archived')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'archived'
-                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
               }`}
             >
               <Archive className="w-4 h-4" />
-              6. Archived ({totalArchivedCount})
+              Archived ({totalArchivedCount})
             </button>
           </div>
 
@@ -1170,20 +1169,20 @@ export const SupplierCatalogPage = () => {
                         key={fam.id}
                         type="button"
                         onClick={() => setSelectedFamilyId(String(fam.id))}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between ${
+                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between cursor-pointer ${
                           isSelected
-                            ? 'bg-[var(--brand-primary)] text-white border-[var(--brand-primary)] font-semibold'
-                            : 'bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--brand-primary)]/40'
+                            ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] border-[var(--brand-accent)] font-semibold shadow-xs'
+                            : 'bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--brand-accent)]/50'
                         }`}
                       >
                         <div>
                           <div>{fam.name}</div>
-                          <div className={`text-[10px] ${isSelected ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
-                            Allowed Units: {(fam.allowed_pack_units || ['kg']).join(', ')}
+                          <div className={`text-[10px] ${isSelected ? 'opacity-80' : 'text-[var(--text-muted)]'}`}>
+                            Units: {(fam.allowed_pack_units || ['kg']).join(', ')}
                           </div>
                         </div>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] ${
-                          isSelected ? 'bg-white/20 text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] tabular-nums ${
+                          isSelected ? 'bg-black/10 text-[var(--text-on-champagne)]' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
                         }`}>
                           {fam.approved_variant_count || 0} specs
                         </span>
@@ -1479,9 +1478,14 @@ export const SupplierCatalogPage = () => {
                           <div className="text-xs font-bold text-[var(--text-primary)]">{l.variant_title || l.spec_title}</div>
                           <div className="text-[11px] text-[var(--text-secondary)]">ID #{l.id} · {l.listing_code} · PKR {Number(l.base_unit_price).toLocaleString()}</div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => handleRestoreListing(l.id, 'PAUSED')}>
-                          Restore Offer
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleRestoreListing(l.id, 'PAUSED')}>
+                            Restore (Paused)
+                          </Button>
+                          <Button size="sm" onClick={() => handleRestoreListing(l.id, 'ACTIVE')}>
+                            Unarchive &amp; Activate
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

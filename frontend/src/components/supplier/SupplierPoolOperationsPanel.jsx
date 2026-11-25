@@ -9,9 +9,9 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
   const categories=[['INVENTORY','Inventory'],['DELIVERY','Delivery'],['INSIGHTS','Insights'],['ALERTS','Alerts']];
   return <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 sm:p-5 space-y-4" aria-label="Supplier pool operations">
     <header className="flex flex-wrap items-start justify-between gap-2">
-      <div><h2 className="text-lg font-semibold flex items-center gap-2"><BarChart3 size={18}/> Pool Operations</h2>
-        <p className="text-xs text-[var(--text-muted)]">Live inventory, configured delivery terms, real pool statuses and in-app alerts · B4/B5 only</p></div>
-      <span className="text-[10px] text-[var(--text-muted)]">Read-only · No stock or payment mutations</span>
+      <div><h2 className="text-lg font-semibold flex items-center gap-2"><BarChart3 size={18} className="text-[var(--brand-accent)]"/> Pool Operations</h2>
+        <p className="text-xs text-[var(--text-muted)]">Live inventory, delivery terms, pool statuses, and alerts.</p></div>
+      <Link to="/supplier/catalog?tab=archived" className="text-xs font-semibold text-[var(--brand-accent)] hover:underline">Manage &amp; Unarchive Archived Items</Link>
     </header>
     <nav className="flex flex-wrap gap-2" aria-label="Pool operations sections">
       {categories.map(([id,label])=><button type="button" key={id} onClick={()=>setSection(id)}
@@ -26,7 +26,10 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
         <div className="grid gap-2 sm:grid-cols-2">
           {items.map(x=><div key={x.supplier_listing_id} className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
             <div className="flex items-center justify-between gap-2"><div className="font-medium text-sm">{x.sku_title||x.listing_code}</div>
-              {x.allocation_state!=='RECONCILED'&&<AlertTriangle size={16} className="text-amber-600"/>}</div>
+              <div className="flex items-center gap-1.5">
+                {x.status==='ARCHIVED'&&<Link to="/supplier/catalog?tab=archived" className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-[var(--brand-accent)] text-[var(--brand-accent)] hover:underline">Archived · Unarchive</Link>}
+                {x.allocation_state!=='RECONCILED'&&<AlertTriangle size={16} className="text-amber-600"/>}
+              </div></div>
             <p className="text-[11px] text-[var(--text-muted)]">{x.listing_code} · {x.status} · {x.unit||'Unknown unit'}</p>
             {x.allocation_state==='RECONCILED'?<div className="grid grid-cols-2 gap-2 text-xs tabular-nums">
               <div><span className="text-[var(--text-muted)] block">Listed</span><b>{x.listed_stock}</b></div>

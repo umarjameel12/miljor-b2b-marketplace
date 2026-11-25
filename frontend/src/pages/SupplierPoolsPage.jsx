@@ -302,7 +302,7 @@ export function SupplierPoolsPage(){
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-xs font-semibold text-[var(--brand-accent)] uppercase">Supplier Portal · Unified Pool</p>
         <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">Unified Pool Management</h1>
-        <p className="text-sm text-[var(--text-muted)]">One Unified Pool manager with Regular and Flash subcategories. Delivery and commercial rules are enforced by their respective backend engines.</p>
+        <p className="text-sm text-[var(--text-muted)]">Manage regular and flash wholesale pools, stock allocations, and delivery readiness.</p>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={load} className="rounded-xl border border-[var(--border-default)] px-3 py-2 flex items-center gap-2 text-sm hover:bg-[var(--bg-card)] transition"><RefreshCw size={15}/>Refresh</button>
