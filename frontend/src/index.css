@@ -2864,12 +2864,14 @@ html.dark #top.miljor-public-landing.miljor-premium-landing {
   background-color: #062a21 !important;
   background-repeat: no-repeat !important;
 }
-/* Quiet, whisper-thin hairline on landing navbar (no harsh gold stripe) */
+/* Seamless glass landing navbar with no distracting bottom border stripe */
 html:not(.dark) #top.miljor-public-landing.miljor-premium-landing header.landing-topbar {
-  border-bottom: 1px solid rgba(12, 43, 36, 0.08) !important;
+  border-bottom: none !important;
+  box-shadow: 0 2px 12px rgba(12, 43, 36, 0.04) !important;
 }
 html.dark #top.miljor-public-landing.miljor-premium-landing header.landing-topbar {
-  border-bottom: 1px solid rgba(240, 234, 214, 0.09) !important;
+  border-bottom: none !important;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.14) !important;
 }
 /* MILJOR V4 VERIFIED LANDING VISUAL PATCH END */
 
