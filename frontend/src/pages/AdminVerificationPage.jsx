@@ -378,33 +378,33 @@ export const AdminVerificationPage = () => {
                       <Button
                         size="sm"
                         variant="primary"
+                        icon={CheckCircle}
                         onClick={() => handleOpenApprove(s)}
                         disabled={isSelf}
-                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                        className="w-full h-9 flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer"
                       >
-                        <CheckCircle className="w-4 h-4" />
                         Approve Supplier
                       </Button>
 
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="primary"
+                        icon={FileText}
                         onClick={() => handleOpenReject(s, 'request-info')}
                         disabled={isSelf}
-                        className="gap-2"
+                        className="w-full h-9 flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer"
                       >
-                        <FileText className="w-4 h-4" />
                         Request Info
                       </Button>
 
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="primary"
+                        icon={XCircle}
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
-                        className="gap-2 border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                        className="w-full h-9 flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer"
                       >
-                        <XCircle className="w-4 h-4" />
                         Reject
                       </Button>
                     </div>
