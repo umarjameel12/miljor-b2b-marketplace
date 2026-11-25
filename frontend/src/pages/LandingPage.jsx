@@ -230,7 +230,8 @@ export const LandingPage = () => {
         : 'radial-gradient(ellipse 1050px 780px at 83% 190px, rgba(195, 157, 94, 0.39) 0%, rgba(211, 177, 125, 0.20) 46%, transparent 82%), radial-gradient(ellipse 980px 750px at 15% 210px, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.27) 49%, transparent 86%), radial-gradient(ellipse 920px 720px at 7% 82%, rgba(164, 132, 87, 0.15) 0%, rgba(164, 132, 87, 0.05) 55%, transparent 88%), linear-gradient(112deg, rgba(158, 122, 72, 0.11) 0%, rgba(255, 255, 255, 0.08) 42%, rgba(171, 127, 65, 0.16) 100%), linear-gradient(90deg, #E4D8C5 0%, #F5F0E8 13%, #FAF7F1 34%, #F1E9DC 55%, #E9D9BF 79%, #DCC5A4 100%)');
       force(root, 'background-color', dark ? '#062a21' : '#f7f1e7');
       force(root, '--miljor-direct-fix', 'active');
-      force(navbar, 'border-bottom', 'none');
+      const hideNavBorder = typeof window !== 'undefined' && window.localStorage?.getItem('miljor_navbar_border') === 'off';
+      force(navbar, 'border-bottom', dark && !hideNavBorder ? '1px solid rgba(180, 212, 195, 0.09)' : 'none');
       force(navbar, 'box-shadow', 'none');
       // Descending strokes such as g, p, y need space BELOW the glyph's baseline.
       force(heading, 'overflow', 'visible');
