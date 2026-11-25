@@ -136,37 +136,43 @@ export function GoogleAuthButton({
     >
       <style>{`
         .miljor-google-btn {
-          background-color: #ffffff;
-          border-color: #d4c7b2;
+          background-color: #ebe2cf;
+          border: 1px solid transparent;
           color: #0c2b24;
-          box-shadow: 0 1px 2px rgba(12, 43, 36, 0.05);
+          transition: transform .18s ease, box-shadow .18s ease;
+          transform: none;
         }
-        [data-testid="google-auth-wrapper"].is-interactive:hover .miljor-google-btn {
-          background-color: #f6f1e6;
-          border-color: #b89452;
-          box-shadow: 0 2px 8px rgba(12, 43, 36, 0.08);
+        html.dark .miljor-google-btn {
+          background-color: #041f18;
+          border: 1px solid transparent;
+          color: #f7f3e8;
+        }
+        [data-testid="google-auth-wrapper"].is-interactive:hover .miljor-google-btn,
+        .miljor-google-btn:not(:disabled):hover {
+          transform: translateY(-2px);
+          box-shadow: 0 9px 20px rgba(125, 94, 47, 0.17);
+        }
+        html.dark [data-testid="google-auth-wrapper"].is-interactive:hover .miljor-google-btn,
+        html.dark .miljor-google-btn:not(:disabled):hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26);
         }
         [data-testid="google-auth-wrapper"].is-interactive:active .miljor-google-btn,
         .miljor-google-btn:not(:disabled):active {
-          transform: scale(0.985);
-        }
-        html.dark .miljor-google-btn {
-          background-color: #06261e;
-          border-color: rgba(200, 178, 118, 0.34);
-          color: #f7f3e8;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
-        }
-        html.dark [data-testid="google-auth-wrapper"].is-interactive:hover .miljor-google-btn {
-          background-color: #0d3f32;
-          border-color: rgba(223, 191, 133, 0.68);
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.36);
+          transform: translateY(0) scale(0.98);
         }
         .miljor-google-btn:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 2px #fcf9f2, 0 0 0 4px #c8b276;
+          outline: 2px solid var(--brand-accent);
+          outline-offset: 2px;
+          transform: none;
         }
-        html.dark .miljor-google-btn:focus-visible {
-          box-shadow: 0 0 0 2px #0a3429, 0 0 0 4px #c8b276;
+        @media (prefers-reduced-motion: reduce) {
+          .miljor-google-btn {
+            transition: none;
+          }
+        }
+        [data-testid="google-gsi-container"]:not(.hidden) {
+          opacity: 0.001;
         }
       `}</style>
       <button
@@ -183,12 +189,12 @@ export function GoogleAuthButton({
             });
           }
         }}
-        className="miljor-google-btn w-full h-11 px-4 rounded-xl border text-sm font-semibold tracking-[0.01em] flex items-center justify-center gap-2.5 select-none cursor-pointer transition-all duration-150 ease-out disabled:opacity-55 disabled:cursor-not-allowed"
+        className="miljor-google-btn w-full h-12 px-6 rounded-xl font-sans text-base font-semibold shadow-xs flex items-center justify-center gap-2.5 select-none cursor-pointer transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? (
-          <Loader2 className="w-4 h-4 animate-spin text-[#c8b276]" />
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
         ) : (
-          <GoogleLogo />
+          <GoogleLogo className="w-4 h-4 shrink-0" />
         )}
         <span>{loading ? 'Connecting with Google…' : label}</span>
       </button>

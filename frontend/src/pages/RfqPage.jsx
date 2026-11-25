@@ -45,6 +45,8 @@ export const RfqPage = () => {
   const [requiredDeliveryDate, setRequiredDeliveryDate] = useState('');
   const [openToSuppliers, setOpenToSuppliers] = useState(true);
   const [openBuyerRequests, setOpenBuyerRequests] = useState([]);
+  const [archivedRequests, setArchivedRequests] = useState([]);
+  const [requestViewTab, setRequestViewTab] = useState('active');
   const [openRequestsMeta, setOpenRequestsMeta] = useState({ eligible_supplier: true, active_listings_count: 0, reason: null });
   const [openRequestsLoading, setOpenRequestsLoading] = useState(false);
   const [openRequestsError, setOpenRequestsError] = useState('');
@@ -131,16 +133,19 @@ export const RfqPage = () => {
     let alive = true;
     const refresh = async () => {
       try {
-        const [catalogResponse, requestResponse] = await Promise.all([
+        const [catalogResponse, requestResponse, archivedResponse] = await Promise.all([
           fetch('/api/v1/catalog/families'),
-          fetch('/api/v1/procurement/requests', { headers: {Authorization: `Bearer ${token}`} })
+          fetch('/api/v1/procurement/requests', { headers: {Authorization: `Bearer ${token}`} }),
+          fetch('/api/v1/procurement/requests?archived=true', { headers: {Authorization: `Bearer ${token}`} })
         ]);
         const catalog = await catalogResponse.json();
         const requests = await requestResponse.json();
+        const archived = await archivedResponse.json().catch(() => ({}));
         if (!catalogResponse.ok || !requestResponse.ok) throw Error('Shopping list could not be loaded');
         if (alive) {
           setFamilyChoices((catalog.data?.families || []).filter(x => x.is_active && x.approval_status === 'APPROVED'));
           setSavedRequests(requests.data?.requests || []);
+          setArchivedRequests(archived.data?.requests || []);
           setLegacyRequests((requests.data?.legacy_requests || []).filter(x => !x.already_converted));
         }
       } catch (error) {
@@ -152,12 +157,15 @@ export const RfqPage = () => {
   }, [token, user?.role]);
 
   const refreshRequests = async () => {
-    const response = await fetch('/api/v1/procurement/requests', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const body = await response.json();
-    if (!response.ok) throw Error(body.error?.message || 'Could not refresh requests');
+    const [activeRes, archRes] = await Promise.all([
+      fetch('/api/v1/procurement/requests', { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/v1/procurement/requests?archived=true', { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    const body = await activeRes.json();
+    const archBody = await archRes.json().catch(() => ({}));
+    if (!activeRes.ok) throw Error(body.error?.message || 'Could not refresh requests');
     setSavedRequests(body.data?.requests || []);
+    setArchivedRequests(archBody.data?.requests || []);
     setLegacyRequests((body.data?.legacy_requests || []).filter(x => !x.already_converted));
   };
 
@@ -331,6 +339,42 @@ export const RfqPage = () => {
       if (!response.ok) throw Error(result.error?.message || 'Could not close request');
       await refreshRequests();
       toast.success('Request closed');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setShoppingBusy(false);
+    }
+  };
+
+  const archiveShoppingRequest = async (request) => {
+    try {
+      setShoppingBusy(true);
+      const response = await fetch(`/api/v1/procurement/requests/${request.id}/archive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || 'Could not archive request');
+      await refreshRequests();
+      toast.success('Request moved to Archived');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setShoppingBusy(false);
+    }
+  };
+
+  const restoreShoppingRequest = async (request) => {
+    try {
+      setShoppingBusy(true);
+      const response = await fetch(`/api/v1/procurement/requests/${request.id}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || 'Could not restore request');
+      await refreshRequests();
+      toast.success('Request restored');
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -1255,9 +1299,54 @@ export const RfqPage = () => {
                 </div>
               </div>
             )}
-            {savedRequests.length>0 && (
-              <div className="border-t border-[var(--border-subtle)] pt-3">
-                <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
+            {(savedRequests.length > 0 || archivedRequests.length > 0) && (
+              <div className="border-t border-[var(--border-subtle)] pt-3 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">My Shopping Requests</p>
+                  <div className="inline-flex rounded-xl border border-[var(--border-subtle)] p-0.5 bg-[var(--bg-card)] text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setRequestViewTab('active')}
+                      className={`px-3 py-1 rounded-lg font-semibold cursor-pointer ${
+                        requestViewTab === 'active' ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs' : 'text-[var(--text-muted)]'
+                      }`}
+                    >
+                      Active ({savedRequests.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRequestViewTab('archived')}
+                      className={`px-3 py-1 rounded-lg font-semibold cursor-pointer ${
+                        requestViewTab === 'archived' ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs' : 'text-[var(--text-muted)]'
+                      }`}
+                    >
+                      Archived ({archivedRequests.length})
+                    </button>
+                  </div>
+                </div>
+                {requestViewTab === 'archived' ? (
+                  archivedRequests.length === 0 ? (
+                    <p className="text-xs text-[var(--text-muted)]">No archived procurement requests.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {archivedRequests.map((request) => (
+                        <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <span className="text-[var(--text-secondary)]">
+                            {request.request_code} · {request.status} · {request.delivery_area}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={shoppingBusy}
+                            onClick={() => restoreShoppingRequest(request)}
+                            className="text-xs font-semibold text-[var(--brand-accent)] underline cursor-pointer disabled:opacity-40"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
                 <div className="space-y-2">
                   {savedRequests.map(request=>(
                     <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -1290,6 +1379,16 @@ export const RfqPage = () => {
                           >
                             Close
                           </button>}
+                        {['DRAFT', 'CLOSED', 'EXPIRED'].includes(request.status) && (
+                          <button
+                            type="button"
+                            disabled={shoppingBusy}
+                            onClick={() => archiveShoppingRequest(request)}
+                            className="text-xs font-medium text-[var(--text-secondary)] hover:underline cursor-pointer disabled:opacity-40"
+                          >
+                            Archive
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={shoppingBusy}
@@ -1304,6 +1403,7 @@ export const RfqPage = () => {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             )}
             {legacyRequests.length>0 && (

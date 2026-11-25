@@ -28,6 +28,45 @@ export const adminApi = {
   reactivateUser: async (userId) => {
     const res = await apiClient.put(`/admin/users/${userId}/reactivate`);
     return res.data;
+  },
+
+  // 5. Pending verified supplier subscription approvals
+  getPendingSubscriptions: async () => {
+    const res = await apiClient.get('/admin/subscriptions/pending');
+    return res.data;
+  },
+
+  approveSubscription: async (subscriptionId, notes = '') => {
+    const res = await apiClient.post(`/admin/subscriptions/${subscriptionId}/approve`, { notes });
+    return res.data;
+  },
+
+  rejectSubscription: async (subscriptionId, reason) => {
+    const res = await apiClient.post(`/admin/subscriptions/${subscriptionId}/reject`, { reason });
+    return res.data;
+  },
+
+  getSubscriptionRefunds: async () => {
+    const res = await apiClient.get('/admin/subscriptions/refunds');
+    return res.data;
+  },
+
+  retrySubscriptionRefund: async (subscriptionId) => {
+    const res = await apiClient.post(`/admin/subscriptions/${subscriptionId}/refund/retry`);
+    return res.data;
+  },
+
+  syncSubscriptionRefund: async (subscriptionId) => {
+    const res = await apiClient.post(`/admin/subscriptions/${subscriptionId}/refund/sync`);
+    return res.data;
+  },
+
+  manualReconcileSubscriptionRefund: async (subscriptionId, { provider_refund_reference, evidence_notes }) => {
+    const res = await apiClient.post(`/admin/subscriptions/${subscriptionId}/refund/manual-reconcile`, {
+      provider_refund_reference,
+      evidence_notes
+    });
+    return res.data;
   }
 };
 

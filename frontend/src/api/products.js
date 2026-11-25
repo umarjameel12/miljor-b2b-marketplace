@@ -57,6 +57,11 @@ export const productsApi = {
   updateListingStatus: async (id, status) => {
     const res = await apiClient.patch(`/listings/${id}/status`, { status });
     return res.data;
+  },
+
+  restoreListing: async (id, targetStatus = 'PAUSED') => {
+    const res = await apiClient.post(`/listings/${id}/restore`, { targetStatus });
+    return res.data;
   }
 };
 

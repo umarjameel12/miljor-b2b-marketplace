@@ -1,0 +1,1817 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { AppShell } from '../components/layout/AppShell';
+import {
+  FileText,
+  Plus,
+  Send,
+  CheckCircle,
+  Clock,
+  Building,
+  DollarSign,
+  Truck,
+  ArrowRight,
+  ShieldCheck,
+  ChevronRight
+} from 'lucide-react';
+import { toast } from 'react-toastify';
+import { geoApi } from '../api/geo';
+import { deliveryApi } from '../api/delivery';
+import { RecurringCycleControls } from '../components/procurement/RecurringCycleControls';
+
+export const RfqPage = () => {
+  const { user, token } = useAuth();
+  const navigate=useNavigate();
+  const [awardAddress,setAwardAddress]=useState(''),[awardConsent,setAwardConsent]=useState(false);
+  const awardIntents=useRef(new Map());
+  const [activeTab, setActiveTab] = useState(user?.role === 'SUPPLIER' ? 'supplier' : 'buyer');
+  const location = useLocation();
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (user?.role !== 'SUPPLIER' || !['supplier-invitations', 'supplier-collective', 'supplier-counteroffers'].includes(id)) return;
+    const frame = requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, user?.role, activeTab]);
+
+  // B6: Buyer-first multi-item shopping list, stored in the existing RFQ page.
+  const emptyItem = () => ({ family_id: '', quantity: '', unit: 'kg', requirements: '' });
+  const [shoppingList, setShoppingList] = useState([emptyItem()]);
+  const [deliveryArea, setDeliveryArea] = useState('');
+  const [quoteDeadline, setQuoteDeadline] = useState('');
+  const [buyerMode,setBuyerMode] = useState('SINGLE_BUYER');
+  const [purchaseCadence,setPurchaseCadence] = useState('ONE_TIME');
+  const [joinDeadline,setJoinDeadline] = useState('');
+  const [minimumBuyers,setMinimumBuyers] = useState(2);
+  const [collectiveGroup,setCollectiveGroup] = useState(null);
+  const [myCollectiveInvites,setMyCollectiveInvites] = useState([]);
+  const [inviteBuyerId,setInviteBuyerId] = useState('');
+  const [joinQuantities,setJoinQuantities] = useState({});
+  const [recurringContracts,setRecurringContracts] = useState([]);
+  const [recurringCadenceDay,setRecurringCadenceDay] = useState(1);
+  const [recurringTime,setRecurringTime] = useState('09:00');
+  const [recurringStart,setRecurringStart] = useState('');
+  const [recurringEnd,setRecurringEnd] = useState('');
+  const [recurringUpcoming,setRecurringUpcoming] = useState(null);
+  const [reviewedAwardLines,setReviewedAwardLines] = useState({});
+  const [awardPreview,setAwardPreview] = useState(null);
+  const [collectiveSupplierId,setCollectiveSupplierId]=useState('');
+  const [collectiveBids,setCollectiveBids]=useState([]);
+  const [collectiveBidGroupId,setCollectiveBidGroupId]=useState(null);
+  const [collectiveApprovalPreview,setCollectiveApprovalPreview]=useState(null);
+  const [replaceCollectiveConsent,setReplaceCollectiveConsent]=useState(false);
+  const [collectiveSupplierInbox,setCollectiveSupplierInbox]=useState([]);
+  const [collectiveSupplierListings,setCollectiveSupplierListings]=useState([]);
+  const [collectiveSellerDrafts,setCollectiveSellerDrafts]=useState({});
+  const [recurringCycles,setRecurringCycles]=useState([]);
+  const [recurringCyclesContract,setRecurringCyclesContract]=useState(null);
+
+  const [familyChoices, setFamilyChoices] = useState([]);
+  const [savedRequests, setSavedRequests] = useState([]);
+  const [legacyRequests, setLegacyRequests] = useState([]);
+  const [convertingLegacy, setConvertingLegacy] = useState(null);
+  const [activeRequest, setActiveRequest] = useState(null);
+  const [shoppingBusy, setShoppingBusy] = useState(false);
+  const [shoppingError, setShoppingError] = useState('');
+  const [selectedMatchRequest, setSelectedMatchRequest] = useState(null);
+  const [supplierMatches, setSupplierMatches] = useState([]);
+  const [supplierInvitations, setSupplierInvitations] = useState([]);
+  const [supplierInbox, setSupplierInbox] = useState([]);
+  const [matchingBusy, setMatchingBusy] = useState(false);
+  const [selectedQuotesRequest,setSelectedQuotesRequest] = useState(null);
+  const [buyerQuotes,setBuyerQuotes] = useState([]);
+  const [supplierQuoteDrafts,setSupplierQuoteDrafts] = useState({});
+  const [quoteBusy,setQuoteBusy] = useState(false);
+  const [mySmartQuotes,setMySmartQuotes] = useState([]);
+  const [quoteHistory,setQuoteHistory] = useState(null);
+  const [quoteComparison,setQuoteComparison]=useState(null);
+  const [compareRequestId,setCompareRequestId]=useState(null);
+  const [counterofferDrafts,setCounterofferDrafts]=useState({});
+  const [buyerCounteroffers,setBuyerCounteroffers]=useState([]);
+  const [supplierCounteroffers,setSupplierCounteroffers]=useState([]);
+  const [supplierCounterDrafts,setSupplierCounterDrafts]=useState({});
+  const [deliveryClusters,setDeliveryClusters]=useState([]);
+  const [deliveryClusterId,setDeliveryClusterId]=useState(user?.base_cluster_id?String(user.base_cluster_id):'');
+  const [deliveryOptionResults,setDeliveryOptionResults]=useState({});
+  const [deliveryAddresses,setDeliveryAddresses]=useState([]);
+  const [chosenAddress,setChosenAddress]=useState('');
+  const [deliveryChoices,setDeliveryChoices]=useState({});
+  const deliveryAccountRef=useRef(user?.id);
+  deliveryAccountRef.current=user?.id;
+
+
+
+  const availableUnits = familyId => {
+    const family = familyChoices.find(choice => String(choice.id) === String(familyId));
+    if (!family) return ['kg','g','l','ml','bag','tin','carton','sack','pack'];
+    const listed = [...(family.allowed_pack_units || []), ...(family.allowed_purchasing_units || [])]
+      .filter(x => typeof x === 'string').map(x => x.toLowerCase().trim());
+    return [...new Set(listed)].filter(x => ['kg','g','l','ml','bag','tin','carton','sack','pack'].includes(x));
+  };
+  const newRequestKey = () => `buyer-${crypto.randomUUID()}`;
+  const toLocalInput = value => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  useEffect(() => {
+    if (!token || user?.role !== 'BUYER') return;
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const [catalogResponse, requestResponse] = await Promise.all([
+          fetch('/api/v1/catalog/families'),
+          fetch('/api/v1/procurement/requests', { headers: {Authorization: `Bearer ${token}`} })
+        ]);
+        const catalog = await catalogResponse.json();
+        const requests = await requestResponse.json();
+        if (!catalogResponse.ok || !requestResponse.ok) throw Error('Shopping list could not be loaded');
+        if (alive) {
+          setFamilyChoices((catalog.data?.families || []).filter(x => x.is_active && x.approval_status === 'APPROVED'));
+          setSavedRequests(requests.data?.requests || []);
+          setLegacyRequests((requests.data?.legacy_requests || []).filter(x => !x.already_converted));
+        }
+      } catch (error) {
+        if (alive) setShoppingError(error.message);
+      }
+    };
+    refresh();
+    return () => { alive = false; };
+  }, [token, user?.role]);
+
+  const refreshRequests = async () => {
+    const response = await fetch('/api/v1/procurement/requests', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const body = await response.json();
+    if (!response.ok) throw Error(body.error?.message || 'Could not refresh requests');
+    setSavedRequests(body.data?.requests || []);
+    setLegacyRequests((body.data?.legacy_requests || []).filter(x => !x.already_converted));
+  };
+
+  const reviewLegacyRequest = legacy => {
+    setActiveRequest(null);
+    setConvertingLegacy(legacy);
+    setShoppingError('');
+    if (legacy.cluster_name && !deliveryArea) setDeliveryArea(`${legacy.cluster_name}, Lahore`);
+    else if (!deliveryArea) setDeliveryArea('Lahore');
+    if (legacy.needed_by_date) setQuoteDeadline(toLocalInput(legacy.needed_by_date));
+    else if (!quoteDeadline) setQuoteDeadline(toLocalInput(new Date(Date.now() + 5 * 86400000)));
+    setShoppingList([{
+      family_id: legacy.family_id ? String(legacy.family_id) : '',
+      quantity: legacy.target_quantity ? String(legacy.target_quantity) : '1',
+      unit: (legacy.target_unit || 'kg').toLowerCase(),
+      requirements: legacy.desired_specs || legacy.commodity_name || ''
+    }]);
+  };
+
+  const convertLegacyToDraft = async () => {
+    if (!convertingLegacy) return;
+    setShoppingBusy(true);
+    setShoppingError('');
+    try {
+      const item = shoppingList[0] || {};
+      const quoteDate = quoteDeadline ? new Date(quoteDeadline).toISOString() : null;
+      const joinDate = buyerMode === 'COLLECTIVE' && joinDeadline
+        ? new Date(joinDeadline).toISOString()
+        : null;
+      const res = await fetch(`/api/v1/procurement/legacy-requests/${convertingLegacy.id}/convert`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `legacy-convert-${convertingLegacy.id}-${crypto.randomUUID()}`
+        },
+        body: JSON.stringify({
+          confirm_conversion: true,
+          ownership: buyerMode,
+          frequency: purchaseCadence,
+          delivery_area: deliveryArea,
+          quote_deadline: quoteDate,
+          ...(joinDate ? { join_deadline: joinDate } : {}),
+          family_id: item.family_id ? Number(item.family_id) : null,
+          quantity: item.quantity,
+          unit: item.unit,
+          requirements: item.requirements,
+          notes: convertingLegacy.notes || undefined
+        })
+      });
+      const body = await res.json();
+      if (!res.ok) throw Error(body.error?.message || 'Could not convert legacy request');
+      setConvertingLegacy(null);
+      await refreshRequests();
+      toast.success(`Converted ${convertingLegacy.request_code} to Smart Hub draft ${body.data?.request?.request_code || ''}`);
+    } catch (err) {
+      setShoppingError(err.message);
+    } finally {
+      setShoppingBusy(false);
+    }
+  };
+
+  const loadShoppingDraft = async requestId => {
+    setShoppingBusy(true);
+    setShoppingError('');
+    try {
+      const response = await fetch(`/api/v1/procurement/requests/${requestId}`, {
+        headers: {Authorization: `Bearer ${token}`}
+      });
+      const body = await response.json();
+      if (!response.ok) throw Error(body.error?.message || 'Could not open request');
+      const request = body.data.request;
+      if (request.status !== 'DRAFT') throw Error('Published requests cannot be edited');
+      setActiveRequest(request);
+      setShoppingList(request.items.map(item => ({
+        family_id: String(item.family_id), quantity: String(item.quantity),
+        unit: item.unit, requirements: item.requirements || ''
+      })));
+      setDeliveryArea(request.delivery_area || '');
+      setQuoteDeadline(toLocalInput(request.quote_deadline));
+      setBuyerMode(request.ownership||'SINGLE_BUYER');
+      setPurchaseCadence(request.frequency||'ONE_TIME');
+      setJoinDeadline(toLocalInput(request.join_deadline));
+    } catch (error) {
+      setShoppingError(error.message);
+    } finally { setShoppingBusy(false); }
+  };
+
+  const submitShoppingList = async publish => {
+    if (!token) return;
+    setShoppingError('');
+    setShoppingBusy(true);
+    try {
+      if (publish && (buyerMode!=='SINGLE_BUYER'||purchaseCadence!=='ONE_TIME'))
+        throw Error('Group and recurring requests use their dedicated consent setup, not one-time publishing.');
+      if (publish && !quoteDeadline) throw Error('Please choose a quotation closing time.');
+      const payload = {
+        ownership: buyerMode, frequency: purchaseCadence,
+        award_policy: 'SPLIT_ALLOWED', priority: 'BEST_VALUE',
+        delivery_area: deliveryArea,
+        quote_deadline: quoteDeadline ? new Date(quoteDeadline).toISOString() : null,
+        join_deadline: buyerMode==='COLLECTIVE' && joinDeadline
+          ? new Date(joinDeadline).toISOString() : null,
+        items: shoppingList.map(item => ({
+          family_id: Number(item.family_id),
+          quantity: item.quantity,
+          unit: item.unit,
+          requirements: item.requirements,
+          allow_substitutions: false
+        }))
+      };
+      const editing = Boolean(activeRequest);
+      const url = editing
+        ? `/api/v1/procurement/requests/${activeRequest.id}`
+        : '/api/v1/procurement/requests';
+      const response = await fetch(url, {
+        method: editing ? 'PATCH' : 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': newRequestKey()
+        },
+        body: JSON.stringify(editing ? {...payload, version_number: activeRequest.version_number} : payload)
+      });
+      const body = await response.json();
+      if (!response.ok) throw Error(body.error?.message || 'Could not save shopping list');
+      let saved = body.data.request;
+      if (publish) {
+        const published = await fetch(`/api/v1/procurement/requests/${saved.id}/publish`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': newRequestKey()
+          },
+          body: JSON.stringify({version_number: saved.version_number})
+        });
+        const result = await published.json();
+        if (!published.ok) {
+          setActiveRequest(saved);
+          throw Error(result.error?.message || 'Saved as draft; publication failed');
+        }
+        saved = result.data.request;
+      }
+      setActiveRequest(publish ? null : saved);
+      if (publish) {
+        setShoppingList([emptyItem()]);
+        setDeliveryArea('');
+        setQuoteDeadline('');
+      }
+      await refreshRequests();
+      toast.success(publish ? 'Shopping list published. Invite eligible suppliers to receive quotations.' : 'Shopping list draft saved');
+    } catch (error) {
+      setShoppingError(error.message);
+    } finally { setShoppingBusy(false); }
+  };
+
+  // B6-D invitation workflow: no buyer contact/address is returned to suppliers.
+  const procurementApi = async (url, options={}) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw Error(body.error?.message || 'Supplier request failed');
+    return body.data || {};
+  };
+
+  const viewSupplierMatches = async requestId => {
+    setMatchingBusy(true);
+    setShoppingError('');
+    try {
+      const [matches, invitations] = await Promise.all([
+        procurementApi(`/api/v1/procurement/requests/${requestId}/matches`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/invitations`)
+      ]);
+      setSelectedMatchRequest(requestId);
+      setSupplierMatches(matches.matches || []);
+      setSupplierInvitations(invitations.invitations || []);
+    } catch(err) {setShoppingError(err.message);}
+    finally {setMatchingBusy(false);}
+  };
+
+  const inviteSupplier = async supplierId => {
+    if (!selectedMatchRequest) return;
+    setMatchingBusy(true);
+    setShoppingError('');
+    try {
+      await procurementApi(`/api/v1/procurement/requests/${selectedMatchRequest}/invitations`, {
+        method:'POST',body:JSON.stringify({supplier_id:supplierId})
+      });
+      const result = await procurementApi(`/api/v1/procurement/requests/${selectedMatchRequest}/invitations`);
+      setSupplierInvitations(result.invitations || []);
+      toast.success('Invitation sent to eligible supplier');
+    } catch(err){setShoppingError(err.message);}
+    finally{setMatchingBusy(false);}
+  };
+
+  const refreshSupplierInbox = async () => {
+    if(!token || user?.role!=='SUPPLIER')return;
+    try{
+      const result=await procurementApi('/api/v1/procurement/supplier/invitations');
+      setSupplierInbox(result.invitations || []);
+    }catch(err){toast.error(err.message);}
+  };
+
+  useEffect(()=>{
+    if(token && user?.role==='SUPPLIER')refreshSupplierInbox();
+  },[token,user?.role]);
+
+  const respondInvitation = async (invitationId, decision) => {
+    setMatchingBusy(true);
+    try{
+      await procurementApi(`/api/v1/procurement/supplier/invitations/${invitationId}/respond`,{
+        method:'POST',body:JSON.stringify({decision})
+      });
+      await refreshSupplierInbox();
+      toast.success(decision==='INTERESTED'?'Interest registered':'Invitation declined');
+    }catch(err){toast.error(err.message);}
+    finally{setMatchingBusy(false);}
+  };
+
+  const refreshMySmartQuotes = async () => {
+    if (!token || user?.role!=='SUPPLIER') return;
+    const response=await procurementApi('/api/v1/procurement/supplier/quotes');
+    setMySmartQuotes(response.quotes||[]);
+  };
+
+  const withdrawSmartQuote = async quoteId => {
+    setQuoteBusy(true);
+    try{
+      await procurementApi(`/api/v1/procurement/supplier/quotes/${quoteId}/withdraw`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({})
+      });
+      await refreshMySmartQuotes();
+      await refreshSupplierCounteroffers();
+      toast.success('Quotation withdrawn; historical versions retained');
+    }catch(error){toast.error(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const viewQuoteHistory = async (requestId,quoteId) => {
+    setQuoteBusy(true);
+    try{
+      const data=await procurementApi(`/api/v1/procurement/requests/${requestId}/quotes/${quoteId}/versions`);
+      setQuoteHistory(data);
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const viewBuyerQuotes = async requestId => {
+    setQuoteBusy(true);
+    setShoppingError('');
+    try {
+      const data=await procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`);
+      setSelectedQuotesRequest(requestId);
+      setBuyerQuotes(data.quotes || []);
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  // B6-G/H: explicit physical SKU consent and server-side read-only preview.
+  const previewSmartAward = async option => {
+    if(!compareRequestId)return;
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const selections=(option.lines||[]).map(line=>{
+        const version=buyerQuotes.find(q=>Number(q.id)===Number(line.quote_id))?.current_version;
+        const snapshot=line.supplier_sku_snapshot||{};
+        const key=`${line.quote_id}:${line.request_item_id}:${version}`;
+        if(!reviewedAwardLines[key])throw Error('Review and accept every selected physical SKU and packaging first.');
+        return {
+          request_item_id:Number(line.request_item_id),quote_id:Number(line.quote_id),
+          version_number:Number(version),supplier_sku_id:Number(snapshot.supplier_sku_id),
+          product_spec_id:Number(snapshot.product_spec_id),
+          physical_specifications_accepted:true,
+          ...(buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id))?.quote_snapshot?.delivery_terms
+            ?{delivery_terms_hash:buyerQuotes.find(quote=>Number(quote.id)===Number(line.quote_id)).quote_snapshot.delivery_terms.hash}:{})
+        };
+      });
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/checkout-preview`,{
+        method:'POST',body:JSON.stringify({selections})
+      });
+      setAwardPreview({...data.preview,confirmed_selections:selections,request_id:compareRequestId});setAwardConsent(false);
+      toast.success('Fee-inclusive nonbinding preview created. Real checkout remains gated.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  // B6-F — read-only server-ranked quote combinations, not an acceptance.
+  const viewSmartComparison = async requestId => {
+    setQuoteBusy(true);
+    setShoppingError('');
+    try{
+      const [compared,currentQuotes,productOffers]=await Promise.all([
+        procurementApi(`/api/v1/procurement/requests/${requestId}/compare`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/quotes`),
+        procurementApi(`/api/v1/procurement/requests/${requestId}/counteroffers`)
+      ]);
+      setCompareRequestId(requestId);
+      setQuoteComparison(compared);
+      setBuyerCounteroffers(productOffers.counteroffers||[]);
+      setBuyerQuotes(currentQuotes.quotes||[]);
+      setReviewedAwardLines({});
+      setAwardPreview(null);
+    }catch(e){setShoppingError(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  const submitProductCounteroffers=async quote=>{
+    const fields=counterofferDrafts[quote.id]||{};
+    const lines=(quote.quote_snapshot?.lines||[])
+      .filter(line=>String(fields[line.request_item_id]||'').trim())
+      .map(line=>({request_item_id:Number(line.request_item_id),
+        proposed_unit_price:String(fields[line.request_item_id]).trim()}));
+    if(!lines.length){setShoppingError('Enter a numeric offer on at least one selected product.');return;}
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/counteroffers`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({version_number:Number(quote.current_version),lines})
+      });
+      const data=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/counteroffers`);
+      setBuyerCounteroffers(data.counteroffers||[]);
+      setCounterofferDrafts(old=>({...old,[quote.id]:{}}));
+      toast.success('Product counteroffer submitted. No payment or order created.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  useEffect(()=>{
+    let active=true;
+    setDeliveryAddresses([]);setChosenAddress('');setDeliveryChoices({});
+    if(user?.role!=='BUYER')return;
+    geoApi.getClusters().then(result=>setDeliveryClusters(result?.data?.clusters||[]))
+      .catch(()=>setDeliveryClusters([]));
+    deliveryApi.getBuyerAddresses().then(result=>{if(active)setDeliveryAddresses(result.data||[]);}).catch(()=>{if(active)setDeliveryAddresses([]);});
+    return()=>{active=false;};
+  },[user?.id,user?.role,token]);
+  const chooseDelivery=async(quote,mode,pickupPointId=null)=>{
+    const owner=user?.id;
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-choice`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},body:JSON.stringify({cluster_id:Number(deliveryClusterId),mode,
+          ...(mode==='PICKUP'?{pickup_point_id:Number(pickupPointId)}:{address_id:Number(chosenAddress)})})});
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,[quote.id]:result.delivery_terms}));
+      toast.success('Delivery choice recorded. Supplier must publish a revised quote before your final approval.');
+    }catch(error){setShoppingError(error.message);}finally{setQuoteBusy(false);}
+  };
+  const loadSupplierDeliveryChoices=async invitation=>{
+    const owner=user?.id;
+    setQuoteBusy(true);
+    try{
+      const result=await procurementApi(`/api/v1/procurement/supplier/requests/${invitation.request_id}/delivery-choices`);
+      if(deliveryAccountRef.current!==owner)return;
+      setDeliveryChoices(old=>({...old,['supplier:'+invitation.invitation_id]:result.choices}));
+    }catch(error){toast.error(error.message);}finally{setQuoteBusy(false);}
+  };
+  const viewSupplierDeliveryOptions=async quote=>{
+    if(!deliveryClusterId){setShoppingError('Select your delivery area cluster first.');return;}
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(
+        `/api/v1/procurement/requests/${compareRequestId}/quotes/${quote.id}/delivery-options?cluster_id=${encodeURIComponent(deliveryClusterId)}`
+      );
+      setDeliveryOptionResults(old=>({...old,[quote.id]:data.options}));
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  const refreshSupplierCounteroffers=async()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    try{
+      const data=await procurementApi('/api/v1/procurement/supplier/counteroffers');
+      setSupplierCounteroffers(data.counteroffers||[]);
+    }catch(error){toast.error(error.message);}
+  };
+  const respondProductCounteroffer=async(offer,decision)=>{
+    setQuoteBusy(true);setShoppingError('');
+    try{
+      const proposed=String(supplierCounterDrafts[offer.id]||'').trim();
+      await procurementApi(`/api/v1/procurement/supplier/counteroffers/${offer.id}/respond`,{
+        method:'POST',body:JSON.stringify(decision==='COUNTER_AGAIN'
+          ?{decision,proposed_unit_price:proposed}:{decision})
+      });
+      await refreshSupplierCounteroffers();
+      toast.success('Decision saved. Publish a revised supplier quotation before buyer checkout.');
+    }catch(error){setShoppingError(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+  useEffect(()=>{
+    if(token&&user?.role==='SUPPLIER')refreshSupplierCounteroffers();
+  },[token,user?.role]);
+
+  const updateQuoteDraft = (invitationId,patch) => {
+    setSupplierQuoteDrafts(old=>({
+      ...old,[invitationId]:{...(old[invitationId]||{}),...patch}
+    }));
+  };
+
+  const submitSmartSupplierQuote = async invitation => {
+    setQuoteBusy(true);
+    try {
+      const saved=supplierQuoteDrafts[invitation.invitation_id]||{};
+      const lines=(invitation.items||[]).flatMap(item=>{
+        const line=saved.lines?.[item.id];
+        return line?.supplier_listing_id && line?.unit_price ? [{
+          request_item_id:item.id,
+          supplier_listing_id:Number(line.supplier_listing_id),
+          quantity:String(item.quantity),
+          unit_price:String(line.unit_price)
+        }] : [];
+      });
+      if(!lines.length)throw Error('Select an eligible listing and price for at least one item.');
+      const deadline=saved.valid_until || new Date(Date.now()+24*60*60*1000).toISOString();
+      const result=await procurementApi(`/api/v1/procurement/supplier/requests/${invitation.request_id}/quotes`,{
+        method:'POST',
+        headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({
+          lines,delivery_fee:saved.delivery_fee||'0',
+          delivery_lead_days:Number(saved.delivery_lead_days??2),
+          valid_until:new Date(deadline).toISOString(),
+          supplier_notes:saved.supplier_notes||'',
+          ...(saved.delivery_quote_code?{delivery_quote_code:saved.delivery_quote_code}:{})
+        })
+      });
+      toast.success(`Quotation version ${result.quote.version_number} submitted`);
+      await refreshMySmartQuotes();
+      await refreshSupplierCounteroffers();
+      setSupplierQuoteDrafts(old=>({...old,[invitation.invitation_id]:{}}));
+    }catch(error){toast.error(error.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  useEffect(()=>{
+    if(token && user?.role==='SUPPLIER'){
+      refreshMySmartQuotes().catch(error=>toast.error(error.message));
+      refreshSupplierCounteroffers().catch(error=>toast.error(error.message));
+    }
+  },[token,user?.role]);
+
+  const refreshProcurementModes = async () => {
+    if(!token||user?.role!=='BUYER')return;
+    const [invites,contracts]=await Promise.all([
+      procurementApi('/api/v1/procurement/collectives/my-invitations'),
+      procurementApi('/api/v1/procurement/recurring')
+    ]);
+    setMyCollectiveInvites(invites.invitations||[]);
+    setRecurringContracts(contracts.contracts||[]);
+  };
+
+  useEffect(()=>{
+    if(token&&user?.role==='BUYER'){
+      refreshProcurementModes().catch(error=>setShoppingError(error.message));
+    }
+  },[token,user?.role]);
+
+  const createCollectiveFromDraft = async request => {
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/requests/${request.id}/collective`,{
+        method:'POST',body:JSON.stringify({visibility:'PRIVATE_INVITE',minimum_buyers:Number(minimumBuyers)})
+      });
+      setCollectiveGroup(result.group);
+      await refreshProcurementModes();
+      toast.success('Private collective created. Every buyer must join with explicit quantities.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const inviteCollectiveBuyer = async () => {
+    if(!collectiveGroup)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${collectiveGroup.id}/invitations`,{
+        method:'POST',body:JSON.stringify({buyer_id:Number(inviteBuyerId)})
+      });
+      setInviteBuyerId('');
+      toast.success('Verified business invited. No obligation until they explicitly join.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const joinCollective = async invite => {
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const lines=(invite.items||[]).flatMap(item=>{
+        const qty=joinQuantities[`${invite.group_id}:${item.id}`];
+        return qty?[{request_item_id:item.id,quantity:qty}]:[];
+      });
+      if(!lines.length)throw Error('Choose quantities for at least one requested item.');
+      await procurementApi(`/api/v1/procurement/collectives/${invite.group_id}/join`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({lines})
+      });
+      await refreshProcurementModes();
+      toast.success('Your independent group participation has been recorded; no payment taken.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const createRecurringFromDraft = async request => {
+    if(!recurringStart)throw setShoppingError('Choose a recurring start date.');
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const cadence=request.frequency;
+      const rule={
+        cadence,timezone_name:'Asia/Karachi',local_run_time:recurringTime,
+        starts_on:recurringStart,ends_on:recurringEnd||null,
+        payment_policy:'EXPLICIT_PER_CYCLE',pricing_policy:'REQUOTE_EACH_CYCLE',
+        ...(cadence!=='MONTHLY'?{weekday_number:recurringCadenceDay}
+          :{month_day:recurringCadenceDay,month_end_policy:'LAST_DAY'})
+      };
+      await procurementApi(`/api/v1/procurement/requests/${request.id}/recurring`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify(rule)
+      });
+      await refreshProcurementModes();
+      toast.success('Recurring draft created. Activate only after reviewing the schedule.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const updateRecurringStatus=async(contract,action)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/recurring/${contract.id}/${action.toLowerCase()}`,{
+        method:'POST',body:JSON.stringify({version_number:contract.version_number,
+          explicit_consent:action==='ACTIVATE'})
+      });
+      await refreshProcurementModes();
+      toast.success('Recurring schedule updated without an automatic payment.');
+      if(recurringCyclesContract===contract.id)await loadActualRecurringCycles(contract.id);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  const previewRecurringCycles=async contractId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/recurring/${contractId}/upcoming`);
+      setRecurringUpcoming(result);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  // B6-J/K: private supplier bids and independent buyer consent.
+  const prepareCollectiveCommitment=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    const signature=`group:${user.id}:${groupId}:prepare`;
+    if(!awardIntents.current.has(signature))awardIntents.current.set(signature,'group-'+crypto.randomUUID());
+    try{
+      const result=await procurementApi(`/api/v1/procurement/collectives/${groupId}/commitment`,{method:'POST',headers:{'X-Idempotency-Key':awardIntents.current.get(signature)},body:'{}'});
+      await refreshRequests();await viewSmartComparison(result.request_id);
+      toast.success('Group stock held. Review your own physical terms and final amount; payment has not started.');
+    }catch(error){setShoppingError(error.message);}finally{setShoppingBusy(false);}
+  };
+  const confirmReviewedAward=async()=>{
+    if(!awardConsent||!awardPreview||awardAddress.trim().length<8)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const recoveredResponse=await fetch(`/api/v1/procurement/requests/${compareRequestId}/award`,{headers:{Authorization:`Bearer ${token}`}});
+      if(recoveredResponse.ok){const recovered=await recoveredResponse.json();if(recovered.data?.award?.orders?.length){navigate('/orders');return;}}
+      else if(recoveredResponse.status!==404)throw Error('Unable to confirm whether an award already exists. Refresh before submitting.');
+      if(Number(awardPreview.request_id)!==Number(compareRequestId)||!awardPreview.confirmed_selections?.every(line=>reviewedAwardLines[`${line.quote_id}:${line.request_item_id}:${line.version_number}`]))throw Error('Refresh and review every selected physical specification before confirming.');
+      const payload={selections:awardPreview.confirmed_selections,accepted_total_payable:awardPreview.total_payable,buyer_total_confirmed:true,delivery_address:awardAddress.trim()};
+      const signature=JSON.stringify([user.id,compareRequestId,payload]);
+      if(!awardIntents.current.has(signature))awardIntents.current.set(signature,'award-'+crypto.randomUUID());
+      await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award`,{method:'POST',headers:{'X-Idempotency-Key':awardIntents.current.get(signature)},body:JSON.stringify(payload)});
+      navigate('/orders');
+    }catch(error){
+      try{const recovered=await procurementApi(`/api/v1/procurement/requests/${compareRequestId}/award`);if(recovered.award?.orders?.length){navigate('/orders');return;}}catch{/* Keep original error; no unconfirmed success. */}
+      setShoppingError(error.message);
+    }finally{setShoppingBusy(false);}
+  };
+  const openGroupBidding=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${groupId}/open-bidding`,{method:'POST'});
+      toast.success('Qualified group is now accepting private supplier bids.');
+      await refreshProcurementModes();
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const inviteGroupSupplier=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${groupId}/supplier-invitations`,{
+        method:'POST',body:JSON.stringify({supplier_id:Number(collectiveSupplierId)})
+      });
+      setCollectiveSupplierId('');
+      toast.success('Verified supplier invited privately.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const showCollectiveBids=async groupId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(`/api/v1/procurement/collectives/${groupId}/bids`);
+      setCollectiveBidGroupId(groupId);setCollectiveBids(data.bids||[]);
+      setCollectiveApprovalPreview(null);
+      setReplaceCollectiveConsent(false);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const previewCollectiveBid=async(groupId,bidId)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(`/api/v1/procurement/collectives/${groupId}/bids/${bidId}/approval-preview`);
+      setCollectiveApprovalPreview(data.preview);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const qualifyCollectiveGroup=async(groupId,bidVersionId)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(
+        `/api/v1/procurement/collectives/${groupId}/qualify`,{
+          method:'POST',body:JSON.stringify({bid_version_id:bidVersionId})
+        });
+      toast.success('Collective qualified with independent buyer approvals. No payments created.');
+      await refreshProcurementModes();
+      setCollectiveApprovalPreview(null);
+      return result.qualification;
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const acceptCollectivePreview=async()=>{
+    const view=collectiveApprovalPreview;
+    if(!view)return;
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/collectives/${view.group_id}/bids/${view.bid_id}/consent`,{
+        method:'POST',
+        headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({bid_version_id:view.bid_version_id,
+          total_preview:view.total_preview,physical_specifications_accepted:true,
+          buyer_total_confirmed:true,replace_previous_consent:replaceCollectiveConsent})
+      });
+      toast.success('Your quote consent saved. No money charged or order created.');
+      setCollectiveApprovalPreview(null);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const refreshCollectiveSellerInbox=async()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    try{
+      const data=await procurementApi('/api/v1/procurement/supplier/collectives/invitations');
+      setCollectiveSupplierInbox(data.invitations||[]);
+    }catch(e){toast.error(e.message);}
+  };
+  const updateCollectiveSellerDraft=(groupId,patch)=>{
+    setCollectiveSellerDrafts(old=>({...old,[groupId]:{...(old[groupId]||{}),...patch}}));
+  };
+  const submitCollectiveSupplierBid=async invitation=>{
+    const draft=collectiveSellerDrafts[invitation.group_id]||{};
+    const lines=(invitation.items||[]).flatMap(item=>{
+      const row=draft.lines?.[item.request_item_id]||{};
+      return row.supplier_listing_id&&row.unit_price&&row.min_aggregate_quantity
+        ?[{request_item_id:item.request_item_id,
+           supplier_listing_id:Number(row.supplier_listing_id),
+           unit_price:row.unit_price,
+           min_aggregate_quantity:row.min_aggregate_quantity}]:[];
+    });
+    if(!lines.length){toast.error('Choose at least one listing, unit price and group minimum.');return;}
+    setQuoteBusy(true);
+    try{
+      await procurementApi(`/api/v1/procurement/supplier/collectives/${invitation.group_id}/bids`,{
+        method:'POST',headers:{'X-Idempotency-Key':newRequestKey()},
+        body:JSON.stringify({lines,
+          delivery_fee_per_buyer:draft.delivery_fee_per_buyer||'0',
+          valid_until:draft.valid_until
+            ?new Date(draft.valid_until).toISOString()
+            :new Date(Date.now()+24*3600000).toISOString()})
+      });
+      toast.success('Collective bid submitted with immutable supplier specifications.');
+      await refreshCollectiveSellerInbox();
+    }catch(e){toast.error(e.message);}
+    finally{setQuoteBusy(false);}
+  };
+
+  // B6-M: no-charge recurring cycle draft preparation.
+  const loadActualRecurringCycles=async contractId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const data=await procurementApi(`/api/v1/procurement/recurring/${contractId}/cycles`);
+      setRecurringCyclesContract(contractId);setRecurringCycles(data.cycles||[]);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const scheduleRecurringCycles=async contractId=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      await procurementApi(`/api/v1/procurement/recurring/${contractId}/cycles/schedule`,{
+        method:'POST',body:JSON.stringify({limit:6})
+      });
+      await loadActualRecurringCycles(contractId);
+      toast.success('Upcoming recurring proposals scheduled. No payments initiated.');
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+  const prepareRecurringDraft=async(contractId,cycleId)=>{
+    setShoppingBusy(true);setShoppingError('');
+    try{
+      const result=await procurementApi(`/api/v1/procurement/recurring/${contractId}/cycles/${cycleId}/prepare`,{
+        method:'POST',body:JSON.stringify({})
+      });
+      await loadActualRecurringCycles(contractId);
+      await refreshRequests();
+      toast.success(`Cycle shopping-list draft #${result.request_id} created. Review and publish it yourself.`);
+    }catch(e){setShoppingError(e.message);}
+    finally{setShoppingBusy(false);}
+  };
+
+  useEffect(()=>{
+    if(!token||user?.role!=='SUPPLIER')return;
+    refreshCollectiveSellerInbox();
+    procurementApi('/api/v1/listings/me')
+      .then(data=>setCollectiveSupplierListings((data.listings||[])
+        .filter(listing=>listing.status==='ACTIVE')))
+      .catch(error=>toast.error(error.message));
+  },[token,user?.role]);
+
+  return (
+    <AppShell>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+          <div>
+            <span className="text-xs uppercase tracking-wider font-semibold text-[var(--brand-accent)] block mb-1">
+              One Unified Procurement Experience
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[var(--text-primary)]">
+              Smart Procurement Hub
+            </h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">
+              One shopping list, flexible suppliers, clearer wholesale comparisons. Start by creating a multi-product request below.
+            </p>
+          </div>
+
+
+        </div>
+
+        {user?.role === 'BUYER' && (
+          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4" aria-label="Smart Procurement Hub">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-accent)]">Smart Procurement Hub</p>
+              <h2 className="text-xl font-serif font-bold text-[var(--text-primary)]">Your Procurement Shopping List</h2>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Choose solo or group purchasing, one product or a complete shopping list, and one-time or recurring procurement. Payments require a later explicit buyer confirmation.</p>
+            </div>
+            {user?.role === 'BUYER' && (!user.is_verified || !['VERIFIED', 'EMAIL_VERIFIED'].includes(user.verification_status)) && (
+              <div role="status" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-sm text-[var(--text-primary)]">
+                Verify your buyer account email before publishing procurement requests.{' '}
+                <Link to="/verify-email" state={{ email: user.email }} className="font-semibold underline text-[var(--brand-accent)]">
+                  Verify email
+                </Link>
+              </div>
+            )}
+            {shoppingError && <p role="alert" className="text-sm text-red-600">{shoppingError}</p>}
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">How would you like to buy?
+                <select value={buyerMode}
+                  onChange={e=>{setBuyerMode(e.target.value);if(e.target.value==='COLLECTIVE')setPurchaseCadence('ONE_TIME');}}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                  <option value="SINGLE_BUYER">Buy Alone — My Business</option>
+                  <option value="COLLECTIVE">Buy Together — Verified Businesses</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold">How often?
+                <select value={purchaseCadence} onChange={e=>setPurchaseCadence(e.target.value)}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                  <option value="ONE_TIME">One-Time Purchase</option>
+                  <option value="WEEKLY" disabled={buyerMode==='COLLECTIVE'}>Weekly Recurring</option>
+                  <option value="BIWEEKLY" disabled={buyerMode==='COLLECTIVE'}>Every Two Weeks</option>
+                  <option value="MONTHLY" disabled={buyerMode==='COLLECTIVE'}>Monthly Recurring</option>
+                </select>
+              </label>
+            </div>
+            {buyerMode==='COLLECTIVE' && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="text-xs font-semibold">Group join cutoff (Pakistan local time)
+                  <input type="datetime-local" value={joinDeadline}
+                    onChange={e=>setJoinDeadline(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">Minimum participating businesses
+                  <input type="number" min="2" max="1000" value={minimumBuyers}
+                    onChange={e=>setMinimumBuyers(Number(e.target.value))}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">
+                  Private invitations and individual quantity consent are available in this stage.
+                  Collective supplier bids, group checkout and collective recurring follow their financial gates.
+                </p>
+              </div>
+            )}
+            {buyerMode==='SINGLE_BUYER' && purchaseCadence!=='ONE_TIME' && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="text-xs font-semibold">
+                  {purchaseCadence!=='MONTHLY'?'Day of week (0 Sun, 1 Mon)':'Day of month (1–31)'}
+                  <input type="number" min={purchaseCadence!=='MONTHLY'?0:1}
+                    max={purchaseCadence!=='MONTHLY'?6:31} value={recurringCadenceDay}
+                    onChange={e=>setRecurringCadenceDay(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">Local time (Pakistan)
+                  <input type="time" value={recurringTime}
+                    onChange={e=>setRecurringTime(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">Start date
+                  <input type="date" value={recurringStart}
+                    onChange={e=>setRecurringStart(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <label className="text-xs font-semibold">End date (optional)
+                  <input type="date" value={recurringEnd}
+                    onChange={e=>setRecurringEnd(e.target.value)}
+                    className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                </label>
+                <p className="sm:col-span-2 text-xs text-[var(--text-muted)]">
+                  Every cycle requires fresh pricing and explicit payment approval. No automatic charges.
+                </p>
+              </div>
+            )}
+            <div className="space-y-3">
+              {shoppingList.map((item, index) => (
+                <div key={index} className="rounded-xl border border-[var(--border-subtle)] p-3 grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <label className="sm:col-span-4 text-xs font-semibold">Product family
+                    <select required value={item.family_id} onChange={e => setShoppingList(old => old.map((row,i)=>i===index?{...row,family_id:e.target.value,unit:availableUnits(e.target.value)[0]||'kg'}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm">
+                      <option value="">Choose product</option>
+                      {familyChoices.map(family => <option key={family.id} value={family.id}>{family.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="sm:col-span-2 text-xs font-semibold">Quantity
+                    <input type="number" min="0.0001" step="any" value={item.quantity}
+                      onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,quantity:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+                  </label>
+                  <label className="sm:col-span-2 text-xs font-semibold">Unit
+                    <select value={item.unit} onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,unit:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm">
+                      {availableUnits(item.family_id).map(unit=><option key={unit} value={unit}>{unit}</option>)}
+                    </select>
+                  </label>
+                  <label className="sm:col-span-3 text-xs font-semibold">Quality / packaging (optional)
+                    <input value={item.requirements} maxLength={2000} placeholder="e.g. Premium Sella 25kg"
+                      onChange={e=>setShoppingList(old=>old.map((row,i)=>i===index?{...row,requirements:e.target.value}:row))}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+                  </label>
+                  <div className="sm:col-span-1 flex items-end">
+                    <button type="button" disabled={shoppingList.length===1||shoppingBusy}
+                      onClick={()=>setShoppingList(old=>old.filter((_,i)=>i!==index))}
+                      className="rounded-lg border p-2 text-xs disabled:opacity-40" aria-label={`Remove item ${index+1}`}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button type="button" disabled={shoppingBusy||shoppingList.length>=50}
+              onClick={()=>setShoppingList(old=>[...old,emptyItem()])}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--brand-accent)] disabled:opacity-40">
+              <Plus size={15}/> Add another product
+            </button>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Your delivery area
+                <input value={deliveryArea} maxLength={255} placeholder="e.g. Johar Town, Lahore"
+                  onChange={e=>setDeliveryArea(e.target.value)}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+              </label>
+              <label className="text-xs font-semibold">Quotation closing time (Pakistan local time)
+                <input type="datetime-local" value={quoteDeadline} onChange={e=>setQuoteDeadline(e.target.value)}
+                  className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-sm"/>
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={shoppingBusy}
+                onClick={()=>submitShoppingList(false)}
+                className="rounded-xl px-4 py-2 border border-[var(--border-subtle)] text-sm font-semibold disabled:opacity-50">
+                {shoppingBusy?'Saving...':'Save Draft'}
+              </button>
+              <button type="button" disabled={shoppingBusy||!quoteDeadline||buyerMode!=='SINGLE_BUYER'||purchaseCadence!=='ONE_TIME'}
+                onClick={()=>submitShoppingList(true)}
+                className="rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-sm font-semibold disabled:opacity-50">
+                Publish Shopping List
+              </button>
+              {activeRequest && <button type="button" disabled={shoppingBusy}
+                onClick={()=>{setActiveRequest(null);setShoppingList([emptyItem()]);setDeliveryArea('');setQuoteDeadline('');setShoppingError('');}}
+                className="text-sm px-3 py-2 underline">Start New</button>}
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">No payment or inventory reservation happens when you publish or create a schedule/group. Solo one-time requests can receive supplier quotes now. Group bids and recurring payment remain gated until their completion tests.</p>
+            {convertingLegacy && (
+              <div className="rounded-xl border border-[var(--brand-accent)]/40 bg-[var(--bg-surface)] p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span>
+                  Reviewing legacy request <strong>{convertingLegacy.request_code}</strong> ({convertingLegacy.commodity_name} · {convertingLegacy.target_quantity} {convertingLegacy.target_unit}). Confirm delivery area &amp; deadline above, then click Convert to Draft.
+                </span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={shoppingBusy} onClick={convertLegacyToDraft} className="rounded-lg px-3 py-1.5 font-semibold text-white bg-[var(--brand-accent)]">
+                    Confirm &amp; Convert to Draft
+                  </button>
+                  <button type="button" disabled={shoppingBusy} onClick={() => setConvertingLegacy(null)} className="underline text-[var(--text-muted)]">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {savedRequests.length>0 && (
+              <div className="border-t border-[var(--border-subtle)] pt-3">
+                <p className="text-sm font-semibold mb-2">My Shopping Requests</p>
+                <div className="space-y-2">
+                  {savedRequests.map(request=>(
+                    <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span>{request.request_code} · {request.status} · {request.delivery_area}</span>
+                      <div className="flex gap-3">
+                        {request.status==='DRAFT' &&
+                          <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">Edit Draft</button>}
+                        {request.status==='DRAFT'&&request.ownership==='COLLECTIVE'&&request.frequency==='ONE_TIME' &&
+                          <button type="button" disabled={shoppingBusy} onClick={()=>createCollectiveFromDraft(request)}
+                            className="text-[var(--brand-accent)] underline text-xs">Set Up Private Group</button>}
+                        {request.status==='DRAFT'&&request.ownership==='SINGLE_BUYER'&&request.frequency!=='ONE_TIME' &&
+                          <button type="button" disabled={shoppingBusy} onClick={()=>createRecurringFromDraft(request)}
+                            className="text-[var(--brand-accent)] underline text-xs">Create Recurring Schedule</button>}
+                        {request.status==='OPEN' &&
+                          <button type="button" disabled={matchingBusy} onClick={()=>viewSupplierMatches(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">Find suppliers</button>}
+                        {request.status==='OPEN' &&
+                          <button type="button" disabled={quoteBusy} onClick={()=>viewBuyerQuotes(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">View quotes</button>}
+                        {request.status==='OPEN' &&
+                          <button type="button" disabled={quoteBusy} onClick={()=>viewSmartComparison(request.id)}
+                            className="text-[var(--brand-accent)] underline text-xs">Compare offers</button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {legacyRequests.length>0 && (
+              <div className="border-t border-[var(--border-subtle)] pt-3">
+                <p className="text-sm font-semibold mb-2">Legacy Demand Requests (Unconverted)</p>
+                <div className="space-y-2">
+                  {legacyRequests.map(legacy=>(
+                    <div key={`legacy-${legacy.id}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span>
+                        <span className="inline-block rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] px-1.5 py-0.5 text-[10px] font-semibold mr-2">LEGACY</span>
+                        {legacy.request_code} · {legacy.commodity_name} · {legacy.target_quantity} {legacy.target_unit} · {legacy.status}
+                      </span>
+                      <button type="button" disabled={shoppingBusy} onClick={()=>reviewLegacyRequest(legacy)}
+                        className="text-[var(--brand-accent)] underline text-xs">Review &amp; Convert to Draft</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {collectiveGroup && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <p className="text-sm font-semibold">Private Group #{collectiveGroup.id}</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Organizer must join too. An invitation does not authorize an order or payment.
+                </p>
+                <label className="text-xs font-semibold">Invite verified business by buyer ID
+                  <div className="flex gap-2 mt-1">
+                    <input type="number" min="1" value={inviteBuyerId}
+                      onChange={e=>setInviteBuyerId(e.target.value)}
+                      className="w-full p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                    <button type="button" disabled={shoppingBusy||!inviteBuyerId}
+                      onClick={inviteCollectiveBuyer}
+                      className="px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs">
+                      Invite
+                    </button>
+                  </div>
+                </label>
+                <div className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                  <p className="text-xs font-semibold">Supplier bidding</p>
+                  <p className="text-xs text-[var(--text-muted)]">Joining must close and at least two buyers must consent before supplier bids open.</p>
+                  <button type="button" disabled={shoppingBusy}
+                    onClick={()=>openGroupBidding(collectiveGroup.id)}
+                    className="text-xs underline">Open supplier bids after cutoff</button>
+                  <label className="block text-xs font-semibold">Invite supplier by ID
+                    <div className="flex gap-2 mt-1">
+                      <input type="number" min="1" value={collectiveSupplierId}
+                        onChange={e=>setCollectiveSupplierId(e.target.value)}
+                        className="w-full p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      <button type="button" disabled={shoppingBusy||!collectiveSupplierId}
+                        onClick={()=>inviteGroupSupplier(collectiveGroup.id)}
+                        className="px-3 py-2 rounded-lg border border-[var(--border-subtle)]">Invite</button>
+                    </div>
+                  </label>
+                  <button type="button" disabled={shoppingBusy}
+                    onClick={()=>showCollectiveBids(collectiveGroup.id)}
+                    className="text-xs underline">View bids</button>
+                </div>
+                <button type="button" className="text-xs underline" onClick={()=>setCollectiveGroup(null)}>
+                  Close Group Setup
+                </button>
+              </div>
+            )}
+            {myCollectiveInvites.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <h3 className="text-sm font-semibold">My Collective Invitations</h3>
+                {myCollectiveInvites.map(invite=>(
+                  <div key={invite.participant_id} className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
+                    <p className="text-xs font-semibold">
+                      Group #{invite.group_id} · {invite.status} · Join by {String(invite.join_deadline)}
+                    </p>
+                    {invite.status==='JOINED'&&invite.group_status==='QUOTING' &&
+                      <button type="button" disabled={shoppingBusy}
+                        onClick={()=>showCollectiveBids(invite.group_id)}
+                        className="text-xs underline">View private bids</button>}
+                    {invite.status==='LOCKED'&&invite.group_status==='QUALIFIED'&&<div className="text-xs space-y-2">
+                      <p>Every buyer creates and pays only their own order. Supplier preparation waits for the entire approved group to be funded. Unfunded group failures require explicit resolution; paid peers are never automatically repriced or refunded.</p>
+                      <button type="button" disabled={shoppingBusy} onClick={()=>prepareCollectiveCommitment(invite.group_id)} className="underline">Prepare my individual group order</button>
+                    </div>}
+                    {invite.status==='INVITED'&&invite.group_status==='FORMING' && <>
+                      {(invite.items||[]).map(item=>(
+                        <label key={item.id} className="block text-xs">
+                          Product family #{item.family_id} · {item.unit}
+                          {item.requirements?' · '+item.requirements:''}
+                          <input inputMode="decimal" placeholder="Your own quantity"
+                            value={joinQuantities[`${invite.group_id}:${item.id}`]||''}
+                            onChange={e=>setJoinQuantities(old=>({
+                              ...old,[`${invite.group_id}:${item.id}`]:e.target.value
+                            }))}
+                            className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                        </label>
+                      ))}
+                      <button type="button" disabled={shoppingBusy} onClick={()=>joinCollective(invite)}
+                        className="rounded-lg px-3 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                        Confirm My Quantities (No Payment)
+                      </button>
+                    </>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {collectiveBidGroupId && (
+              <section className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3" aria-label="Collective supplier bids">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Group #{collectiveBidGroupId} — Private Bids</h3>
+                  <button type="button" className="text-xs underline"
+                    onClick={()=>{setCollectiveBidGroupId(null);setCollectiveApprovalPreview(null);}}>
+                    Close
+                  </button>
+                </div>
+                {collectiveBids.length===0 &&
+                  <p className="text-xs text-[var(--text-muted)]">No eligible supplier bid has been submitted yet.</p>}
+                {collectiveBids.map(bid=>(
+                  <div key={bid.id} className="border-t border-[var(--border-subtle)] pt-2 space-y-1">
+                    <p className="text-xs font-semibold">Supplier #{bid.supplier_id} · v{bid.current_version} · {bid.status}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {bid.full_snapshot?.coverage} · Group items Rs. {bid.full_snapshot?.aggregate_item_subtotal}
+                      · Delivery per buyer Rs. {bid.full_snapshot?.delivery_fee_per_buyer}
+                    </p>
+                    <button type="button" disabled={shoppingBusy||bid.status!=='ACTIVE'}
+                      onClick={()=>previewCollectiveBid(collectiveBidGroupId,bid.id)}
+                      className="text-xs underline disabled:opacity-50">
+                      Review my exact supplier terms
+                    </button>
+                    {Number(collectiveGroup?.id)===Number(collectiveBidGroupId) &&
+                      <button type="button" disabled={shoppingBusy||bid.status!=='ACTIVE'}
+                        onClick={()=>qualifyCollectiveGroup(collectiveBidGroupId,bid.bid_version_id)}
+                        className="ml-3 text-xs underline disabled:opacity-50">
+                        Qualify group after all buyers approve
+                      </button>}
+                  </div>
+                ))}
+                {collectiveApprovalPreview && (
+                  <div className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                    <h4 className="text-sm font-semibold">Your individual quotation preview</h4>
+                    {(collectiveApprovalPreview.items||[]).map(item=>(
+                      <p key={item.request_item_id} className="text-xs">
+                        {item.physical_snapshot?.title||'Supplier SKU'} ·
+                        {item.quantity} {item.purchasing_unit} ·
+                        Grade {item.physical_snapshot?.quality_grade||'Supplier specified'} ·
+                        Rs. {item.subtotal}
+                      </p>
+                    ))}
+                    <p className="text-xs">
+                      Items Rs. {collectiveApprovalPreview.item_subtotal} +
+                      Delivery Rs. {collectiveApprovalPreview.supplier_delivery_fee} +
+                      Processing Rs. {collectiveApprovalPreview.buyer_platform_fee}
+                    </p>
+                    <p className="text-base font-semibold">Your preview total: Rs. {collectiveApprovalPreview.total_preview}</p>
+                    <p className="text-xs text-amber-700">
+                      This action stores your agreement to the quote only. It does not reserve stock, create an order or charge your account.
+                    </p>
+                    <label className="flex items-start gap-2 text-xs">
+                      <input type="checkbox" checked={replaceCollectiveConsent}
+                        onChange={e=>setReplaceCollectiveConsent(e.target.checked)}/>
+                      Explicitly replace my earlier approval if the supplier has changed the quotation.
+                    </label>
+                    <button type="button" disabled={shoppingBusy}
+                      onClick={acceptCollectivePreview}
+                      className="rounded-lg px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                      Approve exact quote (No Payment)
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+            {recurringContracts.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <h3 className="text-sm font-semibold">My Recurring Procurement</h3>
+                {recurringContracts.map(contract=>(
+                  <div key={contract.id} className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
+                    <p className="text-xs font-semibold">
+                      {contract.contract_code} · {contract.cadence} · {contract.status} ·
+                      {String(contract.local_run_time).slice(0,5)} PKT
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      New quote and separate buyer payment approval for every cycle. No automatic charge.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {contract.status==='DRAFT' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'ACTIVATE')}
+                          className="text-xs underline">Activate With Consent</button>}
+                      {contract.status==='ACTIVE' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'PAUSE')}
+                          className="text-xs underline">Pause</button>}
+                      {contract.status==='PAUSED' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'RESUME')}
+                          className="text-xs underline">Resume</button>}
+                      {contract.status!=='CANCELLED' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>updateRecurringStatus(contract,'CANCEL')}
+                          className="text-xs underline">Cancel Future Cycles</button>}
+                      <button type="button" disabled={shoppingBusy}
+                        onClick={()=>previewRecurringCycles(contract.id)}
+                        className="text-xs underline">Preview Schedule</button>
+                      {contract.status==='ACTIVE' &&
+                        <button type="button" disabled={shoppingBusy}
+                          onClick={()=>scheduleRecurringCycles(contract.id)}
+                          className="text-xs underline">Schedule Upcoming Cycles</button>}
+                      <button type="button" disabled={shoppingBusy}
+                        onClick={()=>loadActualRecurringCycles(contract.id)}
+                        className="text-xs underline">View Actual Cycles</button>
+                    </div>
+                  </div>
+                ))}
+                {recurringCyclesContract && (
+                  <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                    <div className="flex justify-between">
+                      <p className="text-xs font-semibold">Contract #{recurringCyclesContract} — Saved Cycles</p>
+                      <button type="button" className="text-xs underline"
+                        onClick={()=>{setRecurringCyclesContract(null);setRecurringCycles([]);}}>Close</button>
+                    </div>
+                    {recurringCycles.length===0 &&
+                      <p className="text-xs text-[var(--text-muted)]">No cycles scheduled yet.</p>}
+                    {recurringCycles.map(cycle=>(
+                      <div key={cycle.id} className="flex flex-wrap justify-between gap-2 border-t border-[var(--border-subtle)] pt-2">
+                        <div>
+                          <p className="text-xs font-semibold">{cycle.cycle_key} · {cycle.status}</p>
+                          <p className="text-xs text-[var(--text-muted)]">Due: {String(cycle.due_at_utc)}</p>
+                          {cycle.generated_request_id &&
+                            <p className="text-xs">Generated buyer draft #{cycle.generated_request_id}</p>}
+                        </div>
+                        {cycle.status==='SCHEDULED' &&
+                          <button type="button" disabled={shoppingBusy}
+                            onClick={()=>prepareRecurringDraft(recurringCyclesContract,cycle.id)}
+                            className="text-xs underline">Prepare Due Shopping Draft</button>}
+                        <RecurringCycleControls key={`${user.id}:${cycle.id}`} contractId={recurringCyclesContract} cycle={cycle} onChanged={()=>loadActualRecurringCycles(recurringCyclesContract)} />
+                      </div>
+                    ))}
+                    <p className="text-xs text-amber-700">
+                      No charges or orders are created by scheduling. Every draft needs separate buyer publication and payment approval.
+                    </p>
+                  </div>
+                )}
+                {recurringUpcoming && (
+                  <div className="rounded-lg bg-[var(--bg-surface)] p-3 text-xs space-y-1">
+                    <p className="font-semibold">Upcoming cycles (not payable orders)</p>
+                    {(recurringUpcoming.upcoming||[]).map(cycle=>(
+                      <p key={cycle.cycle_key}>{cycle.local_date} · {cycle.local_run_time} PKT</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {compareRequestId && quoteComparison && (
+              <section className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3" aria-label="Compare supplier quotations">
+                <div className="flex justify-between items-center gap-3">
+                  <h3 className="text-sm font-semibold">Compare Delivered Quotes</h3>
+                  <button type="button" className="text-xs underline"
+                    onClick={()=>{setCompareRequestId(null);setQuoteComparison(null);}}>Close</button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Supplier-quoted prices include their stated delivery fees, but exclude MilJor processing fees and taxes.
+                  Final stock, quality, shipping conditions and full payable amount are rechecked only during acceptance.
+                </p>
+                {quoteComparison.coverage_status &&
+                  <p role="alert" className="text-xs text-amber-700">Comparison incomplete: {quoteComparison.coverage_status}. Refine quotes before selecting suppliers.</p>}
+                {(!quoteComparison.options||quoteComparison.options.length===0) &&
+                  <p className="text-sm text-[var(--text-muted)]">No complete eligible shopping-list quotation combination is available yet. Suppliers can still send partial quotations.</p>}
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {[
+                    ['Lowest supplier quote',quoteComparison.recommendations?.lowest_supplier_quoted_cost],
+                    ['Fastest declared delivery',quoteComparison.recommendations?.fastest_supplier_estimated_delivery],
+                    ['Best value — fewer suppliers',quoteComparison.recommendations?.best_value_transparent_rule]
+                  ].map(([title,option])=>(
+                    <div key={title} className="rounded-lg border border-[var(--border-subtle)] p-3 space-y-1">
+                      <p className="text-xs font-semibold">{title}</p>
+                      {option ? <>
+                        <p className="text-base font-semibold">Rs. {option.total_delivered_cost}</p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {option.supplier_count} supplier(s), {option.estimated_delivery_days} day(s) estimated
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">Quotes: {option.quote_ids.join(', ')}</p>
+                      </> : <p className="text-xs text-[var(--text-muted)]">No matching full basket</p>}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">{quoteComparison.best_value_rule}</p>
+                {(quoteComparison.options||[]).slice(0,3).map((option,index)=>(
+                  <div key={option.quote_ids.join('-')+'-'+index}
+                    className="rounded-lg border border-[var(--border-subtle)] p-3 space-y-2">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <p className="text-sm font-semibold">Shopping-list combination {index+1}</p>
+                      <p className="text-sm font-semibold">Supplier quoted: Rs. {option.total_delivered_cost}</p>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Items Rs. {option.item_subtotal} + supplier delivery Rs. {option.delivery_fee_total}.
+                      MilJor fees and taxes are not included.
+                    </p>
+                    {(option.lines||[]).map(line=>(
+                      <div key={line.request_item_id} className="text-xs border-t border-[var(--border-subtle)] pt-2">
+                        <p className="font-semibold">
+                          {line.supplier_sku_snapshot?.product_title||'Supplier SKU'} ·
+                          {line.quantity} {line.unit} · Rs. {line.subtotal}
+                        </p>
+                        <p className="text-[var(--text-muted)]">
+                          Quote #{line.quote_id} · Supplier #{line.supplier_id} ·
+                          Brand: {line.supplier_sku_snapshot?.brand||'Supplier specified'} ·
+                          Grade: {line.supplier_sku_snapshot?.quality_grade||'Supplier specified'} ·
+                          Pack: {line.supplier_sku_snapshot?.pack_size||'?'} {line.supplier_sku_snapshot?.pack_unit||''}
+                        </p>
+                        {line.buyer_requirements && (
+                          <p className="text-amber-700">
+                            Buyer requested: {line.buyer_requirements}. Check grade and packaging before accepting.
+                          </p>
+                        )}
+                        <label className="flex items-center gap-2 mt-2 font-medium">
+                          <input type="checkbox"
+                            checked={Boolean(reviewedAwardLines[
+                              `${line.quote_id}:${line.request_item_id}:${buyerQuotes.find(q=>Number(q.id)===Number(line.quote_id))?.current_version}`
+                            ])}
+                            onChange={e=>{
+                              const key=`${line.quote_id}:${line.request_item_id}:${buyerQuotes.find(q=>Number(q.id)===Number(line.quote_id))?.current_version}`;
+                              setReviewedAwardLines(old=>({...old,[key]:e.target.checked}));
+                            }}/>
+                          I reviewed this physical SKU, grade and pack for my order preview
+                        </label>
+                      </div>
+                    ))}
+                    <button type="button" disabled={quoteBusy}
+                      onClick={()=>previewSmartAward(option)}
+                      className="rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                      Review Seller-Specific Order Breakdown
+                    </button>
+                  </div>
+                ))}
+                {awardPreview && (
+                  <section className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2" aria-label="Order preview only">
+                    <p className="text-sm font-semibold">Order Breakdown — Preview Only</p>
+                    <p className="text-xs text-[var(--text-muted)]">{awardPreview.warning}</p>
+                    {(awardPreview.groups||[]).map(group=>(
+                      <div key={group.supplier_id} className="border-t border-[var(--border-subtle)] pt-2 text-xs">
+                        <p className="font-semibold">Supplier #{group.supplier_id} · Quote #{group.quote_id} v{group.version_number}</p>
+                        <p>{group.lines?.length} products · Items Rs. {group.item_subtotal} + Delivery Rs. {group.delivery_fee}</p>
+                        <p className="font-semibold">Supplier quoted Rs. {group.supplier_quote_total}</p>
+                      </div>
+                    ))}
+                    <p className="text-sm font-semibold">Supplier quote total: Rs. {awardPreview.supplier_quoted_total}</p>
+                    <p className="text-sm font-semibold">MilJor buyer processing fee: Rs. {awardPreview.buyer_platform_fee_total}</p>
+                    <p className="text-base font-semibold">Calculated basket payable: Rs. {awardPreview.total_payable}</p>
+                    <p className="text-xs text-amber-700">
+                      Nonbinding preflight only. Tax policy and authoritative inventory checkout gate are not yet approved.
+                      This preview creates no order or payment. Existing group capacity holds follow their own expiry.
+                    </p>
+                    <label className="block text-xs">Your delivery address or agreed pickup destination<input aria-label="Final award delivery address" value={awardAddress} onChange={event=>{setAwardAddress(event.target.value);setAwardConsent(false);}} className="block w-full p-2 rounded-lg border bg-[var(--bg-surface)]"/></label>
+                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={awardConsent} onChange={event=>setAwardConsent(event.target.checked)}/>I approve these selected physical specifications and the displayed final amount. Order creation remains subject to server financial gates; payment is a separate action.</label>
+                    <button type="button" disabled={shoppingBusy||!awardConsent||awardAddress.trim().length<8} onClick={confirmReviewedAward} className="text-xs underline">Confirm reviewed terms through gated checkout</button>
+                  </section>
+                )}
+                <div className="space-y-3" aria-label="Product-wise numeric counteroffers">
+                  <p className="text-sm font-semibold">Product-wise Counteroffers (No Chat)</p>
+                  <label className="flex flex-col gap-1 text-xs">
+                    Check supplier delivery eligibility for your cluster
+                    <select value={deliveryClusterId} onChange={e=>{
+                      setDeliveryClusterId(e.target.value);setDeliveryOptionResults({});
+                    }} className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                      <option value="">Select delivery cluster</option>
+                      {deliveryClusters.map(cluster=>(
+                        <option key={cluster.id} value={cluster.id}>{cluster.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {buyerQuotes.filter(q=>q.status==='ACTIVE').map(quote=>(
+                    <div key={quote.id} className="border border-[var(--border-subtle)] rounded-xl p-3 space-y-3">
+                      <p className="text-xs font-semibold">{quote.supplier_name} · Quote #{quote.id} (v{quote.current_version})</p>
+                      <div className="space-y-1 text-xs">
+                        <span>Current supplier delivery fee: Rs. {quote.delivery_fee} · Quoted lead time: {quote.delivery_lead_days} days</span>
+                        {quote.quote_snapshot?.delivery_terms&&<p>Supplier-approved {quote.quote_snapshot.delivery_terms.mode} · Rs. {quote.quote_snapshot.delivery_terms.fee} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.point_name||'saved destination'} · {quote.quote_snapshot.delivery_terms.pickup_snapshot?.address_line} · Review these terms together with the selected products.</p>}
+                        <button type="button" disabled={quoteBusy||!deliveryClusterId}
+                          onClick={()=>viewSupplierDeliveryOptions(quote)}
+                          className="ml-2 underline disabled:opacity-40">Check Delivery Options</button>
+                        {deliveryOptionResults[quote.id]&&(
+                          <div className="rounded-lg p-2 bg-[var(--bg-card)] space-y-1">
+                            <p className="font-semibold">Eligible delivery modes (not yet selected)</p>
+                            <label>Saved delivery address
+                              <select value={chosenAddress} onChange={event=>setChosenAddress(event.target.value)} className="block w-full p-2 border rounded">
+                                <option value="">Select saved address</option>
+                                {deliveryAddresses.map(address=><option key={address.id} value={address.id}>{address.full_address}</option>)}
+                              </select>
+                            </label>
+                            {(deliveryOptionResults[quote.id].eligible_modes||[]).length
+                              ?deliveryOptionResults[quote.id].eligible_modes.map(mode=>(
+                                <div key={mode.mode}>
+                                  <span>{mode.label||mode.mode}</span>
+                                  {mode.mode==='PICKUP'?(mode.pickup_points||[]).map(point=><button type="button" disabled={quoteBusy} key={point.id} onClick={()=>chooseDelivery(quote,mode.mode,point.id)} className="ml-2 underline">Request pickup at {point.point_name||point.id} · {point.address_line} · Rs. {point.handling_fee_pkr}</button>):
+                                    <button type="button" disabled={quoteBusy||!chosenAddress} onClick={()=>chooseDelivery(quote,mode.mode)} className="ml-2 underline">Request this mode · Rs. {mode.fee_pkr}</button>}
+                                </div>
+                              ))
+                              :<p>No eligible modes found for this supplier and cluster.</p>}
+                            <p className="text-[var(--text-muted)]">Rates and modes require a confirmed supplier quotation and your approval before checkout.</p>
+                            {deliveryChoices[quote.id]&&<p>Requested {deliveryChoices[quote.id].mode} · Rs. {deliveryChoices[quote.id].fee} · awaiting supplier revised quote</p>}
+                          </div>
+                        )}
+                      </div>
+                      {(quote.quote_snapshot?.lines||[]).map(line=>{
+                        const already=buyerCounteroffers.some(o=>Number(o.quote_id)===Number(quote.id)&&
+                          Number(o.quote_version)===Number(quote.current_version)&&Number(o.request_item_id)===Number(line.request_item_id));
+                        return (
+                          <label key={line.request_item_id} className="grid sm:grid-cols-2 gap-2 items-center text-xs">
+                            <span>{line.snapshot?.product_title||'Selected product'} · Supplier Rs. {line.unit_price} per unit
+                              {already&&<span className="ml-2 text-[var(--brand-accent)]">Counteroffer recorded</span>}
+                            </span>
+                            <input type="number" step="0.01" min="0.01" inputMode="decimal"
+                              disabled={quoteBusy||already} placeholder="Your proposed unit price (PKR)"
+                              aria-label={`Counteroffer price for product ${line.request_item_id}`}
+                              value={counterofferDrafts[quote.id]?.[line.request_item_id]||''}
+                              onChange={event=>setCounterofferDrafts(old=>({
+                                ...old,[quote.id]:{...(old[quote.id]||{}),[line.request_item_id]:event.target.value}
+                              }))}
+                              className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                          </label>
+                        );
+                      })}
+                      <button type="button" disabled={quoteBusy}
+                        onClick={()=>submitProductCounteroffers(quote)}
+                        className="rounded-lg px-3 py-2 text-xs font-semibold bg-[var(--brand-accent)] text-stone-900 disabled:opacity-40">
+                        Submit Selected Product Counteroffers
+                      </button>
+                    </div>
+                  ))}
+                  {buyerCounteroffers.length>0&&(
+                    <div className="space-y-1 border-t border-[var(--border-subtle)] pt-3">
+                      <p className="text-xs font-semibold">Product Counteroffer History</p>
+                      {buyerCounteroffers.map(offer=>(
+                        <p key={offer.id} className="text-xs text-[var(--text-muted)]">
+                          Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                          Rs. {offer.quoted_unit_price} → Rs. {offer.buyer_proposed_unit_price} · {offer.decision}
+                          {offer.supplier_proposed_unit_price&&` · Supplier Rs. ${offer.supplier_proposed_unit_price}`}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--text-muted)]">
+                    All offers are nonbinding. Supplier must publish a revised quotation and buyer must explicitly approve it.
+                  </p>
+                </div>
+              </section>
+            )}
+            {selectedQuotesRequest && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Supplier Quotations</p>
+                  <button type="button" className="text-xs underline"
+                    onClick={()=>{setSelectedQuotesRequest(null);setBuyerQuotes([]);}}>Close</button>
+                </div>
+                {buyerQuotes.length===0 && <p className="text-xs text-[var(--text-muted)]">No quotations received yet.</p>}
+                {buyerQuotes.map(quote=>(
+                  <article key={quote.id} className="border-t border-[var(--border-subtle)] pt-3">
+                    <p className="text-sm font-semibold">{quote.supplier_name} · Version {quote.current_version}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{quote.coverage} · {quote.quote_snapshot?.lines?.length||0} lines</p>
+                    {(quote.quote_snapshot?.lines||[]).map(line=>(
+                      <p key={line.request_item_id} className="text-xs">
+                        {line.snapshot?.product_title} · {line.quantity} {line.snapshot?.purchasing_unit}
+                        · Rs. {line.subtotal} (Grade: {line.snapshot?.quality_grade||'Supplier-specified'})
+                      </p>
+                    ))}
+                    <p className="text-sm font-semibold mt-1">
+                      Items Rs. {quote.items_total} + Delivery Rs. {quote.delivery_fee}
+                      = Rs. {quote.quoted_total}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">Valid until {String(quote.valid_until)}. Supplier quotation excludes MilJor processing fees; final payable amount is calculated only at order acceptance.</p>
+                    <button type="button" className="text-xs underline mt-1" disabled={quoteBusy}
+                      onClick={()=>viewQuoteHistory(selectedQuotesRequest,quote.id)}>View version history</button>
+                  </article>
+                ))}
+                {quoteHistory && (
+                  <div className="rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs font-semibold">Quotation #{quoteHistory.quote_id} history</p>
+                      <button type="button" onClick={()=>setQuoteHistory(null)} className="text-xs underline">Close history</button>
+                    </div>
+                    {(quoteHistory.versions||[]).map(version=>(
+                      <p key={version.version_number} className="text-xs">
+                        Version {version.version_number} · {version.coverage} · Rs. {version.quoted_total} · Valid until {String(version.valid_until)}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {selectedMatchRequest && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Matching suppliers</p>
+                  <button type="button" onClick={()=>{setSelectedMatchRequest(null);setSupplierMatches([]);setSupplierInvitations([]);}}
+                    className="text-xs underline">Close</button>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">Matches reflect compatible listed items and declared delivery zones. Final stock, specifications and terms will be checked when suppliers submit quotes.</p>
+                {supplierMatches.length===0 && <p className="text-sm text-[var(--text-muted)]">No eligible suppliers currently match this request.</p>}
+                {supplierMatches.map(supplier=>{
+                  const invite=supplierInvitations.find(row=>Number(row.supplier_id)===Number(supplier.supplier_id));
+                  return <div key={supplier.supplier_id} className="flex justify-between gap-3 items-center border-t border-[var(--border-subtle)] pt-3">
+                    <div>
+                      <p className="text-sm font-semibold">{supplier.supplier_name}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{supplier.covered_item_count} of {supplier.total_item_count} product lines match</p>
+                    </div>
+                    <button type="button" disabled={matchingBusy||Boolean(invite)}
+                      onClick={()=>inviteSupplier(supplier.supplier_id)}
+                      className="px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs font-semibold disabled:opacity-50">
+                      {invite ? invite.status : 'Invite'}
+                    </button>
+                  </div>;
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {user?.role === 'SUPPLIER' && (
+          <section className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3"
+            id="supplier-collective" aria-label="Collective group supplier bidding">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-serif font-semibold">Collective Supplier Bids</h2>
+              <button type="button" className="text-xs underline"
+                onClick={refreshCollectiveSellerInbox}>Refresh invitations</button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              Only private invitations appear here. All buyers consent individually and no payment is taken when you submit a bid.
+            </p>
+            {collectiveSupplierInbox.length===0 &&
+              <p className="text-sm text-[var(--text-muted)]">No qualifying group invitations yet.</p>}
+            {collectiveSupplierInbox.map(invitation=>{
+              const draft=collectiveSellerDrafts[invitation.group_id]||{};
+              return <article key={invitation.invitation_id}
+                className="border-t border-[var(--border-subtle)] pt-3 space-y-3">
+                <p className="text-sm font-semibold">
+                  Group #{invitation.group_id} · {invitation.minimum_buyers} buyers minimum ·
+                  Quotes until {String(invitation.quote_deadline)}
+                </p>
+                {(invitation.items||[]).map(item=>{
+                  const row=draft.lines?.[item.request_item_id]||{};
+                  const listings=collectiveSupplierListings.filter(listing=>
+                    Number(listing.family_id)===Number(item.family_id)&&
+                    String(listing.purchasing_unit).toLowerCase()===String(item.unit).toLowerCase());
+                  const update=(key,value)=>updateCollectiveSellerDraft(invitation.group_id,{
+                    lines:{...(draft.lines||{}),[item.request_item_id]:{...row,[key]:value}}
+                  });
+                  return <div key={item.request_item_id}
+                    className="grid sm:grid-cols-3 gap-2 border-t border-[var(--border-subtle)] pt-2">
+                    <label className="text-xs font-semibold">Product family #{item.family_id} · {item.unit}
+                      <select value={row.supplier_listing_id||''}
+                        onChange={e=>update('supplier_listing_id',e.target.value)}
+                        className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                        <option value="">Do not quote this item</option>
+                        {listings.map(listing=><option key={listing.id} value={listing.id}>
+                          #{listing.id} · {listing.spec_title||listing.variant_title||listing.family_name||'Supplier SKU'}
+                        </option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold">Price per {item.unit} (Rs.)
+                      <input inputMode="decimal" placeholder="0.00" value={row.unit_price||''}
+                        onChange={e=>update('unit_price',e.target.value)}
+                        className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                    </label>
+                    <label className="text-xs font-semibold">Minimum combined quantity
+                      <input inputMode="decimal" placeholder="e.g. 10" value={row.min_aggregate_quantity||''}
+                        onChange={e=>update('min_aggregate_quantity',e.target.value)}
+                        className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                    </label>
+                  </div>;
+                })}
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <label className="text-xs font-semibold">Delivery per buyer (Rs.)
+                    <input inputMode="decimal" value={draft.delivery_fee_per_buyer??'0'}
+                      onChange={e=>updateCollectiveSellerDraft(invitation.group_id,{
+                        delivery_fee_per_buyer:e.target.value})}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                  </label>
+                  <label className="text-xs font-semibold">Bid expires
+                    <input type="datetime-local" value={draft.valid_until||''}
+                      onChange={e=>updateCollectiveSellerDraft(invitation.group_id,{
+                        valid_until:e.target.value})}
+                      className="block w-full p-2 mt-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                  </label>
+                </div>
+                <button type="button" disabled={quoteBusy}
+                  onClick={()=>submitCollectiveSupplierBid(invitation)}
+                  className="px-4 py-2 rounded-lg bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                  Submit Group Bid
+                </button>
+              </article>;
+            })}
+          </section>
+        )}
+
+        {user?.role === 'SUPPLIER' && (
+          <section id="supplier-invitations" aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
+            <div className="flex justify-between items-center gap-3">
+              <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
+              <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
+            <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
+              <div className="flex items-center justify-between">
+                <p id="supplier-counteroffers" className="text-sm font-semibold">Product Counteroffers</p>
+                <button type="button" className="text-xs underline" onClick={refreshSupplierCounteroffers}>Refresh</button>
+              </div>
+              {supplierCounteroffers.length===0&&<p className="text-xs text-[var(--text-muted)]">No product counteroffers yet.</p>}
+              {supplierCounteroffers.map(offer=>(
+                <div key={offer.id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                  <p className="text-xs">Quote #{offer.quote_id} · Product #{offer.request_item_id} ·
+                    Your price Rs. {offer.quoted_unit_price} · Buyer offers Rs. {offer.buyer_proposed_unit_price}</p>
+                  <p className="text-xs font-semibold">{offer.decision}</p>
+                  {offer.decision==='OPEN'&&(
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'ACCEPT')} className="text-xs underline">Accept</button>
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'REJECT')} className="text-xs underline">Reject</button>
+                      <input type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="Your new unit price"
+                        aria-label={`Supplier counter price for product ${offer.request_item_id}`}
+                        value={supplierCounterDrafts[offer.id]||''}
+                        onChange={e=>setSupplierCounterDrafts(old=>({...old,[offer.id]:e.target.value}))}
+                        className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
+                      <button type="button" disabled={quoteBusy||!supplierCounterDrafts[offer.id]}
+                        onClick={()=>respondProductCounteroffer(offer,'COUNTER_AGAIN')} className="text-xs underline">Counter Again</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-[var(--text-muted)]">
+                Accept/Counter Again records a nonbinding decision. Send a revised quotation for buyer approval.
+              </p>
+            </div>
+            {mySmartQuotes.length>0 && (
+              <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                <p className="text-sm font-semibold">My submitted quotations</p>
+                {mySmartQuotes.map(quote=>(
+                  <div key={quote.id} className="flex flex-wrap justify-between gap-2 text-xs">
+                    <span>Quote #{quote.id} · RFQ #{quote.request_id} · v{quote.current_version} · {quote.status} · Rs. {quote.quoted_total}</span>
+                    {quote.status==='ACTIVE' && <button type="button" disabled={quoteBusy}
+                      onClick={()=>withdrawSmartQuote(quote.id)} className="underline text-red-600">
+                      Withdraw
+                    </button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {supplierInbox.length===0 && <p className="text-sm text-[var(--text-muted)]">No open invitations yet.</p>}
+            {supplierInbox.map(invitation=>(
+              <article key={invitation.invitation_id} className="border-t border-[var(--border-subtle)] pt-3 space-y-2">
+                <p className="text-sm font-semibold">{invitation.request_code} · {invitation.status}</p>
+                <div className="space-y-1">
+                  {(invitation.items||[]).map((item,index)=>(
+                    <p key={index} className="text-xs text-[var(--text-muted)]">
+                      Product family #{item.family_id}: {item.quantity} {item.unit}
+                      {item.requirements ? ` · ${item.requirements}` : ''}
+                    </p>
+                  ))}
+                </div>
+                {invitation.status==='INTERESTED' && (
+                  <div className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-3">
+                    <p className="text-sm font-semibold">Submit a supplier quotation</p>
+                    <p className="text-xs text-[var(--text-muted)]">Choose which requested items you can supply. Your exact physical SKU, price and delivery will be shown to the buyer. Leave an item blank to omit it.</p>
+                    {(invitation.items||[]).map(item=>{
+                      const eligible=(invitation.eligible_offers||[]).filter(offer=>Number(offer.request_item_id)===Number(item.id));
+                      const draft=supplierQuoteDrafts[invitation.invitation_id]||{};
+                      const line=draft.lines?.[item.id]||{};
+                      return <div key={item.id} className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-[var(--border-subtle)] pt-2">
+                        <label className="text-xs font-semibold">Product family #{item.family_id} — {item.quantity} {item.unit}
+                          <select value={line.supplier_listing_id||''}
+                            onChange={event=>updateQuoteDraft(invitation.invitation_id,{
+                              lines:{...(draft.lines||{}),[item.id]:{...line,supplier_listing_id:event.target.value}}
+                            })}
+                            className="block w-full mt-1 rounded-lg p-2 border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                            <option value="">Do not quote this item</option>
+                            {eligible.map(offer=><option key={offer.supplier_listing_id} value={offer.supplier_listing_id}>
+                              {offer.product_title} · {offer.pack_size}{offer.pack_unit} · listing #{offer.supplier_listing_id}
+                            </option>)}
+                          </select>
+                        </label>
+                        <label className="text-xs font-semibold">Price per {item.unit} (Rs.)
+                          <input inputMode="decimal" value={line.unit_price||''} placeholder="0.00"
+                            onChange={event=>updateQuoteDraft(invitation.invitation_id,{
+                              lines:{...(draft.lines||{}),[item.id]:{...line,unit_price:event.target.value}}
+                            })}
+                            className="block w-full mt-1 rounded-lg p-2 border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                        </label>
+                      </div>;
+                    })}
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      <label className="text-xs font-semibold">Delivery fee (Rs.)
+                        <button type="button" className="ml-2 underline" disabled={quoteBusy} onClick={()=>loadSupplierDeliveryChoices(invitation)}>Load buyer delivery choices</button>
+                        {(deliveryChoices['supplier:'+invitation.invitation_id]||[]).map(terms=><button key={terms.quote_code} type="button" className="block underline" onClick={()=>{
+                          const localTime=new Date(new Date(terms.expires_at).getTime()-new Date(terms.expires_at).getTimezoneOffset()*60000).toISOString().slice(0,16);
+                          updateQuoteDraft(invitation.invitation_id,{delivery_quote_code:terms.quote_code,delivery_fee:terms.fee,valid_until:localTime});
+                        }}>Confirm {terms.mode} · Rs. {terms.fee} · {terms.quote_code}</button>)}
+                        {(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_quote_code&&<span className="block">Delivery terms selected for revised quote</span>}
+                        <input value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_fee??'0'}
+                          onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_fee:event.target.value})}
+                          className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      </label>
+                      <label className="text-xs font-semibold">Lead time (days)
+                        <input type="number" min="0" max="90" value={(supplierQuoteDrafts[invitation.invitation_id]||{}).delivery_lead_days??2}
+                          onChange={event=>updateQuoteDraft(invitation.invitation_id,{delivery_lead_days:event.target.value})}
+                          className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      </label>
+                      <label className="text-xs font-semibold">Quote valid until
+                        <input type="datetime-local" value={(supplierQuoteDrafts[invitation.invitation_id]||{}).valid_until||''}
+                          onChange={event=>updateQuoteDraft(invitation.invitation_id,{valid_until:event.target.value})}
+                          className="block w-full mt-1 p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]"/>
+                      </label>
+                    </div>
+                    <button type="button" disabled={quoteBusy}
+                      onClick={()=>submitSmartSupplierQuote(invitation)}
+                      className="rounded-lg px-4 py-2 bg-[var(--brand-accent)] text-stone-900 text-xs font-semibold disabled:opacity-50">
+                      {quoteBusy?'Submitting...':'Submit Quotation'}
+                    </button>
+                  </div>
+                )}
+                {invitation.status==='INVITED' && <div className="flex gap-2">
+                  <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'INTERESTED')}
+                    className="text-xs font-semibold rounded-lg px-3 py-2 border border-[var(--border-subtle)]">I'm interested</button>
+                  <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'DECLINED')}
+                    className="text-xs rounded-lg px-3 py-2 border border-[var(--border-subtle)]">Decline</button>
+                </div>}
+              </article>
+            ))}
+          </section>
+        )}
+
+      </div>
+    </AppShell>
+  );
+};

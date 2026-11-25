@@ -536,6 +536,41 @@ export const SupplierCatalogPage = () => {
     }
   };
 
+  const handleRestoreSupplierProduct = async (productId) => {
+    try {
+      await catalogApi.restoreSupplierProduct(productId);
+      toast.success('Supplier product restored to published status.');
+      await loadPortalData();
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || 'Failed to restore supplier product.');
+    }
+  };
+
+  const handleRestoreSku = async (skuId) => {
+    try {
+      await catalogApi.restoreSupplierSku(skuId);
+      toast.success('Physical SKU restored to published status.');
+      await loadPortalData();
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || 'Failed to restore physical SKU.');
+    }
+  };
+
+  const handleRestoreListing = async (listingId, targetStatus = 'PAUSED') => {
+    try {
+      await productsApi.restoreListing(listingId, targetStatus);
+      toast.success(`Commercial offer restored (${targetStatus}).`);
+      await loadPortalData();
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || 'Failed to restore commercial offer.');
+    }
+  };
+
+  const archivedProducts = mySupplierProducts.filter((p) => p.status === 'ARCHIVED');
+  const archivedSkus = mySupplierSkus.filter((s) => s.status === 'ARCHIVED');
+  const archivedListings = myListings.filter((l) => l.status === 'ARCHIVED');
+  const totalArchivedCount = archivedProducts.length + archivedSkus.length + archivedListings.length;
+
   // ---------------------------------------------------------------------------
   // Catalog Request Modal Helpers
   // ---------------------------------------------------------------------------
@@ -1054,6 +1089,18 @@ export const SupplierCatalogPage = () => {
               <FileText className="w-4 h-4" />
               5. Family Requests ({myRequests.length})
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('archived')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'archived'
+                  ? 'bg-[var(--brand-primary)] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
+              }`}
+            >
+              <Archive className="w-4 h-4" />
+              6. Archived ({totalArchivedCount})
+            </button>
           </div>
 
           <button
@@ -1299,6 +1346,11 @@ export const SupplierCatalogPage = () => {
                               <Archive className="w-3.5 h-3.5" />
                             </Button>
                           )}
+                          {sp.status === 'ARCHIVED' && (
+                            <Button size="sm" variant="outline" onClick={() => handleRestoreSupplierProduct(sp.id)}>
+                              Restore Product
+                            </Button>
+                          )}
                         </div>
                       </div>
 
@@ -1355,6 +1407,11 @@ export const SupplierCatalogPage = () => {
                                     Archive
                                   </Button>
                                 )}
+                                {sku.status === 'ARCHIVED' && (
+                                  <Button size="sm" variant="outline" onClick={() => handleRestoreSku(sku.id)}>
+                                    Restore SKU
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           ))
@@ -1369,6 +1426,71 @@ export const SupplierCatalogPage = () => {
         )}
 
         {/* TAB 3: MY COMMERCIAL OFFERS */}
+        {activeTab === 'archived' && (
+          <Card className="p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-6">
+            <div>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Archived Catalog Records</h2>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Archived products, physical SKUs, and offers preserve all specifications and order history. Restore items within your subscription family quota.
+              </p>
+            </div>
+            {totalArchivedCount === 0 ? (
+              <p className="text-xs text-[var(--text-muted)] py-4">No archived products, SKUs, or commercial offers.</p>
+            ) : (
+              <div className="space-y-5">
+                {archivedProducts.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Archived Products ({archivedProducts.length})</h3>
+                    {archivedProducts.map((sp) => (
+                      <div key={`arch-p-${sp.id}`} className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-primary)]">{sp.title || sp.variety}</div>
+                          <div className="text-[11px] text-[var(--text-secondary)]">ID #{sp.id} · {sp.product_code} · {sp.family_name}</div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => handleRestoreSupplierProduct(sp.id)}>
+                          Restore Product
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {archivedSkus.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Archived Physical SKUs ({archivedSkus.length})</h3>
+                    {archivedSkus.map((sku) => (
+                      <div key={`arch-s-${sku.id}`} className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-primary)]">{supplierSkuDisplayTitle(sku)}</div>
+                          <div className="text-[11px] text-[var(--text-secondary)]">ID #{sku.id} · {sku.sku_code} · {sku.pack_size}{sku.pack_unit}</div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => handleRestoreSku(sku.id)}>
+                          Restore SKU
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {archivedListings.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Archived Commercial Offers ({archivedListings.length})</h3>
+                    {archivedListings.map((l) => (
+                      <div key={`arch-l-${l.id}`} className="p-3.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-primary)]">{l.variant_title || l.spec_title}</div>
+                          <div className="text-[11px] text-[var(--text-secondary)]">ID #{l.id} · {l.listing_code} · PKR {Number(l.base_unit_price).toLocaleString()}</div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => handleRestoreListing(l.id, 'PAUSED')}>
+                          Restore Offer
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        )}
+
         {activeTab === 'offers' && (
           <Card className="p-6 bg-[var(--bg-card)] border-[var(--border-subtle)] space-y-4">
             <div className="flex items-center justify-between">
@@ -1417,6 +1539,11 @@ export const SupplierCatalogPage = () => {
                     {listing.status === 'ACTIVE' && (
                       <Button size="sm" onClick={() => openCreatePoolModal(listing)}>
                         + Create Regular Pool
+                      </Button>
+                    )}
+                    {listing.status === 'ARCHIVED' && (
+                      <Button size="sm" variant="outline" onClick={() => handleRestoreListing(listing.id, 'PAUSED')}>
+                        Restore Offer
                       </Button>
                     )}
                     {listing.status !== 'ARCHIVED' && <Button

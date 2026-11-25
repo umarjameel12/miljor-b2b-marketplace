@@ -57,8 +57,8 @@ export const Navbar = () => {
         }}
         className={`sticky top-0 z-40 border-b backdrop-blur-md transition-colors duration-200 ${isAuthRoute ? 'miljor-auth-navbar' : ''}`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
+        <div className={isAuthRoute ? 'max-w-7xl mx-auto px-5 sm:px-8 lg:px-10' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}>
+          <div className={isAuthRoute ? 'flex items-center justify-between gap-5 py-4' : 'flex items-center justify-between h-16 sm:h-20'}>
             {/* Brand: Refined Champagne-Gold Ribbon M Monogram */}
             <div className="flex items-center gap-6">
               {/* Desktop: Brand Logo links to Home */}

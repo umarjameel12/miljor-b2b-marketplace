@@ -282,7 +282,7 @@ export const RegisterPage = () => {
 
   // Registration Form Body
   const renderForm = () => (
-    <div className="flex flex-col gap-2.5 sm:gap-3 w-full">
+    <div className="flex flex-col gap-2 w-full">
       {/* Top Branding & Positioning */}
       <div className="flex flex-col items-center text-center">
         <Link to="/" aria-label="MilJor Home" className="mb-0.5">
@@ -398,7 +398,7 @@ export const RegisterPage = () => {
       )}
 
       {/* Registration Form Fields */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
         {/* Row 1: Business Name & Authorized Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <Input
@@ -578,7 +578,7 @@ export const RegisterPage = () => {
           size="lg"
           loading={loading}
           disabled={loading || googleLoading}
-          className="w-full mt-1.5 font-semibold shadow-xs justify-center cursor-pointer"
+          className="w-full mt-0.5 font-semibold shadow-xs justify-center cursor-pointer"
           style={{
             backgroundColor: 'var(--brand-accent)',
             color: 'var(--text-on-champagne)',
@@ -587,7 +587,7 @@ export const RegisterPage = () => {
           Get Started
         </Button>
 
-        <div className="flex items-center gap-3 my-0.5" role="separator" aria-label="OR">
+        <div className="flex items-center gap-3" role="separator" aria-label="OR">
           <div className="h-px flex-1" style={{ backgroundColor: 'var(--border-subtle)' }} />
           <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
             OR
@@ -633,7 +633,7 @@ export const RegisterPage = () => {
 
   return (
     <div
-      className="min-h-[calc(100vh-4.5rem)] flex items-center justify-center py-2 sm:py-3 lg:py-4 px-3 sm:px-4 transition-colors duration-300 relative overflow-hidden"
+      className="min-h-[calc(100vh-4.5rem)] flex items-center justify-center py-2 px-3 sm:px-4 transition-colors duration-300 relative overflow-hidden"
       style={{ background: 'var(--bg-auth)' }}
     >
       {/* Preserved Appearance Customizer Control (Hidden from view to prevent clutter) */}
@@ -666,7 +666,7 @@ export const RegisterPage = () => {
                 pageType="register"
                 role={role}
                 showBackgroundImage={preferences.showBackgroundImage}
-                className="lg:col-span-5 min-h-[280px] lg:min-h-[480px]"
+                className="lg:col-span-5 min-h-[240px] lg:min-h-[420px]"
               />
             )}
 
@@ -674,7 +674,7 @@ export const RegisterPage = () => {
             <div
               className={`${
                 preferences.showBrandPanel ? 'lg:col-span-7' : 'col-span-1'
-              } p-4 sm:p-5 lg:p-6 flex flex-col justify-center min-h-[480px]`}
+              } p-4 sm:p-5 flex flex-col justify-center min-h-[420px]`}
               style={{
                 background: 'var(--bg-auth-form)',
                 boxShadow: 'var(--shadow-auth-form)',

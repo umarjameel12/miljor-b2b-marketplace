@@ -67,6 +67,8 @@ export const SupplierSubscriptionPage = () => {
   const [billingHistory, setBillingHistory] = useState([]);
   const [payments, setPayments] = useState([]);
   const [pendingCheckout, setPendingCheckout] = useState(null);
+  const [resumingCheckout, setResumingCheckout] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState('');
 
   const loadSubscriptionData = useCallback(async () => {
     if (!token) {
@@ -99,10 +101,16 @@ export const SupplierSubscriptionPage = () => {
         throw new Error(subBody.error?.message || 'Unable to load your subscription status.');
       }
 
+      const loadedPayments = subBody.data?.payments || [];
       setPlans(plansBody.data?.plans || []);
       setSubscription(subBody.data?.entitlements || null);
       setBillingHistory(subBody.data?.billing_history || []);
-      setPayments(subBody.data?.payments || []);
+      setPayments(loadedPayments);
+      setPendingCheckout((prev) => {
+        if (!prev?.payment?.id) return prev;
+        const match = loadedPayments.find((p) => p.id === prev.payment.id);
+        return match && ['PENDING', 'INITIATED'].includes(match.status) ? prev : null;
+      });
     } catch (err) {
       setLoadError(err.message || 'Failed to load subscription details.');
       setSubscription(null);
@@ -113,6 +121,17 @@ export const SupplierSubscriptionPage = () => {
 
   useEffect(() => {
     loadSubscriptionData();
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadSubscriptionData();
+      }
+    };
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+    return () => {
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+    };
   }, [loadSubscriptionData]);
 
   // Handle return from Safepay checkout (?payment_status=verify&tracker=... or cancelled)
@@ -137,24 +156,46 @@ export const SupplierSubscriptionPage = () => {
           });
           toast.info('Subscription checkout was cancelled. No plan changes were made.');
         } else if (tracker) {
-          const res = await fetch('/api/v1/supplier/subscription/verify', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ tracker_token: tracker }),
-          });
-          const body = await res.json();
-          if (!res.ok) {
-            throw new Error(body.error?.message || 'Payment verification failed.');
+          setProcessingMessage('Confirming your Safepay payment securely. Please wait...');
+          const backoffMs = [1000, 2000, 3000, 5000, 7000];
+          let lastBody = null;
+          for (let attempt = 0; attempt <= backoffMs.length; attempt += 1) {
+            const res = await fetch('/api/v1/supplier/subscription/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ tracker_token: tracker }),
+            });
+            lastBody = await res.json();
+            if (!res.ok) {
+              throw new Error(lastBody.error?.message || 'Payment verification failed.');
+            }
+            if (lastBody.data?.verified || lastBody.data?.activated || lastBody.data?.already_verified || lastBody.data?.status !== 'PENDING') {
+              break;
+            }
+            if (attempt < backoffMs.length) {
+              setProcessingMessage(`Waiting for Safepay confirmation (check ${attempt + 2}/${backoffMs.length + 1})...`);
+              await new Promise((r) => setTimeout(r, backoffMs[attempt]));
+            }
           }
-          if (body.data?.activated || body.data?.already_verified) {
+          setProcessingMessage('');
+          if (lastBody?.data?.pending_admin_approval) {
+            toast.success('Safepay payment verified! Your upgrade is pending admin approval.');
+          } else if (lastBody?.data?.activated || lastBody?.data?.already_verified) {
             toast.success('Safepay payment verified! Your subscription plan is now active.');
-          } else if (body.data?.status === 'PENDING') {
-            toast.info('Payment is still pending confirmation from Safepay. Click Verify Status shortly.');
+          } else if (lastBody?.data?.status === 'PENDING') {
+            toast.info('Payment is still pending confirmation from Safepay. Use Verify Payment below to re-check.');
+          } else if (lastBody?.data?.status === 'CANCELLED') {
+            setPendingCheckout(null);
+            toast.info('Safepay checkout session was cancelled. Click Upgrade / Checkout to start a fresh session.');
+          } else if (lastBody?.data?.status === 'EXPIRED') {
+            setPendingCheckout(null);
+            toast.info('Safepay checkout session expired. Start a fresh checkout session anytime.');
           } else {
-            toast.error(`Payment status: ${body.data?.status || 'FAILED'}. Plan was not activated.`);
+            setPendingCheckout(null);
+            toast.error(`Payment status: ${lastBody?.data?.status || 'FAILED'}. Plan was not activated.`);
           }
         }
         await loadSubscriptionData();
@@ -212,6 +253,7 @@ export const SupplierSubscriptionPage = () => {
         body: JSON.stringify({
           plan_code: targetPlanCode,
           billing_cycle: 'MONTHLY',
+          frontend_origin: window.location.origin,
         }),
       });
       const data = await res.json();
@@ -219,9 +261,16 @@ export const SupplierSubscriptionPage = () => {
         throw new Error(data.error?.message || 'Could not initiate Safepay subscription checkout.');
       }
       setPendingCheckout(data.data);
-      toast.info('Safepay checkout session created. Complete payment to activate your plan.');
+      if (data.data?.already_paid) {
+        setPendingCheckout(null);
+        toast.success('Safepay payment is already verified! Subscription status updated.');
+        await loadSubscriptionData();
+        return;
+      }
+      toast.info('Redirecting to Safepay checkout...');
       if (data.data?.checkout_url && /^https:\/\//i.test(data.data.checkout_url)) {
-        window.open(data.data.checkout_url, '_blank', 'noopener,noreferrer');
+        window.location.assign(data.data.checkout_url);
+        return;
       }
       await loadSubscriptionData();
     } catch (err) {
@@ -246,19 +295,75 @@ export const SupplierSubscriptionPage = () => {
       if (!res.ok) {
         throw new Error(body.error?.message || 'Verification failed.');
       }
-      if (body.data?.activated || body.data?.already_verified) {
+      if (body.data?.pending_admin_approval) {
+        toast.success(`Safepay payment verified! ${payment.plan_code} upgrade is pending admin approval.`);
+        setPendingCheckout(null);
+      } else if (body.data?.activated || body.data?.already_verified) {
         toast.success(`Payment verified! ${payment.plan_code} plan is now active.`);
         setPendingCheckout(null);
       } else if (body.data?.status === 'PENDING') {
         toast.info('Payment is still pending on Safepay.');
+      } else if (body.data?.status === 'CANCELLED') {
+        setPendingCheckout(null);
+        toast.info('This Safepay checkout session was cancelled. Start a fresh checkout session below.');
+      } else if (body.data?.status === 'EXPIRED') {
+        setPendingCheckout(null);
+        toast.info('This Safepay checkout session expired. Start a fresh checkout session below.');
       } else {
-        toast.error(`Payment ${body.data?.status || 'FAILED'}. You can retry checkout anytime.`);
+        setPendingCheckout(null);
+        toast.error(`Payment ${body.data?.status || 'FAILED'}. You can start a fresh checkout anytime.`);
       }
       await loadSubscriptionData();
     } catch (err) {
       toast.error(err.message);
     } finally {
       setVerifyingTracker(false);
+    }
+  };
+
+  const handleResumeCheckout = async (payment) => {
+    if (resumingCheckout || verifyingTracker) return;
+    try {
+      setResumingCheckout(true);
+      const idempotencyKey = `sub-resume-${payment.plan_code}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const res = await fetch('/api/v1/supplier/subscription/checkout/resume', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          payment_id: payment.id,
+          plan_code: payment.plan_code,
+          frontend_origin: window.location.origin,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error?.message || 'Unable to resume Safepay checkout.');
+      }
+      const result = body.data || {};
+      if (result.action === 'ALREADY_PAID') {
+        setPendingCheckout(null);
+        toast.success('Payment was already completed on Safepay! Subscription status updated.');
+      } else if (result.action === 'CREATED_FRESH') {
+        setPendingCheckout(result);
+        toast.info(`Previous session was ${(result.previous_status || 'cancelled').toLowerCase()}. Redirecting to fresh Safepay checkout...`);
+        if (result.checkout_url && /^https:\/\//i.test(result.checkout_url)) {
+          window.location.assign(result.checkout_url);
+          return;
+        }
+      } else if (result.checkout_url && /^https:\/\//i.test(result.checkout_url)) {
+        setPendingCheckout(result);
+        window.location.assign(result.checkout_url);
+        return;
+      }
+      await loadSubscriptionData();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setResumingCheckout(false);
     }
   };
 
@@ -270,7 +375,7 @@ export const SupplierSubscriptionPage = () => {
 
   return (
     <AppShell title="Supplier Subscription">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full min-w-0 overflow-x-hidden space-y-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-2">
           <span className="miljor-section-kicker text-xs uppercase tracking-wider font-semibold block">
@@ -307,7 +412,31 @@ export const SupplierSubscriptionPage = () => {
           </div>
         ) : (
           <>
-            {/* Expiry / Pending Warnings */}
+            {/* Processing / Expiry / Pending / Admin Approval Banners */}
+            {processingMessage && (
+              <div role="status" className="max-w-3xl mx-auto p-4 rounded-2xl border border-[var(--brand-accent)] bg-[var(--bg-surface)] flex items-start gap-3 text-xs">
+                <RefreshCw className="w-4 h-4 text-[var(--brand-accent)] shrink-0 mt-0.5 animate-spin" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-[var(--text-primary)]">Payment Processing</p>
+                  <p className="text-[var(--text-secondary)] mt-0.5 break-words">{processingMessage}</p>
+                </div>
+              </div>
+            )}
+
+            {subscription?.subscription_status === 'PAID_PENDING' && (
+              <div className="max-w-3xl mx-auto p-4 rounded-2xl border border-[var(--brand-accent)] bg-[var(--bg-surface)] flex items-start gap-3 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-[var(--text-primary)]">
+                    Safepay Payment Verified — Pending Admin Approval
+                  </p>
+                  <p className="text-[var(--text-secondary)] mt-0.5">
+                    Your payment has been verified with Safepay. Paid entitlements will activate once an administrator reviews and approves the upgrade.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {subscription?.is_expired && (
               <div className="max-w-3xl mx-auto p-4 rounded-2xl border border-amber-400/50 bg-[var(--bg-surface)] flex items-start gap-3 text-xs">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -337,20 +466,20 @@ export const SupplierSubscriptionPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {(pendingCheckout?.checkout_url || latestPendingPayment?.checkout_url) && (
-                    <a
-                      href={pendingCheckout?.checkout_url || latestPendingPayment?.checkout_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] font-semibold text-[var(--text-primary)]"
+                  {(pendingCheckout?.payment || latestPendingPayment) && (
+                    <button
+                      type="button"
+                      disabled={resumingCheckout || verifyingTracker}
+                      onClick={() => handleResumeCheckout(pendingCheckout?.payment || latestPendingPayment)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] font-semibold text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
                     >
-                      <span>Open Safepay</span>
+                      <span>{resumingCheckout ? 'Checking Safepay...' : 'Open Safepay'}</span>
                       <ExternalLink className="w-3 h-3" />
-                    </a>
+                    </button>
                   )}
                   <button
                     type="button"
-                    disabled={verifyingTracker}
+                    disabled={verifyingTracker || resumingCheckout}
                     onClick={() => handleVerifyPending(pendingCheckout?.payment || latestPendingPayment)}
                     className="landing-gradient-cta px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50"
                   >
@@ -387,7 +516,7 @@ export const SupplierSubscriptionPage = () => {
             )}
 
             {/* Live Pricing Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {plans.map((p) => {
                 const visual = PLAN_VISUALS[p.plan_code] || PLAN_VISUALS.STARTER;
                 const Icon = visual.icon;
@@ -399,7 +528,7 @@ export const SupplierSubscriptionPage = () => {
                 return (
                   <div
                     key={p.plan_code}
-                    className={`relative rounded-3xl p-7 border transition-all duration-200 flex flex-col justify-between bg-[var(--bg-surface)] ${
+                    className={`relative min-w-0 rounded-3xl p-5 sm:p-7 border transition-all duration-200 flex flex-col justify-between bg-[var(--bg-surface)] ${
                       isCurrent
                         ? 'border-[var(--brand-accent)] ring-2 ring-[var(--brand-accent)]/20 shadow-md'
                         : 'border-[var(--border-default)]'
@@ -513,16 +642,16 @@ export const SupplierSubscriptionPage = () => {
                           <td className="py-2.5 pr-4">
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                                pay.status === 'VERIFIED'
+                                pay.status === 'VERIFIED' || pay.status === 'REFUNDED'
                                   ? 'miljor-badge-verified'
-                                  : pay.status === 'PENDING' || pay.status === 'INITIATED'
+                                  : ['PENDING', 'INITIATED', 'REFUND_PENDING', 'REFUND_PROCESSING'].includes(pay.status)
                                     ? 'miljor-badge-provisional'
                                     : 'border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
                               }`}
                             >
-                              {pay.status === 'VERIFIED' ? (
+                              {pay.status === 'VERIFIED' || pay.status === 'REFUNDED' ? (
                                 <CheckCircle2 className="w-3 h-3" />
-                              ) : pay.status === 'PENDING' || pay.status === 'INITIATED' ? (
+                              ) : ['PENDING', 'INITIATED', 'REFUND_PENDING', 'REFUND_PROCESSING'].includes(pay.status) ? (
                                 <Clock className="w-3 h-3" />
                               ) : (
                                 <XCircle className="w-3 h-3" />

@@ -72,6 +72,11 @@ export const catalogApi = {
     return res.data;
   },
 
+  restoreSupplierProduct: async (productId) => {
+    const res = await apiClient.post(`/catalog/supplier-products/${productId}/restore`);
+    return res.data;
+  },
+
   createSupplierSku: async (payload) => {
     const res = await apiClient.post('/catalog/supplier-skus', payload);
     return res.data;
@@ -99,6 +104,11 @@ export const catalogApi = {
 
   archiveSupplierSku: async (skuId) => {
     const res = await apiClient.post(`/catalog/supplier-skus/${skuId}/archive`);
+    return res.data;
+  },
+
+  restoreSupplierSku: async (skuId) => {
+    const res = await apiClient.post(`/catalog/supplier-skus/${skuId}/restore`);
     return res.data;
   },
 
