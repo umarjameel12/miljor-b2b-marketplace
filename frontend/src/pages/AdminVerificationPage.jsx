@@ -203,22 +203,35 @@ export const AdminVerificationPage = () => {
           color: var(--text-primary);
         }
         .admin-action-btn {
-          background-color: #e7d8b4;
+          background: linear-gradient(180deg, #fbf7ec 0%, #efe1c1 100%);
           color: #0c2b24;
-          border: 1px solid rgba(184, 148, 82, 0.45);
-          box-shadow: 0 1px 2px rgba(12, 43, 36, 0.05);
+          border: 1px solid rgba(176, 138, 68, 0.45);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 2px 6px rgba(12, 43, 36, 0.06), 0 1px 2px rgba(176, 138, 68, 0.14);
+          transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
         }
         .admin-action-btn:hover:not(:disabled) {
-          background-color: #decb9e;
-          border-color: rgba(184, 148, 82, 0.65);
+          background: linear-gradient(180deg, #fdfaf2 0%, #e8d5aa 100%);
+          border-color: rgba(176, 138, 68, 0.68);
+          transform: translateY(-1px);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 10px rgba(12, 43, 36, 0.09), 0 2px 4px rgba(176, 138, 68, 0.18);
+        }
+        .admin-action-btn:active:not(:disabled) {
+          transform: translateY(0);
         }
         html.dark .admin-action-btn {
-          background-color: var(--brand-primary);
+          background: linear-gradient(180deg, #0b392e 0%, #06251d 100%);
           color: var(--text-on-emerald);
-          border: 1px solid transparent;
+          border: 1px solid rgba(200, 178, 118, 0.24);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.28);
         }
         html.dark .admin-action-btn:hover:not(:disabled) {
-          opacity: 0.92;
+          background: linear-gradient(180deg, #0e4538 0%, #082e24 100%);
+          border-color: rgba(200, 178, 118, 0.45);
+          transform: translateY(-1px);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.36);
+        }
+        html.dark .admin-action-btn:active:not(:disabled) {
+          transform: translateY(0);
         }
       `}</style>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
