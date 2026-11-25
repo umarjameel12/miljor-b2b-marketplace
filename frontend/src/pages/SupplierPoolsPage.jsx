@@ -314,7 +314,7 @@ export function SupplierPoolsPage(){
       A draft operation may have succeeded despite a network error. Refresh Pool Management and check existing drafts; do not create another until reconciled.
     </p>}
     {operationsError&&<p role="status" className="text-xs text-amber-600">{operationsError}</p>}
-    {!loading&&<SupplierPoolOperationsPanel {...operations}/>}
+    {!loading&&<SupplierPoolOperationsPanel {...operations} onRefresh={load}/>}
     {creating?<section className="max-w-3xl rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-5 space-y-4">
       <div className="flex items-center gap-2"><Layers size={18}/><h2 className="font-semibold text-lg">{edit?'Edit':'Create'} Pool Draft</h2></div>
       {!edit&&<div className="grid grid-cols-2 gap-2">

@@ -575,10 +575,11 @@ export const SupplierCatalogPage = () => {
         await catalogApi.restoreSupplierSku(listingObj.supplier_sku_id);
       }
       await productsApi.restoreListing(listingId, targetStatus);
-      toast.success(`Commercial offer restored (${targetStatus}).`);
+      toast.success(`Commercial offer restored (${targetStatus === 'ACTIVE' ? 'Active' : 'Paused'}).`);
       await loadPortalData();
     } catch (err) {
-      toast.error(err.response?.data?.error?.message || 'Failed to restore commercial offer.');
+      console.error('[SupplierCatalog] Restore listing error:', err);
+      toast.error(err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Failed to restore commercial offer.');
     }
   };
 
@@ -1497,10 +1498,10 @@ export const SupplierCatalogPage = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Button size="sm" variant="outline" onClick={() => handleRestoreListing(l, 'PAUSED')}>
-                            Restore (Paused)
+                            Restore as Inactive
                           </Button>
                           <Button size="sm" onClick={() => handleRestoreListing(l, 'ACTIVE')}>
-                            Unarchive &amp; Activate
+                            Unarchive &amp; Publish
                           </Button>
                         </div>
                       </div>

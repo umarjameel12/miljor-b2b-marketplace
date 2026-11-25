@@ -1,17 +1,34 @@
 import React,{useState} from 'react';
 import {Link} from 'react-router-dom';
-import {BarChart3,Truck,Package,AlertTriangle,Info,MapPin} from 'lucide-react';
+import {BarChart3,Truck,Package,AlertTriangle,Info,MapPin,RotateCcw} from 'lucide-react';
+import {toast} from 'react-toastify';
+import productsApi from '../../api/products';
 
 // All data from supplier-scoped READ ONLY APIs. No simulated sales, savings or payouts.
-export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}){
+export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts,onRefresh}){
   const [section,setSection]=useState('INVENTORY');
+  const [restoringId,setRestoringId]=useState(null);
   const items=inventory?.listings||[];
   const categories=[['INVENTORY','Inventory'],['DELIVERY','Delivery'],['INSIGHTS','Insights'],['ALERTS','Alerts']];
+
+  const handleQuickUnarchive=async(item)=>{
+    try{
+      setRestoringId(item.supplier_listing_id);
+      await productsApi.restoreListing(item.supplier_listing_id,'ACTIVE');
+      toast.success('Offer unarchived and activated.');
+      await onRefresh?.();
+    }catch(err){
+      const msg=err.response?.data?.error?.message||err.response?.data?.message||err.message||'Could not unarchive offer.';
+      toast.error(msg);
+    }finally{
+      setRestoringId(null);
+    }
+  };
   return <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-4 sm:p-5 space-y-4" aria-label="Supplier pool operations">
     <header className="flex flex-wrap items-start justify-between gap-2">
       <div><h2 className="text-lg font-semibold flex items-center gap-2"><BarChart3 size={18} className="text-[var(--brand-accent)]"/> Pool Operations</h2>
         <p className="text-xs text-[var(--text-muted)]">Live inventory, delivery terms, pool statuses, and alerts.</p></div>
-      <Link to="/supplier/catalog?tab=archived" className="text-xs font-semibold text-[var(--brand-accent)] hover:underline">Manage &amp; Unarchive Archived Items</Link>
+      <Link to="/supplier/catalog?tab=archived" className="px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[var(--brand-accent)] text-xs font-medium text-[var(--text-primary)] transition-colors">View Archived</Link>
     </header>
     <nav className="flex flex-wrap gap-2" aria-label="Pool operations sections">
       {categories.map(([id,label])=><button type="button" key={id} onClick={()=>setSection(id)}
@@ -27,7 +44,7 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
           {items.map(x=><div key={x.supplier_listing_id} className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
             <div className="flex items-center justify-between gap-2"><div className="font-medium text-sm">{x.sku_title||x.listing_code}</div>
               <div className="flex items-center gap-1.5">
-                {x.status==='ARCHIVED'&&<Link to="/supplier/catalog?tab=archived" className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-[var(--brand-accent)] text-[var(--brand-accent)] hover:underline">Archived · Unarchive</Link>}
+                {x.status==='ARCHIVED'&&<span className="px-2 py-0.5 rounded-full text-[10px] font-medium border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]">Archived</span>}
                 {x.allocation_state!=='RECONCILED'&&<AlertTriangle size={16} className="text-amber-600"/>}
               </div></div>
             <p className="text-[11px] text-[var(--text-muted)]">{x.listing_code} · {x.status} · {x.unit||'Unknown unit'}</p>
@@ -37,6 +54,19 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
               <div><span className="text-[var(--text-muted)] block">Pending allocation</span><b>{x.pending_allocated}</b></div>
               <div><span className="text-[var(--text-muted)] block">Committed</span><b>{x.committed_allocated}</b></div>
             </div>:<p className="text-xs text-amber-600">{x.note||'Inventory requires reconciliation before any new pool publication.'}</p>}
+            {x.status==='ARCHIVED'&&<div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+              <button
+                type="button"
+                disabled={restoringId===x.supplier_listing_id}
+                onClick={()=>handleQuickUnarchive(x)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{backgroundColor:'var(--brand-accent)',color:'var(--text-on-champagne)'}}
+              >
+                <RotateCcw size={12}/>
+                <span>{restoringId===x.supplier_listing_id?'Unarchiving…':'Unarchive & Activate'}</span>
+              </button>
+              <Link to="/supplier/catalog?tab=archived" className="text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]">Open in Catalog</Link>
+            </div>}
           </div>)}
         </div>}
     </div>}
