@@ -242,7 +242,6 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
               </div>
               <div className="hidden sm:flex flex-col">
                 <span className="text-xs font-semibold leading-tight">{s.label}</span>
-                <span className="text-[10px] text-[var(--text-muted)]">Step {s.num}</span>
               </div>
             </button>
           );
@@ -554,9 +553,8 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
               variant="outline"
               size="md"
               onClick={prevStep}
-              className="flex-1 sm:flex-initial items-center gap-1.5 cursor-pointer"
+              className="flex-1 sm:flex-initial cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
             </Button>
           )}
@@ -568,9 +566,8 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
             loading={saving}
             disabled={saving || submitting}
             onClick={handleSaveDraft}
-            className="flex-1 sm:flex-initial items-center gap-1.5 cursor-pointer text-xs"
+            className="flex-1 sm:flex-initial cursor-pointer text-xs"
           >
-            <Save className="w-4 h-4" />
             <span>Save Draft</span>
           </Button>
         </div>
@@ -582,14 +579,13 @@ export const SupplierOnboardingWizard = ({ initialProfile, onProfileUpdated }) =
               variant="primary"
               size="md"
               onClick={nextStep}
-              className="w-full sm:w-auto items-center gap-2 cursor-pointer font-semibold shadow-xs"
+              className="w-full sm:w-auto cursor-pointer font-semibold shadow-xs"
               style={{
                 backgroundColor: 'var(--brand-accent)',
                 color: 'var(--text-on-champagne)',
               }}
             >
               <span>Continue</span>
-              <ArrowRight className="w-4 h-4" />
             </Button>
           ) : (
             <Button

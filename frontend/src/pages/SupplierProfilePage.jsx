@@ -197,11 +197,9 @@ export const SupplierProfilePage = () => {
               <Button
                 size="sm"
                 onClick={() => navigate('/supplier/catalog')}
-                className="flex items-center gap-1.5 text-xs whitespace-nowrap shrink-0"
+                className="text-xs whitespace-nowrap shrink-0"
               >
-                <Package className="w-3.5 h-3.5 shrink-0" />
-                <span>Catalog &amp; Offers</span>
-                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                Catalog &amp; Offers
               </Button>
             </div>
           </div>

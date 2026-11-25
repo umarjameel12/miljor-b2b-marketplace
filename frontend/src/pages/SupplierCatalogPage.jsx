@@ -549,8 +549,13 @@ export const SupplierCatalogPage = () => {
     }
   };
 
-  const handleRestoreSku = async (skuId) => {
+  const handleRestoreSku = async (skuOrId) => {
+    const skuId = typeof skuOrId === 'object' ? skuOrId.id : skuOrId;
+    const skuObj = typeof skuOrId === 'object' ? skuOrId : mySupplierSkus.find((s) => s.id === skuId);
     try {
+      if (skuObj?.supplier_product_id && archivedProducts.some((p) => Number(p.id) === Number(skuObj.supplier_product_id))) {
+        await catalogApi.restoreSupplierProduct(skuObj.supplier_product_id);
+      }
       await catalogApi.restoreSupplierSku(skuId);
       toast.success('Physical SKU restored to published status.');
       await loadPortalData();
@@ -559,8 +564,16 @@ export const SupplierCatalogPage = () => {
     }
   };
 
-  const handleRestoreListing = async (listingId, targetStatus = 'PAUSED') => {
+  const handleRestoreListing = async (listingOrId, targetStatus = 'PAUSED') => {
+    const listingId = typeof listingOrId === 'object' ? listingOrId.id : listingOrId;
+    const listingObj = typeof listingOrId === 'object' ? listingOrId : myListings.find((l) => l.id === listingId);
     try {
+      if (listingObj?.supplier_product_id && archivedProducts.some((p) => Number(p.id) === Number(listingObj.supplier_product_id))) {
+        await catalogApi.restoreSupplierProduct(listingObj.supplier_product_id);
+      }
+      if (listingObj?.supplier_sku_id && archivedSkus.some((s) => Number(s.id) === Number(listingObj.supplier_sku_id))) {
+        await catalogApi.restoreSupplierSku(listingObj.supplier_sku_id);
+      }
       await productsApi.restoreListing(listingId, targetStatus);
       toast.success(`Commercial offer restored (${targetStatus}).`);
       await loadPortalData();
@@ -1015,10 +1028,10 @@ export const SupplierCatalogPage = () => {
               </div>
               <Button
                 size="sm"
+                icon={Plus}
                 onClick={openCreateSupplierProductModal}
-                className="flex items-center gap-1.5 text-xs whitespace-nowrap shrink-0"
+                className="text-xs whitespace-nowrap shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" />
                 New Product
               </Button>
             </div>
@@ -1128,16 +1141,20 @@ export const SupplierCatalogPage = () => {
                         key={cat.id}
                         type="button"
                         onClick={() => handleSelectCategory(String(cat.id))}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between ${
+                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-all flex items-center justify-between cursor-pointer ${
                           isSelected
-                            ? 'bg-[var(--brand-accent)]/15 border-[var(--brand-accent)]/50 text-[var(--text-primary)] font-semibold'
-                            : 'bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--brand-accent)]/40'
+                            ? 'bg-[var(--brand-accent)] border-[var(--brand-accent)] text-[var(--text-on-champagne)] font-semibold shadow-xs'
+                            : 'bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--brand-accent)]/50'
                         }`}
                       >
                         <div>
                           <div className="font-semibold">{cat.name}</div>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-[var(--bg-card)] border border-[var(--border-subtle)]">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] tabular-nums ${
+                          isSelected
+                            ? 'bg-black/10 text-[var(--text-on-champagne)]'
+                            : 'bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                        }`}>
                           {cat.active_family_count} families
                         </span>
                       </button>
@@ -1462,7 +1479,7 @@ export const SupplierCatalogPage = () => {
                           <div className="text-xs font-bold text-[var(--text-primary)]">{supplierSkuDisplayTitle(sku)}</div>
                           <div className="text-[11px] text-[var(--text-secondary)]">ID #{sku.id} · {sku.sku_code} · {sku.pack_size}{sku.pack_unit}</div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => handleRestoreSku(sku.id)}>
+                        <Button size="sm" variant="outline" onClick={() => handleRestoreSku(sku)}>
                           Restore SKU
                         </Button>
                       </div>
@@ -1479,10 +1496,10 @@ export const SupplierCatalogPage = () => {
                           <div className="text-[11px] text-[var(--text-secondary)]">ID #{l.id} · {l.listing_code} · PKR {Number(l.base_unit_price).toLocaleString()}</div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleRestoreListing(l.id, 'PAUSED')}>
+                          <Button size="sm" variant="outline" onClick={() => handleRestoreListing(l, 'PAUSED')}>
                             Restore (Paused)
                           </Button>
-                          <Button size="sm" onClick={() => handleRestoreListing(l.id, 'ACTIVE')}>
+                          <Button size="sm" onClick={() => handleRestoreListing(l, 'ACTIVE')}>
                             Unarchive &amp; Activate
                           </Button>
                         </div>

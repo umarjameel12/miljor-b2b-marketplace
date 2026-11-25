@@ -24,7 +24,7 @@ const PLAN_VISUALS = {
     tagline: 'Ideal for independent producers & single-commodity millers',
     popular: false,
     highlights: [
-      'Up to 4 active canonical product families',
+      'Up to 4 active product families',
       'Unlimited physical SKUs within allowed families',
       'Standard Lahore cluster order routing',
       'Direct bank escrow settlement (T+2)',
@@ -35,7 +35,7 @@ const PLAN_VISUALS = {
     tagline: 'For established distributors expanding bulk B2B restaurant reach',
     popular: true,
     highlights: [
-      'Up to 13 active canonical product families',
+      'Up to 13 active product families',
       'Reduced 2% supplier transaction fee',
       'Priority matching on Sourcing Hub open requests',
       'Flash pool clearance & multi-hub cluster routing',
@@ -46,7 +46,7 @@ const PLAN_VISUALS = {
     tagline: 'For major mills, commodity importers & large-scale FMCG wholesalers',
     popular: false,
     highlights: [
-      'Up to 25 active canonical product families',
+      'Up to 25 active product families',
       'Lowest 1.5% supplier transaction fee',
       'Full Sourcing Hub open-market & collective access',
       'Dedicated Lahore account & demand intelligence',
@@ -156,7 +156,7 @@ export const SupplierSubscriptionPage = () => {
           });
           toast.info('Subscription checkout was cancelled. No plan changes were made.');
         } else if (tracker) {
-          setProcessingMessage('Confirming your Safepay payment securely. Please wait...');
+          setProcessingMessage('Verifying your payment...');
           const backoffMs = [1000, 2000, 3000, 5000, 7000];
           let lastBody = null;
           for (let attempt = 0; attempt <= backoffMs.length; attempt += 1) {
@@ -170,32 +170,31 @@ export const SupplierSubscriptionPage = () => {
             });
             lastBody = await res.json();
             if (!res.ok) {
-              throw new Error(lastBody.error?.message || 'Payment verification failed.');
+              throw new Error(lastBody.error?.message || 'Payment could not be verified. Please contact support.');
             }
             if (lastBody.data?.verified || lastBody.data?.activated || lastBody.data?.already_verified || lastBody.data?.status !== 'PENDING') {
               break;
             }
             if (attempt < backoffMs.length) {
-              setProcessingMessage(`Waiting for Safepay confirmation (check ${attempt + 2}/${backoffMs.length + 1})...`);
+              setProcessingMessage('Payment is still processing. We are checking again.');
               await new Promise((r) => setTimeout(r, backoffMs[attempt]));
             }
           }
           setProcessingMessage('');
           if (lastBody?.data?.pending_admin_approval) {
-            toast.success('Safepay payment verified! Your upgrade is pending admin approval.');
+            setPendingCheckout(null);
+            toast.success('Payment received. Awaiting Admin approval.');
           } else if (lastBody?.data?.activated || lastBody?.data?.already_verified) {
-            toast.success('Safepay payment verified! Your subscription plan is now active.');
+            setPendingCheckout(null);
+            toast.success('Subscription activated');
           } else if (lastBody?.data?.status === 'PENDING') {
-            toast.info('Payment is still pending confirmation from Safepay. Use Verify Payment below to re-check.');
-          } else if (lastBody?.data?.status === 'CANCELLED') {
+            toast.info('Payment is still processing. We are checking again.');
+          } else if (lastBody?.data?.status === 'CANCELLED' || lastBody?.data?.status === 'EXPIRED' || lastBody?.data?.status === 'FAILED') {
             setPendingCheckout(null);
-            toast.info('Safepay checkout session was cancelled. Click Upgrade / Checkout to start a fresh session.');
-          } else if (lastBody?.data?.status === 'EXPIRED') {
-            setPendingCheckout(null);
-            toast.info('Safepay checkout session expired. Start a fresh checkout session anytime.');
+            toast.info('Payment failed or cancelled.');
           } else {
             setPendingCheckout(null);
-            toast.error(`Payment status: ${lastBody?.data?.status || 'FAILED'}. Plan was not activated.`);
+            toast.error('Payment could not be verified. Please contact support.');
           }
         }
         await loadSubscriptionData();
@@ -296,22 +295,19 @@ export const SupplierSubscriptionPage = () => {
         throw new Error(body.error?.message || 'Verification failed.');
       }
       if (body.data?.pending_admin_approval) {
-        toast.success(`Safepay payment verified! ${payment.plan_code} upgrade is pending admin approval.`);
+        toast.success('Payment received. Awaiting Admin approval.');
         setPendingCheckout(null);
       } else if (body.data?.activated || body.data?.already_verified) {
-        toast.success(`Payment verified! ${payment.plan_code} plan is now active.`);
+        toast.success('Subscription activated');
         setPendingCheckout(null);
       } else if (body.data?.status === 'PENDING') {
-        toast.info('Payment is still pending on Safepay.');
-      } else if (body.data?.status === 'CANCELLED') {
+        toast.info('Payment is still processing. We are checking again.');
+      } else if (body.data?.status === 'CANCELLED' || body.data?.status === 'EXPIRED' || body.data?.status === 'FAILED') {
         setPendingCheckout(null);
-        toast.info('This Safepay checkout session was cancelled. Start a fresh checkout session below.');
-      } else if (body.data?.status === 'EXPIRED') {
-        setPendingCheckout(null);
-        toast.info('This Safepay checkout session expired. Start a fresh checkout session below.');
+        toast.info('Payment failed or cancelled.');
       } else {
         setPendingCheckout(null);
-        toast.error(`Payment ${body.data?.status || 'FAILED'}. You can start a fresh checkout anytime.`);
+        toast.error('Payment could not be verified. Please contact support.');
       }
       await loadSubscriptionData();
     } catch (err) {
@@ -425,7 +421,7 @@ export const SupplierSubscriptionPage = () => {
 
             {subscription?.subscription_status === 'PAID_PENDING' && (
               <div className="max-w-3xl mx-auto p-4 rounded-2xl border border-[var(--brand-accent)] bg-[var(--bg-surface)] flex items-start gap-3 text-xs">
-                <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-[var(--brand-accent)] shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-[var(--text-primary)]">
                     Safepay Payment Verified — Pending Admin Approval

@@ -1351,25 +1351,25 @@ export const RfqPage = () => {
                   {savedRequests.map(request=>(
                     <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                       <span>{request.request_code} · {request.status} · {request.delivery_area}</span>
-                      <div className="flex gap-3">
+                      <div className="flex flex-wrap gap-2">
                         {request.status==='DRAFT' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
-                            className="text-[var(--brand-accent)] underline text-xs">Edit Draft</button>}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Edit Draft</button>}
                         {request.status==='DRAFT'&&request.ownership==='COLLECTIVE'&&request.frequency==='ONE_TIME' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>createCollectiveFromDraft(request)}
-                            className="text-[var(--brand-accent)] underline text-xs">Set Up Private Group</button>}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Set Up Private Group</button>}
                         {request.status==='DRAFT'&&request.ownership==='SINGLE_BUYER'&&request.frequency!=='ONE_TIME' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>createRecurringFromDraft(request)}
-                            className="text-[var(--brand-accent)] underline text-xs">Create Recurring Schedule</button>}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Create Recurring Schedule</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={matchingBusy} onClick={()=>viewSupplierMatches(request.id)}
-                            className="text-[var(--brand-accent)] underline text-xs">Find suppliers</button>}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Find suppliers</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={quoteBusy} onClick={()=>viewBuyerQuotes(request.id)}
-                            className="text-[var(--brand-accent)] underline text-xs">View quotes</button>}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">View quotes</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={quoteBusy} onClick={()=>viewSmartComparison(request.id)}
-                            className="text-[var(--brand-accent)] underline text-xs">Compare offers</button>}
+                            className="px-2.5 py-1 rounded-lg border border-[var(--brand-accent)] bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] text-xs font-semibold cursor-pointer transition-colors">Compare offers</button>}
                         {request.status==='OPEN' &&
                           <button
                             type="button"
