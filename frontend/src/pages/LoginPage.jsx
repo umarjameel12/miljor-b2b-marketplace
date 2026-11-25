@@ -256,7 +256,7 @@ export const LoginPage = () => {
 
         <Button
           type="submit"
-          variant="primary"
+          variant="accent"
           size="lg"
           loading={loading}
           disabled={loading || googleLoading}

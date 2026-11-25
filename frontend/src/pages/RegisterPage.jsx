@@ -572,7 +572,7 @@ export const RegisterPage = () => {
 
         <Button
           type="submit"
-          variant="primary"
+          variant="accent"
           size="lg"
           loading={loading}
           disabled={loading || googleLoading}

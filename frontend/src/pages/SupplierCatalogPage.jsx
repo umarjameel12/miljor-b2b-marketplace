@@ -1270,7 +1270,7 @@ export const SupplierCatalogPage = () => {
                         </div>
                         <Button
                           size="sm"
-                          variant={myExistingOffer ? 'outline' : 'primary'}
+                          variant="primary"
                           onClick={() => openCreateOfferModal(variant)}
                           className="text-xs shrink-0"
                         >

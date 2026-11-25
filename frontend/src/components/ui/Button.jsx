@@ -45,7 +45,8 @@ export const Button = ({
     },
   };
 
-  const isPrimary = !variant || variant === 'primary' || !(variant in variantStyles);
+  const hasCustomBg = Boolean(props.style?.backgroundColor || props.style?.background);
+  const isPrimary = !hasCustomBg && (!variant || variant === 'primary' || !(variant in variantStyles));
   const style = variantStyles[variant];
 
   return (
