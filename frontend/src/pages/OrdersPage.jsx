@@ -297,11 +297,7 @@ export const OrdersPage = () => {
               <Link to="/login">
                 <button
                   type="button"
-                  className="px-4 py-2.5 rounded-full text-xs font-medium border transition-colors cursor-pointer"
-                  style={{
-                    borderColor: 'var(--border-default)',
-                    color: 'var(--text-primary)',
-                  }}
+                  className="miljor-btn-primary px-4 py-2.5 rounded-full text-xs font-semibold cursor-pointer"
                 >
                   Sign In to Account
                 </button>

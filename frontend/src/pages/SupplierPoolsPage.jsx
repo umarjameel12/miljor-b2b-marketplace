@@ -305,7 +305,7 @@ export function SupplierPoolsPage(){
         <p className="text-sm text-[var(--text-muted)]">Manage regular and flash wholesale pools, stock allocations, and delivery readiness.</p>
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={load} className="rounded-xl border border-[var(--border-default)] px-3 py-2 flex items-center gap-2 text-sm hover:bg-[var(--bg-card)] transition"><RefreshCw size={15}/>Refresh</button>
+        <button type="button" onClick={load} className="miljor-btn-primary rounded-xl px-3.5 py-2 inline-flex items-center gap-2 text-xs font-semibold cursor-pointer"><RefreshCw size={15}/>Refresh</button>
         <button type="button" onClick={()=>creating?close():openCreate(params.get('type')?.toUpperCase()==='FLASH'?'FLASH':'REGULAR',params.get('listing')||'')} className="rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-[#072a21] font-semibold flex gap-2 items-center text-sm shadow-xs hover:opacity-95 transition"><Plus size={16}/>{creating?'Back to pools':'Create Pool'}</button>
       </div>
     </header>
@@ -399,7 +399,7 @@ export function SupplierPoolsPage(){
           </p>}
         </>}
         <div className="flex flex-wrap gap-2 justify-end pt-2">
-          <button type="button" onClick={close} className="px-4 py-2 rounded-xl border text-sm">Cancel</button>
+          <button type="button" onClick={close} className="miljor-btn-primary px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer">Cancel</button>
           <button disabled={busy||!chosen||uncertainDraft} type="submit" className="px-4 py-2 rounded-xl bg-[var(--brand-accent)] text-[#072a21] font-semibold disabled:opacity-50 text-sm shadow-xs hover:opacity-95 transition">{busy?'Saving…':'Save Draft'}</button>
         </div>
       </form>}
@@ -431,7 +431,7 @@ export function SupplierPoolsPage(){
           <CountdownTimer deadline={pool.expires_at} serverTime={data.server_time} compact label="Closes in"/>:
           'No deadline'}</div>
         <div className="flex flex-wrap gap-2">
-          {pool.can_edit&&<button onClick={()=>openEdit(pool)} className="border rounded-lg px-3 py-1.5 text-xs">Edit Draft</button>}
+          {pool.can_edit&&<button onClick={()=>openEdit(pool)} className="miljor-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer">Edit Draft</button>}
           {pool.can_publish&&<button onClick={()=>setConfirm({pool,action:'PUBLISH'})} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold px-3 py-1.5 rounded-lg text-xs flex gap-1 items-center shadow-xs"><Lock size={12}/>Review & Publish</button>}
           {['DRAFT','ACTIVE'].includes(pool.status)&&<button onClick={()=>setConfirm({pool,action:'CANCEL'})} className="border border-amber-600 text-amber-600 px-3 py-1.5 rounded-lg text-xs">Cancel</button>}
         </div>
@@ -440,7 +440,7 @@ export function SupplierPoolsPage(){
     {confirm&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true"><div className="max-w-md w-full rounded-2xl p-5 bg-[var(--bg-card)] space-y-4">
       <h2 className="text-lg font-bold">{confirm.action==='PUBLISH'?'Publish and lock commercial terms?':'Cancel this pool?'}</h2>
       <p className="text-sm text-[var(--text-secondary)]">{confirm.pool.type} · {confirm.pool.code}. {confirm.action==='PUBLISH'?'The original B4/B5 engine will verify stock, subscription, ownership and deadlines before publishing.':'Cancellation may fail if buyers already have protected commitments.'}</p>
-      <div className="flex justify-end gap-2"><button onClick={()=>setConfirm(null)} disabled={busy} className="border rounded-lg px-3 py-2 text-sm">Back</button><button onClick={runAction} disabled={busy} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-sm">{busy?'Working…':'Confirm '+confirm.action.toLowerCase()}</button></div>
+      <div className="flex justify-end gap-2"><button onClick={()=>setConfirm(null)} disabled={busy} className="miljor-btn-primary rounded-lg px-3 py-2 text-sm font-semibold cursor-pointer">Back</button><button onClick={runAction} disabled={busy} className="bg-[var(--brand-accent)] text-[#072a21] font-semibold rounded-lg px-4 py-2 text-sm cursor-pointer">{busy?'Working…':'Confirm '+confirm.action.toLowerCase()}</button></div>
     </div></div>}
   </div></AppShell>;
 }

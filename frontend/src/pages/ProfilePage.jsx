@@ -269,8 +269,7 @@ export const ProfilePage = () => {
                   <button
                     type="button"
                     onClick={() => setEditingCluster(false)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer transition-colors"
-                    style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                    className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                   >
                     Cancel
                   </button>

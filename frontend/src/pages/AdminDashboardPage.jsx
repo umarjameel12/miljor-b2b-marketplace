@@ -171,7 +171,7 @@ export function AdminDashboardPage() {
                   <p className="text-2xl font-bold tabular-nums">{loading ? '…' : pending.length} <span className="text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>applications awaiting review</span></p>
                 </div>
               </div>
-              <button type="button" onClick={refresh} disabled={loading} className="inline-flex flex-row items-center justify-center gap-2 px-3.5 h-9 text-xs font-medium leading-none whitespace-nowrap rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
+              <button type="button" onClick={refresh} disabled={loading} className="miljor-btn-primary inline-flex flex-row items-center justify-center gap-2 px-3.5 h-9 text-xs font-semibold leading-none whitespace-nowrap rounded-lg cursor-pointer disabled:opacity-50">
                 <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
@@ -196,7 +196,7 @@ export function AdminDashboardPage() {
                 <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Verified Safepay subscriptions</p>
                 <h2 className="text-lg font-bold tabular-nums">Pending approvals ({pendingSubs.length})</h2>
               </div>
-              <button type="button" onClick={refresh} disabled={loading} className="inline-flex flex-row items-center justify-center gap-2 px-3.5 h-9 text-xs font-medium leading-none whitespace-nowrap rounded-lg border cursor-pointer hover:border-[var(--brand-accent)] transition-colors disabled:opacity-50" style={{ borderColor: 'var(--border-subtle)' }}>
+              <button type="button" onClick={refresh} disabled={loading} className="miljor-btn-primary inline-flex flex-row items-center justify-center gap-2 px-3.5 h-9 text-xs font-semibold leading-none whitespace-nowrap rounded-lg cursor-pointer disabled:opacity-50">
                 <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
@@ -337,8 +337,7 @@ export function AdminDashboardPage() {
                         type="button"
                         disabled={refundBusyId === rf.subscription_id}
                         onClick={() => handleRetryRefund(rf.subscription_id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                        style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}
+                        className="miljor-btn-primary inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 whitespace-nowrap"
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Retry Refund
                       </button>
@@ -348,8 +347,7 @@ export function AdminDashboardPage() {
                         type="button"
                         disabled={refundBusyId === rf.subscription_id}
                         onClick={() => handleSyncRefund(rf.subscription_id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                        style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}
+                        className="miljor-btn-primary inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 whitespace-nowrap"
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Sync Status
                       </button>
