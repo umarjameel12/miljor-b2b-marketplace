@@ -499,6 +499,71 @@ html.dark .miljor-btn-outline:active:not(:disabled) {
   transform: translateY(0);
 }
 
+/* Luxury champagne sheen sweep for Explore Pools & Request a Quote CTAs (revocable via miljor_cta_shine=off) */
+.miljor-cta-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.miljor-cta-shine::after {
+  content: '';
+  position: absolute;
+  inset: -20% auto -20% -60%;
+  width: 48%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 252, 238, 0.06) 22%,
+    rgba(255, 253, 244, 0.46) 50%,
+    rgba(255, 252, 238, 0.06) 78%,
+    transparent 100%
+  );
+  transform: skewX(-22deg) translateX(0);
+  pointer-events: none;
+  z-index: 1;
+  animation: miljor-cta-sheen 4.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.miljor-cta-shine--delayed::after {
+  animation-delay: 0.65s;
+}
+.miljor-cta-shine:hover::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 252, 238, 0.10) 20%,
+    rgba(255, 254, 248, 0.56) 50%,
+    rgba(255, 252, 238, 0.10) 80%,
+    transparent 100%
+  );
+}
+@keyframes miljor-cta-sheen {
+  0%, 58% {
+    left: -65%;
+    opacity: 0;
+  }
+  64% {
+    opacity: 1;
+  }
+  92% {
+    left: 135%;
+    opacity: 0.9;
+  }
+  100% {
+    left: 135%;
+    opacity: 0;
+  }
+}
+html[data-miljor-cta-shine="off"] .miljor-cta-shine::after {
+  display: none !important;
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .miljor-cta-shine::after {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
 /* Authentication-only segmented controls: selected gold focus glow in both themes. */
 .auth-segment-active {
   box-shadow: 0 0 0 1px var(--border-default), 0 0 14px 1px var(--brand-accent-soft), 0 3px 9px rgba(20, 30, 25, 0.10);

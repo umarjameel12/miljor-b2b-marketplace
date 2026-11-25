@@ -413,13 +413,20 @@ export const LandingPage = () => {
               Wholesale procurement, made easier for growing food businesses.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <button type="button"
-      onClick={scrollToPools}
-      className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold"
-      style={buttonGold}>
-      Explore Pools
-    </button>
-              <Link to={requestQuoteDestination} state={quoteState} className="landing-gradient-cta inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold" style={buttonGold}>Request a Quote</Link>
+              {(() => {
+                const shineCls = typeof window !== 'undefined' && window.localStorage?.getItem('miljor_cta_shine') === 'off' ? '' : 'miljor-cta-shine';
+                return (
+                  <>
+                    <button type="button"
+                      onClick={scrollToPools}
+                      className={`landing-gradient-cta ${shineCls} inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold`}
+                      style={buttonGold}>
+                      Explore Pools
+                    </button>
+                    <Link to={requestQuoteDestination} state={quoteState} className={`landing-gradient-cta ${shineCls ? `${shineCls} miljor-cta-shine--delayed` : ''} inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold`} style={buttonGold}>Request a Quote</Link>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
