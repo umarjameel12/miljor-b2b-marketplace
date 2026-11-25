@@ -397,8 +397,8 @@ export const PoolsPage = () => {
             </div>
           )}
 
-          {/* Commodity Categories Scroll Strip */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+          {/* Commodity Categories Strip */}
+          <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
             {categoryOptions.map((cat) => {
               const active = selectedCategory === cat.id;
               return (

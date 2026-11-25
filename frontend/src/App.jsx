@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AuthAppearanceProvider } from './context/AuthAppearanceContext';
 import { Navbar } from './components/Navbar';
+import { PremiumMotion } from './components/motion/PremiumMotion';
 import { OpeningTreatment } from './components/ui/OpeningTreatment';
 import { Logo } from './components/ui/Logo';
 import { LandingPage } from './pages/LandingPage';
@@ -64,6 +65,7 @@ function AppContent() {
         color: 'var(--text-primary)',
       }}
     >
+      <PremiumMotion />
       {!isAppShellRoute && <Navbar />}
 
       <div className="flex-1 flex flex-col">

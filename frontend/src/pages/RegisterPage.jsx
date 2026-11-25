@@ -27,9 +27,7 @@ import {
   MapPin,
   AlertCircle,
   Truck,
-  Store,
-  ShieldCheck,
-  Info
+  Store
 } from 'lucide-react';
 
 export const RegisterPage = () => {
