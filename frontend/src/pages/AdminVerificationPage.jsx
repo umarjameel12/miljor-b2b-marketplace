@@ -257,13 +257,13 @@ export const AdminVerificationPage = () => {
           </div>
         ) : suppliers.length === 0 ? (
           <Card className="p-12 text-center space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
-              <CheckCircle className="w-8 h-8" />
+            <div className="w-14 h-14 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--brand-accent)] flex items-center justify-center mx-auto">
+              <CheckCircle className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-lg font-bold">Verification Queue Clear</h3>
-              <p className="text-xs opacity-70 mt-1 max-w-sm mx-auto">
-                There are no pending supplier verification submissions awaiting review at this time.
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Verification queue clear</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm mx-auto">
+                No pending supplier verification submissions awaiting review.
               </p>
             </div>
           </Card>

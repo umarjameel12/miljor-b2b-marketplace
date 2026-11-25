@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {Link} from 'react-router-dom';
 import {BarChart3,Truck,Package,AlertTriangle,Info,MapPin} from 'lucide-react';
 
 // All data from supplier-scoped READ ONLY APIs. No simulated sales, savings or payouts.
@@ -15,7 +16,7 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
     <nav className="flex flex-wrap gap-2" aria-label="Pool operations sections">
       {categories.map(([id,label])=><button type="button" key={id} onClick={()=>setSection(id)}
         aria-pressed={section===id}
-        className={`rounded-lg border px-3 py-2 text-xs ${section===id?'border-emerald-600 text-emerald-600 font-semibold':'border-[var(--border-subtle)]'}`}>
+        className={`rounded-lg border px-3 py-2 text-xs cursor-pointer transition-colors ${section===id?'border-[var(--brand-accent)] text-[var(--text-primary)] bg-[var(--bg-surface)] font-semibold':'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
         {label}{id==='ALERTS'&&alerts?.alerts?.length>0?` (${alerts.alerts.length})`:''}
       </button>)}
     </nav>
@@ -27,9 +28,9 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
             <div className="flex items-center justify-between gap-2"><div className="font-medium text-sm">{x.sku_title||x.listing_code}</div>
               {x.allocation_state!=='RECONCILED'&&<AlertTriangle size={16} className="text-amber-600"/>}</div>
             <p className="text-[11px] text-[var(--text-muted)]">{x.listing_code} · {x.status} · {x.unit||'Unknown unit'}</p>
-            {x.allocation_state==='RECONCILED'?<div className="grid grid-cols-2 gap-2 text-xs">
+            {x.allocation_state==='RECONCILED'?<div className="grid grid-cols-2 gap-2 text-xs tabular-nums">
               <div><span className="text-[var(--text-muted)] block">Listed</span><b>{x.listed_stock}</b></div>
-              <div><span className="text-[var(--text-muted)] block">Available</span><b className="text-emerald-700 dark:text-emerald-400">{x.available_to_allocate}</b></div>
+              <div><span className="text-[var(--text-muted)] block">Available</span><b className="text-[var(--brand-accent)]">{x.available_to_allocate}</b></div>
               <div><span className="text-[var(--text-muted)] block">Pending allocation</span><b>{x.pending_allocated}</b></div>
               <div><span className="text-[var(--text-muted)] block">Committed</span><b>{x.committed_allocated}</b></div>
             </div>:<p className="text-xs text-amber-600">{x.note||'Inventory requires reconciliation before any new pool publication.'}</p>}
@@ -43,7 +44,7 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
           ['Standard delivery',delivery?.configuration?.standard_delivery_enabled],
           ['Supplier pickup',delivery?.configuration?.pickup_enabled],
           ['Express delivery',delivery?.configuration?.express_enabled]
-        ].map(([label,enabled])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3"><Truck size={14}/><p className="mt-1 text-xs font-medium">{label}</p><p className={`text-xs ${enabled?'text-emerald-600':'text-[var(--text-muted)]'}`}>{enabled?'Enabled':'Not enabled'}</p></div>)}
+        ].map(([label,enabled])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] p-3"><Truck size={14} className="text-[var(--brand-accent)]"/><p className="mt-1 text-xs font-medium">{label}</p><p className={`text-xs ${enabled?'text-[var(--text-primary)] font-medium':'text-[var(--text-muted)]'}`}>{enabled?'Enabled':'Not enabled'}</p></div>)}
       </div>
       <h3 className="text-xs font-semibold">Eligible Lahore delivery clusters</h3>
       {(delivery?.cluster_rates||[]).filter(x=>x.is_eligible).length===0?
@@ -58,7 +59,7 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
       {(delivery?.pickup_points||[]).filter(p=>p.is_active).length===0?
         <p className="text-xs text-[var(--text-muted)]">No active supplier pickup point.</p>:
         <div className="space-y-2">{delivery.pickup_points.filter(p=>p.is_active).map(p=><p key={p.id} className="text-xs flex items-start gap-1"><MapPin size={14}/>{p.point_name} · {p.address_line} · Handling fee Rs. {p.pickup_handling_fee_pkr}</p>)}</div>}
-      <a href="/supplier/profile" className="underline text-emerald-600 text-xs">Manage delivery settings</a>
+      <Link to="/supplier/profile" className="inline-flex items-center text-xs font-semibold text-[var(--brand-accent)] hover:underline">Manage delivery settings</Link>
     </div>}
     {section==='INSIGHTS'&&<div className="space-y-3">
       <p className="text-xs text-[var(--text-muted)]">Counts reflect real B4/B5 records. Revenue, savings and net payout remain unavailable until verified settlement baselines exist.</p>
@@ -76,7 +77,7 @@ export function SupplierPoolOperationsPanel({inventory,delivery,insights,alerts}
         </div>
         <div className="grid grid-cols-3 gap-2 text-xs mt-3 pt-3 border-t border-[var(--border-subtle)]">
           <div>Orders <b className="block">{insights?.by_type_orders?.[type]?.total??'—'}</b></div>
-          <div>Verified paid <b className="block text-emerald-600">{insights?.by_type_orders?.[type]?.paid??'—'}</b></div>
+          <div>Verified paid <b className="block tabular-nums text-[var(--brand-accent)]">{insights?.by_type_orders?.[type]?.paid??'—'}</b></div>
           <div>Unpaid <b className="block">{insights?.by_type_orders?.[type]?.unpaid??'—'}</b></div>
         </div>
       </div>)}

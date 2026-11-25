@@ -104,7 +104,7 @@ export const OrdersPage = () => {
               <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Active Commitments</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border"
                 style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
-                <Clock className="w-4 h-4 text-[var(--lp-accent)]" />
+                <Clock className="w-4 h-4 text-[var(--brand-accent)]" />
               </div>
             </div>
             <div className="mt-3">
@@ -126,7 +126,7 @@ export const OrdersPage = () => {
               <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Confirmed Deliveries</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border"
                 style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
-                <CheckCircle2 className="w-4 h-4 text-[var(--lp-accent)]" />
+                <CheckCircle2 className="w-4 h-4 text-[var(--brand-accent)]" />
               </div>
             </div>
             <div className="mt-3">
@@ -148,11 +148,11 @@ export const OrdersPage = () => {
               <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Escrow Protection</span>
               <div className="w-8 h-8 rounded-lg flex items-center justify-center border"
                 style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
-                <ShieldCheck className="w-4 h-4 text-[var(--lp-accent)]" />
+                <ShieldCheck className="w-4 h-4 text-[var(--brand-accent)]" />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-xs font-semibold text-[var(--lp-accent)]">
+              <span className="text-xs font-semibold text-[var(--brand-accent)]">
                 Protected Checkout
               </span>
               <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>

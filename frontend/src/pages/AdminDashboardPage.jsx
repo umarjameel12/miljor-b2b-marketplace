@@ -266,7 +266,7 @@ export function AdminDashboardPage() {
         {canApproveSubs && subRefunds.length > 0 && (
           <section className="rounded-2xl border p-5 sm:p-6 space-y-4" style={{borderColor:'var(--border-subtle)',background:'var(--bg-surface)'}}>
             <div>
-              <p className="text-xs opacity-60 font-semibold uppercase tracking-wide">Post-Rejection Refunds</p>
+              <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Post-rejection refunds</p>
               <h2 className="text-lg font-bold">Rejected Subscription Refunds ({subRefunds.length})</h2>
             </div>
             <div className="space-y-3">
@@ -292,7 +292,7 @@ export function AdminDashboardPage() {
                     <p className="font-mono text-[11px] opacity-75">
                       Order: <span className="break-all">{rf.order_code}</span> · Tracker: <span className="break-all">{rf.tracker_token}</span> · Orig Ref: <span className="break-all">{rf.original_provider_reference || 'N/A'}</span> · Refund Ref: <span className="break-all">{rf.provider_refund_reference || 'Pending'}</span>
                     </p>
-                    <p className="text-[11px] opacity-70">
+                    <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                       Last attempt: {rf.last_attempted_at ? new Date(rf.last_attempted_at).toLocaleString() : 'N/A'}
                       {rf.confirmed_at ? ` · Confirmed: ${new Date(rf.confirmed_at).toLocaleString()}` : ''}
                     </p>

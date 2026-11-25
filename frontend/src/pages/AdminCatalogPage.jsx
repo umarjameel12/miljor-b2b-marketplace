@@ -272,11 +272,11 @@ export const AdminCatalogPage = () => {
               </div>
               <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase">Families</span>
-                <span className="text-sm font-bold text-[var(--text-primary)]">{families.length}</span>
+                <span className="text-sm font-bold tabular-nums text-[var(--text-primary)]">{families.length}</span>
               </div>
               <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-center">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase">Categories</span>
-                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{categories.length}</span>
+                <span className="text-sm font-bold tabular-nums text-[var(--text-primary)]">{categories.length}</span>
               </div>
             </div>
           </div>
