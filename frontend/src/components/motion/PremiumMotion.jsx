@@ -4,11 +4,13 @@ import './premium-motion.css';
 
 // PremiumMotion: one self-contained, removable motion layer.
 // - Scroll progress hairline (window or inner app scroller)
-// - Repeating scroll reveal on landing, pools and app pages (replays every time)
+// - Repeating scroll reveal across Landing, Auth (Login/Register), Buyer, Supplier, and Admin pages
 // - Scroll-linked 3D depth on the landing hero frame
-// - Pointer tilt on pool cards, benefit rows and the hero frame
-// Only toggles CSS classes. Never touches data, routing or pool logic.
-// Disabled for reduced-motion users. Remove <PremiumMotion /> from App.jsx to turn it all off.
+// - Subtle pointer tilt on pool cards, benefit rows, hero frame, and workspace/governance cards
+// Only toggles CSS classes. Never touches data, routing, forms, or pool logic.
+// Revoke anytime:
+//   1. Browser instant toggle: localStorage.setItem('miljor_motion', 'off'); location.reload();
+//   2. Code toggle: remove <PremiumMotion /> from frontend/src/App.jsx
 
 const REVEAL_SELECTORS = [
   // Landing
@@ -16,9 +18,12 @@ const REVEAL_SELECTORS = [
   '.landing-premium-benefits',
   '.landing-benefit-item',
   '.landing-pool-shell',
-  // Pools and app pages (live data cards, panels, sections)
+  // Auth (Login, Register, Forgot Password)
+  '.auth-box-enhanced',
+  // Buyer, Supplier & Admin pages inside AppShell
   'main article',
   'main section',
+  'main [class*="rounded-xl"][class*="border"]',
   'main [class*="rounded-2xl"][class*="border"]',
   'main [class*="rounded-3xl"][class*="border"]',
   'main table',
@@ -32,14 +37,21 @@ const TILT_SELECTORS = [
   '.landing-benefit-item',
   '.miljor-commodity-frame',
   'main article[aria-label$="pool"]',
+  'main a[class*="rounded-2xl"][class*="border"]',
+  'main button[class*="rounded-xl"][class*="border"][class*="text-left"]',
 ];
 
-const MAX_TILT = 4;
+const MAX_TILT = 3.5;
 
 export function PremiumMotion() {
   const { pathname } = useLocation();
 
   useEffect(() => {
+    const manualOff =
+      window.__MILJOR_DISABLE_MOTION__ === true ||
+      window.localStorage?.getItem('miljor_motion') === 'off';
+    if (manualOff) return undefined;
+
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const cleanups = [];
@@ -95,7 +107,7 @@ export function PremiumMotion() {
     if (reduce) return () => cleanups.forEach((fn) => fn());
 
     // 2. Repeating reveal. Elements fade/rise in when they enter the viewport and
-    //    reset when they leave, so the motion replays on every scroll pass.
+    //    reset when they leave, so the motion replays on every scroll pass up or down.
     const registered = new WeakSet();
     const io = new IntersectionObserver(
       (entries) => {
@@ -111,13 +123,12 @@ export function PremiumMotion() {
       nodes.forEach((el) => {
         if (registered.has(el)) return;
         if (el.closest(REVEAL_EXCLUDE)) return;
-        // Skip nested targets so effects never compound
         const parentTarget = el.parentElement && el.parentElement.closest('.mj-reveal');
         if (parentTarget) return;
         registered.add(el);
         const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
         const index = Math.max(0, siblings.indexOf(el));
-        el.style.setProperty('--mj-delay', `${Math.min(index, 5) * 60}ms`);
+        el.style.setProperty('--mj-delay', `${Math.min(index, 5) * 55}ms`);
         el.classList.add('mj-reveal');
         io.observe(el);
       });
@@ -146,7 +157,7 @@ export function PremiumMotion() {
       });
     });
 
-    // 3. Pointer tilt (fine pointers only), delegated so live pool cards are covered
+    // 3. Pointer tilt (fine pointers only, non-input cards)
     if (finePointer) {
       const selector = TILT_SELECTORS.join(',');
       let active = null;

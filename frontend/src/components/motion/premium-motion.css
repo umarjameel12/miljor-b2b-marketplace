@@ -48,12 +48,16 @@
 .landing-pool-shell,
 .landing-benefit-item,
 .miljor-commodity-frame,
-main article[aria-label$="pool"] {
+main article[aria-label$="pool"],
+main a[class*="rounded-2xl"][class*="border"],
+main button[class*="rounded-xl"][class*="border"][class*="text-left"] {
   transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 .landing-pool-shell.mj-tilting,
 .landing-benefit-item.mj-tilting,
-main article[aria-label$="pool"].mj-tilting {
+main article[aria-label$="pool"].mj-tilting,
+main a[class*="rounded-2xl"][class*="border"].mj-tilting,
+main button[class*="rounded-xl"][class*="border"][class*="text-left"].mj-tilting {
   transform: perspective(900px) rotateX(var(--mj-rx, 0deg)) rotateY(var(--mj-ry, 0deg)) translate3d(0, -4px, 0);
   will-change: transform;
 }
