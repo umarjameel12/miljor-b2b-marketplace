@@ -2864,12 +2864,12 @@ html.dark #top.miljor-public-landing.miljor-premium-landing {
   background-color: #062a21 !important;
   background-repeat: no-repeat !important;
 }
-/* Very thin line, not the previous bright gold stripe. */
+/* Quiet, whisper-thin hairline on landing navbar (no harsh gold stripe) */
 html:not(.dark) #top.miljor-public-landing.miljor-premium-landing header.landing-topbar {
-  border-bottom: 1px solid rgba(146,123,90,.23) !important;
+  border-bottom: 1px solid rgba(12, 43, 36, 0.08) !important;
 }
 html.dark #top.miljor-public-landing.miljor-premium-landing header.landing-topbar {
-  border-bottom: 1px solid rgba(200,178,118,.26) !important;
+  border-bottom: 1px solid rgba(240, 234, 214, 0.09) !important;
 }
 /* MILJOR V4 VERIFIED LANDING VISUAL PATCH END */
 

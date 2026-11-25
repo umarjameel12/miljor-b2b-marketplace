@@ -298,7 +298,7 @@ export const LandingPage = () => {
           -webkit-text-fill-color: #e8cb92 !important;
         }
       `}</style>
-      <header className="landing-topbar landing-premium-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-sidebar)', color: 'var(--text-primary)' }}>
+      <header className="landing-topbar landing-premium-topbar sticky top-0 z-50 border-b backdrop-blur-xl" style={{ backgroundColor: 'var(--landing-header-bg)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8 lg:px-10">
           <Link to="/" aria-label="MilJor home" className="flex shrink-0 items-center"><Logo variant="monogram" size="md" /></Link>
           
