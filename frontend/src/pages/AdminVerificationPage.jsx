@@ -191,6 +191,35 @@ export const AdminVerificationPage = () => {
 
   return (
     <AppShell>
+      <style>{`
+        .admin-header-pill {
+          background-color: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          color: var(--text-primary);
+        }
+        html.dark .admin-header-pill {
+          background-color: var(--bg-elevated);
+          border: 1px solid rgba(200, 178, 118, 0.25);
+          color: var(--text-primary);
+        }
+        .admin-action-btn {
+          background-color: var(--bg-elevated);
+          color: var(--text-primary);
+          border: 1px solid var(--border-default);
+        }
+        .admin-action-btn:hover:not(:disabled) {
+          background-color: var(--bg-surface);
+          border-color: var(--brand-accent);
+        }
+        html.dark .admin-action-btn {
+          background-color: var(--brand-primary);
+          color: var(--text-on-emerald);
+          border: 1px solid transparent;
+        }
+        html.dark .admin-action-btn:hover:not(:disabled) {
+          opacity: 0.92;
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[var(--border-subtle)]">
@@ -209,25 +238,23 @@ export const AdminVerificationPage = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => navigate('/admin/catalog')}
-              className="h-9 inline-flex flex-row items-center justify-center leading-none whitespace-nowrap cursor-pointer"
+              className="admin-header-pill h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex flex-row items-center justify-center leading-none whitespace-nowrap cursor-pointer transition-colors"
             >
               Catalog Governance &amp; Requests
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              icon={RefreshCw}
+            </button>
+            <button
+              type="button"
               onClick={fetchPendingSuppliers}
               disabled={loading}
-              className="h-9 inline-flex flex-row items-center justify-center gap-2 leading-none whitespace-nowrap cursor-pointer"
+              className="admin-header-pill h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex flex-row items-center justify-center gap-2 leading-none whitespace-nowrap cursor-pointer transition-colors disabled:opacity-50"
             >
-              Refresh
-            </Button>
-            <div className="h-9 inline-flex flex-row items-center justify-center gap-1.5 px-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] text-xs font-semibold leading-none whitespace-nowrap">
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <div className="admin-header-pill h-9 inline-flex flex-row items-center justify-center gap-1.5 px-3.5 rounded-xl text-xs font-semibold leading-none whitespace-nowrap">
               <span>Pending Reviews:</span>
               <span className="tabular-nums text-[var(--brand-accent)]">{suppliers.length}</span>
             </div>
@@ -375,38 +402,35 @@ export const AdminVerificationPage = () => {
                         </div>
                       )}
 
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        icon={CheckCircle}
+                      <button
+                        type="button"
                         onClick={() => handleOpenApprove(s)}
                         disabled={isSelf}
-                        className="w-full h-9 flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer"
+                        className="admin-action-btn w-full h-9 px-3 rounded-lg text-xs inline-flex flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >
-                        Approve Supplier
-                      </Button>
+                        <CheckCircle className="w-4 h-4 shrink-0" />
+                        <span>Approve Supplier</span>
+                      </button>
 
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        icon={FileText}
+                      <button
+                        type="button"
                         onClick={() => handleOpenReject(s, 'request-info')}
                         disabled={isSelf}
-                        className="w-full h-9 flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer"
+                        className="admin-action-btn w-full h-9 px-3 rounded-lg text-xs inline-flex flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >
-                        Request Info
-                      </Button>
+                        <FileText className="w-4 h-4 shrink-0" />
+                        <span>Request Info</span>
+                      </button>
 
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        icon={XCircle}
+                      <button
+                        type="button"
                         onClick={() => handleOpenReject(s)}
                         disabled={isSelf}
-                        className="w-full h-9 flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer"
+                        className="admin-action-btn w-full h-9 px-3 rounded-lg text-xs inline-flex flex-row items-center justify-center gap-2 leading-none whitespace-nowrap font-semibold cursor-pointer transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >
-                        Reject
-                      </Button>
+                        <XCircle className="w-4 h-4 shrink-0" />
+                        <span>Reject</span>
+                      </button>
                     </div>
                   </div>
                 </Card>
