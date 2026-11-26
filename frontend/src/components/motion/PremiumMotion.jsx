@@ -109,6 +109,23 @@ export function PremiumMotion() {
             item.style.setProperty('--mj-b-sc', (0.96 + ease * 0.04).toFixed(4));
           });
         }
+        const familyCards = document.querySelectorAll('.miljor-family-card');
+        if (familyCards.length > 0) {
+          const vh = window.innerHeight || 800;
+          const entryLine = vh * 0.96;
+          const span = Math.max(160, vh * 0.28);
+          familyCards.forEach((card, idx) => {
+            card.classList.add('mj-family-scrub');
+            const rect = card.getBoundingClientRect();
+            const colOffset = (idx % 2) * 0.12;
+            const raw = (entryLine - rect.top) / span - colOffset;
+            const t = Math.min(1, Math.max(0, raw));
+            const ease = 1 - Math.pow(1 - t, 3);
+            card.style.setProperty('--mj-f-op', ease.toFixed(3));
+            card.style.setProperty('--mj-f-ty', `${((1 - ease) * 28).toFixed(1)}px`);
+            card.style.setProperty('--mj-f-sc', (0.96 + ease * 0.04).toFixed(4));
+          });
+        }
       }
     };
     const onScroll = (event) => {
@@ -144,7 +161,7 @@ export function PremiumMotion() {
     const register = () => {
       const nodes = document.querySelectorAll(REVEAL_SELECTORS.join(','));
       nodes.forEach((el) => {
-        if (el.classList.contains('landing-benefit-item')) return;
+        if (el.classList.contains('landing-benefit-item') || el.classList.contains('miljor-family-card')) return;
         if (registered.has(el)) return;
         if (el.closest(REVEAL_EXCLUDE)) return;
         const parentTarget = el.parentElement && el.parentElement.closest('.mj-reveal');
@@ -167,6 +184,7 @@ export function PremiumMotion() {
       rafId = window.requestAnimationFrame(() => {
         rafId = 0;
         register();
+        update();
       });
     };
     const startTimer = window.setTimeout(register, 80);
@@ -178,11 +196,14 @@ export function PremiumMotion() {
       if (rafId) window.cancelAnimationFrame(rafId);
       mo.disconnect();
       io.disconnect();
-      document.querySelectorAll('.mj-scroll-scrub').forEach((el) => {
-        el.classList.remove('mj-scroll-scrub');
+      document.querySelectorAll('.mj-scroll-scrub, .mj-family-scrub').forEach((el) => {
+        el.classList.remove('mj-scroll-scrub', 'mj-family-scrub');
         el.style.removeProperty('--mj-b-op');
         el.style.removeProperty('--mj-b-ty');
         el.style.removeProperty('--mj-b-sc');
+        el.style.removeProperty('--mj-f-op');
+        el.style.removeProperty('--mj-f-ty');
+        el.style.removeProperty('--mj-f-sc');
       });
       document.querySelectorAll('.mj-reveal').forEach((el) => {
         el.classList.remove('mj-reveal', 'mj-in');

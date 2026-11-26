@@ -160,6 +160,18 @@ p {
     box-shadow 0.28s ease,
     border-color 0.2s ease;
 }
+.miljor-family-card.mj-family-scrub {
+  opacity: var(--mj-f-op, 1);
+  translate: 0 var(--mj-f-ty, 0px);
+  scale: var(--mj-f-sc, 1);
+  transition:
+    opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    scale 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    border-color 0.2s ease;
+}
 .miljor-family-card:hover {
   transform: translate3d(0, -5px, 0);
 }
@@ -169,6 +181,7 @@ p {
   }
   .mj-reveal,
   .landing-benefit-item.mj-scroll-scrub,
+  .miljor-family-card.mj-family-scrub,
   .landing-benefit-item.mj-reveal,
   .auth-box-enhanced.mj-reveal,
   main .grid > .mj-reveal,
