@@ -15,7 +15,7 @@ import './premium-motion.css';
 const REVEAL_SELECTORS = [
   // Landing & Buyer Home
   '.landing-premium-pools > div:first-child',
-  '.landing-benefit-copy',
+  '.landing-premium-benefits',
   '.landing-benefit-item',
   '.landing-pool-shell',
   '.miljor-pool-rail > *',
@@ -130,11 +130,9 @@ export function PremiumMotion() {
         registered.add(el);
         const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
         const index = Math.max(0, siblings.indexOf(el));
-        const stepMs = el.classList.contains('landing-benefit-item')
-          ? 140
-          : el.classList.contains('landing-pool-shell') || el.closest('.miljor-pool-rail')
-            ? 95
-            : 65;
+        const stepMs = el.classList.contains('landing-pool-shell') || el.closest('.miljor-pool-rail')
+          ? 95
+          : 65;
         el.style.setProperty('--mj-delay', `${Math.min(index, 6) * stepMs}ms`);
         el.classList.add('mj-reveal');
         io.observe(el);
