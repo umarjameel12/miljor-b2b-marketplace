@@ -39,7 +39,6 @@ const TILT_SELECTORS = [
   '.landing-pool-shell',
   '.landing-benefit-item',
   '.miljor-commodity-frame',
-  '.miljor-family-card',
   'main article[aria-label$="pool"]',
   'main a[class*="rounded-2xl"][class*="border"]',
   'main button[class*="rounded-xl"][class*="border"][class*="text-left"]',

@@ -624,7 +624,7 @@ export const PoolsPage = () => {
                             setSelectedCategory('All Commodities');
                             setSearchQuery(family.name);
                           }}
-                          className="shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center leading-none whitespace-nowrap cursor-pointer shadow-xs transition-all hover:opacity-95"
+                          className="miljor-cta-shine shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center leading-none whitespace-nowrap cursor-pointer shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
                           style={{
                             backgroundColor: 'var(--brand-accent)',
                             color: 'var(--text-on-champagne)',
