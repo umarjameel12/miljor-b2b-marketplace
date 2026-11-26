@@ -31,6 +31,7 @@ import {
   FileText,
   Lock,
   Archive,
+  RotateCcw,
   Truck,
   X
 } from 'lucide-react';
@@ -343,15 +344,18 @@ export const SupplierCatalogPage = () => {
   }, [families, selectedFamilyId]);
 
   const filteredVariants = useMemo(() => {
-    if (!variantSearch.trim()) return variants;
+    const scoped = user?.role === 'SUPPLIER'
+      ? variants.filter(v => Number(v.supplier_id) === Number(user.id))
+      : variants;
+    if (!variantSearch.trim()) return scoped;
     const q = variantSearch.toLowerCase();
-    return variants.filter(v =>
+    return scoped.filter(v =>
       (v.variant_title || '').toLowerCase().includes(q) ||
       (v.brand || '').toLowerCase().includes(q) ||
       (v.variety || '').toLowerCase().includes(q) ||
       (v.spec_code || '').toLowerCase().includes(q)
     );
-  }, [variants, variantSearch]);
+  }, [variants, variantSearch, user]);
 
   // ---------------------------------------------------------------------------
   // Supplier-Owned Product Handlers (Level 3)
@@ -1205,6 +1209,16 @@ export const SupplierCatalogPage = () => {
                 </div>
 
                 <div className="space-y-3">
+                  {filteredVariants.length === 0 && (
+                    <div className="p-6 rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)]/40 text-center space-y-2">
+                      <p className="text-xs font-semibold text-[var(--text-primary)]">
+                        No supplier products in this family yet
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Only your own published supplier products appear here. Click &ldquo;+ Define My Supplier Product&rdquo; to add one.
+                      </p>
+                    </div>
+                  )}
                   {filteredVariants.map((variant) => {
                     const myExistingOffer = myListings.find(l => Number(l.product_spec_id) === Number(variant.id));
                     return (
@@ -1313,22 +1327,22 @@ export const SupplierCatalogPage = () => {
 
                         <div className="flex flex-wrap items-center gap-2">
                           {sp.status === 'DRAFT' && (
-                            <Button size="sm" variant="outline" onClick={() => openEditSupplierProductModal(sp)}>
+                            <Button size="sm" variant="outline" icon={Edit3} className="whitespace-nowrap" onClick={() => openEditSupplierProductModal(sp)}>
                               Edit Draft
                             </Button>
                           )}
                           {sp.status !== 'ARCHIVED' && (
-                            <Button size="sm" onClick={() => openCreateSkuModal(sp)}>
-                              + Add Pack SKU
+                            <Button size="sm" icon={Plus} className="whitespace-nowrap" onClick={() => openCreateSkuModal(sp)}>
+                              Add Pack SKU
                             </Button>
                           )}
                           {sp.status !== 'ARCHIVED' && (
-                            <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'product', id: sp.id, title: sp.title || sp.variety })}>
-                              <Archive className="w-3.5 h-3.5" />
+                            <Button size="sm" variant="outline" icon={Archive} className="whitespace-nowrap" onClick={() => setConfirmArchive({ kind: 'product', id: sp.id, title: sp.title || sp.variety })}>
+                              Archive
                             </Button>
                           )}
                           {sp.status === 'ARCHIVED' && (
-                            <Button size="sm" variant="outline" onClick={() => handleRestoreSupplierProduct(sp.id)}>
+                            <Button size="sm" variant="outline" icon={RotateCcw} className="whitespace-nowrap" onClick={() => handleRestoreSupplierProduct(sp.id)}>
                               Restore Product
                             </Button>
                           )}
@@ -1370,26 +1384,26 @@ export const SupplierCatalogPage = () => {
                               <div className="flex flex-wrap items-center gap-2">
                                 {sku.status === 'DRAFT' && (
                                   <>
-                                    <Button size="sm" variant="outline" onClick={() => openEditSkuModal(sku)}>
+                                    <Button size="sm" variant="outline" icon={Edit3} className="whitespace-nowrap" onClick={() => openEditSkuModal(sku)}>
                                       Edit SKU
                                     </Button>
-                                    <Button size="sm" onClick={() => setConfirmPublishSku(sku)}>
-                                      Publish & Lock SKU
+                                    <Button size="sm" icon={Lock} className="whitespace-nowrap" onClick={() => setConfirmPublishSku(sku)}>
+                                      Publish &amp; Lock SKU
                                     </Button>
                                   </>
                                 )}
                                 {sku.status === 'PUBLISHED' && (
-                                  <Button size="sm" onClick={() => openCreateOfferModal(sku)}>
+                                  <Button size="sm" icon={Tag} className="whitespace-nowrap" onClick={() => openCreateOfferModal(sku)}>
                                     Create / Edit Offer
                                   </Button>
                                 )}
                                 {sku.status !== 'ARCHIVED' && (
-                                  <Button size="sm" variant="outline" onClick={() => setConfirmArchive({ kind: 'sku', id: sku.id, title: supplierSkuDisplayTitle(sku) })}>
+                                  <Button size="sm" variant="outline" icon={Archive} className="whitespace-nowrap" onClick={() => setConfirmArchive({ kind: 'sku', id: sku.id, title: supplierSkuDisplayTitle(sku) })}>
                                     Archive
                                   </Button>
                                 )}
                                 {sku.status === 'ARCHIVED' && (
-                                  <Button size="sm" variant="outline" onClick={() => handleRestoreSku(sku.id)}>
+                                  <Button size="sm" variant="outline" icon={RotateCcw} className="whitespace-nowrap" onClick={() => handleRestoreSku(sku.id)}>
                                     Restore SKU
                                   </Button>
                                 )}

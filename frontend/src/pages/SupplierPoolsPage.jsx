@@ -351,13 +351,30 @@ export function SupplierPoolsPage(){
         </div>
       </div>
       {!edit&&<div className="grid sm:grid-cols-2 gap-3">
-        {['REGULAR','FLASH'].map(t=><button key={t} type="button" onClick={()=>setMode(t)} className={`rounded-2xl border p-4 text-left transition-all cursor-pointer ${mode===t?'border-[var(--brand-accent)] bg-[var(--brand-accent)]/10 shadow-xs':'border-[var(--border-default)] bg-[var(--bg-card)] hover:border-[var(--brand-accent)]/50'}`}>
-          <div className="flex items-center justify-between">
-            <b className={`text-sm ${mode===t?'text-[var(--brand-accent)]':'text-[var(--text-primary)]'}`}>{t==='REGULAR'?'Regular Pool':'Flash Pool'}</b>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${mode===t?'border-[var(--brand-accent)] text-[var(--brand-accent)]':'border-[var(--border-subtle)] text-[var(--text-muted)]'}`}>{t}</span>
-          </div>
-          <p className="text-xs mt-1.5 text-[var(--text-secondary)]">{t==='REGULAR'?'Demand aggregation with volume-based Tier 1 & Tier 2 pricing':'Ready-stock clearance discount with instant Safepay hold'}</p>
-        </button>)}
+        {['REGULAR','FLASH'].map(t=>{
+          const active=mode===t;
+          return <button key={t} type="button" onClick={()=>setMode(t)}
+            className={`rounded-2xl border p-4 text-left transition-all cursor-pointer ${active?'shadow-xs':'hover:border-[var(--brand-accent)]/50'}`}
+            style={{
+              backgroundColor: active ? 'var(--brand-accent-soft, rgba(200, 178, 118, 0.14))' : 'var(--bg-card)',
+              borderColor: active ? 'var(--brand-accent)' : 'var(--border-default)',
+            }}>
+            <div className="flex items-center justify-between gap-2">
+              <b className="text-sm font-display" style={{ color: active ? 'var(--brand-accent)' : 'var(--text-primary)' }}>
+                {t==='REGULAR'?'Regular Pool':'Flash Pool'}
+              </b>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider border leading-none"
+                style={{
+                  borderColor: active ? 'var(--brand-accent)' : 'var(--border-subtle)',
+                  color: active ? 'var(--brand-accent)' : 'var(--text-muted)',
+                  backgroundColor: 'var(--bg-surface)',
+                }}>{t}</span>
+            </div>
+            <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              {t==='REGULAR'?'Demand aggregation with volume-based Tier 1 & Tier 2 pricing':'Ready-stock clearance discount with instant Safepay hold'}
+            </p>
+          </button>;
+        })}
       </div>}
       {!listings.length?<div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 text-sm space-y-2.5"><AlertTriangle size={18} className="text-amber-600"/><p className="text-[var(--text-primary)] font-medium">No eligible published supplier listings. Create and publish your physical SKU and commercial offer first.</p><Link to="/supplier/catalog" className="miljor-btn-primary inline-flex items-center px-3.5 py-2 rounded-xl text-xs font-semibold">Open Supplier Catalog</Link></div>:
       <form onSubmit={save} className="space-y-5">
@@ -465,7 +482,12 @@ export function SupplierPoolsPage(){
                 {eligibleStandard.map(rate=>{
                   const cluster=operations.delivery?.clusters?.find(c=>Number(c.id)===Number(rate.cluster_id));
                   const checked=form.delivery_clusters.includes(Number(rate.cluster_id));
-                  return <label key={rate.cluster_id} className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-xs cursor-pointer transition ${checked?'border-[var(--brand-accent)] bg-[var(--brand-accent)]/10':'border-[var(--border-subtle)] bg-[var(--bg-card)]'}`}>
+                  return <label key={rate.cluster_id}
+                    className="flex items-center gap-2.5 rounded-xl border p-2.5 text-xs cursor-pointer transition"
+                    style={{
+                      borderColor: checked ? 'var(--brand-accent)' : 'var(--border-subtle)',
+                      backgroundColor: checked ? 'var(--brand-accent-soft, rgba(200, 178, 118, 0.14))' : 'var(--bg-card)',
+                    }}>
                     <input type="checkbox" checked={checked} onChange={e=>update('delivery_clusters',e.target.checked?
                       Array.from(new Set([...form.delivery_clusters,Number(rate.cluster_id)])):
                       form.delivery_clusters.filter(id=>id!==Number(rate.cluster_id)))}/>
@@ -520,8 +542,8 @@ export function SupplierPoolsPage(){
           </div>
         </>;})()}
         <div className="flex flex-wrap gap-2.5 justify-end pt-2">
-          <button type="button" onClick={close} className="miljor-btn-outline px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold cursor-pointer">Cancel</button>
-          <button disabled={busy||!chosen||uncertainDraft} type="submit" className="landing-gradient-cta px-5 py-2.5 rounded-xl bg-[var(--brand-accent)] text-[#072a21] font-semibold disabled:opacity-50 text-xs sm:text-sm shadow-xs hover:opacity-95 transition cursor-pointer">{busy?'Saving…':'Save Draft'}</button>
+          <button type="button" onClick={close} className="miljor-btn-outline px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold inline-flex items-center justify-center leading-none whitespace-nowrap cursor-pointer">Cancel</button>
+          <button disabled={busy||!chosen||uncertainDraft} type="submit" className="landing-gradient-cta px-5 py-2.5 rounded-xl bg-[var(--brand-accent)] text-[#072a21] font-semibold disabled:opacity-50 text-xs sm:text-sm inline-flex items-center justify-center leading-none whitespace-nowrap shadow-xs hover:opacity-95 transition cursor-pointer">{busy?'Saving…':'Save Draft'}</button>
         </div>
       </form>}
     </section>:
