@@ -557,66 +557,89 @@ export const PoolsPage = () => {
         ) : (
           /* Canonical families: never display legacy spec brands, fixed packs or invented MOQ. */
           filteredFamilies.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredFamilies.map((family) => (
-                <div
-                  key={family.id}
-                  className="p-5 sm:p-6 rounded-3xl border flex flex-col gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)]"
-                  style={{
-                    backgroundColor: 'var(--bg-card)',
-                    borderColor: 'var(--border-default)',
-                    boxShadow: 'var(--shadow-card)',
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className="px-2.5 py-1 rounded-full text-[10px] font-semibold border leading-none"
-                      style={{
-                        backgroundColor: 'var(--bg-elevated)',
-                        borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-primary)',
-                      }}
-                    >
-                      {family.category_name}
-                    </span>
-                    <span
-                      className="px-2 py-0.5 rounded-md text-[10px] font-mono border leading-none"
-                      style={{
-                        backgroundColor: 'var(--bg-surface)',
-                        borderColor: 'var(--border-subtle)',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      {family.family_code}
-                    </span>
+            <div className="space-y-6">
+              {Object.entries(
+                filteredFamilies.reduce((acc, fam) => {
+                  const key = fam.category_name || 'General Commodities';
+                  if (!acc[key]) acc[key] = [];
+                  acc[key].push(fam);
+                  return acc;
+                }, {})
+              ).map(([categoryName, categoryFamilies]) => (
+                <div key={categoryName} className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-sm sm:text-base tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                        {categoryName}
+                      </h3>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums border"
+                        style={{
+                          backgroundColor: 'var(--bg-elevated)',
+                          borderColor: 'var(--border-subtle)',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        {categoryFamilies.length}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-display font-bold text-base tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                      {family.name}
-                    </h3>
-                    <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                      {family.description}
-                    </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {categoryFamilies.map((family) => (
+                      <div
+                        key={family.id}
+                        className="miljor-family-card p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)]"
+                        style={{
+                          backgroundColor: 'var(--bg-card)',
+                          borderColor: 'var(--border-default)',
+                          boxShadow: 'var(--shadow-card)',
+                        }}
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-sans font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                              {family.name}
+                            </h4>
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-mono border leading-none shrink-0"
+                              style={{
+                                backgroundColor: 'var(--bg-surface)',
+                                borderColor: 'var(--border-subtle)',
+                                color: 'var(--text-muted)',
+                              }}
+                            >
+                              {family.family_code}
+                            </span>
+                          </div>
+                          {family.description && (
+                            <p className="text-xs line-clamp-1" style={{ color: 'var(--text-secondary)' }}>
+                              {family.description}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewMode('pools');
+                            setSelectedCategory('All Commodities');
+                            setSearchQuery(family.name);
+                          }}
+                          className="shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center leading-none whitespace-nowrap cursor-pointer shadow-xs transition-all hover:opacity-95"
+                          style={{
+                            backgroundColor: 'var(--brand-accent)',
+                            color: 'var(--text-on-champagne)',
+                          }}
+                        >
+                          <span>Find Live Pools</span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <div
-                    className="mt-auto border-t pt-3 text-[11px] leading-relaxed"
-                    style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
-                  >
-                    Brand, grade, pack size, price, and MOQ depend on each supplier&apos;s actual SKU and offer.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setViewMode('pools');
-                      setSelectedCategory('All Commodities');
-                      setSearchQuery(family.name);
-                    }}
-                    className="miljor-btn-primary w-full py-2.5 px-4 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 leading-none cursor-pointer"
-                  >
-                    <span>Find Live Pools</span>
-                  </button>
                 </div>
               ))}
+              <p className="text-[11px] text-center pt-2" style={{ color: 'var(--text-muted)' }}>
+                Brand, grade, pack size, price, and MOQ depend on each supplier&apos;s actual SKU and active offer.
+              </p>
             </div>
           ) : (
             <div

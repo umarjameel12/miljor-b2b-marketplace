@@ -19,6 +19,7 @@ const REVEAL_SELECTORS = [
   '.landing-benefit-item',
   '.landing-pool-shell',
   '.miljor-pool-rail > *',
+  '.miljor-family-card',
   // Auth (Login, Register, Forgot Password)
   '.auth-box-enhanced',
   // Buyer, Supplier & Admin pages inside AppShell
@@ -38,6 +39,7 @@ const TILT_SELECTORS = [
   '.landing-pool-shell',
   '.landing-benefit-item',
   '.miljor-commodity-frame',
+  '.miljor-family-card',
   'main article[aria-label$="pool"]',
   'main a[class*="rounded-2xl"][class*="border"]',
   'main button[class*="rounded-xl"][class*="border"][class*="text-left"]',

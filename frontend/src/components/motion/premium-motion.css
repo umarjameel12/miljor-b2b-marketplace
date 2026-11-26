@@ -114,6 +114,7 @@ main article[aria-label$="pool"]:hover img {
 .landing-pool-shell,
 .landing-benefit-item,
 .miljor-commodity-frame,
+.miljor-family-card,
 main article[aria-label$="pool"],
 main a[class*="rounded-2xl"][class*="border"],
 main button[class*="rounded-xl"][class*="border"][class*="text-left"] {
@@ -121,6 +122,7 @@ main button[class*="rounded-xl"][class*="border"][class*="text-left"] {
 }
 .landing-pool-shell.mj-tilting,
 .landing-benefit-item.mj-tilting,
+.miljor-family-card.mj-tilting,
 main article[aria-label$="pool"].mj-tilting,
 main a[class*="rounded-2xl"][class*="border"].mj-tilting,
 main button[class*="rounded-xl"][class*="border"][class*="text-left"].mj-tilting {
