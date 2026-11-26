@@ -119,6 +119,14 @@ export function PremiumMotion() {
       },
       { threshold: 0, rootMargin: '40px 0px 40px 0px' },
     );
+    const benefitIo = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          entry.target.classList.toggle('mj-in', entry.isIntersecting);
+        });
+      },
+      { threshold: 0.35, rootMargin: '0px 0px -10% 0px' },
+    );
 
     const register = () => {
       const nodes = document.querySelectorAll(REVEAL_SELECTORS.join(','));
@@ -130,14 +138,15 @@ export function PremiumMotion() {
         registered.add(el);
         const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
         const index = Math.max(0, siblings.indexOf(el));
-        const stepMs = el.classList.contains('landing-benefit-item')
-          ? 220
+        const isBenefitItem = el.classList.contains('landing-benefit-item');
+        const stepMs = isBenefitItem
+          ? 70
           : el.classList.contains('landing-pool-shell') || el.closest('.miljor-pool-rail')
             ? 95
             : 65;
         el.style.setProperty('--mj-delay', `${Math.min(index, 6) * stepMs}ms`);
         el.classList.add('mj-reveal');
-        io.observe(el);
+        (isBenefitItem ? benefitIo : io).observe(el);
       });
     };
 
@@ -158,6 +167,7 @@ export function PremiumMotion() {
       if (rafId) window.cancelAnimationFrame(rafId);
       mo.disconnect();
       io.disconnect();
+      benefitIo.disconnect();
       document.querySelectorAll('.mj-reveal').forEach((el) => {
         el.classList.remove('mj-reveal', 'mj-in');
         el.style.removeProperty('--mj-delay');
