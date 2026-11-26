@@ -357,7 +357,7 @@ export const PoolCard = ({ pool, onSelect, isExample = false }) => {
               aria-valuemax="100"
             >
               <div
-                className="h-full rounded-full transition-all duration-300"
+                className="miljor-pool-progress-fill h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${progressPercent}%`,
                   background: 'var(--pool-progress-gradient, linear-gradient(90deg, #b39156, #d8c48e))',

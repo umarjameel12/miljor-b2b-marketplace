@@ -400,9 +400,9 @@ export const SupplierSubscriptionPage = () => {
             <button
               type="button"
               onClick={loadSubscriptionData}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border border-[var(--border-default)] bg-[var(--bg-card)] cursor-pointer"
+              className="miljor-btn-primary inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold leading-none whitespace-nowrap cursor-pointer"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
               <span>Retry</span>
             </button>
           </div>
@@ -467,10 +467,10 @@ export const SupplierSubscriptionPage = () => {
                       type="button"
                       disabled={resumingCheckout || verifyingTracker}
                       onClick={() => handleResumeCheckout(pendingCheckout?.payment || latestPendingPayment)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] font-semibold text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+                      className="miljor-btn-primary inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold leading-none whitespace-nowrap cursor-pointer disabled:opacity-50"
                     >
                       <span>{resumingCheckout ? 'Checking Safepay...' : 'Open Safepay'}</span>
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="w-3 h-3 shrink-0" />
                     </button>
                   )}
                   <button
@@ -590,7 +590,7 @@ export const SupplierSubscriptionPage = () => {
                         isCurrent
                           ? 'bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
                           : monthlyPrice === 0
-                            ? 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:border-[var(--brand-accent)]'
+                            ? 'miljor-btn-primary'
                             : 'landing-gradient-cta shadow-xs'
                       }`}
                     >

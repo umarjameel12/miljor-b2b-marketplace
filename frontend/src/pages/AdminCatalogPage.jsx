@@ -309,7 +309,7 @@ export const AdminCatalogPage = () => {
           <button
             type="button"
             onClick={loadAdminCatalogData}
-            className="h-9 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex flex-row items-center justify-center gap-1.5 px-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] leading-none whitespace-nowrap cursor-pointer"
+            className="miljor-btn-primary h-9 text-xs font-semibold inline-flex flex-row items-center justify-center gap-1.5 px-3.5 rounded-lg leading-none whitespace-nowrap cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5 shrink-0" />
             <span>Refresh</span>

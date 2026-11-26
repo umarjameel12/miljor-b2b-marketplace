@@ -13,14 +13,16 @@ import './premium-motion.css';
 //   2. Code toggle: remove <PremiumMotion /> from frontend/src/App.jsx
 
 const REVEAL_SELECTORS = [
-  // Landing
+  // Landing & Buyer Home
   '.landing-premium-pools > div:first-child',
-  '.landing-premium-benefits',
+  '.landing-benefit-copy',
   '.landing-benefit-item',
   '.landing-pool-shell',
+  '.miljor-pool-rail > *',
   // Auth (Login, Register, Forgot Password)
   '.auth-box-enhanced',
   // Buyer, Supplier & Admin pages inside AppShell
+  'main .grid > *',
   'main article',
   'main section',
   'main [class*="rounded-xl"][class*="border"]',
@@ -128,7 +130,12 @@ export function PremiumMotion() {
         registered.add(el);
         const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
         const index = Math.max(0, siblings.indexOf(el));
-        el.style.setProperty('--mj-delay', `${Math.min(index, 5) * 55}ms`);
+        const stepMs = el.classList.contains('landing-benefit-item')
+          ? 140
+          : el.classList.contains('landing-pool-shell') || el.closest('.miljor-pool-rail')
+            ? 95
+            : 65;
+        el.style.setProperty('--mj-delay', `${Math.min(index, 6) * stepMs}ms`);
         el.classList.add('mj-reveal');
         io.observe(el);
       });

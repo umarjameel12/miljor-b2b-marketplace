@@ -360,7 +360,7 @@ export const PoolCard = ({ pool, onSelect }) => {
               aria-valuemax="100"
             >
               <div
-                className="h-full rounded-full transition-all duration-300"
+                className="miljor-pool-progress-fill h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${progressPercent}%`,
                   backgroundColor: 'var(--brand-emerald)',
