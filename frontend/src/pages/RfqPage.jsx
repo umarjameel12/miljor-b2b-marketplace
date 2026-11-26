@@ -1354,19 +1354,19 @@ export const RfqPage = () => {
                       <div className="flex flex-wrap gap-2">
                         {request.status==='DRAFT' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>loadShoppingDraft(request.id)}
-                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Edit Draft</button>}
+                            className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Edit Draft</button>}
                         {request.status==='DRAFT'&&request.ownership==='COLLECTIVE'&&request.frequency==='ONE_TIME' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>createCollectiveFromDraft(request)}
-                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Set Up Private Group</button>}
+                            className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Set Up Private Group</button>}
                         {request.status==='DRAFT'&&request.ownership==='SINGLE_BUYER'&&request.frequency!=='ONE_TIME' &&
                           <button type="button" disabled={shoppingBusy} onClick={()=>createRecurringFromDraft(request)}
-                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Create Recurring Schedule</button>}
+                            className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Create Recurring Schedule</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={matchingBusy} onClick={()=>viewSupplierMatches(request.id)}
-                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">Find suppliers</button>}
+                            className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Find suppliers</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={quoteBusy} onClick={()=>viewBuyerQuotes(request.id)}
-                            className="px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-[var(--brand-accent)] text-[var(--text-primary)] text-xs font-medium cursor-pointer transition-colors">View quotes</button>}
+                            className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">View quotes</button>}
                         {request.status==='OPEN' &&
                           <button type="button" disabled={quoteBusy} onClick={()=>viewSmartComparison(request.id)}
                             className="px-2.5 py-1 rounded-lg border border-[var(--brand-accent)] bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] text-xs font-semibold cursor-pointer transition-colors">Compare offers</button>}
@@ -1941,7 +1941,7 @@ export const RfqPage = () => {
                 type="button"
                 onClick={refreshOpenRequests}
                 disabled={openRequestsLoading}
-                className="px-3.5 py-1.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
+                className="miljor-btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold leading-none whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 {openRequestsLoading ? 'Refreshing...' : 'Refresh'}
               </button>
@@ -2186,13 +2186,13 @@ export const RfqPage = () => {
           <section id="supplier-invitations" aria-label="Supplier procurement invitations" className="mb-8 rounded-2xl border border-[var(--border-subtle)] p-5 space-y-3">
             <div className="flex justify-between items-center gap-3">
               <h2 className="text-lg font-serif font-semibold">Procurement Invitations</h2>
-              <button type="button" onClick={refreshSupplierInbox} className="text-xs underline">Refresh</button>
+              <button type="button" onClick={refreshSupplierInbox} className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer">Refresh</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">Buyers' business contact details and delivery addresses are private. Your interest is not a binding quotation.</p>
             <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-3">
               <div className="flex items-center justify-between">
                 <p id="supplier-counteroffers" className="text-sm font-semibold">Product Counteroffers</p>
-                <button type="button" className="text-xs underline" onClick={refreshSupplierCounteroffers}>Refresh</button>
+                <button type="button" className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer" onClick={refreshSupplierCounteroffers}>Refresh</button>
               </div>
               {supplierCounteroffers.length===0&&<p className="text-xs text-[var(--text-muted)]">No product counteroffers yet.</p>}
               {supplierCounteroffers.map(offer=>(
@@ -2202,15 +2202,15 @@ export const RfqPage = () => {
                   <p className="text-xs font-semibold">{offer.decision}</p>
                   {offer.decision==='OPEN'&&(
                     <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'ACCEPT')} className="text-xs underline">Accept</button>
-                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'REJECT')} className="text-xs underline">Reject</button>
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'ACCEPT')} className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50">Accept</button>
+                      <button type="button" disabled={quoteBusy} onClick={()=>respondProductCounteroffer(offer,'REJECT')} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 cursor-pointer disabled:opacity-50">Reject</button>
                       <input type="number" step="0.01" min="0.01" inputMode="decimal" placeholder="Your new unit price"
                         aria-label={`Supplier counter price for product ${offer.request_item_id}`}
                         value={supplierCounterDrafts[offer.id]||''}
                         onChange={e=>setSupplierCounterDrafts(old=>({...old,[offer.id]:e.target.value}))}
                         className="p-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-xs"/>
                       <button type="button" disabled={quoteBusy||!supplierCounterDrafts[offer.id]}
-                        onClick={()=>respondProductCounteroffer(offer,'COUNTER_AGAIN')} className="text-xs underline">Counter Again</button>
+                        onClick={()=>respondProductCounteroffer(offer,'COUNTER_AGAIN')} className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-50">Counter Again</button>
                     </div>
                   )}
                 </div>
@@ -2307,9 +2307,9 @@ export const RfqPage = () => {
                 )}
                 {invitation.status==='INVITED' && <div className="flex gap-2">
                   <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'INTERESTED')}
-                    className="text-xs font-semibold rounded-lg px-3 py-2 border border-[var(--border-subtle)]">I'm interested</button>
+                    className="miljor-btn-primary text-xs font-semibold rounded-xl px-3.5 py-2 cursor-pointer disabled:opacity-50">I&apos;m interested</button>
                   <button type="button" disabled={matchingBusy} onClick={()=>respondInvitation(invitation.invitation_id,'DECLINED')}
-                    className="text-xs rounded-lg px-3 py-2 border border-[var(--border-subtle)]">Decline</button>
+                    className="miljor-btn-outline text-xs font-semibold rounded-xl px-3.5 py-2 cursor-pointer disabled:opacity-50">Decline</button>
                 </div>}
               </article>
             ))}

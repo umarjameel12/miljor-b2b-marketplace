@@ -299,14 +299,14 @@ export function SupplierPoolsPage(){
   };
   if(!isAuthenticated||user?.role!=='SUPPLIER')return <AppShell><div className="max-w-xl mx-auto p-8 space-y-3"><h1 className="text-xl font-bold">Supplier access required</h1><p className="text-sm text-[var(--text-muted)]">Only signed-in suppliers manage commercial pools.</p><Link to="/login" className="underline">Sign in</Link></div></AppShell>;
   return <AppShell><div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
-    <header className="flex flex-wrap items-center justify-between gap-3">
-      <div><p className="text-xs font-semibold text-[var(--brand-accent)] uppercase">Supplier Portal · Unified Pool</p>
-        <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">Unified Pool Management</h1>
-        <p className="text-sm text-[var(--text-muted)]">Manage regular and flash wholesale pools, stock allocations, and delivery readiness.</p>
+    <header className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
+      <div className="space-y-1">
+        <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-primary)]">Wholesale Pool Studio</h1>
+        <p className="text-xs sm:text-sm text-[var(--text-secondary)]">Manage regular and flash wholesale pools, stock allocations, and delivery readiness.</p>
       </div>
-      <div className="flex gap-2">
-        <button type="button" onClick={load} className="miljor-btn-primary rounded-xl px-3.5 py-2 inline-flex items-center gap-2 text-xs font-semibold cursor-pointer"><RefreshCw size={15}/>Refresh</button>
-        <button type="button" onClick={()=>creating?close():openCreate(params.get('type')?.toUpperCase()==='FLASH'?'FLASH':'REGULAR',params.get('listing')||'')} className="rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-[#072a21] font-semibold flex gap-2 items-center text-sm shadow-xs hover:opacity-95 transition"><Plus size={16}/>{creating?'Back to pools':'Create Pool'}</button>
+      <div className="flex items-center gap-2.5">
+        <button type="button" onClick={load} className="miljor-btn-primary rounded-xl px-3.5 py-2 inline-flex items-center justify-center gap-2 text-xs font-semibold leading-none whitespace-nowrap cursor-pointer"><RefreshCw size={14} className="shrink-0"/><span>Refresh</span></button>
+        <button type="button" onClick={()=>creating?close():openCreate(params.get('type')?.toUpperCase()==='FLASH'?'FLASH':'REGULAR',params.get('listing')||'')} className="landing-gradient-cta rounded-xl px-4 py-2 bg-[var(--brand-accent)] text-[#072a21] font-semibold inline-flex items-center justify-center gap-2 text-xs sm:text-sm leading-none whitespace-nowrap shadow-xs hover:opacity-95 transition cursor-pointer"><Plus size={15} className="shrink-0"/><span>{creating?'Back to pools':'Create Pool'}</span></button>
       </div>
     </header>
     {error&&<div role="alert" className="p-3 rounded-xl border border-red-500 text-red-500 text-sm">{error}</div>}

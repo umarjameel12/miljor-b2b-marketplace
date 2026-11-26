@@ -246,16 +246,13 @@ export const PoolsPage = () => {
 
             {/* Refresh Button */}
             <button
+              type="button"
               onClick={fetchData}
               title="Refresh marketplace"
               aria-label="Refresh marketplace"
-              className="px-3.5 py-2 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 hover:bg-stone-50 dark:hover:bg-stone-800 transition cursor-pointer self-end sm:self-auto"
-              style={{
-                borderColor: 'var(--border-default)',
-                color: 'var(--text-secondary)',
-              }}
+              className="miljor-btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2 leading-none whitespace-nowrap cursor-pointer self-end sm:self-auto"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
             </button>
           </div>

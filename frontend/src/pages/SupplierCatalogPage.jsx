@@ -1041,89 +1041,52 @@ export const SupplierCatalogPage = () => {
         </Card>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('browse')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'browse'
-                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              Catalog ({variants.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('my-skus')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'my-skus'
-                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              Products &amp; SKUs ({mySupplierProducts.length} / {mySupplierSkus.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('offers')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'offers'
-                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <Tag className="w-4 h-4" />
-              Offers ({myListings.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('pools')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'pools'
-                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <Truck className="w-4 h-4" />
-              Regular Pools ({myPools.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('requests')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'requests'
-                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              Requests ({myRequests.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('archived')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'archived'
-                  ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'
-              }`}
-            >
-              <Archive className="w-4 h-4" />
-              Archived ({totalArchivedCount})
-            </button>
+            {[
+              { id: 'browse', icon: Layers, label: 'Catalog', count: variants.length },
+              { id: 'my-skus', icon: Package, label: 'Products & SKUs', count: `${mySupplierProducts.length}/${mySupplierSkus.length}` },
+              { id: 'offers', icon: Tag, label: 'Offers', count: myListings.length },
+              { id: 'pools', icon: Truck, label: 'Regular Pools', count: myPools.length },
+              { id: 'requests', icon: FileText, label: 'Requests', count: myRequests.length },
+              { id: 'archived', icon: Archive, label: 'Archived', count: totalArchivedCount },
+            ].map((tab) => {
+              const IconComp = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 leading-none whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? 'bg-[var(--brand-accent)] text-[var(--text-on-champagne)] shadow-xs'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <IconComp className="w-3.5 h-3.5 shrink-0" />
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold tabular-nums leading-none ${
+                      isActive
+                        ? 'bg-black/15 text-[var(--text-on-champagne)]'
+                        : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <button
             type="button"
             onClick={loadPortalData}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+            className="miljor-btn-primary h-9 px-3.5 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 leading-none whitespace-nowrap cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Refresh
+            <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+            <span>Refresh</span>
           </button>
         </div>
 
