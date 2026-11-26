@@ -588,7 +588,7 @@ export const PoolsPage = () => {
                     {categoryFamilies.map((family) => (
                       <div
                         key={family.id}
-                        className="miljor-family-card p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)]"
+                        className="miljor-family-card p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all duration-200 hover:-translate-y-1.5 hover:shadow-lg hover:border-[var(--brand-accent)]"
                         style={{
                           backgroundColor: 'var(--bg-card)',
                           borderColor: 'var(--border-default)',
