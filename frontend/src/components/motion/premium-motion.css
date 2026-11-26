@@ -33,20 +33,22 @@
   scale: 1;
 }
 
-/* Subtle scale+rise for Auth & Grid KPI/Pool cards */
+/* Subtle scale+rise pop-up for Auth, Grid KPI/Pool cards, and staggered Benefit boxes */
+.landing-benefit-item.mj-reveal,
 .auth-box-enhanced.mj-reveal,
 main .grid > .mj-reveal,
 .landing-pool-shell.mj-reveal {
-  scale: 0.975;
-  translate: 0 22px;
+  scale: 0.94;
+  translate: 0 26px;
   transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--mj-delay, 0ms),
-    translate 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--mj-delay, 0ms),
-    scale 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--mj-delay, 0ms),
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1) var(--mj-delay, 0ms),
+    translate 0.65s cubic-bezier(0.22, 1, 0.36, 1) var(--mj-delay, 0ms),
+    scale 0.65s cubic-bezier(0.22, 1, 0.36, 1) var(--mj-delay, 0ms),
     transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
     box-shadow 0.3s ease,
     border-color 0.2s ease;
 }
+.landing-benefit-item.mj-reveal.mj-in,
 .auth-box-enhanced.mj-reveal.mj-in,
 main .grid > .mj-reveal.mj-in,
 .landing-pool-shell.mj-reveal.mj-in {
@@ -142,6 +144,7 @@ p {
     scroll-behavior: auto;
   }
   .mj-reveal,
+  .landing-benefit-item.mj-reveal,
   .auth-box-enhanced.mj-reveal,
   main .grid > .mj-reveal,
   .landing-pool-shell.mj-reveal {
