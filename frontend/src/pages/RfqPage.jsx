@@ -2110,7 +2110,7 @@ export const RfqPage = () => {
             id="supplier-collective" aria-label="Collective group supplier bidding">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-serif font-semibold">Collective Supplier Bids</h2>
-              <button type="button" className="text-xs underline"
+              <button type="button" className="miljor-btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold leading-none whitespace-nowrap cursor-pointer"
                 onClick={refreshCollectiveSellerInbox}>Refresh invitations</button>
             </div>
             <p className="text-xs text-[var(--text-muted)]">
