@@ -88,6 +88,24 @@ export function PremiumMotion() {
           el.style.setProperty('--mj-depth-ty', `${(depth * -18).toFixed(1)}px`);
           el.style.setProperty('--mj-depth-scale', (1 - depth * 0.04).toFixed(3));
         });
+        const benefitList = document.querySelector('.landing-benefit-list');
+        if (benefitList) {
+          const items = benefitList.querySelectorAll('.landing-benefit-item');
+          const rect = benefitList.getBoundingClientRect();
+          const vh = window.innerHeight || 800;
+          const entryLine = vh * 0.92;
+          const pastEntry = Math.max(0, entryLine - rect.top);
+          const remaining = Math.max(0, max - top);
+          const p = pastEntry <= 0 ? 0 : remaining <= 2 ? 1 : pastEntry / (pastEntry + remaining);
+          const thresholds = [0.08, 0.45, 0.80];
+          items.forEach((item, idx) => {
+            if (!item.classList.contains('mj-reveal')) {
+              item.style.setProperty('--mj-delay', '0ms');
+              item.classList.add('mj-reveal');
+            }
+            item.classList.toggle('mj-in', p >= (thresholds[idx] ?? 0.8));
+          });
+        }
       }
     };
     const onScroll = (event) => {
@@ -119,18 +137,11 @@ export function PremiumMotion() {
       },
       { threshold: 0, rootMargin: '40px 0px 40px 0px' },
     );
-    const benefitIo = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          entry.target.classList.toggle('mj-in', entry.isIntersecting);
-        });
-      },
-      { threshold: 0.35, rootMargin: '0px 0px -10% 0px' },
-    );
 
     const register = () => {
       const nodes = document.querySelectorAll(REVEAL_SELECTORS.join(','));
       nodes.forEach((el) => {
+        if (el.classList.contains('landing-benefit-item')) return;
         if (registered.has(el)) return;
         if (el.closest(REVEAL_EXCLUDE)) return;
         const parentTarget = el.parentElement && el.parentElement.closest('.mj-reveal');
@@ -138,15 +149,12 @@ export function PremiumMotion() {
         registered.add(el);
         const siblings = el.parentElement ? Array.from(el.parentElement.children) : [];
         const index = Math.max(0, siblings.indexOf(el));
-        const isBenefitItem = el.classList.contains('landing-benefit-item');
-        const stepMs = isBenefitItem
-          ? 70
-          : el.classList.contains('landing-pool-shell') || el.closest('.miljor-pool-rail')
-            ? 95
-            : 65;
+        const stepMs = el.classList.contains('landing-pool-shell') || el.closest('.miljor-pool-rail')
+          ? 95
+          : 65;
         el.style.setProperty('--mj-delay', `${Math.min(index, 6) * stepMs}ms`);
         el.classList.add('mj-reveal');
-        (isBenefitItem ? benefitIo : io).observe(el);
+        io.observe(el);
       });
     };
 
@@ -167,7 +175,6 @@ export function PremiumMotion() {
       if (rafId) window.cancelAnimationFrame(rafId);
       mo.disconnect();
       io.disconnect();
-      benefitIo.disconnect();
       document.querySelectorAll('.mj-reveal').forEach((el) => {
         el.classList.remove('mj-reveal', 'mj-in');
         el.style.removeProperty('--mj-delay');
