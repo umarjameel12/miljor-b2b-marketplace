@@ -557,29 +557,63 @@ export const PoolsPage = () => {
         ) : (
           /* Canonical families: never display legacy spec brands, fixed packs or invented MOQ. */
           filteredFamilies.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredFamilies.map((family) => (
-                <div key={family.id} className="p-5 rounded-3xl border shadow-xs flex flex-col gap-4"
-                  style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
+                <div
+                  key={family.id}
+                  className="p-5 sm:p-6 rounded-3xl border flex flex-col gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)]"
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    borderColor: 'var(--border-default)',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">{family.category_name}</span>
-                    <span className="text-[10px] text-stone-500 font-mono">{family.family_code}</span>
+                    <span
+                      className="px-2.5 py-1 rounded-full text-[10px] font-semibold border leading-none"
+                      style={{
+                        backgroundColor: 'var(--bg-elevated)',
+                        borderColor: 'var(--border-subtle)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      {family.category_name}
+                    </span>
+                    <span
+                      className="px-2 py-0.5 rounded-md text-[10px] font-mono border leading-none"
+                      style={{
+                        backgroundColor: 'var(--bg-surface)',
+                        borderColor: 'var(--border-subtle)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      {family.family_code}
+                    </span>
                   </div>
                   <div>
-                    <h3 className="font-sans font-bold text-base" style={{ color: 'var(--text-primary)' }}>{family.name}</h3>
-                    <p className="text-xs text-stone-500 mt-2">{family.description}</p>
+                    <h3 className="font-display font-bold text-base tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                      {family.name}
+                    </h3>
+                    <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                      {family.description}
+                    </p>
                   </div>
-                  <div className="mt-auto border-t pt-3 text-xs text-stone-500"
-                    style={{ borderColor: 'var(--border-subtle)' }}>
-                    Brand, grade, pack size, price and MOQ depend on each supplier's actual SKU and offer.
+                  <div
+                    className="mt-auto border-t pt-3 text-[11px] leading-relaxed"
+                    style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+                  >
+                    Brand, grade, pack size, price, and MOQ depend on each supplier&apos;s actual SKU and offer.
                   </div>
-                  <button type="button" onClick={() => {
-                    setViewMode('pools');
-                    setSelectedCategory('All Commodities');
-                    setSearchQuery(family.name);
-                  }} className="px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer"
-                    style={{ backgroundColor: 'var(--brand-accent)', color: 'var(--text-on-champagne)' }}>
-                    Find Live Pools
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('pools');
+                      setSelectedCategory('All Commodities');
+                      setSearchQuery(family.name);
+                    }}
+                    className="miljor-btn-primary w-full py-2.5 px-4 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 leading-none cursor-pointer"
+                  >
+                    <span>Find Live Pools</span>
                   </button>
                 </div>
               ))}

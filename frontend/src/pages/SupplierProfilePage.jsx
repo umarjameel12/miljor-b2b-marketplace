@@ -162,33 +162,48 @@ export const SupplierProfilePage = () => {
   return (
     <AppShell title="Supplier Profile">
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* Minimal Profile Header */}
-        <Card className="p-6 sm:p-7 bg-[var(--bg-card)] border-[var(--border-subtle)] rounded-2xl">
+        {/* Profile Header */}
+        <Card
+          className="p-6 sm:p-7 bg-[var(--bg-card)] border-[var(--border-default)] rounded-3xl"
+          style={{ boxShadow: 'var(--shadow-card)' }}
+        >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-            <div className="space-y-1.5 min-w-0">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-                  {profile?.business_name || user?.business_name || 'Supplier Portal'}
-                </h1>
-                <SupplierVerificationBadge
-                  status={profile?.verification_status}
-                  level={profile?.verification_level}
-                  size="md"
-                />
+            <div className="flex items-center gap-4 min-w-0">
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center font-display font-bold text-base shrink-0 ring-2 ring-[var(--brand-accent)]/25"
+                style={{
+                  background: 'linear-gradient(135deg, #e5cf99 0%, #c8b276 55%, #b39252 100%)',
+                  color: 'var(--text-on-champagne)',
+                  boxShadow: '0 4px 12px rgba(176, 138, 68, 0.22)',
+                }}
+              >
+                {(profile?.business_name || user?.business_name || 'SP').slice(0, 2).toUpperCase()}
               </div>
-              <p className="text-xs text-[var(--text-secondary)]">
-                {profile?.business_type || 'Wholesale Distributor'} · {profile?.lahore_service_area || 'Lahore'}
-              </p>
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+                    {profile?.business_name || user?.business_name || 'Supplier Portal'}
+                  </h1>
+                  <SupplierVerificationBadge
+                    status={profile?.verification_status}
+                    level={profile?.verification_level}
+                    size="md"
+                  />
+                </div>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  {profile?.business_type || 'Wholesale Distributor'} · {profile?.lahore_service_area || 'Lahore'}
+                </p>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5 self-stretch sm:self-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-[var(--border-subtle)]">
-              <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-center flex-1 sm:flex-initial">
+              <div className="px-3.5 py-2 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-default)] text-center flex-1 sm:flex-initial">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">Plan</span>
                 <span className="text-xs font-semibold text-[var(--text-primary)]">
                   {profile?.subscription_plan || 'STARTER'}
                 </span>
               </div>
-              <div className="px-3.5 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-center flex-1 sm:flex-initial">
+              <div className="px-3.5 py-2 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-default)] text-center flex-1 sm:flex-initial">
                 <span className="text-[10px] text-[var(--text-muted)] block uppercase tracking-wider">Fee</span>
                 <span className="text-xs font-semibold tabular-nums text-[var(--text-primary)]">
                   {profile?.transaction_fee_percent ?? '2.5'}%
@@ -227,10 +242,10 @@ export const SupplierProfilePage = () => {
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 py-3 px-1 border-b-2 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 py-3 px-3 rounded-t-xl border-b-2 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                   isActive
-                    ? 'border-[var(--brand-accent)] text-[var(--text-primary)]'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    ? 'border-[var(--brand-accent)] text-[var(--text-primary)] bg-[var(--bg-elevated)]/40'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/30'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 shrink-0" />

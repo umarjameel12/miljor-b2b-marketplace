@@ -121,19 +121,21 @@ export const ProfilePage = () => {
       <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
         {/* Profile Header Banner */}
         <div
-          className="p-6 sm:p-7 rounded-2xl border shadow-xs relative overflow-hidden"
+          className="p-6 sm:p-7 rounded-3xl border relative overflow-hidden"
           style={{
             backgroundColor: 'var(--bg-surface)',
             borderColor: 'var(--border-default)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div className="flex items-center gap-4">
               <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center font-display font-bold text-lg shrink-0"
+                className="w-14 h-14 rounded-2xl flex items-center justify-center font-display font-bold text-lg shrink-0 ring-2 ring-[var(--brand-accent)]/25"
                 style={{
-                  backgroundColor: 'var(--brand-accent)',
+                  background: 'linear-gradient(135deg, #e5cf99 0%, #c8b276 55%, #b39252 100%)',
                   color: 'var(--text-on-champagne)',
+                  boxShadow: '0 4px 12px rgba(176, 138, 68, 0.24)',
                 }}
               >
                 {initials}
@@ -176,17 +178,18 @@ export const ProfilePage = () => {
         {/* Account Details Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div
-            className="p-5 sm:p-6 rounded-2xl border space-y-4 transition-all duration-200"
+            className="p-5 sm:p-6 rounded-3xl border space-y-4 transition-all duration-200 hover:border-[var(--brand-accent)]/50"
             style={{
               backgroundColor: 'var(--bg-surface)',
-              borderColor: 'var(--border-subtle)',
+              borderColor: 'var(--border-default)',
+              boxShadow: 'var(--shadow-card)',
             }}
           >
             <h3 className="miljor-section-kicker font-sans font-bold text-[11px] uppercase tracking-wider">
               Account &amp; Contact
             </h3>
-            <div className="space-y-3.5 text-xs">
-              <div className="flex items-center gap-3.5">
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center gap-3.5 p-2.5 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
                 <div
                   className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
@@ -200,7 +203,7 @@ export const ProfilePage = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-3.5">
+              <div className="flex items-center gap-3.5 p-2.5 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
                 <div
                   className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
@@ -214,7 +217,7 @@ export const ProfilePage = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-3.5">
+              <div className="flex items-center gap-3.5 p-2.5 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
                 <div
                   className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
@@ -232,10 +235,11 @@ export const ProfilePage = () => {
           </div>
 
           <div
-            className="p-5 sm:p-6 rounded-2xl border space-y-4 transition-all duration-200"
+            className="p-5 sm:p-6 rounded-3xl border space-y-4 transition-all duration-200 hover:border-[var(--brand-accent)]/50"
             style={{
               backgroundColor: 'var(--bg-surface)',
-              borderColor: 'var(--border-subtle)',
+              borderColor: 'var(--border-default)',
+              boxShadow: 'var(--shadow-card)',
             }}
           >
             <div className="flex items-center justify-between">
@@ -288,8 +292,8 @@ export const ProfilePage = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-3.5 text-xs">
-                <div className="flex items-center gap-3.5">
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center gap-3.5 p-2.5 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
                   <div
                     className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                     style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
@@ -303,7 +307,7 @@ export const ProfilePage = () => {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3.5">
+                <div className="flex items-center gap-3.5 p-2.5 rounded-2xl border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-subtle)' }}>
                   <div
                     className="w-8 h-8 rounded-xl flex items-center justify-center border shrink-0"
                     style={{ backgroundColor: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
@@ -351,10 +355,11 @@ export const ProfilePage = () => {
                   key={item.path}
                   type="button"
                   onClick={() => navigate(item.path)}
-                  className="p-4 rounded-xl border text-left transition-colors hover:border-[var(--brand-accent)] cursor-pointer"
+                  className="p-4 rounded-2xl border text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--brand-accent)] cursor-pointer"
                   style={{
                     backgroundColor: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
+                    borderColor: 'var(--border-default)',
+                    boxShadow: 'var(--shadow-card)',
                   }}
                 >
                   <span className="text-xs font-semibold block" style={{ color: 'var(--text-primary)' }}>{item.label}</span>
@@ -394,13 +399,9 @@ export const ProfilePage = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddressForm(true)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 hover:-translate-y-0.5 cursor-pointer shadow-xs"
-                  style={{
-                    backgroundColor: 'var(--brand-accent)',
-                    color: 'var(--text-on-champagne)',
-                  }}
+                  className="miljor-btn-primary px-4 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 leading-none whitespace-nowrap cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
                   <span>Add Address</span>
                 </button>
               )}
