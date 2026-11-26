@@ -33,7 +33,22 @@
   scale: 1;
 }
 
-/* Subtle scale+rise pop-up for Auth, Grid KPI/Pool cards, and staggered Benefit boxes */
+/* Continuous scroll-scrubbed ascending reveal for the 3 right-side benefit boxes */
+.landing-benefit-item.mj-scroll-scrub {
+  opacity: var(--mj-b-op, 0);
+  translate: 0 var(--mj-b-ty, 32px);
+  scale: var(--mj-b-sc, 0.96);
+  transition:
+    opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    scale 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.3s ease,
+    border-color 0.2s ease;
+  will-change: opacity, translate, scale;
+}
+
+/* Subtle scale+rise pop-up for Auth, Grid KPI/Pool cards */
 .landing-benefit-item.mj-reveal,
 .auth-box-enhanced.mj-reveal,
 main .grid > .mj-reveal,
@@ -144,6 +159,7 @@ p {
     scroll-behavior: auto;
   }
   .mj-reveal,
+  .landing-benefit-item.mj-scroll-scrub,
   .landing-benefit-item.mj-reveal,
   .auth-box-enhanced.mj-reveal,
   main .grid > .mj-reveal,

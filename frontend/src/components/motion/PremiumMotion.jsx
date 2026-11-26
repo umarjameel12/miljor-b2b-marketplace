@@ -93,17 +93,19 @@ export function PremiumMotion() {
           const items = benefitList.querySelectorAll('.landing-benefit-item');
           const rect = benefitList.getBoundingClientRect();
           const vh = window.innerHeight || 800;
-          const entryLine = vh * 0.92;
+          const entryLine = vh * 0.94;
           const pastEntry = Math.max(0, entryLine - rect.top);
           const remaining = Math.max(0, max - top);
           const p = pastEntry <= 0 ? 0 : remaining <= 2 ? 1 : pastEntry / (pastEntry + remaining);
-          const thresholds = [0.08, 0.45, 0.80];
+          const starts = [0.0, 0.24, 0.48];
           items.forEach((item, idx) => {
-            if (!item.classList.contains('mj-reveal')) {
-              item.style.setProperty('--mj-delay', '0ms');
-              item.classList.add('mj-reveal');
-            }
-            item.classList.toggle('mj-in', p >= (thresholds[idx] ?? 0.8));
+            item.classList.add('mj-scroll-scrub');
+            const start = starts[idx] ?? 0.48;
+            const t = Math.min(1, Math.max(0, (p - start) / 0.42));
+            const ease = 1 - Math.pow(1 - t, 3);
+            item.style.setProperty('--mj-b-op', ease.toFixed(3));
+            item.style.setProperty('--mj-b-ty', `${((1 - ease) * 32).toFixed(1)}px`);
+            item.style.setProperty('--mj-b-sc', (0.96 + ease * 0.04).toFixed(4));
           });
         }
       }
@@ -175,6 +177,12 @@ export function PremiumMotion() {
       if (rafId) window.cancelAnimationFrame(rafId);
       mo.disconnect();
       io.disconnect();
+      document.querySelectorAll('.mj-scroll-scrub').forEach((el) => {
+        el.classList.remove('mj-scroll-scrub');
+        el.style.removeProperty('--mj-b-op');
+        el.style.removeProperty('--mj-b-ty');
+        el.style.removeProperty('--mj-b-sc');
+      });
       document.querySelectorAll('.mj-reveal').forEach((el) => {
         el.classList.remove('mj-reveal', 'mj-in');
         el.style.removeProperty('--mj-delay');
